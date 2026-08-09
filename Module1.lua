@@ -93,6 +93,7 @@ getgenv().Settings = {
     Crosshair = false,
     CustomMouseIcon = false,
     MouseIconID = "",
+    MouseIconSize = 150,
     Fullbright = false,
     TracerOrigin = "DOWN",
     EspMaxDistance = 1000,
@@ -183,6 +184,7 @@ getgenv().AutoSaveConfiguration = function()
             Crosshair = Settings.Crosshair,
             CustomMouseIcon = Settings.CustomMouseIcon,
             MouseIconID = Settings.MouseIconID,
+            MouseIconSize = Settings.MouseIconSize,
             Fullbright = Settings.Fullbright,
             TracerOrigin = Settings.TracerOrigin,
             EspMaxDistance = Settings.EspMaxDistance,
@@ -392,8 +394,9 @@ local function UpdateMouseIcon()
     pcall(function()
         if Settings.CustomMouseIcon and Settings.MouseIconID ~= "" then
             local cleanID = tostring(Settings.MouseIconID):match("%d+")
+            local sz = Settings.MouseIconSize or 150
             if cleanID then
-                Player:GetMouse().Icon = "rbxthumb://type=Asset&id=" .. cleanID .. "&w=150&h=150"
+                Player:GetMouse().Icon = "rbxthumb://type=Asset&id=" .. cleanID .. "&w=" .. tostring(sz) .. "&h=" .. tostring(sz)
             else
                 Player:GetMouse().Icon = ""
             end
@@ -743,7 +746,7 @@ local WaypointsGui = Instance.new("Frame")
 WaypointsGui.Name = "ToxWaypointsFrame"
 WaypointsGui.Size = UDim2.new(0, 320, 0, 260)
 WaypointsGui.Position = UDim2.new(0.5, -160, 0.5, -130)
-WaypointsGui.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
+WaypointsGui.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
 WaypointsGui.BorderSizePixel = 0
 WaypointsGui.ClipsDescendants = true
 WaypointsGui.Visible = false
@@ -797,7 +800,7 @@ local function CreateDarkBtn(text, pos, size, parent)
     b.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
     b.BorderSizePixel = 0
     b.Text = text
-    b.TextColor3 = Color3.fromRGB(220, 220, 220)
+    b.TextColor3 = Color3.fromRGB(255, 255, 255)
     b.Font = Enum.Font.GothamBold
     b.TextSize = 10
     b.Parent = parent
@@ -865,7 +868,7 @@ RefreshWaypointsUI = function()
         lbl.Position = UDim2.new(0, 6, 0, 0)
         lbl.BackgroundTransparency = 1
         lbl.Text = wp.name
-        lbl.TextColor3 = Color3.fromRGB(220, 220, 220)
+        lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
         lbl.Font = Enum.Font.Gotham
         lbl.TextSize = 11
         lbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -928,7 +931,7 @@ local MusicGui = Instance.new("Frame")
 MusicGui.Name = "ToxMusicPlayerFrame"
 MusicGui.Size = UDim2.new(0, 370, 0, 310)
 MusicGui.Position = UDim2.new(0.5, -185, 0.5, -155)
-MusicGui.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
+MusicGui.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
 MusicGui.BorderSizePixel = 0
 MusicGui.ClipsDescendants = true
 MusicGui.Visible = false
@@ -982,30 +985,30 @@ InputArea.BackgroundTransparency = 1
 InputArea.Parent = MusicContent
 
 local SoundInput = Instance.new("TextBox")
-SoundInput.Size = UDim2.new(0.35, 0, 1, 0)
+SoundInput.Size = UDim2.new(0.42, 0, 1, 0)
 SoundInput.Position = UDim2.new(0, 0, 0, 0)
 SoundInput.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
 SoundInput.PlaceholderText = "ID"
 SoundInput.Text = ""
-SoundInput.TextColor3 = Color3.fromRGB(240, 240, 240)
+SoundInput.TextColor3 = Color3.fromRGB(255, 255, 255)
 SoundInput.Font = Enum.Font.Gotham
 SoundInput.TextSize = 11
 SoundInput.Parent = InputArea
 local SoundInputCorner = Instance.new("UICorner") SoundInputCorner.CornerRadius = UDim.new(0, 4) SoundInputCorner.Parent = SoundInput
 
 local SongNameInput = Instance.new("TextBox")
-SongNameInput.Size = UDim2.new(0.48, 0, 1, 0)
-SongNameInput.Position = UDim2.new(0.37, 0, 0, 0)
+SongNameInput.Size = UDim2.new(0.42, 0, 1, 0)
+SongNameInput.Position = UDim2.new(0.43, 0, 0, 0)
 SongNameInput.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
 SongNameInput.PlaceholderText = "Name"
 SongNameInput.Text = ""
-SongNameInput.TextColor3 = Color3.fromRGB(240, 240, 240)
+SongNameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
 SongNameInput.Font = Enum.Font.Gotham
 SongNameInput.TextSize = 11
 SongNameInput.Parent = InputArea
 local SongNameCorner = Instance.new("UICorner") SongNameCorner.CornerRadius = UDim.new(0, 4) SongNameCorner.Parent = SongNameInput
 
-local AddPlaylistBtn = CreateDarkBtn("Add", UDim2.new(0.87, 0, 0, 0), UDim2.new(0.13, 0, 1, 0), InputArea)
+local AddPlaylistBtn = CreateDarkBtn("Add", UDim2.new(0.86, 0, 0, 0), UDim2.new(0.14, 0, 1, 0), InputArea)
 
 local ControlsBar = Instance.new("Frame")
 ControlsBar.Size = UDim2.new(1, 0, 0, 24)
@@ -1032,7 +1035,7 @@ VolLabel.Size = UDim2.new(0.30, 0, 1, 0)
 VolLabel.Position = UDim2.new(0, 0, 0, 0)
 VolLabel.BackgroundTransparency = 1
 VolLabel.Text = "Volume: " .. tostring(Settings.MusicVolume) .. "%"
-VolLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+VolLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 VolLabel.Font = Enum.Font.GothamBold
 VolLabel.TextSize = 10
 VolLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1121,7 +1124,7 @@ RefreshMusicPlaylistUI = function()
         idBox.Position = UDim2.new(0, 4, 0, 0)
         idBox.BackgroundTransparency = 1
         idBox.Text = tostring(trackID)
-        idBox.TextColor3 = Color3.fromRGB(150, 150, 170)
+        idBox.TextColor3 = Color3.fromRGB(200, 200, 220)
         idBox.Font = Enum.Font.Gotham
         idBox.TextSize = 10
         idBox.TextXAlignment = Enum.TextXAlignment.Left
@@ -1133,7 +1136,7 @@ RefreshMusicPlaylistUI = function()
         nameBox.Position = UDim2.new(0.24, 2, 0, 2)
         nameBox.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
         nameBox.Text = trackName
-        nameBox.TextColor3 = Color3.fromRGB(220, 220, 220)
+        nameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
         nameBox.Font = Enum.Font.Gotham
         nameBox.TextSize = 10
         nameBox.ClearTextOnFocus = false
