@@ -12,6 +12,9 @@ local Lighting = game:GetService("Lighting")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
+if getgenv().Gui then pcall(function() getgenv().Gui:Destroy() end) end
+if getgenv().NotifGui then pcall(function() getgenv().NotifGui:Destroy() end) end
+
 local LOGO_ID = "rbxassetid://120675082996894"
 local MAIN_COLOR = Color3.fromRGB(9, 0, 136) 
 
@@ -107,6 +110,12 @@ getgenv().SavedIDs = {}
 getgenv().SavedWaypoints = {}
 getgenv().Destroyed = false
 getgenv().ScriptLoaded = false
+
+if getgenv().ScriptConnections then
+    for _, conn in ipairs(getgenv().ScriptConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+end
 getgenv().ScriptConnections = {}
 
 getgenv().OriginalLighting = {
@@ -236,6 +245,7 @@ end
 
 LoadConfiguration()
 
+if getgenv().FOVCircle then pcall(function() getgenv().FOVCircle:Remove() end) end
 local FOVCircle = (Drawing and Drawing.new) and Drawing.new("Circle") or nil
 if FOVCircle then
     FOVCircle.Color = Color3.fromRGB(0, 200, 255)
@@ -246,6 +256,8 @@ if FOVCircle then
 end
 getgenv().FOVCircle = FOVCircle
 
+if getgenv().CrosshairH then pcall(function() getgenv().CrosshairH:Remove() end) end
+if getgenv().CrosshairV then pcall(function() getgenv().CrosshairV:Remove() end) end
 local CrosshairH = (Drawing and Drawing.new) and Drawing.new("Line") or nil
 local CrosshairV = (Drawing and Drawing.new) and Drawing.new("Line") or nil
 if CrosshairH and CrosshairV then
@@ -320,6 +332,14 @@ getgenv().CustomNotify = function(text, color, customTime)
     end)
 end
 
+AddConnection(Players.PlayerAdded:Connect(function(p)
+    if ScriptLoaded then CustomNotify("(" .. p.Name .. ") joined", Color3.fromRGB(50, 255, 50), 3) end
+end))
+
+AddConnection(Players.PlayerRemoving:Connect(function(p)
+    if ScriptLoaded then CustomNotify("(" .. p.Name .. ") left", Color3.fromRGB(255, 50, 50), 3) end
+end))
+
 getgenv().MakeDraggable = function(Frame, DragHandle)
     local Dragging, DragInput, DragStart, StartPos
     DragHandle.InputBegan:Connect(function(input)
@@ -342,6 +362,92 @@ getgenv().MakeDraggable = function(Frame, DragHandle)
         end
     end))
 end
+
+local AirWalkPart = nil
+local LockedAirWalkY = nil
+
+local function UpdateAirWalk()
+    local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+    if Settings.AirWalk and Root then
+        if not LockedAirWalkY then
+            LockedAirWalkY = Root.Position.Y - 3.4
+        end
+        if not AirWalkPart or not AirWalkPart.Parent then
+            AirWalkPart = Instance.new("Part")
+            AirWalkPart.Name = "ToxAirWalk"
+            AirWalkPart.Size = Vector3.new(8, 1, 8)
+            AirWalkPart.Transparency = 1
+            AirWalkPart.Anchored = true
+            AirWalkPart.Parent = workspace
+        end
+        AirWalkPart.CFrame = CFrame.new(Root.Position.X, LockedAirWalkY, Root.Position.Z)
+    else
+        LockedAirWalkY = nil
+        if AirWalkPart then AirWalkPart:Destroy() AirWalkPart = nil end
+    end
+end
+getgenv().UpdateAirWalk = UpdateAirWalk
+
+local function UpdateMouseIcon()
+    pcall(function()
+        if Settings.CustomMouseIcon and Settings.MouseIconID ~= "" then
+            local cleanID = tostring(Settings.MouseIconID):match("%d+")
+            if cleanID then
+                Player:GetMouse().Icon = "rbxthumb://type=Asset&id=" .. cleanID .. "&w=150&h=150"
+            else
+                Player:GetMouse().Icon = ""
+            end
+        else
+            Player:GetMouse().Icon = ""
+        end
+    end)
+end
+getgenv().UpdateMouseIcon = UpdateMouseIcon
+
+local function RestoreCollisions()
+    if Player.Character then
+        for _, part in ipairs(Player.Character:GetChildren()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.CanCollide = true
+            end
+        end
+        local Hum = Player.Character:FindFirstChildOfClass("Humanoid")
+        if Hum then
+            Hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end
+    end
+end
+getgenv().RestoreCollisions = RestoreCollisions
+
+local function ResetHitboxes()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= Player and p.Character then
+            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.Size = Vector3.new(2, 2, 1)
+                hrp.Transparency = 1
+            end
+        end
+    end
+end
+getgenv().ResetHitboxes = ResetHitboxes
+
+local function UpdateFullbright()
+    if Settings.Fullbright then
+        Lighting.Ambient = Color3.fromRGB(180, 180, 180)
+        Lighting.Brightness = 1.2
+        Lighting.ClockTime = 14
+        Lighting.FogEnd = 100000
+        Lighting.GlobalShadows = false
+    else
+        Lighting.Ambient = OriginalLighting.Ambient
+        Lighting.Brightness = OriginalLighting.Brightness
+        Lighting.ClockTime = OriginalLighting.ClockTime
+        Lighting.FogEnd = OriginalLighting.FogEnd
+        Lighting.GlobalShadows = OriginalLighting.GlobalShadows
+    end
+end
+getgenv().UpdateFullbright = UpdateFullbright
 
 local ParentContainer = (gethui and gethui()) or game:GetService("CoreGui")
 local Gui = Instance.new("ScreenGui")
@@ -402,6 +508,7 @@ Minimize.TextSize = 18
 Minimize.Font = Enum.Font.GothamBold
 Minimize.Parent = TopBar
 local MinimizeCorner = Instance.new("UICorner") MinimizeCorner.CornerRadius = UDim.new(0, 4) MinimizeCorner.Parent = Minimize
+getgenv().Minimize = Minimize
 
 local Tabs = Instance.new("ScrollingFrame")
 Tabs.Size = UDim2.new(1, -10, 0, 34)
