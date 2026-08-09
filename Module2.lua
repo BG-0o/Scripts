@@ -12,9 +12,13 @@ local Lighting = game:GetService("Lighting")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
-local Character = Player.Character or Player.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
-local RootPart = Character:WaitForChild("HumanoidRootPart")
+for _, page in pairs(Pages) do
+    for _, child in ipairs(page:GetChildren()) do
+        if child:IsA("Frame") or child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+end
 
 local function SkidFling(TargetPlayer)
 	if not TargetPlayer or not TargetPlayer.Character then return end
@@ -254,8 +258,8 @@ CreateButton("Reload ESP", VisualsPage, function()
     CustomNotify("ESP Reloaded!", Color3.fromRGB(100, 255, 100))
 end)
 
-CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
 CreateInputWithButton("Fling", FlingPage, "", "Fling", function(text) ExecuteFling(text) end)
+CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
 CreateToggle("Ctrl Click TP", FlingPage, Settings.CtrlClickTP, function(v) Settings.CtrlClickTP = v end)
 CreateToggle("No Fall Damage", FlingPage, Settings.NoFallDamage, function(v) Settings.NoFallDamage = v end)
 CreateToggle("Anti Void", FlingPage, Settings.AntiVoid, function(v) Settings.AntiVoid = v if v then StartAntiVoid() end end)
@@ -823,13 +827,31 @@ end
 
 task.spawn(ShowCenterLoadSequence)
 
+local SubGuisPreMinimizedState = {}
+local Minimize = getgenv().Minimize
 local Minimized = false
-Minimize.MouseButton1Click:Connect(function()
-	Minimized = not Minimized
-	Main.Size = Minimized and UDim2.new(0, 330, 0, 38) or UDim2.new(0, 330, 0, 395)
-	Tabs.Visible = not Minimized
-	if CurrentPage then CurrentPage.Visible = not Minimized end
-	Minimize.Text = Minimized and "+" or "-"
-end)
+
+if Minimize then
+    Minimize.MouseButton1Click:Connect(function()
+        Minimized = not Minimized
+        Main.Size = Minimized and UDim2.new(0, 330, 0, 38) or UDim2.new(0, 330, 0, 395)
+        Tabs.Visible = not Minimized
+        if getgenv().CurrentPage then getgenv().CurrentPage.Visible = not Minimized end
+        Minimize.Text = Minimized and "+" or "-"
+
+        if Minimized then
+            SubGuisPreMinimizedState.ChatLog = ChatLogGui.Visible
+            SubGuisPreMinimizedState.Music = MusicGui.Visible
+            SubGuisPreMinimizedState.Waypoints = WaypointsGui.Visible
+            ChatLogGui.Visible = false
+            MusicGui.Visible = false
+            WaypointsGui.Visible = false
+        else
+            if SubGuisPreMinimizedState.ChatLog ~= nil then ChatLogGui.Visible = SubGuisPreMinimizedState.ChatLog end
+            if SubGuisPreMinimizedState.Music ~= nil then MusicGui.Visible = SubGuisPreMinimizedState.Music end
+            if SubGuisPreMinimizedState.Waypoints ~= nil then WaypointsGui.Visible = SubGuisPreMinimizedState.Waypoints end
+        end
+    end)
+end
 
 if Settings.AntiVoid then StartAntiVoid() end
