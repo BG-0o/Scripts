@@ -21,47 +21,186 @@ for _, page in pairs(Pages) do
 end
 
 local function SkidFling(TargetPlayer)
-	if not TargetPlayer or not TargetPlayer.Character then return end
-	local Char = Player.Character
-	local Hum = Char and Char:FindFirstChildOfClass("Humanoid")
-	local Root = Hum and Hum.RootPart or Char:FindFirstChild("HumanoidRootPart")
-	local TRoot = TargetPlayer.Character:FindFirstChild("HumanoidRootPart") or TargetPlayer.Character:FindFirstChild("Torso")
+    if not TargetPlayer or not TargetPlayer.Character then return end
 
-	if Char and Hum and Root and TRoot then
-		local oldPos = Root.CFrame
-        local bav = Instance.new("BodyAngularVelocity")
-        bav.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-        bav.AngularVelocity = Vector3.new(0, 999999, 0)
-        bav.Parent = Root
+    local Character = Player.Character
+    local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+    local RootPart = Humanoid and Humanoid.RootPart
+    local TCharacter = TargetPlayer.Character
+    local THumanoid = TCharacter and TCharacter:FindFirstChildOfClass("Humanoid")
+    local TRootPart = THumanoid and THumanoid.RootPart
+    local THead = TCharacter and TCharacter:FindFirstChild("Head")
+    local Accessory = TCharacter and TCharacter:FindFirstChildOfClass("Accessory")
+    local Handle = Accessory and Accessory:FindFirstChild("Handle")
 
-        local startTime = tick()
-        while tick() - startTime < 1.8 do
-            if not TRoot or not Root then break end
-            Hum:ChangeState(Enum.HumanoidStateType.StrafingNoPhysics)
-            Root.CFrame = TRoot.CFrame * CFrame.new(math.random(-1,1), math.random(-1,1), math.random(-1,1))
-            Root.Velocity = Vector3.new(999999, 999999, 999999)
-            RunService.Heartbeat:Wait()
+    if not (Character and Humanoid and RootPart and TCharacter) then return end
+
+    getgenv().OldPos = RootPart.CFrame
+    if THumanoid and THumanoid.Sit then return end
+
+    local oldCameraSubject = Camera.CameraSubject
+    if THead then
+        Camera.CameraSubject = THead
+    elseif Handle then
+        Camera.CameraSubject = Handle
+    elseif THumanoid then
+        Camera.CameraSubject = THumanoid
+    end
+
+    local targetBasePart = TRootPart or THead or Handle
+    if not targetBasePart then
+        Camera.CameraSubject = oldCameraSubject
+        return
+    end
+
+    getgenv().FPDH = workspace.FallenPartsDestroyHeight
+
+    local FPos = function(BasePart, Pos, Ang)
+        if not RootPart or not BasePart or not BasePart.Parent then return end
+        RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
+        pcall(function()
+            Character:SetPrimaryPartCFrame(CFrame.new(BasePart.Position) * Pos * Ang)
+        end)
+        RootPart.Velocity = Vector3.new(9e7, 9e8, 9e7)
+        RootPart.RotVelocity = Vector3.new(9e8, 9e8, 9e8)
+    end
+
+    local SFBasePart = function(BasePart)
+        local TimeToWait = 2
+        local Time = tick()
+        local Angle = 0
+
+        repeat
+            if not RootPart or not THumanoid or Humanoid.Health <= 0 then break end
+
+            if BasePart.Velocity.Magnitude < 50 then
+                Angle = Angle + 100
+
+                FPos(BasePart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+                task.wait()
+                FPos(BasePart, CFrame.new(0, -1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+                task.wait()
+                FPos(BasePart, CFrame.new(2.25, 1.5, -2.25) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+                task.wait()
+                FPos(BasePart, CFrame.new(-2.25, -1.5, 2.25) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+                task.wait()
+                FPos(BasePart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection, CFrame.Angles(math.rad(Angle), 0, 0))
+                task.wait()
+                FPos(BasePart, CFrame.new(0, -1.5, 0) + THumanoid.MoveDirection, CFrame.Angles(math.rad(Angle), 0, 0))
+                task.wait()
+            else
+                FPos(BasePart, CFrame.new(0, 1.5, THumanoid.WalkSpeed), CFrame.Angles(math.rad(90), 0, 0))
+                task.wait()
+                FPos(BasePart, CFrame.new(0, -1.5, -THumanoid.WalkSpeed), CFrame.Angles(0, 0, 0))
+                task.wait()
+                FPos(BasePart, CFrame.new(0, 1.5, THumanoid.WalkSpeed), CFrame.Angles(math.rad(90), 0, 0))
+                task.wait()
+                local targetVelocity = TRootPart and TRootPart.Velocity.Magnitude / 1.25 or 0
+                FPos(BasePart, CFrame.new(0, 1.5, targetVelocity), CFrame.Angles(math.rad(90), 0, 0))
+                task.wait()
+                FPos(BasePart, CFrame.new(0, -1.5, -targetVelocity), CFrame.Angles(0, 0, 0))
+                task.wait()
+                FPos(BasePart, CFrame.new(0, 1.5, targetVelocity), CFrame.Angles(math.rad(90), 0, 0))
+                task.wait()
+                FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(math.rad(90), 0, 0))
+                task.wait()
+                FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(0, 0, 0))
+                task.wait()
+                FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(math.rad(-90), 0, 0))
+                task.wait()
+                FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(0, 0, 0))
+                task.wait()
+            end
+        until BasePart.Velocity.Magnitude > 500
+            or BasePart.Parent ~= TargetPlayer.Character
+            or TargetPlayer.Parent ~= Players
+            or THumanoid.Sit
+            or Humanoid.Health <= 0
+            or tick() > Time + TimeToWait
+    end
+
+    pcall(function()
+        workspace.FallenPartsDestroyHeight = 0/0
+    end)
+
+    local BV = Instance.new("BodyVelocity")
+    BV.Name = "EpixVel"
+    BV.Parent = RootPart
+    BV.Velocity = Vector3.new(9e8, 9e8, 9e8)
+    BV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+
+    if TRootPart and THead then
+        if (TRootPart.Position - THead.Position).Magnitude > 5 then
+            SFBasePart(THead)
+        else
+            SFBasePart(TRootPart)
+        end
+    elseif TRootPart then
+        SFBasePart(TRootPart)
+    elseif THead then
+        SFBasePart(THead)
+    elseif Handle then
+        SFBasePart(Handle)
+    end
+
+    BV:Destroy()
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+    Camera.CameraSubject = Humanoid
+
+    local OldPos = getgenv().OldPos or RootPart.CFrame
+    repeat
+        RootPart.CFrame = OldPos * CFrame.new(0, 0.5, 0)
+        pcall(function()
+            Character:SetPrimaryPartCFrame(OldPos * CFrame.new(0, 0.5, 0))
+        end)
+        Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+
+        for _, x in ipairs(Character:GetChildren()) do
+            if x:IsA("BasePart") then
+                x.Velocity = Vector3.zero
+                x.RotVelocity = Vector3.zero
+            end
         end
 
-        bav:Destroy()
-        Root.Velocity = Vector3.zero
-        Root.RotVelocity = Vector3.zero
-        Root.CFrame = oldPos
-	end
+        task.wait()
+    until (RootPart.Position - OldPos.Position).Magnitude < 25
+
+    pcall(function()
+        workspace.FallenPartsDestroyHeight = getgenv().FPDH
+    end)
 end
 
 local function ExecuteFling(TargetInput)
-	if not TargetInput or TargetInput == "" then return CustomNotify("Enter username or 'all'", Color3.fromRGB(255, 100, 100)) end
-	local LowerInput = string.lower(TargetInput)
-	if LowerInput == "all" or LowerInput == "others" then
-		for _, p in ipairs(Players:GetPlayers()) do if p ~= Player then SkidFling(p) end end
-	else
-		for _, p in ipairs(Players:GetPlayers()) do
-			if p ~= Player and (string.find(string.lower(p.Name), LowerInput) or string.find(string.lower(p.DisplayName), LowerInput)) then
-				SkidFling(p) break
-			end
-		end
-	end
+    if not TargetInput or TargetInput == "" then
+        return CustomNotify("Enter username or 'all'", Color3.fromRGB(255, 100, 100))
+    end
+
+    local LowerInput = string.lower(TargetInput)
+
+    if LowerInput == "all" or LowerInput == "others" then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= Player then
+                task.spawn(function() SkidFling(p) end)
+            end
+        end
+        return
+    end
+
+    local target = nil
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= Player and (string.find(string.lower(p.Name), LowerInput, 1, true) or string.find(string.lower(p.DisplayName), LowerInput, 1, true)) then
+            target = p
+            break
+        end
+    end
+
+    if target then
+        task.spawn(function() SkidFling(target) end)
+    else
+        CustomNotify("Player not found!", Color3.fromRGB(255, 100, 100))
+    end
 end
 
 local function ExecuteTeleport(TargetInput, mode)
@@ -210,7 +349,7 @@ CreateToggle("Noclip", PlayerPage, Settings.Noclip, function(v)
     if not v then RestoreCollisions() end
 end)
 CreateToggle("Infinite Jump", PlayerPage, Settings.InfiniteJump, function(v) Settings.InfiniteJump = v end)
-CreateToggle("Bhop (Auto Jump)", PlayerPage, Settings.Bhop, function(v) Settings.Bhop = v end)
+CreateToggleWithValue("Bhop (Auto Jump)", PlayerPage, Settings.Bhop, Settings.BhopInterval, function(v) Settings.Bhop = v end, function(val) Settings.BhopInterval = math.max(0.05, val) end)
 CreateToggleWithValue("Car Speed", PlayerPage, Settings.CarSpeed, Settings.CarSpeedValue, function(v) Settings.CarSpeed = v end, function(val) Settings.CarSpeedValue = val end)
 CreateToggleWithValue("Car Fly", PlayerPage, Settings.CarFly, Settings.CarFlySpeed, function(v) Settings.CarFly = v end, function(val) Settings.CarFlySpeed = val end)
 
@@ -221,10 +360,9 @@ CreateToggle("2D Box ESP", VisualsPage, Settings.ESPBox, function(v) Settings.ES
 CreateToggle("Head Dot ESP", VisualsPage, Settings.ESPHeadDot, function(v) Settings.ESPHeadDot = v end)
 CreateToggle("Tracers", VisualsPage, Settings.ESPTracers, function(v) Settings.ESPTracers = v end)
 CreateDropdown("Tracer Mode", {"DOWN", "UP", "MOUSE"}, VisualsPage, Settings.TracerOrigin, function(v) Settings.TracerOrigin = v end)
-CreateToggle("Custom Crosshair", VisualsPage, Settings.Crosshair, function(v) Settings.Crosshair = v end)
+CreateToggle("Custom Crosshair", VisualsPage, Settings.Crosshair, function(v) Settings.Crosshair = v UpdateMouseIcon() end)
 CreateInputWithButton("Mouse Icon (Decal ID)", VisualsPage, Settings.MouseIconID, "Set", function(text) 
-    Settings.MouseIconID = text 
-    Settings.CustomMouseIcon = (text ~= "")
+    Settings.MouseIconID = tostring(text or "")
     UpdateMouseIcon()
     AutoSaveConfiguration()
 end)
@@ -281,6 +419,10 @@ CreateButton("Infinite Yield", ScriptsPage, function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
 end)
 
+CreateButton("Bundle Edit", ScriptsPage, function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/All/refs/heads/main/BundleEdit.lua"))()
+end)
+
 CreateToggle("Anti AFK", ConfigPage, Settings.AntiAFK, function(v) Settings.AntiAFK = v end)
 CreateToggle("Chat Logs", ConfigPage, Settings.ChatLogs, function(v) Settings.ChatLogs = v ChatLogGui.Visible = v end)
 CreateToggle("3D Rendering", ConfigPage, Settings.Render3D, function(v) 
@@ -305,7 +447,7 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     Settings.AirWalk = false
     UpdateAirWalk()
 
-    Settings.CustomMouseIcon = false
+    Settings.Crosshair = false
     UpdateMouseIcon()
 
     local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
@@ -430,8 +572,15 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         Hum.UseJumpPower = true
         Hum.JumpPower = Settings.Jump and Settings.JumpValue or 50
 
-        if Settings.Bhop and UserInputService:IsKeyDown(Enum.KeyCode.Space) and (Hum.FloorMaterial ~= Enum.Material.Air or Hum:GetState() == Enum.HumanoidStateType.Landed) then
-            Hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        if Settings.Bhop then
+            local interval = math.max(0.05, tonumber(Settings.BhopInterval) or 0.2)
+            getgenv().BhopTimer = (getgenv().BhopTimer or 0) + delta
+            if getgenv().BhopTimer >= interval and (Hum.FloorMaterial ~= Enum.Material.Air or Hum:GetState() == Enum.HumanoidStateType.Landed) then
+                getgenv().BhopTimer = 0
+                Hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        else
+            getgenv().BhopTimer = 0
         end
     end
 
@@ -528,15 +677,8 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
     end
 
     if CrosshairH and CrosshairV then
-        CrosshairH.Visible = Settings.Crosshair
-        CrosshairV.Visible = Settings.Crosshair
-        if Settings.Crosshair then
-            local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-            CrosshairH.From = Vector2.new(center.X - 10, center.Y)
-            CrosshairH.To = Vector2.new(center.X + 10, center.Y)
-            CrosshairV.From = Vector2.new(center.X, center.Y - 10)
-            CrosshairV.To = Vector2.new(center.X, center.Y + 10)
-        end
+        CrosshairH.Visible = false
+        CrosshairV.Visible = false
     end
 
     if Settings.Aimbot and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
@@ -744,7 +886,7 @@ local function ShowCenterLoadSequence()
     TitleLabel.Size = UDim2.new(1, -85, 0, 24)
     TitleLabel.Position = UDim2.new(0, 78, 0, 16)
     TitleLabel.BackgroundTransparency = 1
-    TitleLabel.Text = "Tox Loading..."
+    TitleLabel.Text = "ToxHub"
     TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     TitleLabel.Font = Enum.Font.GothamBold
     TitleLabel.TextSize = 15
@@ -755,7 +897,7 @@ local function ShowCenterLoadSequence()
     SubLabel.Size = UDim2.new(1, -85, 0, 20)
     SubLabel.Position = UDim2.new(0, 78, 0, 40)
     SubLabel.BackgroundTransparency = 1
-    SubLabel.Text = "ToxHud v1 Utility Suite"
+    SubLabel.Text = "Made by @BG_0o"
     SubLabel.TextColor3 = Color3.fromRGB(150, 150, 180)
     SubLabel.Font = Enum.Font.GothamMedium
     SubLabel.TextSize = 12
@@ -794,7 +936,7 @@ local function ShowCenterLoadSequence()
         local p = i / steps
         BarFill.Size = UDim2.new(p, 0, 1, 0)
         PercentLabel.Text = math.floor(p * 100) .. "%"
-        if i == steps then TitleLabel.Text = "ToxHud Loaded Successfully" end
+        if i == steps then TitleLabel.Text = "ToxHub Loaded Successfully" end
         task.wait(duration / steps)
     end
 
@@ -821,7 +963,7 @@ local function ShowCenterLoadSequence()
                 0.5,
                 true
             )
-            CustomNotify("ToxHud v1 Loaded Successfully!", Color3.fromRGB(100, 255, 100))
+            CustomNotify("ToxHub v1 Loaded Successfully!", Color3.fromRGB(100, 255, 100))
         end
     end)
 end
