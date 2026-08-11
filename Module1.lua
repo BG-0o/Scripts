@@ -78,6 +78,7 @@ getgenv().Settings = {
     KillAuraRange = 15,
 
     Bhop = false,
+    BhopInterval = 0.2,
     AirWalk = false,
     CarSpeed = false,
     CarSpeedValue = 100,
@@ -91,7 +92,6 @@ getgenv().Settings = {
     ESPBox = false,
     ESPHeadDot = false,
     Crosshair = false,
-    CustomMouseIcon = false,
     MouseIconID = "",
     MouseIconSize = 150,
     Fullbright = false,
@@ -182,7 +182,6 @@ getgenv().AutoSaveConfiguration = function()
             ESPBox = Settings.ESPBox,
             ESPHeadDot = Settings.ESPHeadDot,
             Crosshair = Settings.Crosshair,
-            CustomMouseIcon = Settings.CustomMouseIcon,
             MouseIconID = Settings.MouseIconID,
             MouseIconSize = Settings.MouseIconSize,
             Fullbright = Settings.Fullbright,
@@ -392,7 +391,7 @@ getgenv().UpdateAirWalk = UpdateAirWalk
 
 local function UpdateMouseIcon()
     pcall(function()
-        if Settings.CustomMouseIcon and Settings.MouseIconID ~= "" then
+        if Settings.Crosshair and Settings.MouseIconID ~= "" then
             local cleanID = tostring(Settings.MouseIconID):match("%d+")
             local sz = Settings.MouseIconSize or 150
             if cleanID then
@@ -493,7 +492,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -70, 1, 0)
 Title.Position = UDim2.new(0, 34, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "ToxHud v1"
+Title.Text = "ToxHub v1"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 15
 Title.Font = Enum.Font.GothamBold
