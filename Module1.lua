@@ -392,10 +392,11 @@ getgenv().UpdateAirWalk = UpdateAirWalk
 
 local function UpdateMouseIcon()
     pcall(function()
-        if Settings.Crosshair and Settings.MouseIconID and Settings.MouseIconID ~= "" then
+        if Settings.CustomMouseIcon and Settings.MouseIconID ~= "" then
             local cleanID = tostring(Settings.MouseIconID):match("%d+")
+            local sz = Settings.MouseIconSize or 150
             if cleanID then
-                Player:GetMouse().Icon = "rbxassetid://" .. cleanID
+                Player:GetMouse().Icon = "rbxthumb://type=Asset&id=" .. cleanID .. "&w=" .. tostring(sz) .. "&h=" .. tostring(sz)
             else
                 Player:GetMouse().Icon = ""
             end
@@ -492,7 +493,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -70, 1, 0)
 Title.Position = UDim2.new(0, 34, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "ToxHub v1"
+Title.Text = "ToxHud v1"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 15
 Title.Font = Enum.Font.GothamBold
@@ -1334,7 +1335,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
 	Container.Parent = Page
 
 	local Label = Instance.new("TextLabel")
-	Label.Size = UDim2.new(1, -115, 1, 0)
+	Label.Size = UDim2.new(1, -125, 1, 0)
 	Label.Position = UDim2.new(0, 12, 0, 0)
 	Label.BackgroundTransparency = 1
 	Label.Text = Name
@@ -1344,84 +1345,83 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
 	Label.TextXAlignment = Enum.TextXAlignment.Left
 	Label.Parent = Container
 
-	local Box = Instance.new("TextBox")
-	Box.Size = UDim2.new(0, 42, 0, 22)
-	Box.Position = UDim2.new(1, -98, 0.5, -11)
-	Box.BackgroundColor3 = Color3.fromRGB(24, 24, 36)
-	Box.BorderSizePixel = 0
-	Box.Text = tostring(DefaultValue or 0)
-	Box.TextColor3 = Color3.fromRGB(255, 255, 255)
-	Box.Font = Enum.Font.GothamBold
-	Box.TextSize = 11
-	Box.Parent = Container
-	local BoxCorner = Instance.new("UICorner") BoxCorner.CornerRadius = UDim.new(0, 4) BoxCorner.Parent = Box
+	local Input = Instance.new("TextBox")
+	Input.Size = UDim2.new(0, 55, 0, 25)
+	Input.Position = UDim2.new(1, -112, 0.5, -12)
+	Input.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+	Input.BorderSizePixel = 0
+	Input.Text = tostring(DefaultValue)
+	Input.TextColor3 = Color3.fromRGB(255, 255, 255)
+	Input.TextSize = 12
+	Input.Font = Enum.Font.Gotham
+	Input.ClearTextOnFocus = false
+	Input.Parent = Container
+	local InputCorner = Instance.new("UICorner") InputCorner.CornerRadius = UDim.new(0, 4) InputCorner.Parent = Input
 
-	Box.FocusLost:Connect(function()
-		local num = tonumber(Box.Text)
-		if num and CallbackValue then
-			CallbackValue(num)
-			AutoSaveConfiguration()
-		end
-	end)
-
-	local Toggle = Instance.new("Frame")
-	Toggle.Size = UDim2.new(0, 38, 0, 20)
-	Toggle.Position = UDim2.new(1, -48, 0.5, -10)
-	Toggle.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-	Toggle.BorderSizePixel = 0
-	Toggle.Parent = Container
-	local ToggleCorner = Instance.new("UICorner") ToggleCorner.CornerRadius = UDim.new(0, 4) ToggleCorner.Parent = Toggle
+	local ToggleButton = Instance.new("TextButton")
+	ToggleButton.Size = UDim2.new(0, 38, 0, 20)
+	ToggleButton.Position = UDim2.new(1, -48, 0.5, -10)
+	ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+	ToggleButton.BorderSizePixel = 0
+	ToggleButton.Text = ""
+	ToggleButton.AutoButtonColor = false
+	ToggleButton.Parent = Container
+	local ToggleCorner = Instance.new("UICorner") ToggleCorner.CornerRadius = UDim.new(0, 4) ToggleCorner.Parent = ToggleButton
 
 	local Indicator = Instance.new("Frame")
 	Indicator.Size = UDim2.new(0, 14, 0, 14)
 	Indicator.Position = UDim2.new(0, 3, 0.5, -7)
 	Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	Indicator.BorderSizePixel = 0
-	Indicator.Parent = Toggle
+	Indicator.Parent = ToggleButton
 	local IndicatorCorner = Instance.new("UICorner") IndicatorCorner.CornerRadius = UDim.new(0, 3) IndicatorCorner.Parent = Indicator
 
-	local Button = Instance.new("TextButton")
-	Button.Size = UDim2.new(0, 38, 0, 20)
-	Button.Position = UDim2.new(1, -48, 0.5, -10)
-	Button.BackgroundTransparency = 1
-	Button.Text = ""
-	Button.Parent = Container
-
 	local Enabled = DefaultToggle or false
-	local function Update()
+	local function UpdateToggle()
 		if Enabled then
-			Toggle.BackgroundColor3 = Color3.fromRGB(50, 180, 70)
+			ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 180, 70)
 			Indicator.Position = UDim2.new(1, -17, 0.5, -7)
 		else
-			Toggle.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+			ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
 			Indicator.Position = UDim2.new(0, 3, 0.5, -7)
 		end
 	end
 
-	Button.MouseButton1Click:Connect(function()
+	ToggleButton.MouseButton1Click:Connect(function()
 		if Destroyed then return end
 		Enabled = not Enabled
-		Update()
-		if CallbackToggle then CallbackToggle(Enabled) end
-		if ScriptLoaded then
-			CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100))
-		end
-		AutoSaveConfiguration()
+		UpdateToggle()
+		CallbackToggle(Enabled)
+        if ScriptLoaded then
+            CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100))
+        end
+        AutoSaveConfiguration()
 	end)
 
-	Update()
+	Input.FocusLost:Connect(function()
+		if Destroyed then return end
+		local Number = tonumber(Input.Text)
+		if Number then
+			CallbackValue(Number)
+            AutoSaveConfiguration()
+		else
+			Input.Text = tostring(DefaultValue)
+		end
+	end)
+
+	UpdateToggle()
 	return Container
 end
 
-getgenv().CreateDropdown = function(Name, Options, Page, DefaultValue, Callback)
-	local Container = Instance.new("Frame")
-	Container.Size = UDim2.new(1, -5, 0, 39)
-	Container.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-	Container.BorderSizePixel = 0
-	Container.Parent = Page
+getgenv().CreateInputWithButton = function(Name, Page, DefaultText, ButtonText, Callback)
+	local Box = Instance.new("Frame")
+	Box.Size = UDim2.new(1, -5, 0, 48)
+	Box.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+	Box.BorderSizePixel = 0
+	Box.Parent = Page
 
 	local Label = Instance.new("TextLabel")
-	Label.Size = UDim2.new(0.5, -10, 1, 0)
+	Label.Size = UDim2.new(1, -170, 1, 0)
 	Label.Position = UDim2.new(0, 12, 0, 0)
 	Label.BackgroundTransparency = 1
 	Label.Text = Name
@@ -1429,238 +1429,273 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultValue, Callback)
 	Label.TextSize = 13
 	Label.Font = Enum.Font.GothamMedium
 	Label.TextXAlignment = Enum.TextXAlignment.Left
-	Label.Parent = Container
+	Label.Parent = Box
 
-	local DropBtn = Instance.new("TextButton")
-	DropBtn.Size = UDim2.new(0.45, 0, 0, 24)
-	DropBtn.Position = UDim2.new(0.52, 0, 0.5, -12)
-	DropBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 36)
-	DropBtn.BorderSizePixel = 0
-	DropBtn.Text = tostring(DefaultValue or Options[1] or "Select")
-	DropBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	DropBtn.Font = Enum.Font.GothamBold
-	DropBtn.TextSize = 11
-	DropBtn.Parent = Container
-	local DropCorner = Instance.new("UICorner") DropCorner.CornerRadius = UDim.new(0, 4) DropCorner.Parent = DropBtn
+	local Input = Instance.new("TextBox")
+	Input.Size = UDim2.new(0, 85, 0, 27)
+	Input.Position = UDim2.new(1, -155, 0.5, -13)
+	Input.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+	Input.BorderSizePixel = 0
+	Input.Text = DefaultText or ""
+	Input.PlaceholderText = "Username"
+	Input.TextColor3 = Color3.fromRGB(255, 255, 255)
+	Input.TextSize = 12
+	Input.Font = Enum.Font.Gotham
+	Input.ClearTextOnFocus = false
+	Input.Parent = Box
+	local InputCorner = Instance.new("UICorner") InputCorner.CornerRadius = UDim.new(0, 4) InputCorner.Parent = Input
 
-	local currentIdx = 1
-	for i, opt in ipairs(Options) do
-		if opt == DefaultValue then currentIdx = i break end
-	end
+	local Button = Instance.new("TextButton")
+	Button.Size = UDim2.new(0, 60, 0, 27)
+	Button.Position = UDim2.new(1, -65, 0.5, -13)
+	Button.BackgroundColor3 = MAIN_COLOR
+	Button.BorderSizePixel = 0
+	Button.Text = ButtonText or "Set"
+	Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+	Button.TextSize = 12
+	Button.Font = Enum.Font.GothamBold
+	Button.Parent = Box
+	local ButtonCorner = Instance.new("UICorner") ButtonCorner.CornerRadius = UDim.new(0, 4) ButtonCorner.Parent = Button
 
-	DropBtn.MouseButton1Click:Connect(function()
+	Button.MouseButton1Click:Connect(function()
 		if Destroyed then return end
-		currentIdx = (currentIdx % #Options) + 1
-		local selected = Options[currentIdx]
-		DropBtn.Text = tostring(selected)
-		if Callback then Callback(selected) end
-		AutoSaveConfiguration()
+		Callback(Input.Text)
 	end)
 
-	return Container
-end
-
-getgenv().CreateInputWithButton = function(Name, Page, DefaultText, BtnText, Callback)
-	local Container = Instance.new("Frame")
-	Container.Size = UDim2.new(1, -5, 0, 39)
-	Container.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-	Container.BorderSizePixel = 0
-	Container.Parent = Page
-
-	local Box = Instance.new("TextBox")
-	Box.Size = UDim2.new(0.65, -10, 0, 24)
-	Box.Position = UDim2.new(0, 10, 0.5, -12)
-	Box.BackgroundColor3 = Color3.fromRGB(24, 24, 36)
-	Box.BorderSizePixel = 0
-	Box.PlaceholderText = Name
-	Box.Text = DefaultText or ""
-	Box.TextColor3 = Color3.fromRGB(255, 255, 255)
-	Box.Font = Enum.Font.Gotham
-	Box.TextSize = 11
-	Box.Parent = Container
-	local BoxCorner = Instance.new("UICorner") BoxCorner.CornerRadius = UDim.new(0, 4) BoxCorner.Parent = Box
-
-	local Btn = Instance.new("TextButton")
-	Btn.Size = UDim2.new(0.3, -10, 0, 24)
-	Btn.Position = UDim2.new(0.68, 5, 0.5, -12)
-	Btn.BackgroundColor3 = MAIN_COLOR
-	Btn.BorderSizePixel = 0
-	Btn.Text = BtnText or "Action"
-	Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	Btn.Font = Enum.Font.GothamBold
-	Btn.TextSize = 11
-	Btn.Parent = Container
-	local BtnCorner = Instance.new("UICorner") BtnCorner.CornerRadius = UDim.new(0, 4) BtnCorner.Parent = Btn
-
-	Btn.MouseButton1Click:Connect(function()
-		if Destroyed then return end
-		if Callback then Callback(Box.Text) end
-	end)
-
-	return Container
+	return Box
 end
 
 getgenv().CreateInputWithTwoButtons = function(Name, Page, DefaultText, Btn1Text, Btn2Text, Callback)
-	local Container = Instance.new("Frame")
-	Container.Size = UDim2.new(1, -5, 0, 39)
-	Container.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-	Container.BorderSizePixel = 0
-	Container.Parent = Page
-
-	local Box = Instance.new("TextBox")
-	Box.Size = UDim2.new(0.42, -5, 0, 24)
-	Box.Position = UDim2.new(0, 8, 0.5, -12)
-	Box.BackgroundColor3 = Color3.fromRGB(24, 24, 36)
+	local Box = Instance.new("Frame")
+	Box.Size = UDim2.new(1, -5, 0, 48)
+	Box.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
 	Box.BorderSizePixel = 0
-	Box.PlaceholderText = Name
-	Box.Text = DefaultText or ""
-	Box.TextColor3 = Color3.fromRGB(255, 255, 255)
-	Box.Font = Enum.Font.Gotham
-	Box.TextSize = 11
-	Box.Parent = Container
-	local BoxCorner = Instance.new("UICorner") BoxCorner.CornerRadius = UDim.new(0, 4) BoxCorner.Parent = Box
+	Box.Parent = Page
 
-	local Btn1 = Instance.new("TextButton")
-	Btn1.Size = UDim2.new(0.26, -4, 0, 24)
-	Btn1.Position = UDim2.new(0.44, 2, 0.5, -12)
-	Btn1.BackgroundColor3 = MAIN_COLOR
-	Btn1.BorderSizePixel = 0
-	Btn1.Text = Btn1Text
-	Btn1.TextColor3 = Color3.fromRGB(255, 255, 255)
-	Btn1.Font = Enum.Font.GothamBold
-	Btn1.TextSize = 10
-	Btn1.Parent = Container
-	local Btn1Corner = Instance.new("UICorner") Btn1Corner.CornerRadius = UDim.new(0, 4) Btn1Corner.Parent = Btn1
+	local Label = Instance.new("TextLabel")
+	Label.Size = UDim2.new(1, -210, 1, 0)
+	Label.Position = UDim2.new(0, 12, 0, 0)
+	Label.BackgroundTransparency = 1
+	Label.Text = Name
+	Label.TextColor3 = Color3.fromRGB(240, 240, 240)
+	Label.TextSize = 13
+	Label.Font = Enum.Font.GothamMedium
+	Label.TextXAlignment = Enum.TextXAlignment.Left
+	Label.Parent = Box
 
-	local Btn2 = Instance.new("TextButton")
-	Btn2.Size = UDim2.new(0.28, -4, 0, 24)
-	Btn2.Position = UDim2.new(0.71, 2, 0.5, -12)
-	Btn2.BackgroundColor3 = Color3.fromRGB(30, 30, 48)
-	Btn2.BorderSizePixel = 0
-	Btn2.Text = Btn2Text
-	Btn2.TextColor3 = Color3.fromRGB(255, 255, 255)
-	Btn2.Font = Enum.Font.GothamBold
-	Btn2.TextSize = 10
-	Btn2.Parent = Container
-	local Btn2Corner = Instance.new("UICorner") Btn2Corner.CornerRadius = UDim.new(0, 4) Btn2Corner.Parent = Btn2
+	local Input = Instance.new("TextBox")
+	Input.Size = UDim2.new(0, 75, 0, 27)
+	Input.Position = UDim2.new(1, -195, 0.5, -13)
+	Input.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+	Input.BorderSizePixel = 0
+	Input.Text = DefaultText or ""
+	Input.PlaceholderText = "Username"
+	Input.TextColor3 = Color3.fromRGB(255, 255, 255)
+	Input.TextSize = 11
+	Input.Font = Enum.Font.Gotham
+	Input.ClearTextOnFocus = false
+	Input.Parent = Box
+	local InputCorner = Instance.new("UICorner") InputCorner.CornerRadius = UDim.new(0, 4) InputCorner.Parent = Input
 
-	Btn1.MouseButton1Click:Connect(function()
+	local Button1 = Instance.new("TextButton")
+	Button1.Size = UDim2.new(0, 50, 0, 27)
+	Button1.Position = UDim2.new(1, -115, 0.5, -13)
+	Button1.BackgroundColor3 = MAIN_COLOR
+	Button1.BorderSizePixel = 0
+	Button1.Text = Btn1Text
+	Button1.TextColor3 = Color3.fromRGB(255, 255, 255)
+	Button1.TextSize = 11
+	Button1.Font = Enum.Font.GothamBold
+	Button1.Parent = Box
+	local B1Corner = Instance.new("UICorner") B1Corner.CornerRadius = UDim.new(0, 4) B1Corner.Parent = Button1
+
+	local Button2 = Instance.new("TextButton")
+	Button2.Size = UDim2.new(0, 60, 0, 27)
+	Button2.Position = UDim2.new(1, -62, 0.5, -13)
+	Button2.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+	Button2.BorderSizePixel = 0
+	Button2.Text = Btn2Text
+	Button2.TextColor3 = Color3.fromRGB(255, 255, 255)
+	Button2.TextSize = 11
+	Button2.Font = Enum.Font.GothamBold
+	Button2.Parent = Box
+	local B2Corner = Instance.new("UICorner") B2Corner.CornerRadius = UDim.new(0, 4) B2Corner.Parent = Button2
+
+	Button1.MouseButton1Click:Connect(function()
 		if Destroyed then return end
-		if Callback then Callback(Box.Text, "TP") end
+		Callback(Input.Text, "TP")
 	end)
 
-	Btn2.MouseButton1Click:Connect(function()
+    Button2.MouseButton1Click:Connect(function()
 		if Destroyed then return end
-		if Callback then Callback(Box.Text, "LOOP") end
+		Callback(Input.Text, "LOOP")
 	end)
 
-	return Container
+	return Box
+end
+
+getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback)
+	local Box = Instance.new("Frame")
+	Box.Size = UDim2.new(1, -5, 0, 48)
+	Box.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+	Box.BorderSizePixel = 0
+	Box.Parent = Page
+
+	local Label = Instance.new("TextLabel")
+	Label.Size = UDim2.new(1, -110, 1, 0)
+	Label.Position = UDim2.new(0, 12, 0, 0)
+	Label.BackgroundTransparency = 1
+	Label.Text = Name
+	Label.TextColor3 = Color3.fromRGB(240, 240, 240)
+	Label.TextSize = 13
+	Label.Font = Enum.Font.GothamMedium
+	Label.TextXAlignment = Enum.TextXAlignment.Left
+	Label.Parent = Box
+
+	local Button = Instance.new("TextButton")
+	Button.Size = UDim2.new(0, 95, 0, 27)
+	Button.Position = UDim2.new(1, -107, 0.5, -13)
+	Button.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+	Button.BorderSizePixel = 0
+	Button.Text = DefaultOption
+	Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+	Button.TextSize = 12
+	Button.Font = Enum.Font.Gotham
+	Button.Parent = Box
+
+	local CurrentIdx = 1
+	for i, opt in ipairs(Options) do if opt == DefaultOption then CurrentIdx = i end end
+
+	Button.MouseButton1Click:Connect(function()
+		if Destroyed then return end
+		CurrentIdx = CurrentIdx + 1
+		if CurrentIdx > #Options then CurrentIdx = 1 end
+		Button.Text = Options[CurrentIdx]
+		Callback(Options[CurrentIdx])
+        AutoSaveConfiguration()
+	end)
+
+	return Box
 end
 
 getgenv().CreateButton = function(Name, Page, Callback)
 	local Button = Instance.new("TextButton")
-	Button.Size = UDim2.new(1, -5, 0, 35)
-	Button.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+	Button.Size = UDim2.new(1, -5, 0, 39)
+	Button.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
 	Button.BorderSizePixel = 0
 	Button.Text = Name
 	Button.TextColor3 = Color3.fromRGB(240, 240, 240)
-	Button.TextSize = 12
-	Button.Font = Enum.Font.GothamBold
+	Button.TextSize = 13
+	Button.Font = Enum.Font.GothamMedium
 	Button.Parent = Page
 	local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 4) Corner.Parent = Button
 
 	Button.MouseButton1Click:Connect(function()
 		if Destroyed then return end
-		if Callback then Callback() end
+		Callback(Button)
 	end)
 
 	return Button
 end
 
 getgenv().CreateConfirmButton = function(Name, Page, Callback)
-	local Container = Instance.new("Frame")
-	Container.Size = UDim2.new(1, -5, 0, 35)
-	Container.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-	Container.BorderSizePixel = 0
-	Container.Parent = Page
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(1, -5, 0, 39)
+    Button.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+    Button.BorderSizePixel = 0
+    Button.Text = Name
+    Button.TextColor3 = Color3.fromRGB(240, 240, 240)
+    Button.TextSize = 13
+    Button.Font = Enum.Font.GothamMedium
+    Button.Parent = Page
+    local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 4) Corner.Parent = Button
 
-	local Label = Instance.new("TextLabel")
-	Label.Size = UDim2.new(0.6, 0, 1, 0)
-	Label.Position = UDim2.new(0, 12, 0, 0)
-	Label.BackgroundTransparency = 1
-	Label.Text = Name
-	Label.TextColor3 = Color3.fromRGB(240, 240, 240)
-	Label.TextSize = 12
-	Label.Font = Enum.Font.GothamMedium
-	Label.TextXAlignment = Enum.TextXAlignment.Left
-	Label.Parent = Container
+    local Confirming = false
 
-	local Btn = Instance.new("TextButton")
-	Btn.Size = UDim2.new(0.35, -10, 0, 23)
-	Btn.Position = UDim2.new(0.65, 0, 0.5, -11)
-	Btn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-	Btn.BorderSizePixel = 0
-	Btn.Text = "Execute"
-	Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	Btn.Font = Enum.Font.GothamBold
-	Btn.TextSize = 10
-	Btn.Parent = Container
-	local BtnCorner = Instance.new("UICorner") BtnCorner.CornerRadius = UDim.new(0, 4) BtnCorner.Parent = Btn
+    Button.MouseButton1Click:Connect(function()
+        if Destroyed then return end
+        if not Confirming then
+            Confirming = true
+            Button.Text = "CONFIRM " .. string.upper(Name) .. "? (Click Again)"
+            Button.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+            task.delay(3.5, function()
+                if not Destroyed and Confirming then
+                    Confirming = false
+                    Button.Text = Name
+                    Button.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+                end
+            end)
+        else
+            Confirming = false
+            Button.Text = Name
+            Button.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+            Callback(Button)
+        end
+    end)
 
-	Btn.MouseButton1Click:Connect(function()
-		if Destroyed then return end
-		if Callback then Callback() end
-	end)
-
-	return Container
+    return Button
 end
 
 getgenv().CreateKeybindButton = function(Name, Page, DefaultKey, Callback)
-	local Container = Instance.new("Frame")
-	Container.Size = UDim2.new(1, -5, 0, 35)
-	Container.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-	Container.BorderSizePixel = 0
-	Container.Parent = Page
+    local Box = Instance.new("Frame")
+    Box.Size = UDim2.new(1, -5, 0, 48)
+    Box.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    Box.BorderSizePixel = 0
+    Box.Parent = Page
 
-	local Label = Instance.new("TextLabel")
-	Label.Size = UDim2.new(0.5, 0, 1, 0)
-	Label.Position = UDim2.new(0, 12, 0, 0)
-	Label.BackgroundTransparency = 1
-	Label.Text = Name
-	Label.TextColor3 = Color3.fromRGB(240, 240, 240)
-	Label.TextSize = 12
-	Label.Font = Enum.Font.GothamMedium
-	Label.TextXAlignment = Enum.TextXAlignment.Left
-	Label.Parent = Container
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -110, 1, 0)
+    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = Name
+    Label.TextColor3 = Color3.fromRGB(240, 240, 240)
+    Label.TextSize = 13
+    Label.Font = Enum.Font.GothamMedium
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = Box
 
-	local Btn = Instance.new("TextButton")
-	Btn.Size = UDim2.new(0.45, -10, 0, 23)
-	Btn.Position = UDim2.new(0.55, 0, 0.5, -11)
-	Btn.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
-	Btn.BorderSizePixel = 0
-	Btn.Text = DefaultKey and DefaultKey.Name or "NONE"
-	Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	Btn.Font = Enum.Font.GothamBold
-	Btn.TextSize = 10
-	Btn.Parent = Container
-	local BtnCorner = Instance.new("UICorner") BtnCorner.CornerRadius = UDim.new(0, 4) BtnCorner.Parent = Btn
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(0, 95, 0, 27)
+    Button.Position = UDim2.new(1, -107, 0.5, -13)
+    Button.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    Button.BorderSizePixel = 0
+    Button.Text = DefaultKey and DefaultKey.Name or "NONE"
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.TextSize = 12
+    Button.Font = Enum.Font.Gotham
+    Button.Parent = Box
 
-	local listening = false
-	Btn.MouseButton1Click:Connect(function()
-		if Destroyed then return end
-		listening = true
-		Btn.Text = "..."
-		local conn
-		conn = UserInputService.InputBegan:Connect(function(input)
-			if listening and input.UserInputType == Enum.UserInputType.Keyboard then
-				listening = false
-				Btn.Text = input.KeyCode.Name
-				if Callback then Callback(input.KeyCode) end
-				conn:Disconnect()
-				AutoSaveConfiguration()
-			end
-		end)
-	end)
+    local Binding = false
 
-	return Container
+    Button.MouseButton1Click:Connect(function()
+        if Binding then return end
+        Binding = true
+        Button.Text = "Press Key..."
+        
+        local conn
+        conn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                conn:Disconnect()
+                Binding = false
+                if input.KeyCode == Enum.KeyCode.Escape then
+                    Settings.GUIKeybind = nil
+                    Button.Text = "NONE"
+                else
+                    Settings.GUIKeybind = input.KeyCode
+                    Button.Text = input.KeyCode.Name
+                end
+                Callback(Settings.GUIKeybind)
+                AutoSaveConfiguration()
+            elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
+                conn:Disconnect()
+                Binding = false
+                Settings.GUIKeybind = nil
+                Button.Text = "NONE"
+                Callback(nil)
+                AutoSaveConfiguration()
+            end
+        end)
+    end)
+
+    return Box
 end
