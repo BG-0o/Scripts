@@ -371,13 +371,67 @@ CreateToggleWithValue("Camera FOV", VisualsPage, Settings.FOVEnabled, Settings.F
 CreateDropdown("Shift Lock Key", {"Shift", "Ctrl"}, VisualsPage, Settings.ShiftLockKey, function(v) Settings.ShiftLockKey = v end)
 CreateToggle("Force Shift Lock", VisualsPage, Settings.ForceShiftLock, function(v) Settings.ForceShiftLock = v end)
 CreateToggleWithValue("ESP Max Dist", VisualsPage, true, Settings.EspMaxDistance, function(v) end, function(val) Settings.EspMaxDistance = val end)
-CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", "Magenta", "Orange", "Purple", "Lime", "Pink", "Gold"}, VisualsPage, Settings.EspColorName, function(v) 
-    Settings.EspColorName = v 
-    Settings.EspColor = ColorMap[v] or Color3.fromRGB(255, 255, 255) 
+CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", "Magenta", "Orange", "Purple", "Lime", "Pink", "Gold", "Teams"}, VisualsPage, Settings.EspColorName, function(v) 
+    Settings.EspColorName = v
+    if v ~= "Teams" then
+        Settings.EspColor = ColorMap[v] or Color3.fromRGB(255, 255, 255)
+    end
 end)
 
 local ESPDrawings = {}
 local Highlights = {}
+
+local function GetESPColorForPlayer(p)
+    if Settings.EspColorName ~= "Teams" then
+        return Settings.EspColor or Color3.fromRGB(255, 255, 255)
+    end
+
+    if p and p.Team then
+        local ok, teamColor = pcall(function()
+            return p.TeamColor.Color
+        end)
+
+        if ok and typeof(teamColor) == "Color3" then
+            return teamColor
+        end
+    end
+
+    if p then
+        local roleKeys = {"Role", "Team", "TeamName", "RoleName"}
+
+        for _, key in ipairs(roleKeys) do
+            local ok, value = pcall(function()
+                return p:GetAttribute(key)
+            end)
+
+            if ok and typeof(value) == "string" and value ~= "" then
+                local role = value:lower():gsub("[%s_%-%.]", "")
+
+                if role == "murder" or role == "murderer" or role == "killer" then
+                    return Color3.fromRGB(255, 50, 50)
+                end
+            end
+        end
+
+        if p.Character then
+            for _, key in ipairs(roleKeys) do
+                local ok, value = pcall(function()
+                    return p.Character:GetAttribute(key)
+                end)
+
+                if ok and typeof(value) == "string" and value ~= "" then
+                    local role = value:lower():gsub("[%s_%-%.]", "")
+
+                    if role == "murder" or role == "murderer" or role == "killer" then
+                        return Color3.fromRGB(255, 50, 50)
+                    end
+                end
+            end
+        end
+    end
+
+    return Settings.EspColor or Color3.fromRGB(255, 255, 255)
+end
 
 local function ClearESPForPlayer(p)
     if ESPDrawings[p] then
@@ -715,6 +769,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 local char = p.Character
                 local hrp = char.HumanoidRootPart
                 local hum = char:FindFirstChildOfClass("Humanoid")
+                local espColor = GetESPColorForPlayer(p)
 
                 if Settings.Chams then
                     local hl = Highlights[p]
@@ -727,8 +782,8 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                         hl.Parent = char
                         Highlights[p] = hl
                     end
-                    hl.FillColor = Settings.EspColor
-                    hl.OutlineColor = Settings.EspColor
+                    hl.FillColor = espColor
+                    hl.OutlineColor = espColor
                     hl.FillTransparency = 0.5
                 else
                     if Highlights[p] then Highlights[p]:Destroy() Highlights[p] = nil end
@@ -765,7 +820,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                         textDraw.Center = true
                         textDraw.Outline = true
                         textDraw.OutlineColor = Color3.fromRGB(0, 0, 0)
-                        textDraw.Color = Settings.EspColor
+                        textDraw.Color = espColor
                         textDraw.Position = Vector2.new(pos.X, pos.Y - 38)
                         textDraw.Visible = (textStr ~= "")
 
@@ -779,7 +834,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
 
                             lineDraw.From = startVector
                             lineDraw.To = Vector2.new(pos.X, pos.Y)
-                            lineDraw.Color = Settings.EspColor
+                            lineDraw.Color = espColor
                             lineDraw.Thickness = 1
                             lineDraw.Visible = true
                         else
@@ -791,7 +846,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                             local boxWidth = boxHeight * 0.65
                             boxDraw.Size = Vector2.new(boxWidth, boxHeight)
                             boxDraw.Position = Vector2.new(pos.X - boxWidth / 2, pos.Y - boxHeight / 2)
-                            boxDraw.Color = Settings.EspColor
+                            boxDraw.Color = espColor
                             boxDraw.Thickness = 1.5
                             boxDraw.Filled = false
                             boxDraw.Visible = true
@@ -805,7 +860,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                             if headOnScreen then
                                 headDraw.Position = Vector2.new(headPos.X, headPos.Y)
                                 headDraw.Radius = math.clamp(300 / pos.Z, 2, 10)
-                                headDraw.Color = Settings.EspColor
+                                headDraw.Color = espColor
                                 headDraw.Filled = true
                                 headDraw.Visible = true
                             else
