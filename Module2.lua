@@ -8,6 +8,7 @@ local TextChatService = game:GetService("TextChatService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -152,6 +153,209 @@ TrackGuiPosition("Main", Main)
 TrackGuiPosition("ChatLog", ChatLogGui)
 TrackGuiPosition("Music", MusicGui)
 TrackGuiPosition("Waypoints", WaypointsGui)
+
+local MusicIDStatus = {}
+local MusicCheckRunning = false
+
+local function FindMusicPlaylistScroll()
+    if not MusicGui then
+        return nil
+    end
+
+    for _, obj in ipairs(MusicGui:GetDescendants()) do
+        if obj:IsA("ScrollingFrame") then
+            return obj
+        end
+    end
+
+    return nil
+end
+
+local function FindMusicVolumeArea()
+    if not MusicGui then
+        return nil
+    end
+
+    for _, obj in ipairs(MusicGui:GetDescendants()) do
+        if obj:IsA("TextLabel") and string.sub(obj.Text or "", 1, 7) == "Volume:" then
+            return obj.Parent
+        end
+    end
+
+    return nil
+end
+
+local MusicPlaylistScroll = FindMusicPlaylistScroll()
+local MusicVolumeArea = FindMusicVolumeArea()
+
+local function GetMusicIDLabels()
+    local result = {}
+
+    if not MusicPlaylistScroll then
+        return result
+    end
+
+    for _, row in ipairs(MusicPlaylistScroll:GetChildren()) do
+        if row:IsA("Frame") then
+            for _, obj in ipairs(row:GetChildren()) do
+                if obj:IsA("TextLabel") then
+                    local id = tonumber(obj.Text)
+                    if id then
+                        table.insert(result, {
+                            ID = id,
+                            Label = obj
+                        })
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    return result
+end
+
+local function ApplyMusicIDColors()
+    for _, entry in ipairs(GetMusicIDLabels()) do
+        local status = MusicIDStatus[tostring(entry.ID)]
+
+        if status == true then
+            entry.Label.TextColor3 = Color3.fromRGB(70, 255, 100)
+        elseif status == false then
+            entry.Label.TextColor3 = Color3.fromRGB(255, 70, 70)
+        elseif status == "checking" then
+            entry.Label.TextColor3 = Color3.fromRGB(255, 215, 70)
+        else
+            entry.Label.TextColor3 = Color3.fromRGB(200, 200, 220)
+        end
+    end
+end
+
+local function IsMusicIDActive(id)
+    local success, info = pcall(function()
+        return MarketplaceService:GetProductInfo(id, Enum.InfoType.Asset)
+    end)
+
+    if not success or typeof(info) ~= "table" then
+        return false
+    end
+
+    if tonumber(info.AssetTypeId) ~= 3 then
+        return false
+    end
+
+    local name = string.lower(tostring(info.Name or ""))
+
+    if name == ""
+    or string.find(name, "content deleted", 1, true)
+    or string.find(name, "[deleted]", 1, true)
+    or string.find(name, "[ content deleted ]", 1, true) then
+        return false
+    end
+
+    return true
+end
+
+local function CheckAllMusicIDs(button)
+    if MusicCheckRunning then
+        return
+    end
+
+    local entries = GetMusicIDLabels()
+
+    if #entries == 0 then
+        CustomNotify("No music IDs to check", Color3.fromRGB(255, 180, 70))
+        return
+    end
+
+    MusicCheckRunning = true
+
+    if button then
+        button.Text = "Checking..."
+        button.TextColor3 = Color3.fromRGB(255, 215, 70)
+        button.Active = false
+    end
+
+    local uniqueIDs = {}
+    local ids = {}
+
+    for _, entry in ipairs(entries) do
+        local key = tostring(entry.ID)
+
+        if not uniqueIDs[key] then
+            uniqueIDs[key] = true
+            MusicIDStatus[key] = "checking"
+            table.insert(ids, entry.ID)
+        end
+    end
+
+    ApplyMusicIDColors()
+
+    task.spawn(function()
+        local activeCount = 0
+        local unavailableCount = 0
+
+        for _, id in ipairs(ids) do
+            local active = IsMusicIDActive(id)
+            MusicIDStatus[tostring(id)] = active
+
+            if active then
+                activeCount = activeCount + 1
+            else
+                unavailableCount = unavailableCount + 1
+            end
+
+            ApplyMusicIDColors()
+            task.wait(0.12)
+        end
+
+        MusicCheckRunning = false
+
+        if button and button.Parent then
+            button.Text = "Check IDs"
+            button.TextColor3 = Color3.fromRGB(100, 255, 100)
+            button.Active = true
+
+            task.delay(1.2, function()
+                if button and button.Parent then
+                    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+                end
+            end)
+        end
+
+        CustomNotify(
+            tostring(activeCount) .. " active | " .. tostring(unavailableCount) .. " unavailable",
+            unavailableCount > 0 and Color3.fromRGB(255, 180, 70) or Color3.fromRGB(100, 255, 100)
+        )
+    end)
+end
+
+if MusicVolumeArea and CreateDarkBtn then
+    local oldCheck = MusicVolumeArea:FindFirstChild("ToxCheckMusicIDs")
+
+    if oldCheck then
+        oldCheck:Destroy()
+    end
+
+    local CheckMusicIDsBtn = CreateDarkBtn(
+        "Check IDs",
+        UDim2.new(0.52, 0, 0, 0),
+        UDim2.new(0.22, 0, 1, 0),
+        MusicVolumeArea
+    )
+
+    CheckMusicIDsBtn.Name = "ToxCheckMusicIDs"
+
+    CheckMusicIDsBtn.MouseButton1Click:Connect(function()
+        CheckAllMusicIDs(CheckMusicIDsBtn)
+    end)
+end
+
+if MusicPlaylistScroll then
+    AddConnection(MusicPlaylistScroll.ChildAdded:Connect(function()
+        task.defer(ApplyMusicIDColors)
+    end))
+end
 
 local function GetHumanoidDefaults(hum)
     if not hum then return nil end
@@ -764,6 +968,11 @@ CreateToggle("Distance", VisualsPage, Settings.ESPDistance, function(v) Settings
 CreateToggle("2D Box ESP", VisualsPage, Settings.ESPBox, function(v) Settings.ESPBox = v end)
 CreateToggle("Head Dot ESP", VisualsPage, Settings.ESPHeadDot, function(v) Settings.ESPHeadDot = v end)
 CreateToggle("Tracers", VisualsPage, Settings.ESPTracers, function(v) Settings.ESPTracers = v end)
+CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
+    Settings.ESPTeamColors = v
+    UIState.TeamColors = v
+    SaveUIState()
+end)
 CreateDropdown("Tracer Mode", {"DOWN", "UP", "MOUSE"}, VisualsPage, Settings.TracerOrigin, function(v) Settings.TracerOrigin = v end)
 CreateToggleWithValue("Camera FOV", VisualsPage, Settings.FOVEnabled, Settings.FOVValue, function(v)
     if v then
@@ -779,28 +988,12 @@ end, function(val) Settings.FOVValue = val end)
 
 CreateDropdown("Shift Lock Key", {"Shift", "Ctrl"}, VisualsPage, Settings.ShiftLockKey, function(v) Settings.ShiftLockKey = v end)
 
-CreateToggle("Force Shift Lock", VisualsPage, Settings.ForceShiftLock, function(v)
-    if v then
-        CaptureShiftLockDefaults()
-    end
-
-    Settings.ForceShiftLock = v
-
-    if not v then
-        RestoreShiftLockDefaults()
-    end
-end)
 CreateToggleWithValue("ESP Max Dist", VisualsPage, true, Settings.EspMaxDistance, function(v) end, function(val) Settings.EspMaxDistance = val end)
 CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", "Magenta", "Orange", "Purple", "Lime", "Pink", "Gold"}, VisualsPage, Settings.EspColorName, function(v)
     Settings.EspColorName = v
     Settings.EspColor = ColorMap[v] or Color3.fromRGB(255, 255, 255)
 end)
 
-CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
-    Settings.ESPTeamColors = v
-    UIState.TeamColors = v
-    SaveUIState()
-end)
 
 local ESPDrawings = {}
 local Highlights = {}
@@ -1016,13 +1209,6 @@ local function ClearESPForPlayer(p)
     end
 end
 
-CreateButton("Reload ESP", VisualsPage, function()
-    for p, _ in pairs(ESPDrawings) do ClearESPForPlayer(p) end
-    ESPDrawings = {}
-    Highlights = {}
-    CustomNotify("ESP Reloaded!", Color3.fromRGB(100, 255, 100))
-end)
-
 CreateToggle("Ctrl Click TP", FlingPage, Settings.CtrlClickTP, function(v) Settings.CtrlClickTP = v end)
 CreateToggle("No Fall Damage", FlingPage, Settings.NoFallDamage, function(v) Settings.NoFallDamage = v end)
 CreateToggle("Anti Void", FlingPage, Settings.AntiVoid, function(v) Settings.AntiVoid = v if v then StartAntiVoid() end end)
@@ -1031,6 +1217,17 @@ CreateToggle("Anti Fling", FlingPage, Settings.AntiFling, function(v)
     if not v then RestoreAntiFlingDefaults() end
 end)
 CreateToggle("Fullbright", FlingPage, Settings.Fullbright, function(v) Settings.Fullbright = v UpdateFullbright() end)
+CreateToggle("Force Shift Lock", FlingPage, Settings.ForceShiftLock, function(v)
+    if v then
+        CaptureShiftLockDefaults()
+    end
+
+    Settings.ForceShiftLock = v
+
+    if not v then
+        RestoreShiftLockDefaults()
+    end
+end)
 CreateInputWithButton("Fling", FlingPage, "", "Fling", function(text) ExecuteFling(text) end)
 CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
 CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
@@ -1063,8 +1260,8 @@ CreateToggle("3D Rendering", ConfigPage, Settings.Render3D, function(v)
     pcall(function() RunService:Set3dRenderingEnabled(v) end)
 end)
 CreateKeybindButton("GUI Keybind", ConfigPage, Settings.GUIKeybind, function(key) Settings.GUIKeybind = key end)
-CreateConfirmButton("Server Hop", ConfigPage, function() ServerHop() end)
 CreateConfirmButton("FPS Booster", ConfigPage, function() BoostFPS() end)
+CreateConfirmButton("Server Hop", ConfigPage, function() ServerHop() end)
 CreateConfirmButton("Rejoin Server", ConfigPage, function()
 	if #Players:GetPlayers() <= 1 then TeleportService:Teleport(game.PlaceId, Player)
 	else TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player) end
