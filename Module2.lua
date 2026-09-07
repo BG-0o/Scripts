@@ -12,6 +12,212 @@ local Lighting = game:GetService("Lighting")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
+local HumanoidDefaults = setmetatable({}, {__mode = "k"})
+local NoclipDefaults = setmetatable({}, {__mode = "k"})
+local AntiFlingDefaults = setmetatable({}, {__mode = "k"})
+local HitboxDefaults = setmetatable({}, {__mode = "k"})
+
+local FOVDefault = Camera.FieldOfView
+local FOVCaptured = false
+local ShiftLockDefaults = nil
+local isShiftLockActive = false
+
+local function GetHumanoidDefaults(hum)
+    if not hum then return nil end
+
+    if not HumanoidDefaults[hum] then
+        HumanoidDefaults[hum] = {
+            WalkSpeed = hum.WalkSpeed,
+            UseJumpPower = hum.UseJumpPower,
+            JumpPower = hum.JumpPower,
+            JumpHeight = hum.JumpHeight
+        }
+    end
+
+    return HumanoidDefaults[hum]
+end
+
+local function RestoreSpeed()
+    local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
+    local defaults = hum and HumanoidDefaults[hum]
+
+    if hum and defaults then
+        hum.WalkSpeed = defaults.WalkSpeed
+    end
+end
+
+local function RestoreJump()
+    local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
+    local defaults = hum and HumanoidDefaults[hum]
+
+    if hum and defaults then
+        hum.UseJumpPower = defaults.UseJumpPower
+        hum.JumpPower = defaults.JumpPower
+        hum.JumpHeight = defaults.JumpHeight
+    end
+end
+
+local function CaptureNoclipDefaults()
+    if not Player.Character then return end
+
+    for _, part in ipairs(Player.Character:GetDescendants()) do
+        if part:IsA("BasePart") and NoclipDefaults[part] == nil then
+            NoclipDefaults[part] = part.CanCollide
+        end
+    end
+end
+
+local function RestoreNoclipDefaults()
+    for part, canCollide in pairs(NoclipDefaults) do
+        if part and part.Parent then
+            part.CanCollide = canCollide
+        end
+        NoclipDefaults[part] = nil
+    end
+end
+
+local function RestoreAntiFlingDefaults()
+    for part, canCollide in pairs(AntiFlingDefaults) do
+        if part and part.Parent then
+            part.CanCollide = canCollide
+        end
+        AntiFlingDefaults[part] = nil
+    end
+end
+
+local function RestoreHitboxDefaults()
+    for hrp, data in pairs(HitboxDefaults) do
+        if hrp and hrp.Parent then
+            hrp.Size = data.Size
+            hrp.Transparency = data.Transparency
+            hrp.CanCollide = data.CanCollide
+        end
+        HitboxDefaults[hrp] = nil
+    end
+end
+
+local function CaptureFOVDefault()
+    if not FOVCaptured then
+        FOVDefault = Camera.FieldOfView
+        FOVCaptured = true
+    end
+end
+
+local function RestoreFOVDefault()
+    if FOVCaptured then
+        Camera.FieldOfView = FOVDefault
+        FOVCaptured = false
+    end
+end
+
+local function CaptureShiftLockDefaults()
+    if not ShiftLockDefaults then
+        ShiftLockDefaults = {
+            DevEnableMouseLock = Player.DevEnableMouseLock,
+            MouseBehavior = UserInputService.MouseBehavior
+        }
+    end
+end
+
+local function RestoreShiftLockDefaults()
+    if ShiftLockDefaults then
+        pcall(function()
+            Player.DevEnableMouseLock = ShiftLockDefaults.DevEnableMouseLock
+        end)
+
+        pcall(function()
+            UserInputService.MouseBehavior = ShiftLockDefaults.MouseBehavior
+        end)
+
+        ShiftLockDefaults = nil
+    end
+
+    isShiftLockActive = false
+end
+
+local SubGuiControls = {}
+
+local function FindSubGuiTopBar(gui)
+    if not gui then return nil end
+
+    for _, child in ipairs(gui:GetChildren()) do
+        if child:IsA("Frame") and child.Size.Y.Offset == 32 and child.Position.Y.Offset == 0 then
+            return child
+        end
+    end
+
+    return nil
+end
+
+local function RegisterSubGuiMinimize(gui, buttonOffset)
+    if not gui then return nil end
+
+    local topBar = FindSubGuiTopBar(gui)
+    if not topBar then return nil end
+
+    local expandedSize = gui.Size
+
+    for _, child in ipairs(topBar:GetChildren()) do
+        if child:IsA("TextButton") and (child.Text == "-" or child.Text == "+") then
+            child:Destroy()
+        end
+    end
+
+    for _, child in ipairs(topBar:GetChildren()) do
+        if child:IsA("TextLabel") then
+            child.Size = UDim2.new(1, math.min(child.Size.X.Offset, -70), child.Size.Y.Scale, child.Size.Y.Offset)
+            break
+        end
+    end
+
+    local button = Instance.new("TextButton")
+    button.Name = "ToxSubGuiMinimize"
+    button.Size = UDim2.new(0, 24, 0, 22)
+    button.Position = UDim2.new(1, buttonOffset, 0.5, -11)
+    button.BackgroundColor3 = Color3.fromRGB(22, 22, 35)
+    button.BorderSizePixel = 0
+    button.Text = "-"
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 14
+    button.AutoButtonColor = false
+    button.Parent = topBar
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = button
+
+    local data = {
+        Gui = gui,
+        ExpandedSize = expandedSize,
+        Button = button
+    }
+
+    SubGuiControls[gui] = data
+
+    button.MouseButton1Click:Connect(function()
+        local minimized = gui.Size.Y.Offset <= 32 and gui.Size.Y.Scale == 0
+
+        if minimized then
+            gui.Size = data.ExpandedSize
+            button.Text = "-"
+        else
+            if gui.Size.Y.Offset > 32 or gui.Size.Y.Scale ~= 0 then
+                data.ExpandedSize = gui.Size
+            end
+
+            gui.Size = UDim2.new(data.ExpandedSize.X.Scale, data.ExpandedSize.X.Offset, 0, 32)
+            button.Text = "+"
+        end
+    end)
+
+    return data
+end
+
+RegisterSubGuiMinimize(ChatLogGui, -88)
+RegisterSubGuiMinimize(MusicGui, -52)
+RegisterSubGuiMinimize(WaypointsGui, -52)
+
 for _, page in pairs(Pages) do
     for _, child in ipairs(page:GetChildren()) do
         if child:IsA("Frame") or child:IsA("TextButton") then
@@ -334,19 +540,49 @@ CreateToggle("Silent Aim", CombatPage, Settings.SilentAim, function(v) Settings.
 CreateToggle("Triggerbot", CombatPage, Settings.Triggerbot, function(v) Settings.Triggerbot = v end)
 CreateToggleWithValue("Spinbot", CombatPage, Settings.Spinbot, Settings.SpinSpeed, function(v) Settings.Spinbot = v end, function(val) Settings.SpinSpeed = val end)
 CreateToggleWithValue("Hitbox Expander", CombatPage, Settings.HitboxExpander, Settings.HitboxSize, function(v) 
-    Settings.HitboxExpander = v 
-    if not v then ResetHitboxes() end
+    Settings.HitboxExpander = v
+    if not v then RestoreHitboxDefaults() end
 end, function(val) Settings.HitboxSize = val end)
 CreateToggleWithValue("Kill Aura", CombatPage, Settings.KillAura, Settings.KillAuraRange, function(v) Settings.KillAura = v end, function(val) Settings.KillAuraRange = val end)
 
-CreateToggleWithValue("Speed", PlayerPage, Settings.Speed, Settings.SpeedValue, function(v) Settings.Speed = v end, function(val) Settings.SpeedValue = val end)
-CreateToggleWithValue("Jump", PlayerPage, Settings.Jump, Settings.JumpValue, function(v) Settings.Jump = v end, function(val) Settings.JumpValue = val end)
+CreateToggleWithValue("Speed", PlayerPage, Settings.Speed, Settings.SpeedValue, function(v)
+    if v then
+        local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
+        GetHumanoidDefaults(hum)
+    end
+
+    Settings.Speed = v
+
+    if not v then
+        RestoreSpeed()
+    end
+end, function(val) Settings.SpeedValue = val end)
+
+CreateToggleWithValue("Jump", PlayerPage, Settings.Jump, Settings.JumpValue, function(v)
+    if v then
+        local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
+        GetHumanoidDefaults(hum)
+    end
+
+    Settings.Jump = v
+
+    if not v then
+        RestoreJump()
+    end
+end, function(val) Settings.JumpValue = val end)
 CreateToggle("Air Walk (Platform)", PlayerPage, Settings.AirWalk, function(v) Settings.AirWalk = v UpdateAirWalk() end)
 CreateToggleWithValue("Smooth Fly", PlayerPage, Settings.SmoothFly, Settings.FlySpeed, function(v) Settings.SmoothFly = v if v then Settings.NormalFly = false end end, function(val) Settings.FlySpeed = val end)
 CreateToggleWithValue("Normal Fly", PlayerPage, Settings.NormalFly, Settings.FlySpeed, function(v) Settings.NormalFly = v if v then Settings.SmoothFly = false end end, function(val) Settings.FlySpeed = val end)
-CreateToggle("Noclip", PlayerPage, Settings.Noclip, function(v) 
-    Settings.Noclip = v 
-    if not v then RestoreCollisions() end
+CreateToggle("Noclip", PlayerPage, Settings.Noclip, function(v)
+    if v then
+        CaptureNoclipDefaults()
+    end
+
+    Settings.Noclip = v
+
+    if not v then
+        RestoreNoclipDefaults()
+    end
 end)
 CreateToggle("Infinite Jump", PlayerPage, Settings.InfiniteJump, function(v) Settings.InfiniteJump = v end)
 CreateToggleWithValue("Bhop (Auto Jump)", PlayerPage, Settings.Bhop, Settings.BhopInterval, function(v) Settings.Bhop = v end, function(val) Settings.BhopInterval = math.max(0.05, val) end)
@@ -360,16 +596,31 @@ CreateToggle("2D Box ESP", VisualsPage, Settings.ESPBox, function(v) Settings.ES
 CreateToggle("Head Dot ESP", VisualsPage, Settings.ESPHeadDot, function(v) Settings.ESPHeadDot = v end)
 CreateToggle("Tracers", VisualsPage, Settings.ESPTracers, function(v) Settings.ESPTracers = v end)
 CreateDropdown("Tracer Mode", {"DOWN", "UP", "MOUSE"}, VisualsPage, Settings.TracerOrigin, function(v) Settings.TracerOrigin = v end)
-CreateToggle("Custom Crosshair", VisualsPage, Settings.Crosshair, function(v) Settings.Crosshair = v UpdateMouseIcon() end)
-CreateInputWithButton("Mouse Icon (Decal ID)", VisualsPage, Settings.MouseIconID, "Set", function(text) 
-    Settings.MouseIconID = tostring(text or "")
-    UpdateMouseIcon()
-    AutoSaveConfiguration()
-end)
-CreateToggleWithValue("Mouse Icon Size", VisualsPage, true, Settings.MouseIconSize, function(v) end, function(val) Settings.MouseIconSize = val UpdateMouseIcon() end)
-CreateToggleWithValue("Camera FOV", VisualsPage, Settings.FOVEnabled, Settings.FOVValue, function(v) Settings.FOVEnabled = v end, function(val) Settings.FOVValue = val end)
+CreateToggleWithValue("Camera FOV", VisualsPage, Settings.FOVEnabled, Settings.FOVValue, function(v)
+    if v then
+        CaptureFOVDefault()
+    end
+
+    Settings.FOVEnabled = v
+
+    if not v then
+        RestoreFOVDefault()
+    end
+end, function(val) Settings.FOVValue = val end)
+
 CreateDropdown("Shift Lock Key", {"Shift", "Ctrl"}, VisualsPage, Settings.ShiftLockKey, function(v) Settings.ShiftLockKey = v end)
-CreateToggle("Force Shift Lock", VisualsPage, Settings.ForceShiftLock, function(v) Settings.ForceShiftLock = v end)
+
+CreateToggle("Force Shift Lock", VisualsPage, Settings.ForceShiftLock, function(v)
+    if v then
+        CaptureShiftLockDefaults()
+    end
+
+    Settings.ForceShiftLock = v
+
+    if not v then
+        RestoreShiftLockDefaults()
+    end
+end)
 CreateToggleWithValue("ESP Max Dist", VisualsPage, true, Settings.EspMaxDistance, function(v) end, function(val) Settings.EspMaxDistance = val end)
 CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", "Magenta", "Orange", "Purple", "Lime", "Pink", "Gold", "Teams"}, VisualsPage, Settings.EspColorName, function(v) 
     Settings.EspColorName = v
@@ -454,7 +705,10 @@ end)
 CreateToggle("Ctrl Click TP", FlingPage, Settings.CtrlClickTP, function(v) Settings.CtrlClickTP = v end)
 CreateToggle("No Fall Damage", FlingPage, Settings.NoFallDamage, function(v) Settings.NoFallDamage = v end)
 CreateToggle("Anti Void", FlingPage, Settings.AntiVoid, function(v) Settings.AntiVoid = v if v then StartAntiVoid() end end)
-CreateToggle("Anti Fling", FlingPage, Settings.AntiFling, function(v) Settings.AntiFling = v end)
+CreateToggle("Anti Fling", FlingPage, Settings.AntiFling, function(v)
+    Settings.AntiFling = v
+    if not v then RestoreAntiFlingDefaults() end
+end)
 CreateToggle("Fullbright", FlingPage, Settings.Fullbright, function(v) Settings.Fullbright = v UpdateFullbright() end)
 CreateInputWithButton("Fling", FlingPage, "", "Fling", function(text) ExecuteFling(text) end)
 CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
@@ -501,17 +755,26 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     Settings.AirWalk = false
     UpdateAirWalk()
 
-    Settings.Crosshair = false
-    UpdateMouseIcon()
+    Settings.Speed = false
+    Settings.Jump = false
+    Settings.Noclip = false
+    Settings.AntiFling = false
+    Settings.HitboxExpander = false
+    Settings.FOVEnabled = false
+    Settings.ForceShiftLock = false
+
+    RestoreSpeed()
+    RestoreJump()
+    RestoreNoclipDefaults()
+    RestoreAntiFlingDefaults()
+    RestoreHitboxDefaults()
+    RestoreFOVDefault()
+    RestoreShiftLockDefaults()
 
     local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
     if Hum then
-        Hum.WalkSpeed = 16
-        Hum.JumpPower = 50
         Hum.PlatformStand = false
     end
-    RestoreCollisions()
-    ResetHitboxes()
 
     for _, hl in pairs(Highlights) do pcall(function() hl:Destroy() end) end
     Highlights = {}
@@ -532,7 +795,6 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     pcall(function() Gui:Destroy() end)
 end)
 
-local isShiftLockActive = false
 AddConnection(UserInputService.InputBegan:Connect(function(input, gpe)
     if not gpe and Settings.ForceShiftLock then
         local key = Settings.ShiftLockKey
@@ -613,7 +875,12 @@ AddConnection(RunService.Stepped:Connect(function()
 
     if Settings.Noclip and Player.Character then
         for _, part in ipairs(Player.Character:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = false end
+            if part:IsA("BasePart") then
+                if NoclipDefaults[part] == nil then
+                    NoclipDefaults[part] = part.CanCollide
+                end
+                part.CanCollide = false
+            end
         end
     end
 
@@ -621,7 +888,12 @@ AddConnection(RunService.Stepped:Connect(function()
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= Player and p.Character then
                 for _, part in ipairs(p.Character:GetChildren()) do
-                    if part:IsA("BasePart") then part.CanCollide = false end
+                    if part:IsA("BasePart") then
+                        if AntiFlingDefaults[part] == nil then
+                            AntiFlingDefaults[part] = part.CanCollide
+                        end
+                        part.CanCollide = false
+                    end
                 end
             end
         end
@@ -633,7 +905,6 @@ AddConnection(RunService.Stepped:Connect(function()
     end
 
     UpdateAirWalk()
-    UpdateMouseIcon()
     if Settings.Fullbright then UpdateFullbright() end
 end))
 
@@ -652,9 +923,22 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
     local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
 
     if Hum and Hum.Health > 0 then
-        Hum.WalkSpeed = Settings.Speed and Settings.SpeedValue or 16
-        Hum.UseJumpPower = true
-        Hum.JumpPower = Settings.Jump and Settings.JumpValue or 50
+        local defaults = GetHumanoidDefaults(Hum)
+
+        if Settings.Speed then
+            Hum.WalkSpeed = Settings.SpeedValue
+        end
+
+        if Settings.Jump then
+            Hum.UseJumpPower = true
+            Hum.JumpPower = Settings.JumpValue
+        elseif defaults and HumanoidDefaults[Hum] == defaults then
+            if Hum.UseJumpPower ~= defaults.UseJumpPower and not Settings.Jump then
+                Hum.UseJumpPower = defaults.UseJumpPower
+                Hum.JumpPower = defaults.JumpPower
+                Hum.JumpHeight = defaults.JumpHeight
+            end
+        end
 
         if Settings.Bhop then
             local interval = math.max(0.05, tonumber(Settings.BhopInterval) or 0.2)
@@ -668,9 +952,13 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         end
     end
 
-    if Settings.FOVEnabled then Camera.FieldOfView = Settings.FOVValue or 70 end
+    if Settings.FOVEnabled then
+        CaptureFOVDefault()
+        Camera.FieldOfView = Settings.FOVValue or FOVDefault
+    end
 
     if Settings.ForceShiftLock then
+        CaptureShiftLockDefaults()
         Player.DevEnableMouseLock = true
         if isShiftLockActive and Root then
             Camera.CFrame = Camera.CFrame * CFrame.new(1.7, 0.5, 0)
@@ -919,6 +1207,14 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
             if p ~= Player and p.Character then
                 local hrp = p.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
+                    if not HitboxDefaults[hrp] then
+                        HitboxDefaults[hrp] = {
+                            Size = hrp.Size,
+                            Transparency = hrp.Transparency,
+                            CanCollide = hrp.CanCollide
+                        }
+                    end
+
                     hrp.Size = Vector3.new(Settings.HitboxSize or 10, Settings.HitboxSize or 10, Settings.HitboxSize or 10)
                     hrp.Transparency = 0.7
                     hrp.CanCollide = false
@@ -1059,6 +1355,41 @@ local SubGuisPreMinimizedState = {}
 local Minimize = getgenv().Minimize
 local Minimized = false
 
+local function CollapseSubGuiWithMain(key, gui)
+    if not gui then return end
+
+    local control = SubGuiControls[gui]
+
+    SubGuisPreMinimizedState[key] = {
+        Visible = gui.Visible,
+        Size = gui.Size,
+        ButtonText = control and control.Button and control.Button.Text or nil
+    }
+
+    if gui.Visible then
+        gui.Size = UDim2.new(gui.Size.X.Scale, gui.Size.X.Offset, 0, 32)
+
+        if control and control.Button then
+            control.Button.Text = "+"
+        end
+    end
+end
+
+local function RestoreSubGuiAfterMain(key, gui)
+    if not gui then return end
+
+    local state = SubGuisPreMinimizedState[key]
+    if not state then return end
+
+    gui.Visible = state.Visible
+    gui.Size = state.Size
+
+    local control = SubGuiControls[gui]
+    if control and control.Button and state.ButtonText then
+        control.Button.Text = state.ButtonText
+    end
+end
+
 if Minimize then
     Minimize.MouseButton1Click:Connect(function()
         Minimized = not Minimized
@@ -1068,16 +1399,13 @@ if Minimize then
         Minimize.Text = Minimized and "+" or "-"
 
         if Minimized then
-            SubGuisPreMinimizedState.ChatLog = ChatLogGui.Visible
-            SubGuisPreMinimizedState.Music = MusicGui.Visible
-            SubGuisPreMinimizedState.Waypoints = WaypointsGui.Visible
-            ChatLogGui.Visible = false
-            MusicGui.Visible = false
-            WaypointsGui.Visible = false
+            CollapseSubGuiWithMain("ChatLog", ChatLogGui)
+            CollapseSubGuiWithMain("Music", MusicGui)
+            CollapseSubGuiWithMain("Waypoints", WaypointsGui)
         else
-            if SubGuisPreMinimizedState.ChatLog ~= nil then ChatLogGui.Visible = SubGuisPreMinimizedState.ChatLog end
-            if SubGuisPreMinimizedState.Music ~= nil then MusicGui.Visible = SubGuisPreMinimizedState.Music end
-            if SubGuisPreMinimizedState.Waypoints ~= nil then WaypointsGui.Visible = SubGuisPreMinimizedState.Waypoints end
+            RestoreSubGuiAfterMain("ChatLog", ChatLogGui)
+            RestoreSubGuiAfterMain("Music", MusicGui)
+            RestoreSubGuiAfterMain("Waypoints", WaypointsGui)
         end
     end)
 end
