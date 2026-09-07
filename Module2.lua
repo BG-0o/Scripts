@@ -556,6 +556,8 @@ AddConnection(UserInputService.JumpRequest:Connect(function()
     end
 end))
 
+local SubGuisPreKeyHiddenState = {}
+
 AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and Settings.CtrlClickTP and input.UserInputType == Enum.UserInputType.MouseButton1 then
         if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
@@ -566,8 +568,36 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
             end
         end
     end
+
     if Settings.GUIKeybind and input.KeyCode == Settings.GUIKeybind then
-        Main.Visible = not Main.Visible
+        if Main.Visible then
+            SubGuisPreKeyHiddenState.ChatLog = ChatLogGui.Visible
+            SubGuisPreKeyHiddenState.Music = MusicGui.Visible
+            SubGuisPreKeyHiddenState.Waypoints = WaypointsGui.Visible
+
+            Main.Visible = false
+            ChatLogGui.Visible = false
+            MusicGui.Visible = false
+            WaypointsGui.Visible = false
+        else
+            Main.Visible = true
+
+            if Tabs.Visible then
+                if SubGuisPreKeyHiddenState.ChatLog ~= nil then
+                    ChatLogGui.Visible = SubGuisPreKeyHiddenState.ChatLog
+                end
+                if SubGuisPreKeyHiddenState.Music ~= nil then
+                    MusicGui.Visible = SubGuisPreKeyHiddenState.Music
+                end
+                if SubGuisPreKeyHiddenState.Waypoints ~= nil then
+                    WaypointsGui.Visible = SubGuisPreKeyHiddenState.Waypoints
+                end
+            else
+                ChatLogGui.Visible = false
+                MusicGui.Visible = false
+                WaypointsGui.Visible = false
+            end
+        end
     end
 end))
 
