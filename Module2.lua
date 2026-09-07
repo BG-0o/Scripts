@@ -805,9 +805,191 @@ end)
 local ESPDrawings = {}
 local Highlights = {}
 
-local function GetESPColorForPlayer(p)
+local MM2GameId = 66654135
+local MM2PlaceId = 142823291
+local MM2RoleCache = {}
+local MM2RoleCacheTime = 0
+
+local RoleColors = {
+    Murderer = Color3.fromRGB(255, 50, 50),
+    Sheriff = Color3.fromRGB(50, 150, 255),
+    Innocent = Color3.fromRGB(50, 255, 50),
+    Hero = Color3.fromRGB(50, 255, 255)
+}
+
+local function HasNamedTool(p, names)
+    if not p then
+        return false
+    end
+
+    local containers = {
+        p:FindFirstChildOfClass("Backpack"),
+        p.Character
+    }
+
+    for _, container in ipairs(containers) do
+        if container then
+            for _, child in ipairs(container:GetChildren()) do
+                local childName = string.lower(child.Name)
+
+                for _, wantedName in ipairs(names) do
+                    if childName == wantedName then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+local function RefreshMM2Roles()
+    if game.GameId ~= MM2GameId and game.PlaceId ~= MM2PlaceId then
+        return
+    end
+
+    local now = tick()
+    if now - MM2RoleCacheTime < 0.15 then
+        return
+    end
+
+    MM2RoleCacheTime = now
+
+    local newCache = {}
+    local roundDetected = false
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if HasNamedTool(p, {"knife"}) then
+            newCache[p] = "Murderer"
+            roundDetected = true
+        elseif HasNamedTool(p, {"gun", "revolver"}) then
+            newCache[p] = "Sheriff"
+            roundDetected = true
+        end
+    end
+
+    if roundDetected then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if not newCache[p] then
+                local char = p.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+                if hum and hum.Health > 0 then
+                    newCache[p] = "Innocent"
+                end
+            end
+        end
+    end
+
+    MM2RoleCache = newCache
+end
+
+local function NormalizeRoleName(value)
+    if typeof(value) ~= "string" or value == "" then
+        return nil
+    end
+
+    local role = string.lower(value)
+    role = role:gsub("[%s_%-%.]", "")
+
+    if role == "murder"
+    or role == "murderer"
+    or role == "murderers"
+    or role == "killer" then
+        return "Murderer"
+    end
+
+    if role == "sheriff"
+    or role == "detective"
+    or role == "cop"
+    or role == "police" then
+        return "Sheriff"
+    end
+
+    if role == "innocent"
+    or role == "innocents"
+    or role == "civilian"
+    or role == "survivor" then
+        return "Innocent"
+    end
+
+    if role == "hero" then
+        return "Hero"
+    end
+
+    return nil
+end
+
+local function GetAttributeRole(p)
+    if not p then
+        return nil
+    end
+
+    local roleKeys = {
+        "Role",
+        "Team",
+        "TeamName",
+        "RoleName"
+    }
+
+    local containers = {
+        p,
+        p.Character
+    }
+
+    for _, container in ipairs(containers) do
+        if container then
+            for _, key in ipairs(roleKeys) do
+                local ok, value = pcall(function()
+                    return container:GetAttribute(key)
+                end)
+
+                if ok then
+                    local normalized = NormalizeRoleName(value)
+
+                    if normalized then
+                        return normalized
+                    end
+                end
+
+                local valueObject = container:FindFirstChild(key)
+
+                if valueObject and valueObject:IsA("StringValue") then
+                    local normalized = NormalizeRoleName(valueObject.Value)
+
+                    if normalized then
+                        return normalized
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function GetESPVisualInfo(p)
+    local defaultColor = Settings.EspColor or Color3.fromRGB(255, 255, 255)
+
     if not Settings.ESPTeamColors then
-        return Settings.EspColor or Color3.fromRGB(255, 255, 255)
+        return defaultColor, nil
+    end
+
+    if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
+        RefreshMM2Roles()
+
+        local role = MM2RoleCache[p]
+
+        if role then
+            return RoleColors[role] or defaultColor, role
+        end
+    end
+
+    local attributeRole = GetAttributeRole(p)
+
+    if attributeRole then
+        return RoleColors[attributeRole] or defaultColor, attributeRole
     end
 
     if p and p.Team then
@@ -816,45 +998,11 @@ local function GetESPColorForPlayer(p)
         end)
 
         if ok and typeof(teamColor) == "Color3" then
-            return teamColor
+            return teamColor, p.Team.Name
         end
     end
 
-    if p then
-        local roleKeys = {"Role", "Team", "TeamName", "RoleName"}
-
-        for _, key in ipairs(roleKeys) do
-            local ok, value = pcall(function()
-                return p:GetAttribute(key)
-            end)
-
-            if ok and typeof(value) == "string" and value ~= "" then
-                local role = value:lower():gsub("[%s_%-%.]", "")
-
-                if role == "murder" or role == "murderer" or role == "killer" then
-                    return Color3.fromRGB(255, 50, 50)
-                end
-            end
-        end
-
-        if p.Character then
-            for _, key in ipairs(roleKeys) do
-                local ok, value = pcall(function()
-                    return p.Character:GetAttribute(key)
-                end)
-
-                if ok and typeof(value) == "string" and value ~= "" then
-                    local role = value:lower():gsub("[%s_%-%.]", "")
-
-                    if role == "murder" or role == "murderer" or role == "killer" then
-                        return Color3.fromRGB(255, 50, 50)
-                    end
-                end
-            end
-        end
-    end
-
-    return Settings.EspColor or Color3.fromRGB(255, 255, 255)
+    return defaultColor, nil
 end
 
 local function ClearESPForPlayer(p)
@@ -887,6 +1035,10 @@ CreateInputWithButton("Fling", FlingPage, "", "Fling", function(text) ExecuteFli
 CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
 CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
 CreateButton("Tox Waypoints", FlingPage, function() WaypointsGui.Visible = not WaypointsGui.Visible end)
+
+CreateButton("BigFroot", ScriptsPage, function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BigFroot.lua"))()
+end)
 
 CreateButton("FE Emotes", ScriptsPage, function()
     loadstring(game:HttpGet(('https://raw.githubusercontent.com/VenezzaX/Usefulthings/refs/heads/main/FeEmotes.lua'),true))()
@@ -1260,7 +1412,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 local char = p.Character
                 local hrp = char.HumanoidRootPart
                 local hum = char:FindFirstChildOfClass("Humanoid")
-                local espColor = GetESPColorForPlayer(p)
+                local espColor, espRole = GetESPVisualInfo(p)
 
                 if Settings.Chams then
                     local hl = Highlights[p]
@@ -1302,8 +1454,19 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
 
                     if onScreen then
                         local textStr = ""
-                        if Settings.ESPNames then textStr = textStr .. p.DisplayName .. " (@" .. p.Name .. ")\n" end
-                        if Settings.ESPDistance then textStr = textStr .. "Dist: " .. math.floor(distFromMe) .. "m" end
+                        if Settings.ESPNames then
+                            textStr = textStr .. p.DisplayName .. " (@" .. p.Name .. ")"
+
+                            if Settings.ESPTeamColors and espRole then
+                                textStr = textStr .. " [" .. espRole .. "]"
+                            end
+
+                            textStr = textStr .. "\n"
+                        end
+
+                        if Settings.ESPDistance then
+                            textStr = textStr .. "Dist: " .. math.floor(distFromMe) .. "m"
+                        end
 
                         textDraw.Text = textStr
                         textDraw.Font = Drawing.Fonts.Plex
