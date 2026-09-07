@@ -22,6 +22,137 @@ local FOVCaptured = false
 local ShiftLockDefaults = nil
 local isShiftLockActive = false
 
+local UIStateFolder = "ToxV1_Data"
+local UIStatePath = UIStateFolder .. "/ui_state.json"
+local UIState = {
+    TeamColors = false,
+    Positions = {}
+}
+local CanSaveGuiPositions = false
+local SaveStateToken = 0
+
+local function EnsureUIStateFolder()
+    if makefolder and isfolder then
+        pcall(function()
+            if not isfolder(UIStateFolder) then
+                makefolder(UIStateFolder)
+            end
+        end)
+    end
+end
+
+local function LoadUIState()
+    EnsureUIStateFolder()
+
+    if not isfile or not readfile or not isfile(UIStatePath) then
+        return
+    end
+
+    pcall(function()
+        local decoded = HttpService:JSONDecode(readfile(UIStatePath))
+        if typeof(decoded) == "table" then
+            if typeof(decoded.TeamColors) == "boolean" then
+                UIState.TeamColors = decoded.TeamColors
+            end
+
+            if typeof(decoded.Positions) == "table" then
+                UIState.Positions = decoded.Positions
+            end
+        end
+    end)
+end
+
+local function SaveUIState()
+    EnsureUIStateFolder()
+
+    if not writefile then
+        return
+    end
+
+    pcall(function()
+        writefile(UIStatePath, HttpService:JSONEncode(UIState))
+    end)
+end
+
+local function QueueUIStateSave()
+    SaveStateToken = SaveStateToken + 1
+    local token = SaveStateToken
+
+    task.delay(0.2, function()
+        if token == SaveStateToken then
+            SaveUIState()
+        end
+    end)
+end
+
+local function EncodePosition(position)
+    return {
+        XS = position.X.Scale,
+        XO = position.X.Offset,
+        YS = position.Y.Scale,
+        YO = position.Y.Offset
+    }
+end
+
+local function DecodePosition(data)
+    if typeof(data) ~= "table" then
+        return nil
+    end
+
+    if typeof(data.XS) ~= "number"
+    or typeof(data.XO) ~= "number"
+    or typeof(data.YS) ~= "number"
+    or typeof(data.YO) ~= "number" then
+        return nil
+    end
+
+    return UDim2.new(data.XS, data.XO, data.YS, data.YO)
+end
+
+local function ApplySavedGuiPosition(key, gui)
+    if not gui then
+        return nil
+    end
+
+    local saved = DecodePosition(UIState.Positions[key])
+    if saved then
+        gui.Position = saved
+        return saved
+    end
+
+    return gui.Position
+end
+
+local function TrackGuiPosition(key, gui)
+    if not gui then
+        return
+    end
+
+    AddConnection(gui:GetPropertyChangedSignal("Position"):Connect(function()
+        if not CanSaveGuiPositions then
+            return
+        end
+
+        UIState.Positions[key] = EncodePosition(gui.Position)
+        QueueUIStateSave()
+    end))
+end
+
+LoadUIState()
+Settings.ESPTeamColors = UIState.TeamColors == true
+
+local DefaultMainPosition = UDim2.new(0.5, -165, 0.5, -197)
+local SavedMainPosition = DecodePosition(UIState.Positions.Main) or DefaultMainPosition
+
+ApplySavedGuiPosition("ChatLog", ChatLogGui)
+ApplySavedGuiPosition("Music", MusicGui)
+ApplySavedGuiPosition("Waypoints", WaypointsGui)
+
+TrackGuiPosition("Main", Main)
+TrackGuiPosition("ChatLog", ChatLogGui)
+TrackGuiPosition("Music", MusicGui)
+TrackGuiPosition("Waypoints", WaypointsGui)
+
 local function GetHumanoidDefaults(hum)
     if not hum then return nil end
 
@@ -149,13 +280,60 @@ local function FindSubGuiTopBar(gui)
     return nil
 end
 
+local function SetSubGuiContentVisible(data, visible)
+    local gui = data.Gui
+    local topBar = data.TopBar
+
+    if visible then
+        for child, wasVisible in pairs(data.ChildVisibility) do
+            if child and child.Parent == gui and child:IsA("GuiObject") then
+                child.Visible = wasVisible
+            end
+        end
+
+        data.ChildVisibility = {}
+    else
+        data.ChildVisibility = {}
+
+        for _, child in ipairs(gui:GetChildren()) do
+            if child:IsA("GuiObject") and child ~= topBar then
+                data.ChildVisibility[child] = child.Visible
+                child.Visible = false
+            end
+        end
+    end
+end
+
+local function SetSubGuiMinimized(data, minimized)
+    if not data or not data.Gui then
+        return
+    end
+
+    local gui = data.Gui
+
+    if minimized then
+        if not data.Minimized and (gui.Size.Y.Offset > 32 or gui.Size.Y.Scale ~= 0) then
+            data.ExpandedSize = gui.Size
+        end
+
+        gui.ClipsDescendants = true
+        SetSubGuiContentVisible(data, false)
+        gui.Size = UDim2.new(data.ExpandedSize.X.Scale, data.ExpandedSize.X.Offset, 0, 32)
+        data.Button.Text = "+"
+        data.Minimized = true
+    else
+        gui.Size = data.ExpandedSize
+        SetSubGuiContentVisible(data, true)
+        data.Button.Text = "-"
+        data.Minimized = false
+    end
+end
+
 local function RegisterSubGuiMinimize(gui, buttonOffset)
     if not gui then return nil end
 
     local topBar = FindSubGuiTopBar(gui)
     if not topBar then return nil end
-
-    local expandedSize = gui.Size
 
     for _, child in ipairs(topBar:GetChildren()) do
         if child:IsA("TextButton") and (child.Text == "-" or child.Text == "+") then
@@ -189,26 +367,17 @@ local function RegisterSubGuiMinimize(gui, buttonOffset)
 
     local data = {
         Gui = gui,
-        ExpandedSize = expandedSize,
-        Button = button
+        TopBar = topBar,
+        ExpandedSize = gui.Size,
+        Button = button,
+        Minimized = false,
+        ChildVisibility = {}
     }
 
     SubGuiControls[gui] = data
 
     button.MouseButton1Click:Connect(function()
-        local minimized = gui.Size.Y.Offset <= 32 and gui.Size.Y.Scale == 0
-
-        if minimized then
-            gui.Size = data.ExpandedSize
-            button.Text = "-"
-        else
-            if gui.Size.Y.Offset > 32 or gui.Size.Y.Scale ~= 0 then
-                data.ExpandedSize = gui.Size
-            end
-
-            gui.Size = UDim2.new(data.ExpandedSize.X.Scale, data.ExpandedSize.X.Offset, 0, 32)
-            button.Text = "+"
-        end
+        SetSubGuiMinimized(data, not data.Minimized)
     end)
 
     return data
@@ -622,18 +791,22 @@ CreateToggle("Force Shift Lock", VisualsPage, Settings.ForceShiftLock, function(
     end
 end)
 CreateToggleWithValue("ESP Max Dist", VisualsPage, true, Settings.EspMaxDistance, function(v) end, function(val) Settings.EspMaxDistance = val end)
-CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", "Magenta", "Orange", "Purple", "Lime", "Pink", "Gold", "Teams"}, VisualsPage, Settings.EspColorName, function(v) 
+CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", "Magenta", "Orange", "Purple", "Lime", "Pink", "Gold"}, VisualsPage, Settings.EspColorName, function(v)
     Settings.EspColorName = v
-    if v ~= "Teams" then
-        Settings.EspColor = ColorMap[v] or Color3.fromRGB(255, 255, 255)
-    end
+    Settings.EspColor = ColorMap[v] or Color3.fromRGB(255, 255, 255)
+end)
+
+CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
+    Settings.ESPTeamColors = v
+    UIState.TeamColors = v
+    SaveUIState()
 end)
 
 local ESPDrawings = {}
 local Highlights = {}
 
 local function GetESPColorForPlayer(p)
-    if Settings.EspColorName ~= "Teams" then
+    if not Settings.ESPTeamColors then
         return Settings.EspColor or Color3.fromRGB(255, 255, 255)
     end
 
@@ -1333,17 +1506,26 @@ local function ShowCenterLoadSequence()
         SplashFrame:Destroy()
         if not Destroyed then
             Main.Size = UDim2.new(0, 0, 0, 0)
-            Main.Position = UDim2.new(0.5, 0, 0.5, 0)
+            Main.Position = SavedMainPosition
             Main.Visible = true
 
             Main:TweenSizeAndPosition(
                 UDim2.new(0, 330, 0, 395),
-                UDim2.new(0.5, -165, 0.5, -197),
+                SavedMainPosition,
                 Enum.EasingDirection.Out,
                 Enum.EasingStyle.Back,
                 0.5,
                 true
             )
+
+            task.delay(0.6, function()
+                if not Destroyed then
+                    CanSaveGuiPositions = true
+                    UIState.Positions.Main = EncodePosition(Main.Position)
+                    QueueUIStateSave()
+                end
+            end)
+
             CustomNotify("ToxHub v1 Loaded Successfully!", Color3.fromRGB(100, 255, 100))
         end
     end)
@@ -1362,16 +1544,11 @@ local function CollapseSubGuiWithMain(key, gui)
 
     SubGuisPreMinimizedState[key] = {
         Visible = gui.Visible,
-        Size = gui.Size,
-        ButtonText = control and control.Button and control.Button.Text or nil
+        WasMinimized = control and control.Minimized or false
     }
 
-    if gui.Visible then
-        gui.Size = UDim2.new(gui.Size.X.Scale, gui.Size.X.Offset, 0, 32)
-
-        if control and control.Button then
-            control.Button.Text = "+"
-        end
+    if gui.Visible and control and not control.Minimized then
+        SetSubGuiMinimized(control, true)
     end
 end
 
@@ -1382,11 +1559,10 @@ local function RestoreSubGuiAfterMain(key, gui)
     if not state then return end
 
     gui.Visible = state.Visible
-    gui.Size = state.Size
 
     local control = SubGuiControls[gui]
-    if control and control.Button and state.ButtonText then
-        control.Button.Text = state.ButtonText
+    if control then
+        SetSubGuiMinimized(control, state.WasMinimized)
     end
 end
 
