@@ -2,7 +2,7 @@ if game.PlaceId ~= 142823291 then
     return
 end
 
-local MM2ModuleVersion = "2026-09-08-guided-silent-aim-5"
+local MM2ModuleVersion = "2026-09-08-silent-normal-shot-6"
 
 if getgenv().ToxMM2ModuleLoadedJobId == game.JobId
 and getgenv().ToxMM2ModuleVersion == MM2ModuleVersion
@@ -1383,8 +1383,15 @@ local function FireGuidedGunShot(gun, targetPosition)
     return fired
 end
 
-local function ShootMurderer()
+local function ShootMurderer(showNotify)
     if GuidedShotBusy or getgenv().Destroyed then
+        if showNotify then
+            CustomNotify(
+                "Shoot Murderer is busy",
+                Color3.fromRGB(255, 180, 70)
+            )
+        end
+
         return false
     end
 
@@ -1395,6 +1402,14 @@ local function ShootMurderer()
 
     if not gun then
         GuidedShotBusy = false
+
+        if showNotify then
+            CustomNotify(
+                "You need the Gun",
+                Color3.fromRGB(255, 100, 100)
+            )
+        end
+
         return false
     end
 
@@ -1402,6 +1417,14 @@ local function ShootMurderer()
 
     if not murderer or not murderer.Character then
         GuidedShotBusy = false
+
+        if showNotify then
+            CustomNotify(
+                "Murderer not found",
+                Color3.fromRGB(255, 180, 70)
+            )
+        end
+
         return false
     end
 
@@ -1410,6 +1433,14 @@ local function ShootMurderer()
 
     if not targetPart then
         GuidedShotBusy = false
+
+        if showNotify then
+            CustomNotify(
+                "Murderer target unavailable",
+                Color3.fromRGB(255, 100, 100)
+            )
+        end
+
         return false
     end
 
@@ -1418,8 +1449,118 @@ local function ShootMurderer()
         targetPart.Position
     )
 
+    if showNotify then
+        if fired then
+            CustomNotify(
+                "Shoot Murderer: " .. murderer.DisplayName,
+                Color3.fromRGB(100, 255, 100)
+            )
+        else
+            CustomNotify(
+                "Shoot Murderer failed",
+                Color3.fromRGB(255, 100, 100)
+            )
+        end
+    end
+
     task.delay(0.22, function()
         GuidedShotBusy = false
+    end)
+
+    return fired
+end
+
+local SilentAimBusy = false
+
+local function FireNormalDirectionalShot(gun, targetPosition)
+    local character = Player.Character
+
+    if not character then
+        return false
+    end
+
+    local originPart = character:FindFirstChild("RightHand")
+        or character:FindFirstChild("Right Arm")
+        or character:FindFirstChild("UpperTorso")
+        or character:FindFirstChild("Torso")
+        or character:FindFirstChild("HumanoidRootPart")
+
+    if not originPart then
+        return false
+    end
+
+    local shootRemote = gun:FindFirstChild("Shoot")
+        or gun:FindFirstChild("Shoot", true)
+
+    if not shootRemote or not shootRemote:IsA("RemoteEvent") then
+        return false
+    end
+
+    local originPosition = originPart.Position
+    local direction = targetPosition - originPosition
+
+    if direction.Magnitude <= 0.1 then
+        return false
+    end
+
+    local originCFrame = CFrame.lookAt(
+        originPosition,
+        targetPosition
+    )
+
+    local targetCFrame = CFrame.lookAt(
+        targetPosition,
+        targetPosition + direction.Unit
+    )
+
+    local ok = pcall(function()
+        shootRemote:FireServer(
+            originCFrame,
+            targetCFrame
+        )
+    end)
+
+    return ok
+end
+
+local function SilentAimShot()
+    if SilentAimBusy
+    or GuidedShotBusy
+    or getgenv().Destroyed then
+        return false
+    end
+
+    SilentAimBusy = true
+
+    local gun = GetOrEquipGuidedGun()
+
+    if not gun then
+        SilentAimBusy = false
+        return false
+    end
+
+    local murderer = FindGuidedMurderer()
+
+    if not murderer or not murderer.Character then
+        SilentAimBusy = false
+        return false
+    end
+
+    local targetPart = murderer.Character:FindFirstChild("Head")
+        or murderer.Character:FindFirstChild("HumanoidRootPart")
+
+    if not targetPart then
+        SilentAimBusy = false
+        return false
+    end
+
+    local fired = FireNormalDirectionalShot(
+        gun,
+        targetPart.Position
+    )
+
+    task.delay(0.18, function()
+        SilentAimBusy = false
     end)
 
     return fired
@@ -2552,7 +2693,9 @@ task.spawn(function()
             and murderHumanoid.Health > 0
             and os.clock() - AutoShootLastAttempt >= 0.72 then
                 AutoShootLastAttempt = os.clock()
-                task.spawn(ShootMurderer)
+                task.spawn(function()
+                    ShootMurderer(false)
+                end)
             end
         end
 
@@ -2592,7 +2735,7 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     and input.KeyCode == Settings.MM2SilentAimKey then
         task.defer(function()
             if not getgenv().Destroyed then
-                ShootMurderer()
+                SilentAimShot()
             end
         end)
 
@@ -2624,7 +2767,7 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 
         task.defer(function()
             if not getgenv().Destroyed then
-                ShootMurderer()
+                ShootMurderer(true)
             end
         end)
 
@@ -2654,6 +2797,7 @@ getgenv().ToxMM2Cleanup = function()
     MM2AutoRuntime.GrabGun = false
     ShootSafetySerial = ShootSafetySerial + 1
     GuidedShotBusy = false
+    SilentAimBusy = false
     ActionBusy = false
     AutoShootLastAttempt = 0
     table.clear(KnifeTargetIds)
