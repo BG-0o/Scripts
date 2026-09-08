@@ -29,6 +29,8 @@ local ToxChatInput = getgenv().ToxChatInput
 local ToxChatSendBtn = getgenv().ToxChatSendBtn
 local ToxChatStatus = getgenv().ToxChatStatus
 local AddToxChatMessage = getgenv().AddToxChatMessage
+local JoinGamesGui = getgenv().JoinGamesGui
+local JoinGamesScroll = getgenv().JoinGamesScroll
 local CheckMusicIDsBtn = getgenv().CheckMusicIDsBtn
 local SetMusicIDStatus = getgenv().SetMusicIDStatus
 
@@ -991,6 +993,7 @@ RegisterSubGuiMinimize(ChatLogGui, -88)
 RegisterSubGuiMinimize(MusicGui, -52)
 RegisterSubGuiMinimize(WaypointsGui, -52)
 RegisterSubGuiMinimize(ToxChatGui, -52)
+RegisterSubGuiMinimize(JoinGamesGui, -52)
 
 for _, page in pairs(Pages) do
     for _, child in ipairs(page:GetChildren()) do
@@ -999,6 +1002,391 @@ for _, page in pairs(Pages) do
         end
     end
 end
+
+local QuickJoinGames = {
+    {Name = "MM2", PlaceId = 142823291},
+    {Name = "NDS", PlaceId = 189707}
+}
+getgenv().QuickJoinGames = QuickJoinGames
+
+local JoinTargetCache = nil
+local JoinLookupGeneration = 0
+
+local JoinTargetBox = nil
+local JoinPlayingLabel = nil
+local JoinPlayerButton = nil
+local JoinGamesButton = nil
+
+local function CleanJoinTarget(text)
+    text = tostring(text or "")
+    text = text:gsub("^%s+", ""):gsub("%s+$", "")
+    text = text:gsub("^@", "")
+    return text
+end
+
+local function ResolveJoinUserId(text)
+    local cleaned = CleanJoinTarget(text)
+
+    if cleaned == "" then
+        return nil, "Enter nick or ID"
+    end
+
+    local numeric = tonumber(cleaned)
+
+    if numeric and numeric > 0 then
+        return math.floor(numeric)
+    end
+
+    local ok, userId = pcall(function()
+        return Players:GetUserIdFromNameAsync(cleaned)
+    end)
+
+    if ok and tonumber(userId) then
+        return tonumber(userId)
+    end
+
+    return nil, "User not found"
+end
+
+local function PresenceRequest(userId)
+    local requestData = {
+        Url = "https://presence.roblox.com/v1/presence/users",
+        Method = "POST",
+        Headers = {
+            ["Content-Type"] = "application/json"
+        },
+        Body = HttpService:JSONEncode({userIds = {userId}})
+    }
+
+    local ok = false
+    local response = nil
+
+    if RequestFunction then
+        ok, response = pcall(function()
+            return RequestFunction(requestData)
+        end)
+
+        if not ok or typeof(response) ~= "table" then
+            requestData.URL = requestData.Url
+            requestData.Url = nil
+
+            ok, response = pcall(function()
+                return RequestFunction(requestData)
+            end)
+        end
+    end
+
+    local body = nil
+
+    if ok and typeof(response) == "table" then
+        body = response.Body or response.body
+    end
+
+    if typeof(body) ~= "string" or body == "" then
+        local postOk, postBody = pcall(function()
+            return HttpService:PostAsync(
+                "https://presence.roblox.com/v1/presence/users",
+                HttpService:JSONEncode({userIds = {userId}}),
+                Enum.HttpContentType.ApplicationJson
+            )
+        end)
+
+        if postOk and typeof(postBody) == "string" then
+            body = postBody
+        end
+    end
+
+    if typeof(body) ~= "string" or body == "" then
+        return nil, "Presence unavailable"
+    end
+
+    if typeof(body) ~= "string" or body == "" then
+        return nil, "Presence unavailable"
+    end
+
+    local decodedOk, decoded = pcall(function()
+        return HttpService:JSONDecode(body)
+    end)
+
+    if not decodedOk or typeof(decoded) ~= "table" then
+        return nil, "Presence unavailable"
+    end
+
+    local presence = decoded.userPresences and decoded.userPresences[1]
+
+    if typeof(presence) ~= "table" then
+        return nil, "Presence unavailable"
+    end
+
+    return presence
+end
+
+local function UpdateJoinStatus(text, notifyFailure)
+    JoinLookupGeneration = JoinLookupGeneration + 1
+    local generation = JoinLookupGeneration
+
+    if JoinPlayingLabel then
+        JoinPlayingLabel.Text = "Checking..."
+        JoinPlayingLabel.TextColor3 = Color3.fromRGB(255, 215, 70)
+    end
+
+    local userId, resolveError = ResolveJoinUserId(text)
+
+    if not userId then
+        JoinTargetCache = nil
+
+        if JoinPlayingLabel then
+            JoinPlayingLabel.Text = resolveError or "User not found"
+            JoinPlayingLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        end
+
+        if notifyFailure then
+            CustomNotify(resolveError or "User not found", Color3.fromRGB(255, 100, 100))
+        end
+
+        return nil
+    end
+
+    local sameServerPlayer = Players:GetPlayerByUserId(userId)
+
+    if sameServerPlayer then
+        JoinTargetCache = {
+            UserId = userId,
+            SameServer = true,
+            PlaceId = game.PlaceId,
+            GameId = game.JobId,
+            LastLocation = "This server"
+        }
+
+        if generation == JoinLookupGeneration and JoinPlayingLabel then
+            JoinPlayingLabel.Text = "Playing: this server"
+            JoinPlayingLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        end
+
+        return JoinTargetCache
+    end
+
+    local presence, presenceError = PresenceRequest(userId)
+
+    if generation ~= JoinLookupGeneration then
+        return nil
+    end
+
+    if not presence then
+        JoinTargetCache = nil
+
+        if JoinPlayingLabel then
+            JoinPlayingLabel.Text = presenceError or "Presence unavailable"
+            JoinPlayingLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        end
+
+        if notifyFailure then
+            CustomNotify(presenceError or "Presence unavailable", Color3.fromRGB(255, 100, 100))
+        end
+
+        return nil
+    end
+
+    local presenceType = tonumber(presence.userPresenceType) or 0
+    local lastLocation = tostring(presence.lastLocation or "")
+    local placeId = tonumber(presence.placeId)
+    local gameId = presence.gameId and tostring(presence.gameId) or nil
+
+    JoinTargetCache = {
+        UserId = userId,
+        PresenceType = presenceType,
+        PlaceId = placeId,
+        GameId = gameId,
+        LastLocation = lastLocation
+    }
+
+    if JoinPlayingLabel then
+        if presenceType == 2 then
+            JoinPlayingLabel.Text = "Playing: " .. (lastLocation ~= "" and lastLocation or "Roblox")
+            JoinPlayingLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        elseif presenceType == 0 then
+            JoinPlayingLabel.Text = "Offline"
+            JoinPlayingLabel.TextColor3 = Color3.fromRGB(170, 170, 185)
+        else
+            JoinPlayingLabel.Text = "Online, not in game"
+            JoinPlayingLabel.TextColor3 = Color3.fromRGB(255, 215, 70)
+        end
+    end
+
+    return JoinTargetCache
+end
+
+local function JoinTargetPlayer()
+    if not JoinTargetBox then
+        return
+    end
+
+    local target = UpdateJoinStatus(JoinTargetBox.Text, true)
+
+    if not target then
+        return
+    end
+
+    if target.SameServer then
+        CustomNotify("Player is already in this server", Color3.fromRGB(255, 215, 70))
+        return
+    end
+
+    if target.PresenceType ~= 2 then
+        CustomNotify("Player is not in a game", Color3.fromRGB(255, 180, 70))
+        return
+    end
+
+    if not target.PlaceId or not target.GameId or target.GameId == "" then
+        CustomNotify("Player joins are unavailable", Color3.fromRGB(255, 100, 100))
+        return
+    end
+
+    pcall(function()
+        TeleportService:TeleportToPlaceInstance(target.PlaceId, target.GameId, Player)
+    end)
+end
+
+local function CreateJoinInterface()
+    if not JoinPage then
+        return
+    end
+
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, -5, 0, 108)
+    card.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    card.BorderSizePixel = 0
+    card.Parent = JoinPage
+
+    local cardCorner = Instance.new("UICorner")
+    cardCorner.CornerRadius = UDim.new(0, 4)
+    cardCorner.Parent = card
+
+    JoinTargetBox = Instance.new("TextBox")
+    JoinTargetBox.Size = UDim2.new(0.52, -8, 0, 30)
+    JoinTargetBox.Position = UDim2.new(0, 8, 0, 8)
+    JoinTargetBox.BackgroundColor3 = Color3.fromRGB(27, 27, 39)
+    JoinTargetBox.BorderSizePixel = 0
+    JoinTargetBox.PlaceholderText = "Nick / ID"
+    JoinTargetBox.Text = ""
+    JoinTargetBox.TextColor3 = Color3.fromRGB(245, 245, 245)
+    JoinTargetBox.PlaceholderColor3 = Color3.fromRGB(130, 130, 150)
+    JoinTargetBox.Font = Enum.Font.Gotham
+    JoinTargetBox.TextSize = 12
+    JoinTargetBox.ClearTextOnFocus = false
+    JoinTargetBox.Parent = card
+
+    local inputCorner = Instance.new("UICorner")
+    inputCorner.CornerRadius = UDim.new(0, 4)
+    inputCorner.Parent = JoinTargetBox
+
+    JoinPlayingLabel = Instance.new("TextLabel")
+    JoinPlayingLabel.Size = UDim2.new(0.48, -12, 0, 30)
+    JoinPlayingLabel.Position = UDim2.new(0.52, 4, 0, 8)
+    JoinPlayingLabel.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+    JoinPlayingLabel.BorderSizePixel = 0
+    JoinPlayingLabel.Text = "Playing: --"
+    JoinPlayingLabel.TextColor3 = Color3.fromRGB(170, 170, 185)
+    JoinPlayingLabel.Font = Enum.Font.Gotham
+    JoinPlayingLabel.TextSize = 10
+    JoinPlayingLabel.TextXAlignment = Enum.TextXAlignment.Center
+    JoinPlayingLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    JoinPlayingLabel.Parent = card
+
+    local playingCorner = Instance.new("UICorner")
+    playingCorner.CornerRadius = UDim.new(0, 4)
+    playingCorner.Parent = JoinPlayingLabel
+
+    JoinPlayerButton = Instance.new("TextButton")
+    JoinPlayerButton.Size = UDim2.new(1, -16, 0, 28)
+    JoinPlayerButton.Position = UDim2.new(0, 8, 0, 44)
+    JoinPlayerButton.BackgroundColor3 = MAIN_COLOR
+    JoinPlayerButton.BorderSizePixel = 0
+    JoinPlayerButton.Text = "JOIN"
+    JoinPlayerButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    JoinPlayerButton.Font = Enum.Font.GothamBold
+    JoinPlayerButton.TextSize = 12
+    JoinPlayerButton.Parent = card
+
+    local joinCorner = Instance.new("UICorner")
+    joinCorner.CornerRadius = UDim.new(0, 4)
+    joinCorner.Parent = JoinPlayerButton
+
+    JoinGamesButton = Instance.new("TextButton")
+    JoinGamesButton.Size = UDim2.new(1, -16, 0, 24)
+    JoinGamesButton.Position = UDim2.new(0, 8, 0, 78)
+    JoinGamesButton.BackgroundColor3 = Color3.fromRGB(24, 24, 36)
+    JoinGamesButton.BorderSizePixel = 0
+    JoinGamesButton.Text = "Quick Games"
+    JoinGamesButton.TextColor3 = Color3.fromRGB(240, 240, 240)
+    JoinGamesButton.Font = Enum.Font.GothamBold
+    JoinGamesButton.TextSize = 11
+    JoinGamesButton.Parent = card
+
+    local gamesCorner = Instance.new("UICorner")
+    gamesCorner.CornerRadius = UDim.new(0, 4)
+    gamesCorner.Parent = JoinGamesButton
+
+    JoinTargetBox.FocusLost:Connect(function()
+        if CleanJoinTarget(JoinTargetBox.Text) ~= "" then
+            task.spawn(function()
+                UpdateJoinStatus(JoinTargetBox.Text, false)
+            end)
+        end
+    end)
+
+    JoinPlayerButton.MouseButton1Click:Connect(function()
+        task.spawn(JoinTargetPlayer)
+    end)
+
+    JoinGamesButton.MouseButton1Click:Connect(function()
+        if JoinGamesGui then
+            JoinGamesGui.Visible = not JoinGamesGui.Visible
+        end
+    end)
+end
+
+local function PopulateQuickJoinGames()
+    if not JoinGamesScroll then
+        return
+    end
+
+    for _, child in ipairs(JoinGamesScroll:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+
+    for _, info in ipairs(QuickJoinGames) do
+        local button = Instance.new("TextButton")
+        button.Size = UDim2.new(1, -4, 0, 38)
+        button.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+        button.BorderSizePixel = 0
+        button.Text = info.Name
+        button.TextColor3 = Color3.fromRGB(245, 245, 245)
+        button.Font = Enum.Font.GothamBold
+        button.TextSize = 12
+        button.Parent = JoinGamesScroll
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 4)
+        corner.Parent = button
+
+        button.MouseButton1Click:Connect(function()
+            if game.PlaceId == info.PlaceId then
+                CustomNotify("Already in " .. info.Name, Color3.fromRGB(255, 215, 70))
+                return
+            end
+
+            pcall(function()
+                TeleportService:Teleport(info.PlaceId, Player)
+            end)
+        end)
+    end
+end
+
+CreateJoinInterface()
+PopulateQuickJoinGames()
 
 local function SkidFling(TargetPlayer)
     if not TargetPlayer or not TargetPlayer.Character then return end
@@ -1284,6 +1672,7 @@ local SharedToggleSettingMap = {
     AntiFling = "AntiFling",
     CtrlClickTP = "CtrlClickTP",
     CarFly = "CarFly",
+    ESPEnabled = "ESPEnabled",
     Chams = "Chams",
     ESPNames = "ESPNames",
     ESPTeamColors = "ESPTeamColors",
@@ -1576,7 +1965,14 @@ CreateToggleWithValue("Car Fly", PlayerPage, Settings.CarFly, Settings.CarFlySpe
     end
 end, function(val) Settings.CarFlySpeed = val end, "CarFly")
 
-CreateToggle("Chams (Wallhack)", VisualsPage, Settings.Chams, function(v)
+CreateToggle("ESP", VisualsPage, Settings.ESPEnabled, function(v)
+    if getgenv().ToxSetSharedOption then
+        getgenv().ToxSetSharedOption("ESPEnabled", v)
+    else
+        Settings.ESPEnabled = v
+    end
+end, "ESPEnabled")
+CreateToggle("Charms", VisualsPage, Settings.Chams, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("Chams", v)
     else
@@ -2118,12 +2514,14 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
             SubGuisPreKeyHiddenState.Music = MusicGui.Visible
             SubGuisPreKeyHiddenState.Waypoints = WaypointsGui.Visible
             SubGuisPreKeyHiddenState.ToxChat = ToxChatGui.Visible
+            SubGuisPreKeyHiddenState.QuickJoin = JoinGamesGui and JoinGamesGui.Visible or false
 
             Main.Visible = false
             ChatLogGui.Visible = false
             MusicGui.Visible = false
             WaypointsGui.Visible = false
             ToxChatGui.Visible = false
+            if JoinGamesGui then JoinGamesGui.Visible = false end
         else
             Main.Visible = true
 
@@ -2140,11 +2538,15 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 if SubGuisPreKeyHiddenState.ToxChat ~= nil then
                     ToxChatGui.Visible = SubGuisPreKeyHiddenState.ToxChat
                 end
+                if JoinGamesGui and SubGuisPreKeyHiddenState.QuickJoin ~= nil then
+                    JoinGamesGui.Visible = SubGuisPreKeyHiddenState.QuickJoin
+                end
             else
                 ChatLogGui.Visible = false
                 MusicGui.Visible = false
                 WaypointsGui.Visible = false
                 ToxChatGui.Visible = false
+                if JoinGamesGui then JoinGamesGui.Visible = false end
             end
         end
     end
@@ -2187,8 +2589,14 @@ AddConnection(RunService.Stepped:Connect(function()
     end
 
     local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-    if Settings.NoFallDamage and Root and Root.AssemblyLinearVelocity.Y < -40 then
-        Root.AssemblyLinearVelocity = Vector3.new(Root.AssemblyLinearVelocity.X, -35, Root.AssemblyLinearVelocity.Z)
+    if Settings.NoFallDamage and Root then
+        local velocity = Root.AssemblyLinearVelocity
+        local triggerVelocity = game.PlaceId == 189707 and -60 or -40
+        local safeVelocity = game.PlaceId == 189707 and -45 or -35
+
+        if velocity.Y < triggerVelocity then
+            Root.AssemblyLinearVelocity = Vector3.new(velocity.X, safeVelocity, velocity.Z)
+        end
     end
 
     UpdateAirWalk()
@@ -2363,12 +2771,12 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         end
     end
 
-    local anyESPActive = Settings.ESPNames
+    local anyESPActive = Settings.ESPEnabled and (Settings.ESPNames
         or Settings.ESPDistance
         or Settings.ESPTracers
         or Settings.ESPBox
         or Settings.ESPHeadDot
-        or Settings.Chams
+        or Settings.Chams)
 
     if anyESPActive and tick() - LastESPSafetyRefresh >= 6 then
         LastESPSafetyRefresh = tick()
@@ -2417,7 +2825,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 local hum = char:FindFirstChildOfClass("Humanoid")
                 local espColor, espRole = GetESPVisualInfo(p)
 
-                if Settings.Chams then
+                if Settings.ESPEnabled and Settings.Chams then
                     local hl = Highlights[p]
                     if not hl or hl.Parent ~= char then
                         if hl then hl:Destroy() end
@@ -2438,7 +2846,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 local distFromMe = Root and (Root.Position - hrp.Position).Magnitude or 0
                 local withinDist = (Settings.EspMaxDistance <= 0) or (distFromMe <= Settings.EspMaxDistance)
 
-                if (Settings.ESPNames or Settings.ESPDistance) and hum.Health > 0 and withinDist then
+                if Settings.ESPEnabled and (Settings.ESPNames or Settings.ESPDistance) and hum.Health > 0 and withinDist then
                     local billboard = ESPLabels[p]
 
                     if not billboard or billboard.Parent ~= char then
@@ -2508,7 +2916,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                     ESPLabels[p] = nil
                 end
 
-                local hasDrawingESP = Settings.ESPTracers or Settings.ESPBox or Settings.ESPHeadDot
+                local hasDrawingESP = Settings.ESPEnabled and (Settings.ESPTracers or Settings.ESPBox or Settings.ESPHeadDot)
 
                 if hasDrawingESP and Drawing and hum.Health > 0 and withinDist then
                     local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
@@ -2787,11 +3195,13 @@ if Minimize then
             CollapseSubGuiWithMain("Music", MusicGui)
             CollapseSubGuiWithMain("Waypoints", WaypointsGui)
             CollapseSubGuiWithMain("ToxChat", ToxChatGui)
+            CollapseSubGuiWithMain("QuickJoin", JoinGamesGui)
         else
             RestoreSubGuiAfterMain("ChatLog", ChatLogGui)
             RestoreSubGuiAfterMain("Music", MusicGui)
             RestoreSubGuiAfterMain("Waypoints", WaypointsGui)
             RestoreSubGuiAfterMain("ToxChat", ToxChatGui)
+            RestoreSubGuiAfterMain("QuickJoin", JoinGamesGui)
         end
     end)
 end
