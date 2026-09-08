@@ -3075,6 +3075,15 @@ CreateConfirmButton("Rejoin Server", ConfigPage, function()
 end)
 
 CreateConfirmButton("DESTROY", ConfigPage, function()
+    if AutoSaveConfiguration then
+        pcall(AutoSaveConfiguration)
+    end
+
+    Destroyed = true
+    getgenv().Destroyed = true
+    ScriptLoaded = false
+    getgenv().ScriptLoaded = false
+
     if getgenv().ToxMM2Cleanup then
         pcall(getgenv().ToxMM2Cleanup)
     end
@@ -3188,15 +3197,6 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
 
         getgenv().ActiveSound = nil
     end
-
-    if AutoSaveConfiguration then
-        pcall(AutoSaveConfiguration)
-    end
-
-    Destroyed = true
-    getgenv().Destroyed = true
-    ScriptLoaded = false
-    getgenv().ScriptLoaded = false
 
     for _, hl in pairs(Highlights) do
         pcall(function()
