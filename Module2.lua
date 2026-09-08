@@ -2497,8 +2497,10 @@ end
 
 local function GetESPVisualInfo(p)
     local defaultColor = Settings.EspColor or Color3.fromRGB(255, 255, 255)
+    local mm2RoleESPActive = (game.GameId == MM2GameId or game.PlaceId == MM2PlaceId)
+        and Settings.MM2RoleESP == true
 
-    if not Settings.ESPTeamColors then
+    if not Settings.ESPTeamColors and not mm2RoleESPActive then
         return defaultColor, nil
     end
 
@@ -2965,12 +2967,19 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         end
     end
 
-    local anyESPActive = Settings.ESPEnabled and (Settings.ESPNames
+    local mm2RoleESPActive = (game.GameId == MM2GameId or game.PlaceId == MM2PlaceId)
+        and Settings.MM2RoleESP == true
+    local effectiveESPEnabled = Settings.ESPEnabled or mm2RoleESPActive
+    local effectiveESPNames = Settings.ESPNames or mm2RoleESPActive
+    local effectiveChams = Settings.Chams or mm2RoleESPActive
+    local effectiveTeamColors = Settings.ESPTeamColors or mm2RoleESPActive
+
+    local anyESPActive = effectiveESPEnabled and (effectiveESPNames
         or Settings.ESPDistance
         or Settings.ESPTracers
         or Settings.ESPBox
         or Settings.ESPHeadDot
-        or Settings.Chams)
+        or effectiveChams)
 
     if anyESPActive and tick() - LastESPSafetyRefresh >= 6 then
         LastESPSafetyRefresh = tick()
@@ -3019,7 +3028,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 local hum = char:FindFirstChildOfClass("Humanoid")
                 local espColor, espRole = GetESPVisualInfo(p)
 
-                if Settings.ESPEnabled and Settings.Chams then
+                if effectiveESPEnabled and effectiveChams then
                     local hl = Highlights[p]
                     if not hl or hl.Parent ~= char then
                         if hl then hl:Destroy() end
@@ -3040,7 +3049,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 local distFromMe = Root and (Root.Position - hrp.Position).Magnitude or 0
                 local withinDist = (Settings.EspMaxDistance <= 0) or (distFromMe <= Settings.EspMaxDistance)
 
-                if Settings.ESPEnabled and (Settings.ESPNames or Settings.ESPDistance) and hum.Health > 0 and withinDist then
+                if effectiveESPEnabled and (effectiveESPNames or Settings.ESPDistance) and hum.Health > 0 and withinDist then
                     local billboard = ESPLabels[p]
 
                     if not billboard or billboard.Parent ~= char then
@@ -3075,7 +3084,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                     local label = billboard:FindFirstChild("Label")
                     local lines = {}
 
-                    if Settings.ESPNames then
+                    if effectiveESPNames then
                         local mode = Settings.ESPNameMode or "Display"
                         local nameText
 
@@ -3087,7 +3096,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                             nameText = p.DisplayName
                         end
 
-                        if Settings.ESPTeamColors and espRole then
+                        if effectiveTeamColors and espRole then
                             nameText = nameText .. " [" .. espRole .. "]"
                         end
 
@@ -3110,7 +3119,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                     ESPLabels[p] = nil
                 end
 
-                local hasDrawingESP = Settings.ESPEnabled and (Settings.ESPTracers or Settings.ESPBox or Settings.ESPHeadDot)
+                local hasDrawingESP = effectiveESPEnabled and (Settings.ESPTracers or Settings.ESPBox or Settings.ESPHeadDot)
 
                 if hasDrawingESP and Drawing and hum.Health > 0 and withinDist then
                     local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
