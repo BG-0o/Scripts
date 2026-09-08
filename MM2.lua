@@ -2,6 +2,13 @@ if game.PlaceId ~= 142823291 then
     return
 end
 
+if getgenv().ToxMM2ModuleLoadedJobId == game.JobId
+and not getgenv().Destroyed then
+    return
+end
+
+getgenv().ToxMM2ModuleLoadedJobId = game.JobId
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -838,7 +845,7 @@ local function RefreshPlayerSelector()
 
     for index, target in ipairs(playerList) do
         local row = Instance.new("Frame")
-        row.Size = UDim2.new(1, -4, 0, 42)
+        row.Size = UDim2.new(1, -4, 0, 36)
         row.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
         row.BorderSizePixel = 0
         row.LayoutOrder = index
@@ -849,7 +856,7 @@ local function RefreshPlayerSelector()
         rowCorner.Parent = row
 
         local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(1, -112, 0, 20)
+        nameLabel.Size = UDim2.new(1, -104, 0, 18)
         nameLabel.Position = UDim2.new(0, 8, 0, 3)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Text = target.DisplayName
@@ -861,8 +868,8 @@ local function RefreshPlayerSelector()
         nameLabel.Parent = row
 
         local userLabel = Instance.new("TextLabel")
-        userLabel.Size = UDim2.new(1, -112, 0, 16)
-        userLabel.Position = UDim2.new(0, 8, 0, 22)
+        userLabel.Size = UDim2.new(1, -104, 0, 14)
+        userLabel.Position = UDim2.new(0, 8, 0, 19)
         userLabel.BackgroundTransparency = 1
         userLabel.Text = "@" .. target.Name
         userLabel.TextColor3 = Color3.fromRGB(140, 140, 160)
@@ -872,8 +879,8 @@ local function RefreshPlayerSelector()
         userLabel.Parent = row
 
         local selectButton = Instance.new("TextButton")
-        selectButton.Size = UDim2.new(0, 94, 0, 26)
-        selectButton.Position = UDim2.new(1, -102, 0.5, -13)
+        selectButton.Size = UDim2.new(0, 86, 0, 24)
+        selectButton.Position = UDim2.new(1, -94, 0.5, -12)
         selectButton.BorderSizePixel = 0
         selectButton.Font = Enum.Font.GothamBold
         selectButton.TextSize = 10
@@ -943,14 +950,21 @@ local function CreatePlayerSelector()
 
     PlayerSelectorFrame = Instance.new("Frame")
     PlayerSelectorFrame.Name = "ToxMM2PlayerSelector"
-    PlayerSelectorFrame.Size = UDim2.new(0, 410, 0, 360)
-    PlayerSelectorFrame.Position = UDim2.new(0.5, -205, 0.5, -180)
+    PlayerSelectorFrame.Size = UDim2.new(0, 350, 0, 300)
+    PlayerSelectorFrame.Position = UDim2.new(0.5, -175, 0.5, -150)
     PlayerSelectorFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
     PlayerSelectorFrame.BorderSizePixel = 0
     PlayerSelectorFrame.Visible = false
     PlayerSelectorFrame.Active = true
     PlayerSelectorFrame.ClipsDescendants = true
     PlayerSelectorFrame.Parent = gui
+
+    if getgenv().RegisterToxLinkedSubGui then
+        getgenv().RegisterToxLinkedSubGui(
+            "MM2PlayerSelector",
+            PlayerSelectorFrame
+        )
+    end
 
     local frameCorner = Instance.new("UICorner")
     frameCorner.CornerRadius = UDim.new(0, 8)
@@ -966,6 +980,13 @@ local function CreatePlayerSelector()
     topBar.BackgroundColor3 = MAIN_COLOR
     topBar.BorderSizePixel = 0
     topBar.Parent = PlayerSelectorFrame
+
+    if getgenv().RegisterToxSubGuiMinimize then
+        getgenv().RegisterToxSubGuiMinimize(
+            PlayerSelectorFrame,
+            -52
+        )
+    end
 
     if MakeDraggable then
         MakeDraggable(PlayerSelectorFrame, topBar)
@@ -1031,7 +1052,7 @@ local function CreatePlayerSelector()
     addCorner.Parent = addButton
 
     PlayerSelectorScroll = Instance.new("ScrollingFrame")
-    PlayerSelectorScroll.Size = UDim2.new(1, -16, 1, -122)
+    PlayerSelectorScroll.Size = UDim2.new(1, -16, 1, -116)
     PlayerSelectorScroll.Position = UDim2.new(0, 8, 0, 78)
     PlayerSelectorScroll.BackgroundTransparency = 1
     PlayerSelectorScroll.BorderSizePixel = 0
@@ -1051,8 +1072,8 @@ local function CreatePlayerSelector()
     end)
 
     PlayerSelectorAction = Instance.new("TextButton")
-    PlayerSelectorAction.Size = UDim2.new(1, -16, 0, 32)
-    PlayerSelectorAction.Position = UDim2.new(0, 8, 1, -38)
+    PlayerSelectorAction.Size = UDim2.new(1, -16, 0, 30)
+    PlayerSelectorAction.Position = UDim2.new(0, 8, 1, -36)
     PlayerSelectorAction.BackgroundColor3 = MAIN_COLOR
     PlayerSelectorAction.BorderSizePixel = 0
     PlayerSelectorAction.Text = "Kill Selected (0)"
@@ -1122,7 +1143,15 @@ local function OpenPlayerSelector(mode)
         return
     end
 
-    PlayerSelectorMode = mode == "whitelist" and "whitelist" or "targets"
+    local requestedMode = mode == "whitelist" and "whitelist" or "targets"
+
+    if PlayerSelectorFrame.Visible
+    and PlayerSelectorMode == requestedMode then
+        PlayerSelectorFrame.Visible = false
+        return
+    end
+
+    PlayerSelectorMode = requestedMode
     PlayerSelectorTitle.Text =
         PlayerSelectorMode == "whitelist" and "Whitelist" or "Knife Targets"
     PlayerSelectorInput.Text = ""
@@ -2500,6 +2529,7 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end))
 
 getgenv().ToxMM2Cleanup = function()
+    getgenv().ToxMM2ModuleLoadedJobId = nil
     Settings.MM2AutoFarm = false
     Settings.MM2RoleESP = false
     Settings.MM2KillAllAuto = false
@@ -2546,6 +2576,10 @@ getgenv().ToxMM2Cleanup = function()
 
     if PlayerSelectorFrame then
         PlayerSelectorFrame.Visible = false
+    end
+
+    if getgenv().ToxLinkedSubGuis then
+        getgenv().ToxLinkedSubGuis.MM2PlayerSelector = nil
     end
 
     if getgenv().SyncToggleVisuals then
