@@ -6,7 +6,6 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
@@ -229,222 +228,29 @@ local function KillAll()
     end)
 end
 
-local function FindShootRemote(gun)
+local function GetMM2GunRemote(character, equippedGun)
+    local gun = character and (
+        character:FindFirstChild("Gun")
+        or character:FindFirstChild("Revolver")
+    ) or equippedGun
+
     if not gun then
-        return nil, nil
+        return nil
     end
 
-    local knifeLocal = gun:FindFirstChild("KnifeLocal", true)
+    for _ = 1, 16 do
+        local knifeLocal = gun:FindFirstChild("KnifeLocal")
+        local createBeam = knifeLocal and knifeLocal:FindFirstChild("CreateBeam")
+        local remote = createBeam and createBeam:FindFirstChild("RemoteFunction")
 
-    if knifeLocal then
-        local createBeam = knifeLocal:FindFirstChild("CreateBeam", true)
-
-        if createBeam then
-            local remoteFunction = createBeam:FindFirstChild("RemoteFunction")
-                or createBeam:FindFirstChildWhichIsA("RemoteFunction")
-
-            if remoteFunction then
-                return remoteFunction, "AH2"
-            end
-        end
-    end
-
-    local shootGun = gun:FindFirstChild("ShootGun", true)
-
-    if shootGun and (shootGun:IsA("RemoteFunction") or shootGun:IsA("RemoteEvent")) then
-        return shootGun, "AH2"
-    end
-
-    for _, obj in ipairs(gun:GetDescendants()) do
-        if obj:IsA("RemoteFunction") or obj:IsA("RemoteEvent") then
-            local objectName = string.lower(obj.Name)
-            local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
-
-            if objectName == "shootgun"
-            or objectName == "remotefunction"
-            or string.find(parentName, "createbeam", 1, true) then
-                return obj, "AH2"
-            end
-        end
-    end
-
-    local replicated = ReplicatedStorage:FindFirstChild("ShootGun", true)
-
-    if replicated and (replicated:IsA("RemoteFunction") or replicated:IsA("RemoteEvent")) then
-        return replicated, "AH2"
-    end
-
-    return nil, nil
-end
-
-local function FireMM2Gun(remote, mode, targetPosition)
-    if not remote then
-        return false
-    end
-
-    local ok = pcall(function()
-        if remote:IsA("RemoteFunction") then
-            remote:InvokeServer(1, targetPosition, mode or "AH2")
-        else
-            remote:FireServer(1, targetPosition, mode or "AH2")
-        end
-    end)
-
-    return ok
-end
-
-local function InstallShotRedirect(gun, getTargetPosition)
-    if not getrawmetatable
-    or not setreadonly
-    or not newcclosure
-    or not getnamecallmethod then
-        return function() end, function() return false end
-    end
-
-    local mt = getrawmetatable(game)
-    local oldNamecall = mt.__namecall
-    local active = true
-    local intercepted = false
-
-    local function IsGunRemote(self, args, method)
-        if method ~= "InvokeServer" and method ~= "FireServer" then
-            return false
+        if remote and remote:IsA("RemoteFunction") then
+            return remote
         end
 
-        if typeof(self) ~= "Instance"
-        or (not self:IsA("RemoteFunction") and not self:IsA("RemoteEvent")) then
-            return false
-        end
-
-        if gun and self:IsDescendantOf(gun) then
-            return true
-        end
-
-        local lowerName = string.lower(self.Name)
-
-        if lowerName == "shootgun" then
-            return true
-        end
-
-        local node = self.Parent
-
-        for _ = 1, 6 do
-            if not node then
-                break
-            end
-
-            local nodeName = string.lower(node.Name)
-
-            if nodeName == "knifelocal"
-            or nodeName == "createbeam"
-            or nodeName == "gun" then
-                return true
-            end
-
-            node = node.Parent
-        end
-
-        if typeof(args[2]) == "Vector3" then
-            local third = tostring(args[3] or "")
-
-            if third == "AH2" or third == "AH" then
-                return true
-            end
-        end
-
-        return false
+        task.wait(0.025)
     end
 
-    local ok = pcall(function()
-        setreadonly(mt, false)
-
-        mt.__namecall = newcclosure(function(self, ...)
-            local method = getnamecallmethod()
-            local args = {...}
-
-            if active and IsGunRemote(self, args, method) then
-                local targetPosition = getTargetPosition()
-
-                if targetPosition then
-                    if typeof(args[2]) == "Vector3" then
-                        args[2] = targetPosition
-                    elseif typeof(args[1]) == "Vector3" then
-                        args[1] = targetPosition
-                    else
-                        args[1] = 1
-                        args[2] = targetPosition
-                        args[3] = "AH2"
-                    end
-
-                    intercepted = true
-                end
-
-                return oldNamecall(self, unpack(args))
-            end
-
-            return oldNamecall(self, ...)
-        end)
-
-        setreadonly(mt, true)
-    end)
-
-    if not ok then
-        pcall(function()
-            setreadonly(mt, true)
-        end)
-
-        return function() end, function() return false end
-    end
-
-    local function cleanup()
-        if not active then
-            return
-        end
-
-        active = false
-
-        pcall(function()
-            setreadonly(mt, false)
-            mt.__namecall = oldNamecall
-            setreadonly(mt, true)
-        end)
-    end
-
-    local function wasIntercepted()
-        return intercepted
-    end
-
-    return cleanup, wasIntercepted
-end
-
-local function TriggerGunShot(gun)
-    pcall(function()
-        gun:Activate()
-    end)
-
-    pcall(function()
-        local mousePosition = UserInputService:GetMouseLocation()
-
-        VirtualInputManager:SendMouseButtonEvent(
-            mousePosition.X,
-            mousePosition.Y,
-            0,
-            true,
-            game,
-            0
-        )
-
-        task.wait()
-
-        VirtualInputManager:SendMouseButtonEvent(
-            mousePosition.X,
-            mousePosition.Y,
-            0,
-            false,
-            game,
-            0
-        )
-    end)
+    return nil
 end
 
 local function ShootMurderer()
@@ -485,7 +291,6 @@ local function ShootMurderer()
     end
 
     local originalParent = gun.Parent
-    local oldNoclip = Settings.Noclip == true
 
     ActionBusy = true
 
@@ -496,71 +301,69 @@ local function ShootMurderer()
             return
         end
 
-        local oldCFrame = root.CFrame
-        local allow = getgenv().AllowToxTeleport
+        local remote = GetMM2GunRemote(character, gun)
 
-        SetSharedTemporary("Noclip", true)
-
-        if allow then
-            allow(1)
-        end
-
-        local function CurrentTargetPosition()
-            if targetRoot and targetRoot.Parent and targetHumanoid.Health > 0 then
-                return targetRoot.Position
+        if not remote then
+            if originalParent and originalParent:IsA("Backpack") and gun and gun.Parent == character then
+                pcall(function()
+                    gun.Parent = originalParent
+                end)
             end
 
-            return nil
+            ActionBusy = false
+            CustomNotify("Gun remote not ready", Color3.fromRGB(255, 100, 100))
+            return
         end
 
-        local cleanupRedirect, wasIntercepted = InstallShotRedirect(gun, CurrentTargetPosition)
+        if not targetRoot.Parent or targetHumanoid.Health <= 0 then
+            ActionBusy = false
+            return
+        end
 
-        local abovePosition = targetRoot.Position + Vector3.new(0, 4.5, 0)
+        local oldCFrame = root.CFrame
+        local oldLinearVelocity = root.AssemblyLinearVelocity
+        local oldAngularVelocity = root.AssemblyAngularVelocity
+        local allow = getgenv().AllowToxTeleport
+
+        if allow then
+            allow(0.8)
+        end
+
+        local shootCFrame = CFrame.new(
+            targetRoot.Position + Vector3.new(0, 3.2, 0),
+            targetRoot.Position
+        )
 
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
-        root.CFrame = CFrame.lookAt(abovePosition, targetRoot.Position)
+        root.CFrame = shootCFrame
 
         RunService.Heartbeat:Wait()
 
-        TriggerGunShot(gun)
+        if root and root.Parent and targetRoot and targetRoot.Parent then
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+            root.CFrame = CFrame.new(
+                targetRoot.Position + Vector3.new(0, 3.2, 0),
+                targetRoot.Position
+            )
 
-        task.wait(0.06)
+            local targetPosition = targetRoot.Position
 
-        if not wasIntercepted() then
-            local shootRemote, shootMode = FindShootRemote(gun)
-
-            if shootRemote then
-                FireMM2Gun(shootRemote, shootMode, targetRoot.Position)
-            else
-                TriggerGunShot(gun)
-                task.wait(0.06)
-            end
+            pcall(function()
+                remote:InvokeServer(1, targetPosition, "AH2")
+            end)
         end
-
-        cleanupRedirect()
-
-        if targetHumanoid.Health > 0 and targetRoot.Parent then
-            local shootRemote, shootMode = FindShootRemote(gun)
-
-            if shootRemote then
-                FireMM2Gun(shootRemote, shootMode, targetRoot.Position)
-            end
-        end
-
-        task.wait(0.025)
 
         if root and root.Parent then
             if allow then
                 allow(0.6)
             end
 
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.AssemblyAngularVelocity = Vector3.zero
             root.CFrame = oldCFrame
+            root.AssemblyLinearVelocity = oldLinearVelocity
+            root.AssemblyAngularVelocity = oldAngularVelocity
         end
-
-        SetSharedTemporary("Noclip", oldNoclip)
 
         if originalParent and originalParent:IsA("Backpack") and gun and gun.Parent == character then
             pcall(function()
