@@ -3,7 +3,7 @@ if game.PlaceId ~= 4522347649 then
 end
 
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local Player = Players.LocalPlayer
@@ -19,6 +19,9 @@ end
 Settings.ADMINPrefix = tostring(Settings.ADMINPrefix or ".")
 Settings.ADMINKillTarget = tostring(Settings.ADMINKillTarget or "")
 Settings.ADMINKillAll = Settings.ADMINKillAll == true
+Settings.ADMINRocketTarget = tostring(Settings.ADMINRocketTarget or "")
+Settings.ADMINRocketAll = Settings.ADMINRocketAll == true
+Settings.ADMINKickTarget = tostring(Settings.ADMINKickTarget or "")
 
 local function Save()
     if AutoSaveConfiguration then
@@ -26,133 +29,233 @@ local function Save()
     end
 end
 
-local function IsVisibleObject(obj)
-    if not obj then
-        return false
+local function Blob(obj)
+    local pieces = {
+        tostring(obj.Name or "")
+    }
+
+    if obj:IsA("TextBox")
+    or obj:IsA("TextLabel")
+    or obj:IsA("TextButton") then
+        table.insert(
+            pieces,
+            tostring(obj.Text or "")
+        )
     end
 
+    if obj:IsA("TextBox") then
+        table.insert(
+            pieces,
+            tostring(obj.PlaceholderText or "")
+        )
+    end
+
+    return string.lower(
+        table.concat(pieces, " ")
+    )
+end
+
+local function AncestorBlob(obj, depth)
+    local pieces = {}
     local current = obj
 
-    while current do
-        if current:IsA("GuiObject") and not current.Visible then
-            return false
+    for _ = 1, depth or 6 do
+        if not current then
+            break
         end
 
-        if current:IsA("ScreenGui") and not current.Enabled then
-            return false
+        table.insert(
+            pieces,
+            Blob(current)
+        )
+
+        current = current.Parent
+    end
+
+    return table.concat(
+        pieces,
+        " "
+    )
+end
+
+local function FindExecuteButton(box)
+    local current = box.Parent
+
+    for _ = 1, 7 do
+        if not current then
+            break
+        end
+
+        for _, obj in ipairs(
+            current:GetDescendants()
+        ) do
+            if obj:IsA("TextButton")
+            or obj:IsA("ImageButton") then
+                local blob = Blob(obj)
+
+                if string.find(
+                    blob,
+                    "execute",
+                    1,
+                    true
+                )
+                or string.find(
+                    blob,
+                    "run",
+                    1,
+                    true
+                ) then
+                    return obj
+                end
+            end
         end
 
         current = current.Parent
     end
 
-    return true
+    return nil
 end
 
-local function ObjectText(obj)
-    if obj:IsA("TextBox")
-    or obj:IsA("TextLabel")
-    or obj:IsA("TextButton") then
-        return string.lower(
-            tostring(obj.Text or "")
-                .. " "
-                .. tostring(obj.PlaceholderText or "")
-                .. " "
-                .. tostring(obj.Name or "")
-        )
+local function CollectCommandBars()
+    local roots = {}
+    local playerGui =
+        Player:FindFirstChildOfClass("PlayerGui")
+
+    if playerGui then
+        table.insert(roots, playerGui)
     end
 
-    return string.lower(tostring(obj.Name or ""))
-end
+    table.insert(roots, CoreGui)
 
-local function FindCommandBar()
-    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+    local found = {}
+    local seen = {}
 
-    if not playerGui then
-        return nil, nil
-    end
+    for _, root in ipairs(roots) do
+        for _, obj in ipairs(root:GetDescendants()) do
+            if obj:IsA("TextBox") then
+                local blob = Blob(obj)
+                local fullBlob =
+                    AncestorBlob(obj, 7)
 
-    local candidates = {}
+                local score = 0
+                local kind = 0
 
-    for _, obj in ipairs(playerGui:GetDescendants()) do
-        if obj:IsA("TextBox") then
-            local blob = ObjectText(obj)
-            local parentBlob = obj.Parent and ObjectText(obj.Parent) or ""
-            local score = 0
+                if string.find(
+                    fullBlob,
+                    "cmdbar2",
+                    1,
+                    true
+                ) then
+                    score = score + 300
+                    kind = 2
+                elseif string.find(
+                    fullBlob,
+                    "cmdbar1",
+                    1,
+                    true
+                ) then
+                    score = score + 250
+                    kind = 1
+                elseif string.find(
+                    fullBlob,
+                    "cmdbar",
+                    1,
+                    true
+                ) then
+                    score = score + 150
+                end
 
-            if string.find(blob, "enter command", 1, true) then
-                score = score + 100
-            end
+                if string.find(
+                    blob,
+                    "enter command",
+                    1,
+                    true
+                ) then
+                    score = score + 200
+                end
 
-            if string.find(blob, "cmdbar2", 1, true)
-            or string.find(parentBlob, "cmdbar2", 1, true) then
-                score = score + 80
-            elseif string.find(blob, "cmdbar1", 1, true)
-            or string.find(parentBlob, "cmdbar1", 1, true) then
-                score = score + 70
-            elseif string.find(blob, "cmdbar", 1, true)
-            or string.find(parentBlob, "cmdbar", 1, true) then
-                score = score + 50
-            end
+                if string.find(
+                    blob,
+                    "command",
+                    1,
+                    true
+                ) then
+                    score = score + 40
+                end
 
-            if score > 0 then
-                table.insert(candidates, {
-                    Box = obj,
-                    Score = score
-                })
-            end
-        end
-    end
+                if score > 0
+                and not seen[obj] then
+                    local executeButton =
+                        FindExecuteButton(obj)
 
-    table.sort(candidates, function(a, b)
-        return a.Score > b.Score
-    end)
+                    if executeButton then
+                        seen[obj] = true
 
-    for _, candidate in ipairs(candidates) do
-        local box = candidate.Box
-        local searchRoot = box.Parent
-        local executeButton = nil
-
-        for _ = 1, 5 do
-            if not searchRoot then
-                break
-            end
-
-            for _, obj in ipairs(searchRoot:GetDescendants()) do
-                if obj:IsA("TextButton")
-                or obj:IsA("ImageButton") then
-                    local blob = ObjectText(obj)
-
-                    if string.find(blob, "execute", 1, true)
-                    or string.find(blob, "run", 1, true) then
-                        executeButton = obj
-                        break
+                        table.insert(found, {
+                            Box = obj,
+                            Button = executeButton,
+                            Score = score,
+                            Kind = kind
+                        })
                     end
                 end
             end
-
-            if executeButton then
-                break
-            end
-
-            searchRoot = searchRoot.Parent
-        end
-
-        if executeButton then
-            return box, executeButton
         end
     end
 
-    return nil, nil
+    table.sort(found, function(a, b)
+        if a.Kind ~= b.Kind then
+            return a.Kind > b.Kind
+        end
+
+        return a.Score > b.Score
+    end)
+
+    return found
 end
 
-local function TriggerButton(button)
-    if not button or not button.Parent then
+local function FireConnectionList(signal)
+    if not getconnections then
+        return false
+    end
+
+    local ok, connections = pcall(function()
+        return getconnections(signal)
+    end)
+
+    if not ok
+    or typeof(connections) ~= "table" then
+        return false
+    end
+
+    local fired = false
+
+    for _, connection in ipairs(connections) do
+        local fn = connection.Function
+
+        if typeof(fn) == "function" then
+            local callOk = pcall(fn)
+
+            if callOk then
+                fired = true
+            end
+        end
+    end
+
+    return fired
+end
+
+local function FireButton(button)
+    if not button
+    or not button.Parent then
         return false
     end
 
     if firesignal then
         local ok = pcall(function()
-            firesignal(button.MouseButton1Click)
+            firesignal(
+                button.MouseButton1Click
+            )
         end)
 
         if ok then
@@ -160,7 +263,9 @@ local function TriggerButton(button)
         end
 
         ok = pcall(function()
-            firesignal(button.Activated)
+            firesignal(
+                button.Activated
+            )
         end)
 
         if ok then
@@ -168,21 +273,123 @@ local function TriggerButton(button)
         end
     end
 
-    local ok = pcall(function()
-        button:Activate()
-    end)
-
-    if ok then
+    if FireConnectionList(
+        button.MouseButton1Click
+    ) then
         return true
     end
 
-    if IsVisibleObject(button) then
-        return pcall(function()
-            local center =
-                button.AbsolutePosition
-                + button.AbsoluteSize / 2
+    if FireConnectionList(
+        button.Activated
+    ) then
+        return true
+    end
 
-            VirtualInputManager:SendMouseButtonEvent(
+    return false
+end
+
+local function FireTextBoxEnter(box)
+    if not box
+    or not box.Parent then
+        return false
+    end
+
+    if firesignal then
+        local ok = pcall(function()
+            firesignal(
+                box.FocusLost,
+                true
+            )
+        end)
+
+        if ok then
+            return true
+        end
+    end
+
+    if getconnections then
+        local ok, connections = pcall(function()
+            return getconnections(
+                box.FocusLost
+            )
+        end)
+
+        if ok
+        and typeof(connections) == "table" then
+            local fired = false
+
+            for _, connection in ipairs(
+                connections
+            ) do
+                local fn = connection.Function
+
+                if typeof(fn) == "function" then
+                    local callOk = pcall(
+                        fn,
+                        true
+                    )
+
+                    if callOk then
+                        fired = true
+                    end
+                end
+            end
+
+            if fired then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+local function VirtualExecute(box, button)
+    if not box
+    or not button then
+        return false
+    end
+
+    local visibleStates = {}
+    local current = button
+
+    for _ = 1, 7 do
+        if not current then
+            break
+        end
+
+        if current:IsA("GuiObject") then
+            table.insert(
+                visibleStates,
+                {
+                    Object = current,
+                    Visible = current.Visible
+                }
+            )
+
+            current.Visible = true
+        elseif current:IsA("ScreenGui") then
+            table.insert(
+                visibleStates,
+                {
+                    Object = current,
+                    Enabled = current.Enabled
+                }
+            )
+
+            current.Enabled = true
+        end
+
+        current = current.Parent
+    end
+
+    local ok = pcall(function()
+        local center =
+            button.AbsolutePosition
+            + button.AbsoluteSize / 2
+
+        VirtualInputManager:
+            SendMouseButtonEvent(
                 center.X,
                 center.Y,
                 0,
@@ -191,9 +398,10 @@ local function TriggerButton(button)
                 0
             )
 
-            task.wait(0.02)
+        task.wait(0.02)
 
-            VirtualInputManager:SendMouseButtonEvent(
+        VirtualInputManager:
+            SendMouseButtonEvent(
                 center.X,
                 center.Y,
                 0,
@@ -201,28 +409,56 @@ local function TriggerButton(button)
                 game,
                 0
             )
-        end)
+    end)
+
+    for _, state in ipairs(visibleStates) do
+        if state.Object
+        and state.Object.Parent then
+            if state.Visible ~= nil then
+                state.Object.Visible =
+                    state.Visible
+            elseif state.Enabled ~= nil then
+                state.Object.Enabled =
+                    state.Enabled
+            end
+        end
     end
 
-    return false
+    return ok
 end
 
-local function RunHDAdminCommand(command)
-    local box, executeButton = FindCommandBar()
+local function ExecuteOnBar(candidate, command)
+    local box = candidate.Box
+    local button = candidate.Button
 
-    if not box or not executeButton then
+    if not box
+    or not box.Parent
+    or not button
+    or not button.Parent then
         return false
     end
 
     local oldText = box.Text
-    box.Text = tostring(command or "")
+    box.Text = command
 
-    local fired = TriggerButton(executeButton)
+    task.wait()
 
-    task.defer(function()
-        task.wait(0.05)
+    local fired = FireButton(button)
 
-        if box and box.Parent then
+    if not fired then
+        fired = FireTextBoxEnter(box)
+    end
+
+    if not fired then
+        fired = VirtualExecute(
+            box,
+            button
+        )
+    end
+
+    task.delay(0.12, function()
+        if box
+        and box.Parent then
             box.Text = oldText
         end
     end)
@@ -230,9 +466,68 @@ local function RunHDAdminCommand(command)
     return fired
 end
 
+local function RunHDAdminCommand(
+    commandName,
+    target
+)
+    commandName =
+        string.lower(
+            tostring(commandName or "")
+        )
+
+    target =
+        tostring(target or "")
+
+    if commandName == ""
+    or target == "" then
+        return false
+    end
+
+    local command =
+        commandName .. " " .. target
+
+    local bars =
+        CollectCommandBars()
+
+    for _, candidate in ipairs(bars) do
+        if ExecuteOnBar(
+            candidate,
+            command
+        ) then
+            return true
+        end
+    end
+
+    local prefix =
+        tostring(
+            Settings.ADMINPrefix or "."
+        )
+
+    local prefixedCommand =
+        prefix
+        .. commandName
+        .. " "
+        .. target
+
+    for _, candidate in ipairs(bars) do
+        if ExecuteOnBar(
+            candidate,
+            prefixedCommand
+        ) then
+            return true
+        end
+    end
+
+    return false
+end
+
 local function MakeCorner(parent, radius)
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, radius or 4)
+    corner.CornerRadius =
+        UDim.new(
+            0,
+            radius or 4
+        )
     corner.Parent = parent
 end
 
@@ -270,7 +565,10 @@ local function CreatePrefixRow()
     MakeCorner(input, 4)
 
     input.FocusLost:Connect(function()
-        local value = tostring(input.Text or "")
+        local value =
+            tostring(
+                input.Text or ""
+            )
 
         if value == "" then
             value = "."
@@ -282,32 +580,41 @@ local function CreatePrefixRow()
     end)
 end
 
-local function CreateKillRow()
+local function CreateTargetCommandRow(
+    labelText,
+    targetSetting,
+    allSetting,
+    commandName,
+    buttonText
+)
     local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, -5, 0, 52)
+    row.Size = UDim2.new(1, -5, 0, 48)
     row.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
     row.BorderSizePixel = 0
     row.Parent = GamePage
     MakeCorner(row, 4)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 118, 1, 0)
+    label.Size = UDim2.new(0, 76, 1, 0)
     label.Position = UDim2.new(0, 10, 0, 0)
     label.BackgroundTransparency = 1
-    label.Text = "KILL (nick) all (kill)"
+    label.Text = labelText
     label.TextColor3 = Color3.fromRGB(240, 240, 240)
-    label.TextSize = 11
+    label.TextSize = 13
     label.Font = Enum.Font.GothamMedium
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.TextWrapped = true
     label.Parent = row
 
     local input = Instance.new("TextBox")
-    input.Size = UDim2.new(0, 76, 0, 27)
-    input.Position = UDim2.new(1, -196, 0.5, -13)
+    input.Size = UDim2.new(0, 80, 0, 27)
+    input.Position = UDim2.new(1, -204, 0.5, -13)
     input.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
     input.BorderSizePixel = 0
-    input.Text = Settings.ADMINKillTarget
+    input.Text =
+        tostring(
+            Settings[targetSetting]
+            or ""
+        )
     input.PlaceholderText = "Nick"
     input.TextColor3 = Color3.fromRGB(255, 255, 255)
     input.TextSize = 11
@@ -316,83 +623,131 @@ local function CreateKillRow()
     input.Parent = row
     MakeCorner(input, 4)
 
-    local allButton = Instance.new("TextButton")
-    allButton.Size = UDim2.new(0, 46, 0, 27)
-    allButton.Position = UDim2.new(1, -116, 0.5, -13)
-    allButton.BorderSizePixel = 0
-    allButton.Text = "ALL"
-    allButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    allButton.TextSize = 11
-    allButton.Font = Enum.Font.GothamBold
-    allButton.AutoButtonColor = false
-    allButton.Parent = row
-    MakeCorner(allButton, 4)
+    local allButton = nil
 
-    local killButton = Instance.new("TextButton")
-    killButton.Size = UDim2.new(0, 58, 0, 27)
-    killButton.Position = UDim2.new(1, -66, 0.5, -13)
-    killButton.BackgroundColor3 = MAIN_COLOR
-    killButton.BorderSizePixel = 0
-    killButton.Text = "KILL"
-    killButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    killButton.TextSize = 11
-    killButton.Font = Enum.Font.GothamBold
-    killButton.Parent = row
-    MakeCorner(killButton, 4)
+    if allSetting then
+        allButton = Instance.new("TextButton")
+        allButton.Size = UDim2.new(0, 46, 0, 27)
+        allButton.Position = UDim2.new(1, -120, 0.5, -13)
+        allButton.BorderSizePixel = 0
+        allButton.Text = "ALL"
+        allButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        allButton.TextSize = 11
+        allButton.Font = Enum.Font.GothamBold
+        allButton.AutoButtonColor = false
+        allButton.Parent = row
+        MakeCorner(allButton, 4)
+    end
+
+    local actionButton =
+        Instance.new("TextButton")
+
+    actionButton.Size = UDim2.new(0, 64, 0, 27)
+    actionButton.Position = UDim2.new(1, -70, 0.5, -13)
+    actionButton.BackgroundColor3 = MAIN_COLOR
+    actionButton.BorderSizePixel = 0
+    actionButton.Text = buttonText
+    actionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    actionButton.TextSize = 10
+    actionButton.Font = Enum.Font.GothamBold
+    actionButton.Parent = row
+    MakeCorner(actionButton, 4)
 
     local function UpdateAll()
-        if Settings.ADMINKillAll then
+        if not allButton then
+            return
+        end
+
+        if Settings[allSetting] then
             allButton.BackgroundColor3 =
-                Color3.fromRGB(50, 180, 70)
+                Color3.fromRGB(
+                    50,
+                    180,
+                    70
+                )
         else
             allButton.BackgroundColor3 =
-                Color3.fromRGB(28, 28, 42)
+                Color3.fromRGB(
+                    28,
+                    28,
+                    42
+                )
         end
     end
 
     input.FocusLost:Connect(function()
-        Settings.ADMINKillTarget =
-            tostring(input.Text or "")
+        Settings[targetSetting] =
+            tostring(
+                input.Text or ""
+            )
 
         Save()
     end)
 
-    allButton.MouseButton1Click:Connect(function()
-        Settings.ADMINKillAll =
-            not Settings.ADMINKillAll
+    if allButton then
+        allButton.MouseButton1Click:
+            Connect(function()
+                Settings[allSetting] =
+                    not Settings[allSetting]
 
-        UpdateAll()
-        Save()
-    end)
+                UpdateAll()
+                Save()
+            end)
+    end
 
-    killButton.MouseButton1Click:Connect(function()
-        Settings.ADMINKillTarget =
-            tostring(input.Text or "")
+    actionButton.MouseButton1Click:
+        Connect(function()
+            Settings[targetSetting] =
+                tostring(
+                    input.Text or ""
+                )
 
-        local target
+            local target =
+                Settings[targetSetting]
 
-        if Settings.ADMINKillAll then
-            target = "all"
-        else
-            target = Settings.ADMINKillTarget
-        end
+            if allSetting
+            and Settings[allSetting] then
+                target = "all"
+            end
 
-        if not target or target == "" then
-            return
-        end
+            if not target
+            or target == "" then
+                return
+            end
 
-        local prefix =
-            tostring(Settings.ADMINPrefix or ".")
+            RunHDAdminCommand(
+                commandName,
+                target
+            )
 
-        RunHDAdminCommand(
-            prefix .. "kill " .. target
-        )
-
-        Save()
-    end)
+            Save()
+        end)
 
     UpdateAll()
 end
 
 CreatePrefixRow()
-CreateKillRow()
+
+CreateTargetCommandRow(
+    "Kill",
+    "ADMINKillTarget",
+    "ADMINKillAll",
+    "kill",
+    "KILL"
+)
+
+CreateTargetCommandRow(
+    "Rocket",
+    "ADMINRocketTarget",
+    "ADMINRocketAll",
+    "rocket",
+    "ROCKET"
+)
+
+CreateTargetCommandRow(
+    "Kick",
+    "ADMINKickTarget",
+    nil,
+    "kick",
+    "KICK"
+)
