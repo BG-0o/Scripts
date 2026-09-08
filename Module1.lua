@@ -100,6 +100,7 @@ getgenv().Settings = {
     Chams = false,
 	EspColorName = "White",
 	EspColor = Color3.fromRGB(255, 255, 255),
+    ESPTeamColors = false,
 
     MusicAutoPlay = false,
     MusicLoop = false,
@@ -109,6 +110,7 @@ getgenv().Settings = {
 
 getgenv().SavedIDs = {}
 getgenv().SavedWaypoints = {}
+getgenv().UIPositions = {}
 getgenv().Destroyed = false
 getgenv().ScriptLoaded = false
 
@@ -189,6 +191,7 @@ getgenv().AutoSaveConfiguration = function()
             EspMaxDistance = Settings.EspMaxDistance,
             Chams = Settings.Chams,
             EspColorName = Settings.EspColorName,
+            ESPTeamColors = Settings.ESPTeamColors,
             Aimbot = Settings.Aimbot,
             AimbotSmoothness = Settings.AimbotSmoothness,
             AimPart = Settings.AimPart,
@@ -209,7 +212,8 @@ getgenv().AutoSaveConfiguration = function()
             MusicVolume = Settings.MusicVolume
         },
         SavedIDs = getgenv().SavedIDs,
-        SavedWaypoints = getgenv().SavedWaypoints
+        SavedWaypoints = getgenv().SavedWaypoints,
+        UIPositions = getgenv().UIPositions
     }
 
     pcall(function()
@@ -240,6 +244,9 @@ local function LoadConfiguration()
             end
             if data.SavedIDs then getgenv().SavedIDs = data.SavedIDs end
             if data.SavedWaypoints then getgenv().SavedWaypoints = data.SavedWaypoints end
+            if data.UIPositions and typeof(data.UIPositions) == "table" then
+                getgenv().UIPositions = data.UIPositions
+            end
         end
     end)
 end
@@ -361,6 +368,68 @@ getgenv().MakeDraggable = function(Frame, DragHandle)
             local Delta = input.Position - DragStart
             Frame.Position = UDim2.new(StartPos.X.Scale, StartPos.X.Offset + Delta.X, StartPos.Y.Scale, StartPos.Y.Offset + Delta.Y)
         end
+    end))
+end
+
+local GuiPositionSaveTokens = {}
+
+getgenv().EncodeGuiPosition = function(position)
+    return {
+        XS = position.X.Scale,
+        XO = position.X.Offset,
+        YS = position.Y.Scale,
+        YO = position.Y.Offset
+    }
+end
+
+getgenv().DecodeGuiPosition = function(data)
+    if typeof(data) ~= "table" then
+        return nil
+    end
+
+    if typeof(data.XS) ~= "number"
+    or typeof(data.XO) ~= "number"
+    or typeof(data.YS) ~= "number"
+    or typeof(data.YO) ~= "number" then
+        return nil
+    end
+
+    return UDim2.new(data.XS, data.XO, data.YS, data.YO)
+end
+
+getgenv().GetSavedGuiPosition = function(key)
+    return getgenv().DecodeGuiPosition(getgenv().UIPositions[key])
+end
+
+getgenv().ApplySavedGuiPosition = function(key, gui)
+    if not gui then
+        return nil
+    end
+
+    local saved = getgenv().GetSavedGuiPosition(key)
+
+    if saved then
+        gui.Position = saved
+    end
+
+    return saved or gui.Position
+end
+
+getgenv().TrackGuiPosition = function(key, gui)
+    if not gui then
+        return
+    end
+
+    AddConnection(gui:GetPropertyChangedSignal("Position"):Connect(function()
+        getgenv().UIPositions[key] = getgenv().EncodeGuiPosition(gui.Position)
+        GuiPositionSaveTokens[key] = (GuiPositionSaveTokens[key] or 0) + 1
+        local token = GuiPositionSaveTokens[key]
+
+        task.delay(0.25, function()
+            if GuiPositionSaveTokens[key] == token and not Destroyed then
+                AutoSaveConfiguration()
+            end
+        end)
     end))
 end
 
@@ -1056,6 +1125,9 @@ VolUpBtn.MouseButton1Click:Connect(function()
     AutoSaveConfiguration()
 end)
 
+local CheckMusicIDsBtn = CreateDarkBtn("Check IDs", UDim2.new(0.52, 0, 0, 0), UDim2.new(0.23, 0, 1, 0), VolumeArea)
+getgenv().CheckMusicIDsBtn = CheckMusicIDsBtn
+
 local PlaylistScroll = Instance.new("ScrollingFrame")
 PlaylistScroll.Size = UDim2.new(1, 0, 1, -88)
 PlaylistScroll.Position = UDim2.new(0, 0, 0, 86)
@@ -1100,9 +1172,30 @@ local function PlayMusicByID(id, name)
     end
 end
 
+getgenv().MusicIDLabels = getgenv().MusicIDLabels or {}
+
+getgenv().SetMusicIDStatus = function(id, status)
+    local key = tostring(id)
+    local label = getgenv().MusicIDLabels[key]
+
+    if label and label.Parent then
+        if status == true then
+            label.TextColor3 = Color3.fromRGB(70, 255, 100)
+        elseif status == false then
+            label.TextColor3 = Color3.fromRGB(255, 70, 70)
+        elseif status == "checking" then
+            label.TextColor3 = Color3.fromRGB(255, 215, 70)
+        else
+            label.TextColor3 = Color3.fromRGB(200, 200, 220)
+        end
+    end
+end
+
 local RefreshMusicPlaylistUI
 
 RefreshMusicPlaylistUI = function()
+    getgenv().MusicIDLabels = {}
+
     for _, child in ipairs(PlaylistScroll:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
     end
@@ -1129,6 +1222,11 @@ RefreshMusicPlaylistUI = function()
         idBox.TextXAlignment = Enum.TextXAlignment.Left
         idBox.TextTruncate = Enum.TextTruncate.AtEnd
         idBox.Parent = item
+        getgenv().MusicIDLabels[tostring(trackID)] = idBox
+
+        if getgenv().MusicIDStatus then
+            getgenv().SetMusicIDStatus(trackID, getgenv().MusicIDStatus[tostring(trackID)])
+        end
 
         local nameBox = Instance.new("TextBox")
         nameBox.Size = UDim2.new(0.36, -4, 1, -4)
@@ -1192,6 +1290,7 @@ RefreshMusicPlaylistUI = function()
     end
 end
 
+getgenv().RefreshMusicPlaylistUI = RefreshMusicPlaylistUI
 RefreshMusicPlaylistUI()
 
 PlayBtn.MouseButton1Click:Connect(function()
@@ -1263,6 +1362,201 @@ AddPlaylistBtn.MouseButton1Click:Connect(function()
 end)
 
 MusicCloseBtn.MouseButton1Click:Connect(function() MusicGui.Visible = false end)
+
+local ToxChatGui = Instance.new("Frame")
+ToxChatGui.Name = "ToxChatFrame"
+ToxChatGui.Size = UDim2.new(0, 370, 0, 310)
+ToxChatGui.Position = UDim2.new(0.5, -185, 0.5, -155)
+ToxChatGui.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+ToxChatGui.BorderSizePixel = 0
+ToxChatGui.ClipsDescendants = true
+ToxChatGui.Visible = false
+ToxChatGui.Parent = Gui
+getgenv().ToxChatGui = ToxChatGui
+
+local ToxChatCorner = Instance.new("UICorner")
+ToxChatCorner.CornerRadius = UDim.new(0, 8)
+ToxChatCorner.Parent = ToxChatGui
+
+local ToxChatStroke = Instance.new("UIStroke")
+ToxChatStroke.Color = MAIN_COLOR
+ToxChatStroke.Thickness = 2
+ToxChatStroke.Parent = ToxChatGui
+
+local ToxChatTopBar = Instance.new("Frame")
+ToxChatTopBar.Size = UDim2.new(1, 0, 0, 32)
+ToxChatTopBar.BackgroundColor3 = MAIN_COLOR
+ToxChatTopBar.BorderSizePixel = 0
+ToxChatTopBar.Parent = ToxChatGui
+getgenv().ToxChatTopBar = ToxChatTopBar
+
+MakeDraggable(ToxChatGui, ToxChatTopBar)
+
+local ToxChatTitle = Instance.new("TextLabel")
+ToxChatTitle.Size = UDim2.new(1, -70, 1, 0)
+ToxChatTitle.Position = UDim2.new(0, 10, 0, 0)
+ToxChatTitle.BackgroundTransparency = 1
+ToxChatTitle.Text = "Tox Chat"
+ToxChatTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToxChatTitle.Font = Enum.Font.GothamBold
+ToxChatTitle.TextSize = 13
+ToxChatTitle.TextXAlignment = Enum.TextXAlignment.Left
+ToxChatTitle.Parent = ToxChatTopBar
+
+local ToxChatCloseBtn = Instance.new("TextButton")
+ToxChatCloseBtn.Size = UDim2.new(0, 22, 0, 20)
+ToxChatCloseBtn.Position = UDim2.new(1, -26, 0.5, -10)
+ToxChatCloseBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
+ToxChatCloseBtn.BorderSizePixel = 0
+ToxChatCloseBtn.Text = "X"
+ToxChatCloseBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+ToxChatCloseBtn.Font = Enum.Font.GothamBold
+ToxChatCloseBtn.TextSize = 11
+ToxChatCloseBtn.Parent = ToxChatTopBar
+
+local ToxChatCloseCorner = Instance.new("UICorner")
+ToxChatCloseCorner.CornerRadius = UDim.new(0, 4)
+ToxChatCloseCorner.Parent = ToxChatCloseBtn
+
+local ToxChatStatus = Instance.new("TextLabel")
+ToxChatStatus.Size = UDim2.new(1, -16, 0, 18)
+ToxChatStatus.Position = UDim2.new(0, 8, 0, 38)
+ToxChatStatus.BackgroundTransparency = 1
+ToxChatStatus.Text = "Global chat • all games"
+ToxChatStatus.TextColor3 = Color3.fromRGB(145, 145, 170)
+ToxChatStatus.Font = Enum.Font.Gotham
+ToxChatStatus.TextSize = 10
+ToxChatStatus.TextXAlignment = Enum.TextXAlignment.Left
+ToxChatStatus.Parent = ToxChatGui
+getgenv().ToxChatStatus = ToxChatStatus
+
+local ToxChatScroll = Instance.new("ScrollingFrame")
+ToxChatScroll.Size = UDim2.new(1, -16, 1, -110)
+ToxChatScroll.Position = UDim2.new(0, 8, 0, 60)
+ToxChatScroll.BackgroundTransparency = 1
+ToxChatScroll.BorderSizePixel = 0
+ToxChatScroll.ScrollBarThickness = 4
+ToxChatScroll.ScrollBarImageColor3 = MAIN_COLOR
+ToxChatScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+ToxChatScroll.Parent = ToxChatGui
+getgenv().ToxChatScroll = ToxChatScroll
+
+local ToxChatLayout = Instance.new("UIListLayout")
+ToxChatLayout.Padding = UDim.new(0, 5)
+ToxChatLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ToxChatLayout.Parent = ToxChatScroll
+
+ToxChatLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ToxChatScroll.CanvasSize = UDim2.new(0, 0, 0, ToxChatLayout.AbsoluteContentSize.Y + 8)
+    ToxChatScroll.CanvasPosition = Vector2.new(0, math.max(0, ToxChatLayout.AbsoluteContentSize.Y))
+end)
+
+local ToxChatInput = Instance.new("TextBox")
+ToxChatInput.Size = UDim2.new(1, -88, 0, 32)
+ToxChatInput.Position = UDim2.new(0, 8, 1, -40)
+ToxChatInput.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+ToxChatInput.BorderSizePixel = 0
+ToxChatInput.PlaceholderText = "Message..."
+ToxChatInput.PlaceholderColor3 = Color3.fromRGB(130, 130, 150)
+ToxChatInput.Text = ""
+ToxChatInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToxChatInput.Font = Enum.Font.Gotham
+ToxChatInput.TextSize = 12
+ToxChatInput.ClearTextOnFocus = false
+ToxChatInput.Parent = ToxChatGui
+getgenv().ToxChatInput = ToxChatInput
+
+local ToxChatInputCorner = Instance.new("UICorner")
+ToxChatInputCorner.CornerRadius = UDim.new(0, 4)
+ToxChatInputCorner.Parent = ToxChatInput
+
+local ToxChatSendBtn = Instance.new("TextButton")
+ToxChatSendBtn.Size = UDim2.new(0, 68, 0, 32)
+ToxChatSendBtn.Position = UDim2.new(1, -76, 1, -40)
+ToxChatSendBtn.BackgroundColor3 = MAIN_COLOR
+ToxChatSendBtn.BorderSizePixel = 0
+ToxChatSendBtn.Text = "Send"
+ToxChatSendBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToxChatSendBtn.Font = Enum.Font.GothamBold
+ToxChatSendBtn.TextSize = 12
+ToxChatSendBtn.Parent = ToxChatGui
+getgenv().ToxChatSendBtn = ToxChatSendBtn
+
+local ToxChatSendCorner = Instance.new("UICorner")
+ToxChatSendCorner.CornerRadius = UDim.new(0, 4)
+ToxChatSendCorner.Parent = ToxChatSendBtn
+
+getgenv().AddToxChatMessage = function(displayName, message, blocked)
+    if not ToxChatScroll or not ToxChatScroll.Parent then
+        return
+    end
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -6, 0, 0)
+    label.AutomaticSize = Enum.AutomaticSize.Y
+    label.BackgroundColor3 = Color3.fromRGB(16, 16, 24)
+    label.BackgroundTransparency = 0.15
+    label.BorderSizePixel = 0
+    label.Text = tostring(displayName) .. ": " .. tostring(message)
+    label.TextColor3 = blocked and Color3.fromRGB(255, 120, 120) or Color3.fromRGB(235, 235, 245)
+    label.TextWrapped = true
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextYAlignment = Enum.TextYAlignment.Top
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 12
+    label.Parent = ToxChatScroll
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = label
+
+    local padding = Instance.new("UIPadding")
+    padding.PaddingLeft = UDim.new(0, 8)
+    padding.PaddingRight = UDim.new(0, 8)
+    padding.PaddingTop = UDim.new(0, 6)
+    padding.PaddingBottom = UDim.new(0, 6)
+    padding.Parent = label
+
+    local messageLabels = {}
+
+    for _, child in ipairs(ToxChatScroll:GetChildren()) do
+        if child:IsA("TextLabel") then
+            table.insert(messageLabels, child)
+        end
+    end
+
+    while #messageLabels > 100 do
+        local oldest = table.remove(messageLabels, 1)
+
+        if oldest and oldest.Parent then
+            oldest:Destroy()
+        end
+    end
+end
+
+getgenv().ClearToxChatMessages = function()
+    for _, child in ipairs(ToxChatScroll:GetChildren()) do
+        if child:IsA("TextLabel") then
+            child:Destroy()
+        end
+    end
+end
+
+ToxChatCloseBtn.MouseButton1Click:Connect(function()
+    ToxChatGui.Visible = false
+end)
+
+ApplySavedGuiPosition("Main", Main)
+ApplySavedGuiPosition("ChatLog", ChatLogGui)
+ApplySavedGuiPosition("Waypoints", WaypointsGui)
+ApplySavedGuiPosition("Music", MusicGui)
+ApplySavedGuiPosition("ToxChat", ToxChatGui)
+
+TrackGuiPosition("Main", Main)
+TrackGuiPosition("ChatLog", ChatLogGui)
+TrackGuiPosition("Waypoints", WaypointsGui)
+TrackGuiPosition("Music", MusicGui)
+TrackGuiPosition("ToxChat", ToxChatGui)
 
 getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback)
 	local Button = Instance.new("TextButton")
