@@ -2,7 +2,7 @@ if game.PlaceId ~= 142823291 then
     return
 end
 
-local MM2ModuleVersion = "2026-09-08-autofarm-unfreeze-2"
+local MM2ModuleVersion = "2026-09-08-sheriff-shoot-tp-3"
 
 if getgenv().ToxMM2ModuleLoadedJobId == game.JobId
 and getgenv().ToxMM2ModuleVersion == MM2ModuleVersion
@@ -1209,27 +1209,15 @@ local function NormalGunClick()
     end)
 end
 
-local function GetPredictedMurderPosition(targetRoot)
-    local velocity = targetRoot.AssemblyLinearVelocity
-    local ping = 0.08
+local function GetPredictedMurderPosition(targetPart)
+    local velocity = targetPart.AssemblyLinearVelocity
+    local lead = Vector3.new(
+        math.clamp(velocity.X * 0.022, -2.4, 2.4),
+        math.clamp(velocity.Y * 0.016, -1.5, 2.0),
+        math.clamp(velocity.Z * 0.022, -2.4, 2.4)
+    )
 
-    pcall(function()
-        ping = math.clamp(Player:GetNetworkPing() + 0.055, 0.065, 0.16)
-    end)
-
-    local horizontal = Vector3.new(velocity.X, 0, velocity.Z) * ping
-    local vertical = Vector3.new(0, velocity.Y * math.min(ping, 0.11), 0)
-
-    if horizontal.Magnitude > 7 then
-        horizontal = horizontal.Unit * 7
-    end
-
-    vertical = Vector3.new(0, math.clamp(vertical.Y, -4, 5), 0)
-
-    return targetRoot.Position
-        + Vector3.new(0, 1.15, 0)
-        + horizontal
-        + vertical
+    return targetPart.Position + lead
 end
 
 local function ClickGunAtPosition(worldPosition)
@@ -1285,6 +1273,8 @@ local function FireMM2GunRemote(gun, targetPosition)
     return fired
 end
 
+local ShootSafetySerial = 0
+
 local function ShootMurderer()
     if ActionBusy or getgenv().Destroyed then
         return false
@@ -1293,7 +1283,10 @@ local function ShootMurderer()
     local gun = FindNamedTool({"gun", "revolver"})
 
     if not gun then
-        CustomNotify("You need the Gun", Color3.fromRGB(255, 100, 100))
+        CustomNotify(
+            "You need the Gun",
+            Color3.fromRGB(255, 100, 100)
+        )
         return false
     end
 
@@ -1306,27 +1299,127 @@ local function ShootMurderer()
     local targetCharacter = murderer.Character
     local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
     local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
-        or targetCharacter:FindFirstChild("UpperTorso")
+    local targetAim = targetCharacter:FindFirstChild("UpperTorso")
         or targetCharacter:FindFirstChild("Torso")
         or targetCharacter:FindFirstChild("Head")
+        or targetRoot
 
-    if not targetHumanoid or targetHumanoid.Health <= 0 or not targetRoot then
+    if not targetHumanoid
+    or targetHumanoid.Health <= 0
+    or not targetRoot
+    or not targetAim then
         return false
     end
 
     local character, humanoid, root = GetCharacterState()
 
-    if not character or not humanoid or humanoid.Health <= 0 or not root then
+    if not character
+    or not humanoid
+    or humanoid.Health <= 0
+    or not root then
         return false
     end
 
-    local originalParent = gun.Parent
+    ActionBusy = true
+    ShootSafetySerial = ShootSafetySerial + 1
+
+    local shotSerial = ShootSafetySerial
+    local oldCharacterCFrame = character:GetPivot()
+    local oldRootAnchored = root.Anchored
+    local oldAutoRotate = humanoid.AutoRotate
+    local oldPlatformStand = humanoid.PlatformStand
+    local oldSit = humanoid.Sit
     local oldCameraType = Camera and Camera.CameraType
     local oldCameraSubject = Camera and Camera.CameraSubject
     local oldCameraCFrame = Camera and Camera.CFrame
     local oldMousePosition = UserInputService:GetMouseLocation()
+    local originalParent = gun.Parent
+    local collisionCache = {}
 
-    ActionBusy = true
+    local function RestoreShot()
+        pcall(function()
+            VirtualInputManager:SendMouseMoveEvent(
+                oldMousePosition.X,
+                oldMousePosition.Y,
+                game
+            )
+        end)
+
+        if Camera then
+            pcall(function()
+                Camera.CameraType = oldCameraType or Enum.CameraType.Custom
+                Camera.CameraSubject = oldCameraSubject or humanoid
+
+                if oldCameraCFrame then
+                    Camera.CFrame = oldCameraCFrame
+                end
+            end)
+        end
+
+        if character
+        and character.Parent
+        and root
+        and root.Parent
+        and humanoid
+        and humanoid.Parent
+        and humanoid.Health > 0 then
+            local allow = getgenv().AllowToxTeleport
+
+            if allow then
+                allow(0.45)
+            end
+
+            root.Anchored = true
+            character:PivotTo(oldCharacterCFrame)
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+
+            humanoid.PlatformStand = oldPlatformStand
+            humanoid.Sit = oldSit
+            humanoid.AutoRotate = oldAutoRotate
+
+            RunService.Heartbeat:Wait()
+
+            root.Anchored = oldRootAnchored
+
+            if not oldRootAnchored then
+                root.AssemblyLinearVelocity = Vector3.zero
+                root.AssemblyAngularVelocity = Vector3.zero
+            end
+        end
+
+        for part, oldCanCollide in pairs(collisionCache) do
+            if part and part.Parent then
+                part.CanCollide = oldCanCollide
+            end
+        end
+
+        if originalParent
+        and originalParent:IsA("Backpack")
+        and gun
+        and gun.Parent == character then
+            pcall(function()
+                gun.Parent = originalParent
+            end)
+        end
+
+        ActionBusy = false
+    end
+
+    task.delay(0.45, function()
+        if ShootSafetySerial ~= shotSerial then
+            return
+        end
+
+        if root and root.Parent and root.Anchored and not oldRootAnchored then
+            root.Anchored = false
+        end
+
+        if humanoid and humanoid.Parent and humanoid.Health > 0 then
+            humanoid.PlatformStand = false
+            humanoid.Sit = false
+        end
+    end)
 
     local success = false
 
@@ -1335,85 +1428,137 @@ local function ShootMurderer()
             return
         end
 
-        task.wait(0.04)
+        task.wait(0.035)
 
-        if not targetRoot.Parent or targetHumanoid.Health <= 0 then
+        if not targetRoot.Parent
+        or not targetAim.Parent
+        or targetHumanoid.Health <= 0 then
             return
         end
 
-        local aimPosition = GetPredictedMurderPosition(targetRoot)
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                collisionCache[part] = part.CanCollide
+                part.CanCollide = false
+            end
+        end
+
+        humanoid.PlatformStand = false
+        humanoid.Sit = false
+        humanoid.AutoRotate = false
+
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        root.Anchored = true
+
+        local allow = getgenv().AllowToxTeleport
+
+        if allow then
+            allow(0.35)
+        end
+
+        for _ = 1, 3 do
+            if getgenv().Destroyed
+            or not targetRoot.Parent
+            or not targetAim.Parent
+            or targetHumanoid.Health <= 0 then
+                break
+            end
+
+            local aimPosition = GetPredictedMurderPosition(targetAim)
+            local targetVelocity = targetRoot.AssemblyLinearVelocity
+            local horizontalVelocity = Vector3.new(
+                targetVelocity.X,
+                0,
+                targetVelocity.Z
+            )
+
+            local followOffset = Vector3.zero
+
+            if horizontalVelocity.Magnitude > 0.1 then
+                followOffset = horizontalVelocity.Unit
+                    * math.min(horizontalVelocity.Magnitude * 0.018, 1.4)
+            end
+
+            local shootPosition = targetRoot.Position
+                + followOffset
+                + Vector3.new(0, 4.6, 0)
+
+            character:PivotTo(
+                CFrame.lookAt(
+                    shootPosition,
+                    aimPosition
+                )
+            )
+
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+
+            if Camera then
+                Camera.CameraType = Enum.CameraType.Custom
+                Camera.CameraSubject = humanoid
+                Camera.CFrame = CFrame.lookAt(
+                    shootPosition + Vector3.new(0, 0.85, 0),
+                    aimPosition
+                )
+            end
+
+            RunService.RenderStepped:Wait()
+        end
+
+        if not targetRoot.Parent
+        or not targetAim.Parent
+        or targetHumanoid.Health <= 0 then
+            return
+        end
+
+        local finalAim = GetPredictedMurderPosition(targetAim)
+        local finalShootPosition = targetRoot.Position
+            + Vector3.new(0, 4.6, 0)
+
+        character:PivotTo(
+            CFrame.lookAt(
+                finalShootPosition,
+                finalAim
+            )
+        )
+
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
 
         if Camera then
             Camera.CameraType = Enum.CameraType.Custom
             Camera.CameraSubject = humanoid
             Camera.CFrame = CFrame.lookAt(
-                Camera.CFrame.Position,
-                aimPosition
+                finalShootPosition + Vector3.new(0, 0.85, 0),
+                finalAim
             )
         end
 
         RunService.RenderStepped:Wait()
 
-        if not targetRoot.Parent or targetHumanoid.Health <= 0 then
-            return
-        end
+        pcall(function()
+            gun:Activate()
+        end)
 
-        aimPosition = GetPredictedMurderPosition(targetRoot)
+        NormalGunClick()
+
+        RunService.RenderStepped:Wait()
+
+        finalAim = GetPredictedMurderPosition(targetAim)
 
         pcall(function()
             gun:Activate()
         end)
 
-        ClickGunAtPosition(aimPosition)
+        NormalGunClick()
+        FireMM2GunRemote(gun, finalAim)
 
-        local remoteFired = FireMM2GunRemote(gun, aimPosition)
-
-        task.wait(remoteFired and 0.035 or 0.06)
+        task.wait(0.035)
         success = true
     end)
 
-    pcall(function()
-        VirtualInputManager:SendMouseMoveEvent(
-            oldMousePosition.X,
-            oldMousePosition.Y,
-            game
-        )
-    end)
-
-    if Camera then
-        pcall(function()
-            Camera.CameraType = oldCameraType or Enum.CameraType.Custom
-            Camera.CameraSubject = oldCameraSubject or humanoid
-
-            if oldCameraCFrame then
-                Camera.CFrame = oldCameraCFrame
-            end
-        end)
-    end
-
-    if originalParent
-    and originalParent:IsA("Backpack")
-    and gun
-    and character
-    and gun.Parent == character then
-        pcall(function()
-            gun.Parent = originalParent
-        end)
-    end
-
-    if humanoid and humanoid.Parent and humanoid.Health > 0 then
-        humanoid.PlatformStand = false
-        humanoid.Sit = false
-        humanoid.AutoRotate = true
-    end
-
-    if root and root.Parent then
-        root.Anchored = false
-        root.AssemblyLinearVelocity = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
-    end
-
-    ActionBusy = false
+    RestoreShot()
 
     if not ok then
         return false
@@ -2529,7 +2674,7 @@ task.spawn(function()
             if murderer
             and murderHumanoid
             and murderHumanoid.Health > 0
-            and os.clock() - AutoShootLastAttempt >= 0.55 then
+            and os.clock() - AutoShootLastAttempt >= 0.72 then
                 AutoShootLastAttempt = os.clock()
                 task.spawn(ShootMurderer)
             end
