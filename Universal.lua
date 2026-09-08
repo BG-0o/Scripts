@@ -1941,6 +1941,8 @@ local WalkFlingGeneration = 0
 local WalkFlingCollisionDefaults =
     setmetatable({}, {__mode = "k"})
 local WalkFlingImpulseActive = false
+getgenv().ToxWalkFlingImpulseActive = false
+    getgenv().ToxWalkFlingImpulseActive = false
 
 local function RestoreWalkFlingCollisions()
     local character = Player.Character
@@ -1987,6 +1989,7 @@ end
 local function StopWalkFling()
     WalkFlingGeneration += 1
     WalkFlingImpulseActive = false
+    getgenv().ToxWalkFlingImpulseActive = false
     RestoreWalkFlingCollisions()
 end
 
@@ -2048,12 +2051,23 @@ local function StartWalkFling()
                 root.Velocity
 
             WalkFlingImpulseActive = true
+            getgenv().ToxWalkFlingImpulseActive = true
+
+            local multiplier =
+                game.PlaceId == NDSPlaceId
+                and 3500
+                or 10000
+
+            local verticalBoost =
+                game.PlaceId == NDSPlaceId
+                and 2500
+                or 10000
 
             root.Velocity =
-                velocity * 10000
+                velocity * multiplier
                 + Vector3.new(
                     0,
-                    10000,
+                    verticalBoost,
                     0
                 )
 
