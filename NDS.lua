@@ -73,6 +73,8 @@ local NoTPCurrentCharacter = nil
 local SpawnCFrame = CFrame.new(-278.442841, 179.499985, 344.097626)
 local IslandCFrame = CFrame.new(-133.347427, 47.399998, 4.539609)
 
+getgenv().NDSSafeSpawnCFrame = SpawnCFrame
+
 local function GetCharacterState()
     local character = Player.Character
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -631,40 +633,107 @@ getgenv().SetNDSNoFall = function(Value, Silent)
     end
 end
 
-local function RestoreNoTPCharacter(character)
+local function IsNDSVoidPosition(position)
+    local fallen =
+        tonumber(
+            workspace.FallenPartsDestroyHeight
+        ) or -500
+
+    local threshold =
+        math.max(
+            fallen + 35,
+            -250
+        )
+
+    return position.Y <= threshold
+end
+
+local function GetNDSRespawnSafeCFrame()
+    local lastSafe =
+        getgenv().ToxLastSafeCFrame
+
+    if typeof(lastSafe) == "CFrame"
+    and not IsNDSVoidPosition(
+        lastSafe.Position
+    ) then
+        return lastSafe
+    end
+
+    return SpawnCFrame
+end
+
+local function RestoreNoTPCharacter(
+    character
+)
     if game.PlaceId ~= NDSPlaceId
-    or not Settings.NDSNoTP
-    or not NoTPAnchorCFrame then
+    or not Settings.NDSNoTP then
         return
     end
 
     task.spawn(function()
-        local root = character:WaitForChild("HumanoidRootPart", 8)
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        local root =
+            character:
+                WaitForChild(
+                    "HumanoidRootPart",
+                    8
+                )
+        local humanoid =
+            character:
+                FindFirstChildOfClass(
+                    "Humanoid"
+                )
 
-        if not root or not humanoid then
+        if not root
+        or not humanoid then
             return
         end
 
-        for _ = 1, 6 do
-            if not Settings.NDSNoTP or not character.Parent or humanoid.Health <= 0 then
-                return
-            end
+        task.wait(0.35)
 
-            local bypassUntil = tonumber(getgenv().ToxTeleportBypassUntil) or 0
-
-            if tick() >= bypassUntil and NoTPAnchorCFrame then
-                local distance = (root.Position - NoTPAnchorCFrame.Position).Magnitude
-
-                if distance > 20 then
-                    root.AssemblyLinearVelocity = Vector3.zero
-                    root.AssemblyAngularVelocity = Vector3.zero
-                    root.CFrame = NoTPAnchorCFrame
-                end
-            end
-
-            task.wait(0.25)
+        if not Settings.NDSNoTP
+        or not character.Parent
+        or humanoid.Health <= 0 then
+            return
         end
+
+        if IsNDSVoidPosition(
+            root.Position
+        ) then
+            local safe =
+                GetNDSRespawnSafeCFrame()
+
+            if getgenv().AllowToxTeleport then
+                getgenv().AllowToxTeleport(
+                    1.25
+                )
+            end
+
+            root.AssemblyLinearVelocity =
+                Vector3.zero
+            root.AssemblyAngularVelocity =
+                Vector3.zero
+            root.CFrame = safe
+
+            NoTPAnchorCFrame = safe
+
+            if getgenv().SetToxLastSafeCFrame then
+                getgenv().SetToxLastSafeCFrame(
+                    safe
+                )
+            end
+        else
+            NoTPAnchorCFrame =
+                root.CFrame
+
+            if getgenv().SetToxLastSafeCFrame then
+                getgenv().SetToxLastSafeCFrame(
+                    root.CFrame
+                )
+            end
+        end
+
+        NoTPCurrentCharacter =
+            character
     end)
 end
 
@@ -741,7 +810,13 @@ local function StartNoTP()
         local bypassUntil = tonumber(getgenv().ToxTeleportBypassUntil) or 0
 
         if tick() < bypassUntil then
-            NoTPAnchorCFrame = currentRoot.CFrame
+            if not IsNDSVoidPosition(
+                currentRoot.Position
+            ) then
+                NoTPAnchorCFrame =
+                    currentRoot.CFrame
+            end
+
             return
         end
 
@@ -760,6 +835,28 @@ local function StartNoTP()
             NoTPAnchorCFrame = currentRoot.CFrame
         end
     end))
+end
+
+getgenv().SetNDSNoTPAnchor = function(
+    cframe,
+    Silent
+)
+    if game.PlaceId ~= NDSPlaceId
+    or typeof(cframe) ~= "CFrame" then
+        return false
+    end
+
+    NoTPAnchorCFrame = cframe
+    NoTPCurrentCharacter =
+        Player.Character
+
+    if getgenv().SetToxLastSafeCFrame then
+        getgenv().SetToxLastSafeCFrame(
+            cframe
+        )
+    end
+
+    return true
 end
 
 getgenv().SetNDSNoTP = function(Value, Silent)
