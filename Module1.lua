@@ -131,6 +131,7 @@ getgenv().Settings = {
 
     NDSAutoWin = false,
     NDSWaterFly = false,
+    NDSWaterFlySpeed = 12,
     NDSNoTP = false
 }
 
@@ -238,6 +239,7 @@ getgenv().AutoSaveConfiguration = function()
             MusicVolume = Settings.MusicVolume,
             NDSAutoWin = Settings.NDSAutoWin,
             NDSWaterFly = Settings.NDSWaterFly,
+            NDSWaterFlySpeed = Settings.NDSWaterFlySpeed,
             NDSNoTP = Settings.NDSNoTP
         },
         SavedIDs = getgenv().SavedIDs,
@@ -857,8 +859,8 @@ end)
 
 local WaypointsGui = Instance.new("Frame")
 WaypointsGui.Name = "ToxWaypointsFrame"
-WaypointsGui.Size = UDim2.new(0, 320, 0, 260)
-WaypointsGui.Position = UDim2.new(0.5, -160, 0.5, -130)
+WaypointsGui.Size = UDim2.new(0, 360, 0, 320)
+WaypointsGui.Position = UDim2.new(0.5, -180, 0.5, -160)
 WaypointsGui.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
 WaypointsGui.BorderSizePixel = 0
 WaypointsGui.ClipsDescendants = true
@@ -922,6 +924,25 @@ local function CreateDarkBtn(text, pos, size, parent)
 end
 getgenv().CreateDarkBtn = CreateDarkBtn
 
+local function CreateWayCoordInput(placeholder, position)
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(0.21, 0, 1, 0)
+    box.Position = position
+    box.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    box.BorderSizePixel = 0
+    box.PlaceholderText = placeholder
+    box.Text = ""
+    box.TextColor3 = Color3.fromRGB(240, 240, 240)
+    box.Font = Enum.Font.Gotham
+    box.TextSize = 10
+    box.ClearTextOnFocus = false
+    box.Parent = WayContent
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = box
+    return box
+end
+
 local WayInputArea = Instance.new("Frame")
 WayInputArea.Size = UDim2.new(1, 0, 0, 26)
 WayInputArea.Position = UDim2.new(0, 0, 0, 0)
@@ -929,7 +950,7 @@ WayInputArea.BackgroundTransparency = 1
 WayInputArea.Parent = WayContent
 
 local WayNameInput = Instance.new("TextBox")
-WayNameInput.Size = UDim2.new(0.72, 0, 1, 0)
+WayNameInput.Size = UDim2.new(0.70, 0, 1, 0)
 WayNameInput.Position = UDim2.new(0, 0, 0, 0)
 WayNameInput.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
 WayNameInput.PlaceholderText = "Waypoint Name"
@@ -940,11 +961,17 @@ WayNameInput.TextSize = 11
 WayNameInput.Parent = WayInputArea
 local WayNameCorner = Instance.new("UICorner") WayNameCorner.CornerRadius = UDim.new(0, 4) WayNameCorner.Parent = WayNameInput
 
-local CreateWayBtn = CreateDarkBtn("Create", UDim2.new(0.75, 0, 0, 0), UDim2.new(0.25, 0, 1, 0), WayInputArea)
+local CreateWayBtn = CreateDarkBtn("Current", UDim2.new(0.72, 0, 0, 0), UDim2.new(0.28, 0, 1, 0), WayInputArea)
+
+local WayXInput = CreateWayCoordInput("X", UDim2.new(0, 0, 0, 32))
+local WayYInput = CreateWayCoordInput("Y", UDim2.new(0.22, 0, 0, 32))
+local WayZInput = CreateWayCoordInput("Z", UDim2.new(0.44, 0, 0, 32))
+local CreateCoordsBtn = CreateDarkBtn("Add Coords", UDim2.new(0.67, 0, 0, 32), UDim2.new(0.33, 0, 0, 26), WayContent)
+local CopyCurrentCoordsBtn = CreateDarkBtn("Copy Current Coordinates", UDim2.new(0, 0, 0, 64), UDim2.new(1, 0, 0, 24), WayContent)
 
 local WayScroll = Instance.new("ScrollingFrame")
-WayScroll.Size = UDim2.new(1, 0, 1, -34)
-WayScroll.Position = UDim2.new(0, 0, 0, 32)
+WayScroll.Size = UDim2.new(1, 0, 1, -96)
+WayScroll.Position = UDim2.new(0, 0, 0, 94)
 WayScroll.BackgroundTransparency = 1
 WayScroll.BorderSizePixel = 0
 WayScroll.ScrollBarThickness = 3
@@ -961,6 +988,30 @@ WayLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     WayScroll.CanvasSize = UDim2.new(0, 0, 0, WayLayout.AbsoluteContentSize.Y + 5)
 end)
 
+local function FormatCoordinate(value)
+    return string.format("%.3f", tonumber(value) or 0)
+end
+
+local function CopyCoordinates(x, y, z)
+    local text = FormatCoordinate(x) .. ", " .. FormatCoordinate(y) .. ", " .. FormatCoordinate(z)
+
+    if setclipboard then
+        setclipboard(text)
+        CustomNotify("Coordinates copied", Color3.fromRGB(100, 255, 100))
+    else
+        CustomNotify(text, Color3.fromRGB(255, 255, 100), 5)
+    end
+
+    return text
+end
+
+local function ClearWayInputs()
+    WayNameInput.Text = ""
+    WayXInput.Text = ""
+    WayYInput.Text = ""
+    WayZInput.Text = ""
+end
+
 local RefreshWaypointsUI
 
 RefreshWaypointsUI = function()
@@ -970,14 +1021,14 @@ RefreshWaypointsUI = function()
 
     for idx, wp in ipairs(SavedWaypoints) do
         local item = Instance.new("Frame")
-        item.Size = UDim2.new(1, -4, 0, 26)
+        item.Size = UDim2.new(1, -4, 0, 28)
         item.BackgroundColor3 = Color3.fromRGB(16, 16, 24)
         item.BorderSizePixel = 0
         item.Parent = WayScroll
         local c = Instance.new("UICorner") c.CornerRadius = UDim.new(0, 4) c.Parent = item
 
         local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(0.48, -4, 1, 0)
+        lbl.Size = UDim2.new(0.42, -4, 1, 0)
         lbl.Position = UDim2.new(0, 6, 0, 0)
         lbl.BackgroundTransparency = 1
         lbl.Text = wp.name
@@ -988,7 +1039,7 @@ RefreshWaypointsUI = function()
         lbl.TextTruncate = Enum.TextTruncate.AtEnd
         lbl.Parent = item
 
-        local goBtn = CreateDarkBtn("GO", UDim2.new(0.50, 0, 0.5, -9), UDim2.new(0, 32, 0, 18), item)
+        local goBtn = CreateDarkBtn("GO", UDim2.new(0.43, 0, 0.5, -9), UDim2.new(0, 28, 0, 18), item)
         goBtn.MouseButton1Click:Connect(function()
             local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
             if Root and wp.x and wp.y and wp.z then
@@ -998,7 +1049,7 @@ RefreshWaypointsUI = function()
             end
         end)
 
-        local upBtn = CreateDarkBtn("Up", UDim2.new(0.50, 35, 0.5, -9), UDim2.new(0, 22, 0, 18), item)
+        local upBtn = CreateDarkBtn("Up", UDim2.new(0.43, 31, 0.5, -9), UDim2.new(0, 22, 0, 18), item)
         upBtn.MouseButton1Click:Connect(function()
             if idx > 1 then
                 SavedWaypoints[idx], SavedWaypoints[idx - 1] = SavedWaypoints[idx - 1], SavedWaypoints[idx]
@@ -1007,7 +1058,7 @@ RefreshWaypointsUI = function()
             end
         end)
 
-        local downBtn = CreateDarkBtn("Down", UDim2.new(0.50, 60, 0.5, -9), UDim2.new(0, 28, 0, 18), item)
+        local downBtn = CreateDarkBtn("Dn", UDim2.new(0.43, 56, 0.5, -9), UDim2.new(0, 24, 0, 18), item)
         downBtn.MouseButton1Click:Connect(function()
             if idx < #SavedWaypoints then
                 SavedWaypoints[idx], SavedWaypoints[idx + 1] = SavedWaypoints[idx + 1], SavedWaypoints[idx]
@@ -1016,7 +1067,12 @@ RefreshWaypointsUI = function()
             end
         end)
 
-        local dBtn = CreateDarkBtn("X", UDim2.new(0.50, 91, 0.5, -9), UDim2.new(0, 20, 0, 18), item)
+        local copyBtn = CreateDarkBtn("Copy", UDim2.new(0.43, 83, 0.5, -9), UDim2.new(0, 34, 0, 18), item)
+        copyBtn.MouseButton1Click:Connect(function()
+            CopyCoordinates(wp.x, wp.y, wp.z)
+        end)
+
+        local dBtn = CreateDarkBtn("X", UDim2.new(0.43, 120, 0.5, -9), UDim2.new(0, 18, 0, 18), item)
         dBtn.MouseButton1Click:Connect(function()
             table.remove(SavedWaypoints, idx)
             AutoSaveConfiguration()
@@ -1027,15 +1083,48 @@ end
 
 CreateWayBtn.MouseButton1Click:Connect(function()
     local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+
     if Root then
         local name = WayNameInput.Text ~= "" and WayNameInput.Text or ("Waypoint " .. (#SavedWaypoints + 1))
         local pos = Root.Position
         table.insert(SavedWaypoints, {name = name, x = pos.X, y = pos.Y, z = pos.Z})
-        WayNameInput.Text = ""
+        ClearWayInputs()
         AutoSaveConfiguration()
         RefreshWaypointsUI()
         CustomNotify("Waypoint Created!", Color3.fromRGB(100, 255, 100))
     end
+end)
+
+CreateCoordsBtn.MouseButton1Click:Connect(function()
+    local x = tonumber(WayXInput.Text)
+    local y = tonumber(WayYInput.Text)
+    local z = tonumber(WayZInput.Text)
+
+    if not x or not y or not z then
+        CustomNotify("Invalid coordinates", Color3.fromRGB(255, 100, 100))
+        return
+    end
+
+    local name = WayNameInput.Text ~= "" and WayNameInput.Text or ("Waypoint " .. (#SavedWaypoints + 1))
+    table.insert(SavedWaypoints, {name = name, x = x, y = y, z = z})
+    ClearWayInputs()
+    AutoSaveConfiguration()
+    RefreshWaypointsUI()
+    CustomNotify("Waypoint added by coordinates", Color3.fromRGB(100, 255, 100))
+end)
+
+CopyCurrentCoordsBtn.MouseButton1Click:Connect(function()
+    local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+
+    if not Root then
+        return
+    end
+
+    local pos = Root.Position
+    WayXInput.Text = FormatCoordinate(pos.X)
+    WayYInput.Text = FormatCoordinate(pos.Y)
+    WayZInput.Text = FormatCoordinate(pos.Z)
+    CopyCoordinates(pos.X, pos.Y, pos.Z)
 end)
 
 WayCloseBtn.MouseButton1Click:Connect(function() WaypointsGui.Visible = false end)
@@ -1605,6 +1694,7 @@ TrackGuiPosition("Music", MusicGui)
 TrackGuiPosition("ToxChat", ToxChatGui)
 
 getgenv().SharedToggleControls = {}
+getgenv().SharedValueControls = {}
 
 getgenv().SyncToggleVisuals = function(Key, Value)
     if not Key then return end
@@ -1627,6 +1717,29 @@ local function RegisterSharedToggle(Key, Controller)
     end
 
     table.insert(getgenv().SharedToggleControls[Key], Controller)
+end
+
+getgenv().SyncValueVisuals = function(Key, Value)
+    if not Key then return end
+
+    local controls = getgenv().SharedValueControls[Key]
+    if not controls then return end
+
+    for _, controller in ipairs(controls) do
+        if controller and controller.SetValue then
+            controller.SetValue(Value)
+        end
+    end
+end
+
+local function RegisterSharedValue(Key, Controller)
+    if not Key or not Controller then return end
+
+    if not getgenv().SharedValueControls[Key] then
+        getgenv().SharedValueControls[Key] = {}
+    end
+
+    table.insert(getgenv().SharedValueControls[Key], Controller)
 end
 
 getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
@@ -1775,10 +1888,16 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
         SetVisual = function(Value)
             Enabled = Value == true
             UpdateToggle()
+        end,
+        SetValue = function(Value)
+            if tonumber(Value) then
+                Input.Text = tostring(Value)
+            end
         end
     }
 
     RegisterSharedToggle(SyncKey, Controller)
+    RegisterSharedValue(SyncKey, Controller)
 
     ToggleButton.MouseButton1Click:Connect(function()
         if Destroyed then return end
@@ -1805,6 +1924,11 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
 
         if Number then
             CallbackValue(Number)
+
+            if SyncKey and getgenv().SyncValueVisuals then
+                getgenv().SyncValueVisuals(SyncKey, Number)
+            end
+
             AutoSaveConfiguration()
         else
             Input.Text = tostring(DefaultValue)
