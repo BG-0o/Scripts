@@ -29,8 +29,14 @@ Settings.ADMINCommandMode = tostring(Settings.ADMINCommandMode or "CMD")
 Settings.ADMINCustomCommand = tostring(Settings.ADMINCustomCommand or "")
 Settings.ADMINCustomTarget = tostring(Settings.ADMINCustomTarget or "")
 Settings.ADMINCustomAll = Settings.ADMINCustomAll == true
-Settings.ADMINUncmdbarTarget = tostring(Settings.ADMINUncmdbarTarget or "")
-Settings.ADMINUncmdbarAll = Settings.ADMINUncmdbarAll == true
+Settings.ADMINUncmdbar2Target = tostring(
+    Settings.ADMINUncmdbar2Target
+    or Settings.ADMINUncmdbarTarget
+    or ""
+)
+Settings.ADMINUncmdbar2All =
+    Settings.ADMINUncmdbar2All == true
+    or Settings.ADMINUncmdbarAll == true
 Settings.ADMINMuteTarget = tostring(Settings.ADMINMuteTarget or "")
 Settings.ADMINMuteAll = Settings.ADMINMuteAll == true
 Settings.ADMINPoopTarget = tostring(Settings.ADMINPoopTarget or "")
@@ -1284,8 +1290,11 @@ local function CreateCommandRow(
 )
     Settings[targetSetting] =
         tostring(Settings[targetSetting] or "")
-    Settings[allSetting] =
-        Settings[allSetting] == true
+
+    if allSetting then
+        Settings[allSetting] =
+            Settings[allSetting] == true
+    end
 
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, -5, 0, 46)
@@ -1311,8 +1320,12 @@ local function CreateCommandRow(
 
     local targetBox =
         Instance.new("TextBox")
-    targetBox.Size = UDim2.new(0, 62, 0, 27)
-    targetBox.Position = UDim2.new(0, 64, 0.5, -13)
+    targetBox.Size =
+        allSetting
+        and UDim2.new(0, 62, 0, 27)
+        or UDim2.new(0, 98, 0, 27)
+    targetBox.Position =
+        UDim2.new(0, 64, 0.5, -13)
     targetBox.BackgroundColor3 =
         Color3.fromRGB(28, 28, 42)
     targetBox.BorderSizePixel = 0
@@ -1326,24 +1339,34 @@ local function CreateCommandRow(
     targetBox.Parent = row
     MakeCorner(targetBox, 4)
 
-    local allButton =
-        Instance.new("TextButton")
-    allButton.Size = UDim2.new(0, 34, 0, 27)
-    allButton.Position = UDim2.new(0, 130, 0.5, -13)
-    allButton.BorderSizePixel = 0
-    allButton.Text = "ALL"
-    allButton.TextColor3 =
-        Color3.fromRGB(255, 255, 255)
-    allButton.TextSize = 9
-    allButton.Font = Enum.Font.GothamBold
-    allButton.AutoButtonColor = false
-    allButton.Parent = row
-    MakeCorner(allButton, 4)
+    local allButton = nil
+
+    if allSetting then
+        allButton =
+            Instance.new("TextButton")
+        allButton.Size =
+            UDim2.new(0, 34, 0, 27)
+        allButton.Position =
+            UDim2.new(0, 130, 0.5, -13)
+        allButton.BorderSizePixel = 0
+        allButton.Text = "ALL"
+        allButton.TextColor3 =
+            Color3.fromRGB(255, 255, 255)
+        allButton.TextSize = 9
+        allButton.Font =
+            Enum.Font.GothamBold
+        allButton.AutoButtonColor = false
+        allButton.Parent = row
+        MakeCorner(allButton, 4)
+    end
 
     local useButton =
         Instance.new("TextButton")
     useButton.Size = UDim2.new(0, 42, 0, 27)
-    useButton.Position = UDim2.new(0, 168, 0.5, -13)
+    useButton.Position =
+        allSetting
+        and UDim2.new(0, 168, 0.5, -13)
+        or UDim2.new(0, 166, 0.5, -13)
     useButton.BackgroundColor3 = MAIN_COLOR
     useButton.BorderSizePixel = 0
     useButton.Text = "USE"
@@ -1355,6 +1378,11 @@ local function CreateCommandRow(
     MakeCorner(useButton, 4)
 
     local function UpdateAll()
+        if not allButton
+        or not allSetting then
+            return
+        end
+
         allButton.BackgroundColor3 =
             Settings[allSetting]
             and Color3.fromRGB(50, 180, 70)
@@ -1366,9 +1394,12 @@ local function CreateCommandRow(
             Trim(targetBox.Text)
 
         local target =
-            Settings[allSetting]
-            and "all"
-            or Settings[targetSetting]
+            Settings[targetSetting]
+
+        if allSetting
+        and Settings[allSetting] then
+            target = "all"
+        end
 
         if target == "" then
             return false
@@ -1386,13 +1417,16 @@ local function CreateCommandRow(
         Save()
     end)
 
-    allButton.MouseButton1Click:
-        Connect(function()
-            Settings[allSetting] =
-                not Settings[allSetting]
-            UpdateAll()
-            Save()
-        end)
+    if allButton
+    and allSetting then
+        allButton.MouseButton1Click:
+            Connect(function()
+                Settings[allSetting] =
+                    not Settings[allSetting]
+                UpdateAll()
+                Save()
+            end)
+    end
 
     useButton.MouseButton1Click:
         Connect(function()
@@ -1445,11 +1479,11 @@ CreatePrefixRow()
 CreateCustomCommandRow()
 
 CreateCommandRow(
-    "Uncmdbar",
-    "Uncmdbar",
-    "uncmdbar",
-    "ADMINUncmdbarTarget",
-    "ADMINUncmdbarAll"
+    "Uncmdbar2",
+    "Uncmdbar2",
+    "uncmdbar2",
+    "ADMINUncmdbar2Target",
+    "ADMINUncmdbar2All"
 )
 
 CreateCommandRow(
@@ -1491,7 +1525,7 @@ CreateCommandRow(
     "Kick",
     "kick",
     "ADMINKickTarget",
-    "ADMINKickAll"
+    nil
 )
 
 CreateSimpleButton(
