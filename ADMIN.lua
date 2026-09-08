@@ -5,6 +5,7 @@ end
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextChatService = game:GetService("TextChatService")
+local TeleportService = game:GetService("TeleportService")
 local CoreGui = game:GetService("CoreGui")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 
@@ -25,6 +26,20 @@ Settings.ADMINRocketTarget = tostring(Settings.ADMINRocketTarget or "")
 Settings.ADMINRocketAll = Settings.ADMINRocketAll == true
 Settings.ADMINKickTarget = tostring(Settings.ADMINKickTarget or "")
 Settings.ADMINCommandMode = tostring(Settings.ADMINCommandMode or "CMD")
+Settings.ADMINCustomCommand = tostring(Settings.ADMINCustomCommand or "")
+Settings.ADMINCustomTarget = tostring(Settings.ADMINCustomTarget or "")
+Settings.ADMINCustomAll = Settings.ADMINCustomAll == true
+Settings.ADMINUncmdbarTarget = tostring(Settings.ADMINUncmdbarTarget or "")
+Settings.ADMINUncmdbarAll = Settings.ADMINUncmdbarAll == true
+Settings.ADMINMuteTarget = tostring(Settings.ADMINMuteTarget or "")
+Settings.ADMINMuteAll = Settings.ADMINMuteAll == true
+Settings.ADMINPoopTarget = tostring(Settings.ADMINPoopTarget or "")
+Settings.ADMINPoopAll = Settings.ADMINPoopAll == true
+Settings.ADMINPunishTarget = tostring(Settings.ADMINPunishTarget or "")
+Settings.ADMINPunishAll = Settings.ADMINPunishAll == true
+Settings.ADMINSuperFlingTarget = tostring(Settings.ADMINSuperFlingTarget or "")
+Settings.ADMINSuperFlingAll = Settings.ADMINSuperFlingAll == true
+Settings.ADMINKickAll = Settings.ADMINKickAll == true
 
 if Settings.ADMINCommandMode ~= "CHAT"
 and Settings.ADMINCommandMode ~= "CMD" then
@@ -37,7 +52,33 @@ local function Save()
     end
 end
 
-local function Blob(obj)
+local function Trim(value)
+    return tostring(value or "")
+        :gsub("^%s+", "")
+        :gsub("%s+$", "")
+end
+
+local function MakeCorner(parent, radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius =
+        UDim.new(0, radius or 4)
+    corner.Parent = parent
+end
+
+local function GetGuiRoots()
+    local roots = {}
+    local playerGui =
+        Player:FindFirstChildOfClass("PlayerGui")
+
+    if playerGui then
+        table.insert(roots, playerGui)
+    end
+
+    table.insert(roots, CoreGui)
+    return roots
+end
+
+local function GetObjectText(obj)
     local pieces = {
         tostring(obj.Name or "")
     }
@@ -63,30 +104,30 @@ local function Blob(obj)
     )
 end
 
-local function AncestorBlob(obj, depth)
-    local pieces = {}
+local function GetAncestorText(obj, depth)
+    local result = {}
     local current = obj
 
-    for _ = 1, depth or 6 do
+    for _ = 1, depth or 7 do
         if not current then
             break
         end
 
         table.insert(
-            pieces,
-            Blob(current)
+            result,
+            GetObjectText(current)
         )
 
         current = current.Parent
     end
 
     return table.concat(
-        pieces,
+        result,
         " "
     )
 end
 
-local function FindExecuteButton(box)
+local function FindExecuteNear(box)
     local current = box.Parent
 
     for _ = 1, 7 do
@@ -99,17 +140,12 @@ local function FindExecuteButton(box)
         ) do
             if obj:IsA("TextButton")
             or obj:IsA("ImageButton") then
-                local blob = Blob(obj)
+                local blob =
+                    GetObjectText(obj)
 
                 if string.find(
                     blob,
                     "execute",
-                    1,
-                    true
-                )
-                or string.find(
-                    blob,
-                    "run",
                     1,
                     true
                 ) then
@@ -124,58 +160,41 @@ local function FindExecuteButton(box)
     return nil
 end
 
-local function CollectCommandBars()
-    local roots = {}
-    local playerGui =
-        Player:FindFirstChildOfClass("PlayerGui")
+local function FindCmdBar()
+    local candidates = {}
 
-    if playerGui then
-        table.insert(roots, playerGui)
-    end
-
-    table.insert(roots, CoreGui)
-
-    local found = {}
-    local seen = {}
-
-    for _, root in ipairs(roots) do
-        for _, obj in ipairs(root:GetDescendants()) do
+    for _, root in ipairs(GetGuiRoots()) do
+        for _, obj in ipairs(
+            root:GetDescendants()
+        ) do
             if obj:IsA("TextBox") then
-                local blob = Blob(obj)
-                local fullBlob =
-                    AncestorBlob(obj, 7)
+                local selfText =
+                    GetObjectText(obj)
+                local ancestorText =
+                    GetAncestorText(
+                        obj,
+                        8
+                    )
 
                 local score = 0
-                local kind = 0
 
                 if string.find(
-                    fullBlob,
+                    ancestorText,
                     "cmdbar2",
                     1,
                     true
                 ) then
-                    score = score + 300
-                    kind = 2
+                    score = score + 500
                 elseif string.find(
-                    fullBlob,
+                    ancestorText,
                     "cmdbar1",
                     1,
                     true
                 ) then
-                    score = score + 250
-                    kind = 1
+                    score = score + 350
                 elseif string.find(
-                    fullBlob,
+                    ancestorText,
                     "cmdbar",
-                    1,
-                    true
-                ) then
-                    score = score + 150
-                end
-
-                if string.find(
-                    blob,
-                    "enter command",
                     1,
                     true
                 ) then
@@ -183,53 +202,55 @@ local function CollectCommandBars()
                 end
 
                 if string.find(
-                    blob,
-                    "command",
+                    selfText,
+                    "enter command",
                     1,
                     true
                 ) then
-                    score = score + 40
+                    score = score + 300
                 end
 
-                if score > 0
-                and not seen[obj] then
-                    local executeButton =
-                        FindExecuteButton(obj)
+                if score > 0 then
+                    local execute =
+                        FindExecuteNear(obj)
 
-                    if executeButton then
-                        seen[obj] = true
-
-                        table.insert(found, {
-                            Box = obj,
-                            Button = executeButton,
-                            Score = score,
-                            Kind = kind
-                        })
+                    if execute then
+                        table.insert(
+                            candidates,
+                            {
+                                Box = obj,
+                                Execute = execute,
+                                Score = score
+                            }
+                        )
                     end
                 end
             end
         end
     end
 
-    table.sort(found, function(a, b)
-        if a.Kind ~= b.Kind then
-            return a.Kind > b.Kind
+    table.sort(
+        candidates,
+        function(a, b)
+            return a.Score > b.Score
         end
+    )
 
-        return a.Score > b.Score
-    end)
-
-    return found
+    return candidates[1]
 end
 
-local function FireConnectionList(signal)
+local function FireConnections(
+    signal,
+    ...
+)
     if not getconnections then
         return false
     end
 
-    local ok, connections = pcall(function()
-        return getconnections(signal)
-    end)
+    local ok, connections =
+        pcall(function()
+            return getconnections(signal)
+        end)
 
     if not ok
     or typeof(connections) ~= "table" then
@@ -237,12 +258,18 @@ local function FireConnectionList(signal)
     end
 
     local fired = false
+    local args = {...}
 
-    for _, connection in ipairs(connections) do
+    for _, connection in ipairs(
+        connections
+    ) do
         local fn = connection.Function
 
         if typeof(fn) == "function" then
-            local callOk = pcall(fn)
+            local callOk = pcall(
+                fn,
+                table.unpack(args)
+            )
 
             if callOk then
                 fired = true
@@ -253,7 +280,7 @@ local function FireConnectionList(signal)
     return fired
 end
 
-local function FireButton(button)
+local function TriggerExecute(button)
     if not button
     or not button.Parent then
         return false
@@ -261,6 +288,16 @@ local function FireButton(button)
 
     if firesignal then
         local ok = pcall(function()
+            firesignal(
+                button.MouseButton1Down
+            )
+        end)
+
+        if ok then
+            return true
+        end
+
+        ok = pcall(function()
             firesignal(
                 button.MouseButton1Click
             )
@@ -281,13 +318,19 @@ local function FireButton(button)
         end
     end
 
-    if FireConnectionList(
+    if FireConnections(
+        button.MouseButton1Down
+    ) then
+        return true
+    end
+
+    if FireConnections(
         button.MouseButton1Click
     ) then
         return true
     end
 
-    if FireConnectionList(
+    if FireConnections(
         button.Activated
     ) then
         return true
@@ -296,356 +339,275 @@ local function FireButton(button)
     return false
 end
 
-local function FireTextBoxEnter(box)
-    if not box
-    or not box.Parent then
-        return false
+local CachedMain = nil
+local CachedRequest = nil
+local CachedRetrieve = nil
+
+local function IsRemoteFunction(obj)
+    return typeof(obj) == "Instance"
+        and obj:IsA("RemoteFunction")
+end
+
+local function ResolveMain()
+    if typeof(CachedMain) == "table" then
+        return CachedMain
     end
 
-    if firesignal then
-        local ok = pcall(function()
-            firesignal(
-                box.FocusLost,
-                true
-            )
-        end)
+    local possibilities = {}
 
-        if ok then
-            return true
+    pcall(function()
+        table.insert(
+            possibilities,
+            _G.HDAdminMain
+        )
+    end)
+
+    pcall(function()
+        table.insert(
+            possibilities,
+            getgenv().HDAdminMain
+        )
+    end)
+
+    pcall(function()
+        table.insert(
+            possibilities,
+            shared.HDAdminMain
+        )
+    end)
+
+    for _, candidate in ipairs(
+        possibilities
+    ) do
+        if typeof(candidate) == "table"
+        and typeof(candidate.signals) == "table"
+        and IsRemoteFunction(
+            candidate.signals.RequestCommand
+        ) then
+            CachedMain = candidate
+            return candidate
         end
     end
 
-    if getconnections then
-        local ok, connections = pcall(function()
-            return getconnections(
-                box.FocusLost
-            )
-        end)
+    if getgc then
+        local ok, objects = pcall(
+            getgc,
+            true
+        )
 
         if ok
-        and typeof(connections) == "table" then
-            local fired = false
-
-            for _, connection in ipairs(
-                connections
+        and typeof(objects) == "table" then
+            for _, candidate in ipairs(
+                objects
             ) do
-                local fn = connection.Function
+                if typeof(candidate) == "table" then
+                    local signals =
+                        rawget(
+                            candidate,
+                            "signals"
+                        )
 
-                if typeof(fn) == "function" then
-                    local callOk = pcall(
-                        fn,
-                        true
-                    )
-
-                    if callOk then
-                        fired = true
+                    if typeof(signals) == "table"
+                    and IsRemoteFunction(
+                        rawget(
+                            signals,
+                            "RequestCommand"
+                        )
+                    ) then
+                        CachedMain = candidate
+                        return candidate
                     end
                 end
             end
-
-            if fired then
-                return true
-            end
         end
     end
 
-    return false
+    return nil
 end
 
-local function VirtualExecute(box, button)
-    if not box
-    or not button then
-        return false
-    end
-
-    local visibleStates = {}
-    local current = button
-
-    for _ = 1, 7 do
-        if not current then
-            break
-        end
-
-        if current:IsA("GuiObject") then
-            table.insert(
-                visibleStates,
-                {
-                    Object = current,
-                    Visible = current.Visible
-                }
-            )
-
-            current.Visible = true
-        elseif current:IsA("ScreenGui") then
-            table.insert(
-                visibleStates,
-                {
-                    Object = current,
-                    Enabled = current.Enabled
-                }
-            )
-
-            current.Enabled = true
-        end
-
-        current = current.Parent
-    end
-
-    local ok = pcall(function()
-        local center =
-            button.AbsolutePosition
-            + button.AbsoluteSize / 2
-
-        VirtualInputManager:
-            SendMouseButtonEvent(
-                center.X,
-                center.Y,
-                0,
-                true,
-                game,
-                0
-            )
-
-        task.wait(0.02)
-
-        VirtualInputManager:
-            SendMouseButtonEvent(
-                center.X,
-                center.Y,
-                0,
-                false,
-                game,
-                0
-            )
-    end)
-
-    for _, state in ipairs(visibleStates) do
-        if state.Object
-        and state.Object.Parent then
-            if state.Visible ~= nil then
-                state.Object.Visible =
-                    state.Visible
-            elseif state.Enabled ~= nil then
-                state.Object.Enabled =
-                    state.Enabled
-            end
+local function FindRemoteByName(name)
+    for _, obj in ipairs(
+        ReplicatedStorage:GetDescendants()
+    ) do
+        if obj:IsA("RemoteFunction")
+        and string.lower(obj.Name)
+            == string.lower(name) then
+            return obj
         end
     end
 
-    return ok
+    return nil
 end
 
-local function ExecuteOnBar(candidate, command)
-    local box = candidate.Box
-    local button = candidate.Button
-
-    if not box
-    or not box.Parent
-    or not button
-    or not button.Parent then
-        return false
+local function ResolveRequest()
+    if IsRemoteFunction(CachedRequest)
+    and CachedRequest.Parent then
+        return CachedRequest
     end
 
-    local oldText = box.Text
-    box.Text = command
+    local main = ResolveMain()
 
-    task.wait()
-
-    local fired = FireButton(button)
-
-    if not fired then
-        fired = FireTextBoxEnter(box)
-    end
-
-    if not fired then
-        fired = VirtualExecute(
-            box,
-            button
-        )
-    end
-
-    task.delay(0.12, function()
-        if box
-        and box.Parent then
-            box.Text = oldText
-        end
-    end)
-
-    return fired
-end
-
-local CachedHDAdminSignals = nil
-local CachedRequestCommand = nil
-local CachedRetrieveData = nil
-
-local function GetHDAdminSignals()
-    if CachedHDAdminSignals
-    and CachedHDAdminSignals.Parent then
-        return CachedHDAdminSignals
+    if main
+    and typeof(main.signals) == "table"
+    and IsRemoteFunction(
+        main.signals.RequestCommand
+    ) then
+        CachedRequest =
+            main.signals.RequestCommand
+        return CachedRequest
     end
 
     local client =
-        ReplicatedStorage:FindFirstChild(
-            "HDAdminClient"
-        )
-
-    if not client then
-        local ok, value = pcall(function()
-            return ReplicatedStorage:
-                WaitForChild(
-                    "HDAdminClient",
-                    3
-                )
-        end)
-
-        if ok then
-            client = value
-        end
-    end
-
-    if not client then
-        return nil
-    end
+        ReplicatedStorage:
+            FindFirstChild("HDAdminClient")
 
     local signals =
-        client:FindFirstChild(
-            "Signals"
-        )
+        client
+        and client:
+            FindFirstChild("Signals")
 
-    if not signals then
-        local ok, value = pcall(function()
-            return client:WaitForChild(
-                "Signals",
-                2
-            )
+    local direct =
+        signals
+        and signals:
+            FindFirstChild("RequestCommand")
+
+    if IsRemoteFunction(direct) then
+        CachedRequest = direct
+        return direct
+    end
+
+    CachedRequest =
+        FindRemoteByName("RequestCommand")
+
+    return CachedRequest
+end
+
+local function ResolveRetrieve()
+    if IsRemoteFunction(CachedRetrieve)
+    and CachedRetrieve.Parent then
+        return CachedRetrieve
+    end
+
+    local main = ResolveMain()
+
+    if main
+    and typeof(main.signals) == "table"
+    and IsRemoteFunction(
+        main.signals.RetrieveData
+    ) then
+        CachedRetrieve =
+            main.signals.RetrieveData
+        return CachedRetrieve
+    end
+
+    CachedRetrieve =
+        FindRemoteByName("RetrieveData")
+
+    return CachedRetrieve
+end
+
+local function GetDirectPrefix()
+    local main = ResolveMain()
+
+    if main
+    and typeof(main.pdata) == "table"
+    and typeof(main.pdata.Prefix) == "string"
+    and main.pdata.Prefix ~= "" then
+        return main.pdata.Prefix
+    end
+
+    local retrieve =
+        ResolveRetrieve()
+
+    if retrieve then
+        local ok, data = pcall(function()
+            return retrieve:InvokeServer()
         end)
 
-        if ok then
-            signals = value
+        if ok
+        and typeof(data) == "table"
+        and typeof(data.pdata) == "table"
+        and typeof(
+            data.pdata.Prefix
+        ) == "string"
+        and data.pdata.Prefix ~= "" then
+            return data.pdata.Prefix
         end
     end
 
-    CachedHDAdminSignals = signals
-    return signals
+    return tostring(
+        Settings.ADMINPrefix or "."
+    )
 end
 
-local function GetRequestCommand()
-    if CachedRequestCommand
-    and CachedRequestCommand.Parent
-    and CachedRequestCommand:IsA(
-        "RemoteFunction"
-    ) then
-        return CachedRequestCommand
-    end
+local function BuildRawCommand(
+    command,
+    target
+)
+    command = Trim(command)
+    target = Trim(target)
 
-    local signals = GetHDAdminSignals()
-
-    if not signals then
+    if command == "" then
         return nil
     end
 
-    local remote =
-        signals:FindFirstChild(
-            "RequestCommand"
-        )
-
-    if remote
-    and remote:IsA("RemoteFunction") then
-        CachedRequestCommand = remote
-        return remote
-    end
-
-    return nil
-end
-
-local function GetRetrieveData()
-    if CachedRetrieveData
-    and CachedRetrieveData.Parent
-    and CachedRetrieveData:IsA(
-        "RemoteFunction"
-    ) then
-        return CachedRetrieveData
-    end
-
-    local signals = GetHDAdminSignals()
-
-    if not signals then
-        return nil
-    end
-
-    local remote =
-        signals:FindFirstChild(
-            "RetrieveData"
-        )
-
-    if remote
-    and remote:IsA("RemoteFunction") then
-        CachedRetrieveData = remote
-        return remote
-    end
-
-    return nil
-end
-
-local function GetHDAdminPrefix()
-    local fallback =
+    local configuredPrefix =
         tostring(
             Settings.ADMINPrefix or "."
         )
 
-    local retrieve = GetRetrieveData()
-
-    if not retrieve then
-        return fallback
+    if configuredPrefix ~= ""
+    and string.sub(
+        command,
+        1,
+        #configuredPrefix
+    ) == configuredPrefix then
+        command = Trim(
+            string.sub(
+                command,
+                #configuredPrefix + 1
+            )
+        )
     end
 
-    local ok, data = pcall(function()
-        return retrieve:InvokeServer()
-    end)
-
-    if not ok
-    or typeof(data) ~= "table" then
-        return fallback
+    if target ~= "" then
+        return command
+            .. " "
+            .. target
     end
 
-    local pdata = data.pdata
-
-    if typeof(pdata) == "table"
-    and typeof(pdata.Prefix) == "string"
-    and pdata.Prefix ~= "" then
-        return pdata.Prefix
-    end
-
-    return fallback
+    return command
 end
 
-local function SendCommandToChat(
-    commandName,
-    target
-)
+local function SendChatCommand(raw)
     local prefix =
         tostring(
             Settings.ADMINPrefix or "."
         )
 
-    local message =
-        prefix
-        .. commandName
-        .. " "
-        .. target
+    local message = raw
+
+    if prefix ~= ""
+    and string.sub(
+        message,
+        1,
+        #prefix
+    ) ~= prefix then
+        message = prefix .. message
+    end
 
     local sent = false
 
     pcall(function()
-        local inputConfig =
+        local config =
             TextChatService:
                 FindFirstChild(
                     "ChatInputBarConfiguration"
                 )
 
         local channel =
-            inputConfig
-            and inputConfig.TargetTextChannel
+            config
+            and config.TargetTextChannel
 
         if channel then
             channel:SendAsync(message)
@@ -654,29 +616,74 @@ local function SendCommandToChat(
     end)
 
     if not sent then
-        pcall(function()
-            Players:Chat(message)
-            sent = true
-        end)
+        local events =
+            ReplicatedStorage:
+                FindFirstChild(
+                    "DefaultChatSystemChatEvents"
+                )
+
+        local say =
+            events
+            and events:
+                FindFirstChild(
+                    "SayMessageRequest"
+                )
+
+        if say
+        and say:IsA("RemoteEvent") then
+            pcall(function()
+                say:FireServer(
+                    message,
+                    "All"
+                )
+                sent = true
+            end)
+        end
     end
 
     return sent
 end
 
-local function SendCommandDirect(
-    commandName,
-    target
-)
+local function ExecuteThroughCmdBar(raw)
+    local bar = FindCmdBar()
+
+    if not bar
+    or not bar.Box
+    or not bar.Execute then
+        return false
+    end
+
+    local box = bar.Box
+    local previous = box.Text
+
+    box.Text = raw
+
+    task.wait()
+
+    local fired =
+        TriggerExecute(
+            bar.Execute
+        )
+
+    task.delay(0.08, function()
+        if box
+        and box.Parent then
+            box.Text = previous
+        end
+    end)
+
+    return fired
+end
+
+local function ExecuteDirect(raw)
     local request =
-        GetRequestCommand()
+        ResolveRequest()
 
     if not request then
-        CachedHDAdminSignals = nil
-        CachedRequestCommand = nil
-        CachedRetrieveData = nil
-
-        request =
-            GetRequestCommand()
+        CachedMain = nil
+        CachedRequest = nil
+        CachedRetrieve = nil
+        request = ResolveRequest()
     end
 
     if not request then
@@ -684,59 +691,268 @@ local function SendCommandDirect(
     end
 
     local prefix =
-        GetHDAdminPrefix()
+        GetDirectPrefix()
 
-    local command =
-        prefix
-        .. commandName
-        .. " "
-        .. target
+    local message = raw
+
+    if prefix ~= ""
+    and string.sub(
+        message,
+        1,
+        #prefix
+    ) ~= prefix then
+        message = prefix .. message
+    end
 
     local ok = pcall(function()
-        request:InvokeServer(command)
+        request:InvokeServer(message)
     end)
 
     return ok
 end
 
 local function RunHDAdminCommand(
-    commandName,
+    command,
     target
 )
-    commandName =
-        string.lower(
-            tostring(commandName or "")
+    local raw =
+        BuildRawCommand(
+            command,
+            target
         )
 
-    target =
-        tostring(target or "")
-
-    if commandName == ""
-    or target == "" then
+    if not raw then
         return false
     end
 
-    if Settings.ADMINCommandMode == "CHAT" then
-        return SendCommandToChat(
-            commandName,
-            target
-        )
+    if Settings.ADMINCommandMode
+    == "CHAT" then
+        return SendChatCommand(raw)
     end
 
-    return SendCommandDirect(
-        commandName,
-        target
-    )
+    if ExecuteThroughCmdBar(raw) then
+        return true
+    end
+
+    return ExecuteDirect(raw)
 end
 
-local function MakeCorner(parent, radius)
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius =
-        UDim.new(
-            0,
-            radius or 4
+local LoopGeneration = {}
+
+local function LoopKeys(id)
+    return
+        "ADMINLoop" .. id,
+        "ADMINLoopSeconds" .. id
+end
+
+local function InitializeLoopState(id)
+    local stateKey, secondsKey =
+        LoopKeys(id)
+
+    Settings[stateKey] =
+        Settings[stateKey] == true
+
+    Settings[secondsKey] =
+        math.clamp(
+            tonumber(
+                Settings[secondsKey]
+            ) or 1,
+            0.1,
+            3600
         )
-    corner.Parent = parent
+
+    return stateKey, secondsKey
+end
+
+local function StopLoop(id)
+    LoopGeneration[id] =
+        (LoopGeneration[id] or 0) + 1
+end
+
+local function StartLoop(id, callback)
+    local stateKey, secondsKey =
+        InitializeLoopState(id)
+
+    StopLoop(id)
+
+    if not Settings[stateKey] then
+        return
+    end
+
+    local generation =
+        LoopGeneration[id]
+
+    task.spawn(function()
+        while not getgenv().Destroyed
+        and Settings[stateKey]
+        and LoopGeneration[id]
+            == generation do
+            pcall(callback)
+
+            local seconds =
+                math.clamp(
+                    tonumber(
+                        Settings[secondsKey]
+                    ) or 1,
+                    0.1,
+                    3600
+                )
+
+            task.wait(seconds)
+        end
+    end)
+end
+
+local function CreateLoopControls(
+    parent,
+    id,
+    callback
+)
+    local stateKey, secondsKey =
+        InitializeLoopState(id)
+
+    local loopButton =
+        Instance.new("TextButton")
+
+    loopButton.Size =
+        UDim2.new(0, 46, 0, 20)
+    loopButton.Position =
+        UDim2.new(0, 86, 1, -23)
+    loopButton.BorderSizePixel = 0
+    loopButton.Text = "LOOP"
+    loopButton.TextColor3 =
+        Color3.fromRGB(
+            255,
+            255,
+            255
+        )
+    loopButton.TextSize = 9
+    loopButton.Font =
+        Enum.Font.GothamBold
+    loopButton.AutoButtonColor = false
+    loopButton.Parent = parent
+    MakeCorner(loopButton, 4)
+
+    local secondsBox =
+        Instance.new("TextBox")
+
+    secondsBox.Size =
+        UDim2.new(0, 48, 0, 20)
+    secondsBox.Position =
+        UDim2.new(0, 136, 1, -23)
+    secondsBox.BackgroundColor3 =
+        Color3.fromRGB(28, 28, 42)
+    secondsBox.BorderSizePixel = 0
+    secondsBox.Text =
+        tostring(
+            Settings[secondsKey]
+        )
+    secondsBox.PlaceholderText = "1"
+    secondsBox.TextColor3 =
+        Color3.fromRGB(
+            255,
+            255,
+            255
+        )
+    secondsBox.TextSize = 10
+    secondsBox.Font =
+        Enum.Font.Gotham
+    secondsBox.ClearTextOnFocus = false
+    secondsBox.Parent = parent
+    MakeCorner(secondsBox, 4)
+
+    local secondsLabel =
+        Instance.new("TextLabel")
+
+    secondsLabel.Size =
+        UDim2.new(0, 18, 0, 20)
+    secondsLabel.Position =
+        UDim2.new(0, 186, 1, -23)
+    secondsLabel.BackgroundTransparency = 1
+    secondsLabel.Text = "s"
+    secondsLabel.TextColor3 =
+        Color3.fromRGB(
+            180,
+            180,
+            195
+        )
+    secondsLabel.TextSize = 10
+    secondsLabel.Font =
+        Enum.Font.Gotham
+    secondsLabel.Parent = parent
+
+    local function UpdateLoop()
+        if Settings[stateKey] then
+            loopButton.BackgroundColor3 =
+                Color3.fromRGB(
+                    50,
+                    180,
+                    70
+                )
+        else
+            loopButton.BackgroundColor3 =
+                Color3.fromRGB(
+                    28,
+                    28,
+                    42
+                )
+        end
+    end
+
+    secondsBox.FocusLost:Connect(function()
+        local value =
+            tonumber(
+                secondsBox.Text
+            )
+
+        if not value then
+            value =
+                Settings[secondsKey]
+                or 1
+        end
+
+        value =
+            math.clamp(
+                value,
+                0.1,
+                3600
+            )
+
+        Settings[secondsKey] = value
+        secondsBox.Text =
+            tostring(value)
+
+        Save()
+    end)
+
+    loopButton.MouseButton1Click:
+        Connect(function()
+            Settings[stateKey] =
+                not Settings[stateKey]
+
+            UpdateLoop()
+            Save()
+
+            if Settings[stateKey] then
+                StartLoop(
+                    id,
+                    callback
+                )
+            else
+                StopLoop(id)
+            end
+        end)
+
+    UpdateLoop()
+
+    if Settings[stateKey] then
+        task.defer(function()
+            StartLoop(
+                id,
+                callback
+            )
+        end)
+    end
 end
 
 local function CreatePrefixRow()
@@ -749,22 +965,23 @@ local function CreatePrefixRow()
     MakeCorner(row, 4)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 54, 1, 0)
+    label.Size = UDim2.new(0, 52, 1, 0)
     label.Position = UDim2.new(0, 10, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = "Prefix"
     label.TextColor3 =
         Color3.fromRGB(240, 240, 240)
     label.TextSize = 13
-    label.Font = Enum.Font.GothamMedium
+    label.Font =
+        Enum.Font.GothamMedium
     label.TextXAlignment =
         Enum.TextXAlignment.Left
     label.Parent = row
 
     local input = Instance.new("TextBox")
-    input.Size = UDim2.new(0, 50, 0, 27)
+    input.Size = UDim2.new(0, 48, 0, 27)
     input.Position =
-        UDim2.new(1, -174, 0.5, -13)
+        UDim2.new(1, -172, 0.5, -13)
     input.BackgroundColor3 =
         Color3.fromRGB(28, 28, 42)
     input.BorderSizePixel = 0
@@ -780,7 +997,6 @@ local function CreatePrefixRow()
 
     local chatButton =
         Instance.new("TextButton")
-
     chatButton.Size =
         UDim2.new(0, 54, 0, 27)
     chatButton.Position =
@@ -798,7 +1014,6 @@ local function CreatePrefixRow()
 
     local cmdButton =
         Instance.new("TextButton")
-
     cmdButton.Size =
         UDim2.new(0, 54, 0, 27)
     cmdButton.Position =
@@ -815,24 +1030,38 @@ local function CreatePrefixRow()
     MakeCorner(cmdButton, 4)
 
     local function UpdateMode()
-        if Settings.ADMINCommandMode == "CHAT" then
+        if Settings.ADMINCommandMode
+        == "CHAT" then
             chatButton.BackgroundColor3 =
-                Color3.fromRGB(50, 180, 70)
-
+                Color3.fromRGB(
+                    50,
+                    180,
+                    70
+                )
             cmdButton.BackgroundColor3 =
-                Color3.fromRGB(28, 28, 42)
+                Color3.fromRGB(
+                    28,
+                    28,
+                    42
+                )
         else
             chatButton.BackgroundColor3 =
-                Color3.fromRGB(28, 28, 42)
-
+                Color3.fromRGB(
+                    28,
+                    28,
+                    42
+                )
             cmdButton.BackgroundColor3 =
-                Color3.fromRGB(50, 180, 70)
+                Color3.fromRGB(
+                    50,
+                    180,
+                    70
+                )
         end
     end
 
     input.FocusLost:Connect(function()
-        local value =
-            tostring(input.Text or "")
+        local value = Trim(input.Text)
 
         if value == "" then
             value = "."
@@ -845,28 +1074,16 @@ local function CreatePrefixRow()
 
     chatButton.MouseButton1Click:
         Connect(function()
-            if Settings.ADMINCommandMode
-            == "CHAT" then
-                return
-            end
-
             Settings.ADMINCommandMode =
                 "CHAT"
-
             UpdateMode()
             Save()
         end)
 
     cmdButton.MouseButton1Click:
         Connect(function()
-            if Settings.ADMINCommandMode
-            == "CMD" then
-                return
-            end
-
             Settings.ADMINCommandMode =
                 "CMD"
-
             UpdateMode()
             Save()
         end)
@@ -874,174 +1091,464 @@ local function CreatePrefixRow()
     UpdateMode()
 end
 
-local function CreateTargetCommandRow(
-    labelText,
-    targetSetting,
-    allSetting,
-    commandName,
-    buttonText
-)
+local function CreateCustomCommandRow()
     local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, -5, 0, 48)
-    row.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    row.Size = UDim2.new(1, -5, 0, 70)
+    row.BackgroundColor3 =
+        Color3.fromRGB(18, 18, 26)
     row.BorderSizePixel = 0
     row.Parent = GamePage
     MakeCorner(row, 4)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 76, 1, 0)
-    label.Position = UDim2.new(0, 10, 0, 0)
+    label.Size = UDim2.new(0, 38, 0, 40)
+    label.Position = UDim2.new(0, 8, 0, 0)
     label.BackgroundTransparency = 1
-    label.Text = labelText
-    label.TextColor3 = Color3.fromRGB(240, 240, 240)
-    label.TextSize = 13
-    label.Font = Enum.Font.GothamMedium
-    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Text = "Cmd"
+    label.TextColor3 =
+        Color3.fromRGB(240, 240, 240)
+    label.TextSize = 12
+    label.Font =
+        Enum.Font.GothamMedium
     label.Parent = row
 
-    local input = Instance.new("TextBox")
-    input.Size = UDim2.new(0, 80, 0, 27)
-    input.Position = UDim2.new(1, -204, 0.5, -13)
-    input.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
-    input.BorderSizePixel = 0
-    input.Text =
-        tostring(
-            Settings[targetSetting]
-            or ""
-        )
-    input.PlaceholderText = "Nick"
-    input.TextColor3 = Color3.fromRGB(255, 255, 255)
-    input.TextSize = 11
-    input.Font = Enum.Font.Gotham
-    input.ClearTextOnFocus = false
-    input.Parent = row
-    MakeCorner(input, 4)
+    local commandBox =
+        Instance.new("TextBox")
+    commandBox.Size =
+        UDim2.new(0, 70, 0, 25)
+    commandBox.Position =
+        UDim2.new(0, 48, 0, 8)
+    commandBox.BackgroundColor3 =
+        Color3.fromRGB(28, 28, 42)
+    commandBox.BorderSizePixel = 0
+    commandBox.Text =
+        Settings.ADMINCustomCommand
+    commandBox.PlaceholderText = "Command"
+    commandBox.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+    commandBox.TextSize = 10
+    commandBox.Font =
+        Enum.Font.Gotham
+    commandBox.ClearTextOnFocus = false
+    commandBox.Parent = row
+    MakeCorner(commandBox, 4)
 
-    local allButton = nil
+    local targetBox =
+        Instance.new("TextBox")
+    targetBox.Size =
+        UDim2.new(0, 68, 0, 25)
+    targetBox.Position =
+        UDim2.new(0, 122, 0, 8)
+    targetBox.BackgroundColor3 =
+        Color3.fromRGB(28, 28, 42)
+    targetBox.BorderSizePixel = 0
+    targetBox.Text =
+        Settings.ADMINCustomTarget
+    targetBox.PlaceholderText = "Nick"
+    targetBox.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+    targetBox.TextSize = 10
+    targetBox.Font =
+        Enum.Font.Gotham
+    targetBox.ClearTextOnFocus = false
+    targetBox.Parent = row
+    MakeCorner(targetBox, 4)
 
-    if allSetting then
-        allButton = Instance.new("TextButton")
-        allButton.Size = UDim2.new(0, 46, 0, 27)
-        allButton.Position = UDim2.new(1, -120, 0.5, -13)
-        allButton.BorderSizePixel = 0
-        allButton.Text = "ALL"
-        allButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-        allButton.TextSize = 11
-        allButton.Font = Enum.Font.GothamBold
-        allButton.AutoButtonColor = false
-        allButton.Parent = row
-        MakeCorner(allButton, 4)
-    end
-
-    local actionButton =
+    local allButton =
         Instance.new("TextButton")
+    allButton.Size =
+        UDim2.new(0, 42, 0, 25)
+    allButton.Position =
+        UDim2.new(0, 194, 0, 8)
+    allButton.BorderSizePixel = 0
+    allButton.Text = "ALL"
+    allButton.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+    allButton.TextSize = 10
+    allButton.Font =
+        Enum.Font.GothamBold
+    allButton.AutoButtonColor = false
+    allButton.Parent = row
+    MakeCorner(allButton, 4)
 
-    actionButton.Size = UDim2.new(0, 64, 0, 27)
-    actionButton.Position = UDim2.new(1, -70, 0.5, -13)
-    actionButton.BackgroundColor3 = MAIN_COLOR
-    actionButton.BorderSizePixel = 0
-    actionButton.Text = buttonText
-    actionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    actionButton.TextSize = 10
-    actionButton.Font = Enum.Font.GothamBold
-    actionButton.Parent = row
-    MakeCorner(actionButton, 4)
+    local useButton =
+        Instance.new("TextButton")
+    useButton.Size =
+        UDim2.new(0, 48, 0, 25)
+    useButton.Position =
+        UDim2.new(1, -54, 0, 8)
+    useButton.BackgroundColor3 =
+        MAIN_COLOR
+    useButton.BorderSizePixel = 0
+    useButton.Text = "USE"
+    useButton.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+    useButton.TextSize = 10
+    useButton.Font =
+        Enum.Font.GothamBold
+    useButton.Parent = row
+    MakeCorner(useButton, 4)
 
     local function UpdateAll()
-        if not allButton then
-            return
-        end
-
-        if Settings[allSetting] then
-            allButton.BackgroundColor3 =
-                Color3.fromRGB(
-                    50,
-                    180,
-                    70
-                )
-        else
-            allButton.BackgroundColor3 =
-                Color3.fromRGB(
-                    28,
-                    28,
-                    42
-                )
-        end
+        allButton.BackgroundColor3 =
+            Settings.ADMINCustomAll
+            and Color3.fromRGB(
+                50,
+                180,
+                70
+            )
+            or Color3.fromRGB(
+                28,
+                28,
+                42
+            )
     end
 
-    input.FocusLost:Connect(function()
-        Settings[targetSetting] =
-            tostring(
-                input.Text or ""
-            )
+    local function SyncFields()
+        Settings.ADMINCustomCommand =
+            Trim(commandBox.Text)
+        Settings.ADMINCustomTarget =
+            Trim(targetBox.Text)
+    end
 
+    local function Execute()
+        SyncFields()
+
+        local target =
+            Settings.ADMINCustomAll
+            and "all"
+            or Settings.ADMINCustomTarget
+
+        return RunHDAdminCommand(
+            Settings.ADMINCustomCommand,
+            target
+        )
+    end
+
+    commandBox.FocusLost:Connect(function()
+        SyncFields()
         Save()
     end)
 
-    if allButton then
-        allButton.MouseButton1Click:
-            Connect(function()
-                Settings[allSetting] =
-                    not Settings[allSetting]
+    targetBox.FocusLost:Connect(function()
+        SyncFields()
+        Save()
+    end)
 
-                UpdateAll()
-                Save()
-            end)
-    end
-
-    actionButton.MouseButton1Click:
+    allButton.MouseButton1Click:
         Connect(function()
-            Settings[targetSetting] =
-                tostring(
-                    input.Text or ""
-                )
-
-            local target =
-                Settings[targetSetting]
-
-            if allSetting
-            and Settings[allSetting] then
-                target = "all"
-            end
-
-            if not target
-            or target == "" then
-                return
-            end
-
-            RunHDAdminCommand(
-                commandName,
-                target
-            )
-
+            Settings.ADMINCustomAll =
+                not Settings.ADMINCustomAll
+            UpdateAll()
             Save()
         end)
+
+    useButton.MouseButton1Click:
+        Connect(function()
+            Execute()
+            Save()
+        end)
+
+    CreateLoopControls(
+        row,
+        "Custom",
+        Execute
+    )
 
     UpdateAll()
 end
 
+local function CreateCommandRow(
+    id,
+    labelText,
+    commandName,
+    targetSetting,
+    allSetting
+)
+    Settings[targetSetting] =
+        tostring(
+            Settings[targetSetting]
+            or ""
+        )
+    Settings[allSetting] =
+        Settings[allSetting] == true
+
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, -5, 0, 70)
+    row.BackgroundColor3 =
+        Color3.fromRGB(18, 18, 26)
+    row.BorderSizePixel = 0
+    row.Parent = GamePage
+    MakeCorner(row, 4)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0, 80, 0, 38)
+    label.Position = UDim2.new(0, 8, 0, 1)
+    label.BackgroundTransparency = 1
+    label.Text = labelText
+    label.TextColor3 =
+        Color3.fromRGB(240, 240, 240)
+    label.TextSize =
+        #labelText > 8 and 10 or 12
+    label.Font =
+        Enum.Font.GothamMedium
+    label.TextXAlignment =
+        Enum.TextXAlignment.Left
+    label.Parent = row
+
+    local targetBox =
+        Instance.new("TextBox")
+    targetBox.Size =
+        UDim2.new(0, 78, 0, 25)
+    targetBox.Position =
+        UDim2.new(0, 86, 0, 8)
+    targetBox.BackgroundColor3 =
+        Color3.fromRGB(28, 28, 42)
+    targetBox.BorderSizePixel = 0
+    targetBox.Text =
+        Settings[targetSetting]
+    targetBox.PlaceholderText = "Nick"
+    targetBox.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+    targetBox.TextSize = 10
+    targetBox.Font =
+        Enum.Font.Gotham
+    targetBox.ClearTextOnFocus = false
+    targetBox.Parent = row
+    MakeCorner(targetBox, 4)
+
+    local allButton =
+        Instance.new("TextButton")
+    allButton.Size =
+        UDim2.new(0, 42, 0, 25)
+    allButton.Position =
+        UDim2.new(0, 168, 0, 8)
+    allButton.BorderSizePixel = 0
+    allButton.Text = "ALL"
+    allButton.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+    allButton.TextSize = 10
+    allButton.Font =
+        Enum.Font.GothamBold
+    allButton.AutoButtonColor = false
+    allButton.Parent = row
+    MakeCorner(allButton, 4)
+
+    local useButton =
+        Instance.new("TextButton")
+    useButton.Size =
+        UDim2.new(0, 48, 0, 25)
+    useButton.Position =
+        UDim2.new(1, -54, 0, 8)
+    useButton.BackgroundColor3 =
+        MAIN_COLOR
+    useButton.BorderSizePixel = 0
+    useButton.Text = "USE"
+    useButton.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+    useButton.TextSize = 10
+    useButton.Font =
+        Enum.Font.GothamBold
+    useButton.Parent = row
+    MakeCorner(useButton, 4)
+
+    local function UpdateAll()
+        allButton.BackgroundColor3 =
+            Settings[allSetting]
+            and Color3.fromRGB(
+                50,
+                180,
+                70
+            )
+            or Color3.fromRGB(
+                28,
+                28,
+                42
+            )
+    end
+
+    local function Execute()
+        Settings[targetSetting] =
+            Trim(targetBox.Text)
+
+        local target =
+            Settings[allSetting]
+            and "all"
+            or Settings[targetSetting]
+
+        if target == "" then
+            return false
+        end
+
+        return RunHDAdminCommand(
+            commandName,
+            target
+        )
+    end
+
+    targetBox.FocusLost:Connect(function()
+        Settings[targetSetting] =
+            Trim(targetBox.Text)
+        Save()
+    end)
+
+    allButton.MouseButton1Click:
+        Connect(function()
+            Settings[allSetting] =
+                not Settings[allSetting]
+            UpdateAll()
+            Save()
+        end)
+
+    useButton.MouseButton1Click:
+        Connect(function()
+            Execute()
+            Save()
+        end)
+
+    CreateLoopControls(
+        row,
+        id,
+        Execute
+    )
+
+    UpdateAll()
+end
+
+local function CreateSimpleButton(
+    name,
+    callback
+)
+    local button =
+        Instance.new("TextButton")
+    button.Size =
+        UDim2.new(1, -5, 0, 39)
+    button.BackgroundColor3 =
+        Color3.fromRGB(22, 22, 32)
+    button.BorderSizePixel = 0
+    button.Text = name
+    button.TextColor3 =
+        Color3.fromRGB(240, 240, 240)
+    button.TextSize = 13
+    button.Font =
+        Enum.Font.GothamMedium
+    button.Parent = GamePage
+    MakeCorner(button, 4)
+
+    button.MouseButton1Click:
+        Connect(function()
+            if not getgenv().Destroyed then
+                callback()
+            end
+        end)
+
+    return button
+end
+
 CreatePrefixRow()
+CreateCustomCommandRow()
 
-CreateTargetCommandRow(
-    "Kill",
-    "ADMINKillTarget",
-    "ADMINKillAll",
-    "kill",
-    "KILL"
+CreateCommandRow(
+    "Uncmdbar",
+    "Uncmdbar",
+    "uncmdbar",
+    "ADMINUncmdbarTarget",
+    "ADMINUncmdbarAll"
 )
 
-CreateTargetCommandRow(
+CreateCommandRow(
+    "Mute",
+    "Mute",
+    "mute",
+    "ADMINMuteTarget",
+    "ADMINMuteAll"
+)
+
+CreateCommandRow(
     "Rocket",
-    "ADMINRocketTarget",
-    "ADMINRocketAll",
+    "Rocket",
     "rocket",
-    "ROCKET"
+    "ADMINRocketTarget",
+    "ADMINRocketAll"
 )
 
-CreateTargetCommandRow(
+CreateCommandRow(
+    "Poop",
+    "Poop",
+    "poop",
+    "ADMINPoopTarget",
+    "ADMINPoopAll"
+)
+
+CreateCommandRow(
+    "Kill",
+    "Kill",
+    "kill",
+    "ADMINKillTarget",
+    "ADMINKillAll"
+)
+
+CreateCommandRow(
+    "Punish",
+    "Punish",
+    "punish",
+    "ADMINPunishTarget",
+    "ADMINPunishAll"
+)
+
+CreateCommandRow(
+    "SuperFling",
+    "SuperFling",
+    "superfling",
+    "ADMINSuperFlingTarget",
+    "ADMINSuperFlingAll"
+)
+
+CreateCommandRow(
     "Kick",
-    "ADMINKickTarget",
-    nil,
+    "Kick",
     "kick",
-    "KICK"
+    "ADMINKickTarget",
+    "ADMINKickAll"
+)
+
+CreateSimpleButton(
+    "Rejoin",
+    function()
+        if AutoSaveConfiguration then
+            pcall(
+                AutoSaveConfiguration
+            )
+        end
+
+        task.wait(0.08)
+
+        local ok = pcall(function()
+            TeleportService:
+                TeleportToPlaceInstance(
+                    game.PlaceId,
+                    game.JobId,
+                    Player
+                )
+        end)
+
+        if not ok then
+            pcall(function()
+                TeleportService:Teleport(
+                    game.PlaceId,
+                    Player
+                )
+            end)
+        end
+    end
+)
+
+CreateSimpleButton(
+    "Logs",
+    function()
+        RunHDAdminCommand(
+            "logs",
+            ""
+        )
+    end
 )
