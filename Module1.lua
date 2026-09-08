@@ -149,6 +149,7 @@ getgenv().Settings = {
 }
 
 getgenv().SavedIDs = {}
+getgenv().SavedJoinGames = {}
 getgenv().SavedWaypoints = {}
 getgenv().UIPositions = {}
 getgenv().GameSharedSettings = {}
@@ -299,6 +300,7 @@ getgenv().AutoSaveConfiguration = function()
             MM2FlingTarget = Settings.MM2FlingTarget
         },
         SavedIDs = getgenv().SavedIDs,
+        SavedJoinGames = getgenv().SavedJoinGames,
         SavedWaypoints = getgenv().SavedWaypoints,
         UIPositions = getgenv().UIPositions,
         GameSharedSettings = getgenv().GameSharedSettings
@@ -334,6 +336,7 @@ local function LoadConfiguration()
                 end
             end
             if data.SavedIDs then getgenv().SavedIDs = data.SavedIDs end
+            if data.SavedJoinGames and typeof(data.SavedJoinGames) == "table" then getgenv().SavedJoinGames = data.SavedJoinGames end
             if data.SavedWaypoints then getgenv().SavedWaypoints = data.SavedWaypoints end
             if data.UIPositions and typeof(data.UIPositions) == "table" then
                 getgenv().UIPositions = data.UIPositions
@@ -1790,8 +1793,8 @@ end)
 
 local JoinGamesGui = Instance.new("Frame")
 JoinGamesGui.Name = "ToxQuickJoinFrame"
-JoinGamesGui.Size = UDim2.new(0, 330, 0, 250)
-JoinGamesGui.Position = UDim2.new(0.5, -165, 0.5, -125)
+JoinGamesGui.Size = UDim2.new(0, 460, 0, 310)
+JoinGamesGui.Position = UDim2.new(0.5, -230, 0.5, -155)
 JoinGamesGui.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
 JoinGamesGui.BorderSizePixel = 0
 JoinGamesGui.ClipsDescendants = true
@@ -1820,7 +1823,7 @@ local JoinGamesTitle = Instance.new("TextLabel")
 JoinGamesTitle.Size = UDim2.new(1, -70, 1, 0)
 JoinGamesTitle.Position = UDim2.new(0, 10, 0, 0)
 JoinGamesTitle.BackgroundTransparency = 1
-JoinGamesTitle.Text = "Quick Join"
+JoinGamesTitle.Text = "Quick Games"
 JoinGamesTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 JoinGamesTitle.Font = Enum.Font.GothamBold
 JoinGamesTitle.TextSize = 13
@@ -1842,9 +1845,50 @@ local JoinGamesCloseCorner = Instance.new("UICorner")
 JoinGamesCloseCorner.CornerRadius = UDim.new(0, 4)
 JoinGamesCloseCorner.Parent = JoinGamesCloseBtn
 
+local JoinGameAddArea = Instance.new("Frame")
+JoinGameAddArea.Size = UDim2.new(1, -16, 0, 32)
+JoinGameAddArea.Position = UDim2.new(0, 8, 0, 39)
+JoinGameAddArea.BackgroundTransparency = 1
+JoinGameAddArea.Parent = JoinGamesGui
+
+local JoinGameIdBox = Instance.new("TextBox")
+JoinGameIdBox.Size = UDim2.new(1, -92, 1, 0)
+JoinGameIdBox.Position = UDim2.new(0, 0, 0, 0)
+JoinGameIdBox.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+JoinGameIdBox.BorderSizePixel = 0
+JoinGameIdBox.PlaceholderText = "Place ID"
+JoinGameIdBox.Text = ""
+JoinGameIdBox.TextColor3 = Color3.fromRGB(245, 245, 245)
+JoinGameIdBox.PlaceholderColor3 = Color3.fromRGB(130, 130, 150)
+JoinGameIdBox.Font = Enum.Font.Gotham
+JoinGameIdBox.TextSize = 12
+JoinGameIdBox.ClearTextOnFocus = false
+JoinGameIdBox.Parent = JoinGameAddArea
+getgenv().JoinGameIdBox = JoinGameIdBox
+
+local JoinGameIdCorner = Instance.new("UICorner")
+JoinGameIdCorner.CornerRadius = UDim.new(0, 4)
+JoinGameIdCorner.Parent = JoinGameIdBox
+
+local JoinGameAddButton = Instance.new("TextButton")
+JoinGameAddButton.Size = UDim2.new(0, 84, 1, 0)
+JoinGameAddButton.Position = UDim2.new(1, -84, 0, 0)
+JoinGameAddButton.BackgroundColor3 = MAIN_COLOR
+JoinGameAddButton.BorderSizePixel = 0
+JoinGameAddButton.Text = "Add Game"
+JoinGameAddButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+JoinGameAddButton.Font = Enum.Font.GothamBold
+JoinGameAddButton.TextSize = 11
+JoinGameAddButton.Parent = JoinGameAddArea
+getgenv().JoinGameAddButton = JoinGameAddButton
+
+local JoinGameAddCorner = Instance.new("UICorner")
+JoinGameAddCorner.CornerRadius = UDim.new(0, 4)
+JoinGameAddCorner.Parent = JoinGameAddButton
+
 local JoinGamesScroll = Instance.new("ScrollingFrame")
-JoinGamesScroll.Size = UDim2.new(1, -16, 1, -44)
-JoinGamesScroll.Position = UDim2.new(0, 8, 0, 38)
+JoinGamesScroll.Size = UDim2.new(1, -16, 1, -84)
+JoinGamesScroll.Position = UDim2.new(0, 8, 0, 78)
 JoinGamesScroll.BackgroundTransparency = 1
 JoinGamesScroll.BorderSizePixel = 0
 JoinGamesScroll.ScrollBarThickness = 3
