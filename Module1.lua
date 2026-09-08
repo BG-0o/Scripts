@@ -166,6 +166,7 @@ getgenv().SavedJoinGames = {}
 getgenv().SavedWaypoints = {}
 getgenv().UIPositions = {}
 getgenv().GameSharedSettings = {}
+getgenv().GameSpecificSettings = {}
 getgenv().BaseSharedSettings = {}
 getgenv().Destroyed = false
 getgenv().ScriptLoaded = false
@@ -220,14 +221,31 @@ local SharedPersistentKeys = {
 getgenv().SharedPersistentKeys = SharedPersistentKeys
 
 local function PersistentSetting(Key)
-    if getgenv().CurrentGameModule
-    and SharedPersistentKeys[Key]
-    and getgenv().BaseSharedSettings
-    and getgenv().BaseSharedSettings[Key] ~= nil then
-        return getgenv().BaseSharedSettings[Key]
+    return Settings[Key]
+end
+
+local function GetGameSettingOwner(Key)
+    if typeof(Key) ~= "string" then
+        return nil
     end
 
-    return Settings[Key]
+    for PlaceId, Info in pairs(getgenv().GameModuleRegistry or {}) do
+        local Prefix = Info and tostring(Info.ShortName or "") or ""
+
+        if Prefix ~= ""
+        and string.sub(Key, 1, #Prefix) == Prefix then
+            return tostring(PlaceId), Prefix
+        end
+    end
+
+    return nil
+end
+
+local function IsCurrentGameSetting(Key)
+    local OwnerPlaceId = GetGameSettingOwner(Key)
+
+    return OwnerPlaceId ~= nil
+        and OwnerPlaceId == tostring(game.PlaceId)
 end
 
 local function SerializeConfigValue(value, seen)
@@ -452,7 +470,7 @@ local function DeserializeConfigValue(value)
     return result
 end
 
-local function BuildSettingsSnapshot()
+local function BuildGlobalSettingsSnapshot()
     local snapshot = {}
     local keys = {}
 
@@ -465,18 +483,129 @@ local function BuildSettingsSnapshot()
     end
 
     for key in pairs(keys) do
-        local value
+        local ownerPlaceId = GetGameSettingOwner(key)
 
-        if SharedPersistentKeys[key] then
-            value = PersistentSetting(key)
-        else
-            value = Settings[key]
+        if not ownerPlaceId then
+            snapshot[key] = SerializeConfigValue(
+                Settings[key]
+            )
         end
+    end
 
-        snapshot[key] = SerializeConfigValue(value)
+    snapshot.GUIKeybind = SerializeConfigValue(
+        Settings.GUIKeybind
+    )
+
+    return snapshot
+end
+
+local function BuildCurrentGameSettingsSnapshot()
+    local snapshot = {}
+
+    for key in pairs(PersistedSettingKeys) do
+        if IsCurrentGameSetting(key) then
+            snapshot[key] = SerializeConfigValue(
+                Settings[key]
+            )
+        end
+    end
+
+    for key in pairs(Settings) do
+        if IsCurrentGameSetting(key) then
+            snapshot[key] = SerializeConfigValue(
+                Settings[key]
+            )
+        end
     end
 
     return snapshot
+end
+
+local function ApplyLoadedSetting(key, savedValue)
+    local value
+
+    if typeof(savedValue) == "table"
+    and savedValue.__toxType then
+        value = DeserializeConfigValue(savedValue)
+    elseif key == "GUIKeybind"
+    or key == "MM2SilentAimKey"
+    or key == "MM2KillAllKey"
+    or key == "MM2ShootMurderKey"
+    or key == "MM2GrabGunKey" then
+        if savedValue == "NONE"
+        or savedValue == nil then
+            value = nil
+        else
+            local ok, enumItem = pcall(function()
+                return Enum.KeyCode[savedValue]
+            end)
+
+            if ok then
+                value = enumItem
+            end
+        end
+    else
+        value = DeserializeConfigValue(savedValue)
+    end
+
+    if key == "EspColorName" then
+        Settings.EspColorName = value
+        Settings.EspColor =
+            ColorMap[value]
+            or Settings.EspColor
+    elseif key == "EspColor"
+    and typeof(value) == "Color3" then
+        Settings.EspColor = value
+    else
+        Settings[key] = value
+    end
+
+    PersistedSettingKeys[key] = true
+end
+
+local function MigrateLegacyGameSettings(data)
+    getgenv().GameSpecificSettings =
+        typeof(getgenv().GameSpecificSettings) == "table"
+        and getgenv().GameSpecificSettings
+        or {}
+
+    if typeof(data.GameSpecificSettings) == "table" then
+        for placeKey, state in pairs(data.GameSpecificSettings) do
+            if typeof(state) == "table" then
+                getgenv().GameSpecificSettings[tostring(placeKey)] =
+                    state
+            end
+        end
+    end
+
+    if typeof(data.GameSettings) == "table" then
+        for placeKey, state in pairs(data.GameSettings) do
+            if typeof(state) == "table"
+            and getgenv().GameSpecificSettings[tostring(placeKey)] == nil then
+                getgenv().GameSpecificSettings[tostring(placeKey)] =
+                    state
+            end
+        end
+    end
+
+    if typeof(data.Settings) == "table" then
+        for key, savedValue in pairs(data.Settings) do
+            local ownerPlaceId = GetGameSettingOwner(key)
+
+            if ownerPlaceId then
+                if typeof(
+                    getgenv().GameSpecificSettings[ownerPlaceId]
+                ) ~= "table" then
+                    getgenv().GameSpecificSettings[ownerPlaceId] = {}
+                end
+
+                if getgenv().GameSpecificSettings[ownerPlaceId][key] == nil then
+                    getgenv().GameSpecificSettings[ownerPlaceId][key] =
+                        savedValue
+                end
+            end
+        end
+    end
 end
 
 getgenv().AutoSaveConfiguration = function()
@@ -490,9 +619,31 @@ getgenv().AutoSaveConfiguration = function()
         return
     end
 
+    getgenv().GameSpecificSettings =
+        typeof(getgenv().GameSpecificSettings) == "table"
+        and getgenv().GameSpecificSettings
+        or {}
+
+    if getgenv().CurrentGameModule then
+        getgenv().GameSpecificSettings[
+            tostring(game.PlaceId)
+        ] = BuildCurrentGameSettingsSnapshot()
+    end
+
+    local guiKeyName = "NONE"
+
+    if Settings.GUIKeybind
+    and typeof(Settings.GUIKeybind) == "EnumItem" then
+        guiKeyName = Settings.GUIKeybind.Name
+    end
+
     local data = {
-        ConfigVersion = 3,
-        Settings = BuildSettingsSnapshot(),
+        ConfigVersion = 4,
+        GlobalGUIKeybind = guiKeyName,
+        Settings = BuildGlobalSettingsSnapshot(),
+        GameSpecificSettings = SerializeConfigValue(
+            getgenv().GameSpecificSettings
+        ),
         SavedIDs = SerializeConfigValue(
             getgenv().SavedIDs
         ),
@@ -504,12 +655,6 @@ getgenv().AutoSaveConfiguration = function()
         ),
         UIPositions = SerializeConfigValue(
             getgenv().UIPositions
-        ),
-        GameSharedSettings = SerializeConfigValue(
-            getgenv().GameSharedSettings
-        ),
-        BaseSharedSettings = SerializeConfigValue(
-            getgenv().BaseSharedSettings
         )
     }
 
@@ -541,52 +686,76 @@ local function LoadConfiguration()
             return
         end
 
+        MigrateLegacyGameSettings(data)
+
         if typeof(data.Settings) == "table" then
             for key, savedValue in pairs(data.Settings) do
-                local value
+                if not GetGameSettingOwner(key) then
+                    ApplyLoadedSetting(
+                        key,
+                        savedValue
+                    )
+                end
+            end
+        end
 
-                if typeof(savedValue) == "table"
-                and savedValue.__toxType then
-                    value = DeserializeConfigValue(savedValue)
-                elseif key == "GUIKeybind"
-                or key == "MM2SilentAimKey"
-                or key == "MM2KillAllKey"
-                or key == "MM2ShootMurderKey"
-                or key == "MM2GrabGunKey" then
-                    if savedValue == "NONE"
-                    or savedValue == nil then
-                        value = nil
-                    else
-                        local ok, enumItem = pcall(function()
-                            return Enum.KeyCode[savedValue]
-                        end)
+        local currentGameState =
+            getgenv().GameSpecificSettings[
+                tostring(game.PlaceId)
+            ]
 
-                        if ok then
-                            value = enumItem
+        if typeof(currentGameState) == "table" then
+            local decodedState =
+                DeserializeConfigValue(
+                    currentGameState
+                )
+
+            if typeof(decodedState) == "table" then
+                for key, savedValue in pairs(decodedState) do
+                    if IsCurrentGameSetting(key) then
+                        if typeof(savedValue) == "EnumItem"
+                        or typeof(savedValue) == "Color3"
+                        or typeof(savedValue) == "CFrame"
+                        or typeof(savedValue) == "Vector2"
+                        or typeof(savedValue) == "Vector3"
+                        or typeof(savedValue) == "UDim"
+                        or typeof(savedValue) == "UDim2" then
+                            Settings[key] = savedValue
+                            PersistedSettingKeys[key] = true
+                        else
+                            ApplyLoadedSetting(
+                                key,
+                                savedValue
+                            )
                         end
                     end
-                else
-                    value = DeserializeConfigValue(savedValue)
                 end
+            end
+        end
 
-                if key == "EspColorName" then
-                    Settings.EspColorName = value
-                    Settings.EspColor =
-                        ColorMap[value]
-                        or Settings.EspColor
-                elseif key == "EspColor"
-                and typeof(value) == "Color3" then
-                    Settings.EspColor = value
-                else
-                    Settings[key] = value
+        if data.GlobalGUIKeybind ~= nil then
+            local keyName = tostring(
+                data.GlobalGUIKeybind
+            )
+
+            if keyName == "NONE"
+            or keyName == "" then
+                Settings.GUIKeybind = nil
+            else
+                local ok, enumItem = pcall(function()
+                    return Enum.KeyCode[keyName]
+                end)
+
+                if ok and enumItem then
+                    Settings.GUIKeybind = enumItem
                 end
-
-                PersistedSettingKeys[key] = true
             end
         end
 
         if data.SavedIDs ~= nil then
-            local value = DeserializeConfigValue(data.SavedIDs)
+            local value = DeserializeConfigValue(
+                data.SavedIDs
+            )
 
             if typeof(value) == "table" then
                 getgenv().SavedIDs = value
@@ -620,26 +789,6 @@ local function LoadConfiguration()
 
             if typeof(value) == "table" then
                 getgenv().UIPositions = value
-            end
-        end
-
-        if data.GameSharedSettings ~= nil then
-            local value = DeserializeConfigValue(
-                data.GameSharedSettings
-            )
-
-            if typeof(value) == "table" then
-                getgenv().GameSharedSettings = value
-            end
-        end
-
-        if data.BaseSharedSettings ~= nil then
-            local value = DeserializeConfigValue(
-                data.BaseSharedSettings
-            )
-
-            if typeof(value) == "table" then
-                getgenv().BaseSharedSettings = value
             end
         end
     end)
@@ -759,9 +908,7 @@ if Settings.AutoExecute then
 end
 
 for Key in pairs(SharedPersistentKeys) do
-    if getgenv().BaseSharedSettings[Key] == nil then
-        getgenv().BaseSharedSettings[Key] = Settings[Key]
-    end
+    getgenv().BaseSharedSettings[Key] = Settings[Key]
 end
 
 pcall(function()
@@ -2883,7 +3030,10 @@ getgenv().CreateKeybindButton = function(Name, Page, DefaultKey, Callback)
                 end
 
                 Callback(CurrentKey)
-                AutoSaveConfiguration()
+
+                if getgenv().AutoSaveConfiguration then
+                    getgenv().AutoSaveConfiguration()
+                end
             elseif input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.MouseButton2 then
                 conn:Disconnect()
@@ -2891,7 +3041,10 @@ getgenv().CreateKeybindButton = function(Name, Page, DefaultKey, Callback)
                 CurrentKey = nil
                 Button.Text = "NONE"
                 Callback(nil)
-                AutoSaveConfiguration()
+
+                if getgenv().AutoSaveConfiguration then
+                    getgenv().AutoSaveConfiguration()
+                end
             end
         end)
     end)
