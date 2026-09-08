@@ -37,6 +37,28 @@ getgenv().ColorMap = ColorMap
 getgenv().LOGO_ID = LOGO_ID
 getgenv().MAIN_COLOR = MAIN_COLOR
 
+getgenv().GameModuleRegistry = {
+    [189707] = {
+        ShortName = "NDS",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/NDS.lua",
+        Ready = true
+    },
+    [142823291] = {
+        ShortName = "MM2",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/MM2.lua",
+        Ready = false
+    }
+}
+
+getgenv().CurrentGameModule = getgenv().GameModuleRegistry[game.PlaceId]
+getgenv().ToxTeleportBypassUntil = 0
+getgenv().AllowToxTeleport = function(seconds)
+    getgenv().ToxTeleportBypassUntil = math.max(
+        tonumber(getgenv().ToxTeleportBypassUntil) or 0,
+        tick() + (tonumber(seconds) or 1)
+    )
+end
+
 getgenv().Settings = {
 	Noclip = false,
 	InfiniteJump = false,
@@ -105,7 +127,11 @@ getgenv().Settings = {
     MusicAutoPlay = false,
     MusicLoop = false,
     MusicVolume = 100,
-    CurrentTrackIndex = 1
+    CurrentTrackIndex = 1,
+
+    NDSAutoWin = false,
+    NDSWaterFly = false,
+    NDSNoTP = false
 }
 
 getgenv().SavedIDs = {}
@@ -209,7 +235,10 @@ getgenv().AutoSaveConfiguration = function()
             GUIKeybind = Settings.GUIKeybind and Settings.GUIKeybind.Name or "NONE",
             MusicAutoPlay = Settings.MusicAutoPlay,
             MusicLoop = Settings.MusicLoop,
-            MusicVolume = Settings.MusicVolume
+            MusicVolume = Settings.MusicVolume,
+            NDSAutoWin = Settings.NDSAutoWin,
+            NDSWaterFly = Settings.NDSWaterFly,
+            NDSNoTP = Settings.NDSNoTP
         },
         SavedIDs = getgenv().SavedIDs,
         SavedWaypoints = getgenv().SavedWaypoints,
@@ -638,6 +667,13 @@ getgenv().CreatePage = function(Name)
 	return Page, Layout
 end
 
+local DetectedGameModule = getgenv().CurrentGameModule
+local GamePage = nil
+
+if DetectedGameModule and DetectedGameModule.Ready then
+    GamePage = CreatePage(DetectedGameModule.ShortName)
+end
+
 local CombatPage = CreatePage("COMBAT")
 local PlayerPage = CreatePage("PLAYER")
 local VisualsPage = CreatePage("VISUALS")
@@ -645,6 +681,7 @@ local FlingPage = CreatePage("MISC")
 local ScriptsPage = CreatePage("SCRIPTS")
 local ConfigPage = CreatePage("CONFIG")
 
+getgenv().GamePage = GamePage
 getgenv().CombatPage = CombatPage
 getgenv().PlayerPage = PlayerPage
 getgenv().VisualsPage = VisualsPage
@@ -688,12 +725,20 @@ getgenv().CreateTab = function(Name, Page)
 	return Button
 end
 
+local GameTab = nil
+
+if GamePage and DetectedGameModule then
+    GameTab = CreateTab(DetectedGameModule.ShortName, GamePage)
+end
+
 local CombatTab = CreateTab("COMBAT", CombatPage)
 local PlayerTab = CreateTab("PLAYER", PlayerPage)
 local VisualsTab = CreateTab("VISUALS", VisualsPage)
 local FlingTab = CreateTab("MISC", FlingPage)
 local ScriptsTab = CreateTab("SCRIPTS", ScriptsPage)
 local ConfigTab = CreateTab("CONFIG", ConfigPage)
+
+getgenv().GameTab = GameTab
 
 CombatPage.Visible = true
 CombatTab.BackgroundColor3 = MAIN_COLOR
@@ -947,6 +992,7 @@ RefreshWaypointsUI = function()
         goBtn.MouseButton1Click:Connect(function()
             local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
             if Root and wp.x and wp.y and wp.z then
+                if getgenv().AllowToxTeleport then getgenv().AllowToxTeleport(1.25) end
                 Root.CFrame = CFrame.new(wp.x, wp.y, wp.z)
                 CustomNotify("Teleported to " .. wp.name, Color3.fromRGB(100, 255, 100))
             end
@@ -1558,152 +1604,215 @@ TrackGuiPosition("Waypoints", WaypointsGui)
 TrackGuiPosition("Music", MusicGui)
 TrackGuiPosition("ToxChat", ToxChatGui)
 
-getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback)
-	local Button = Instance.new("TextButton")
-	Button.Size = UDim2.new(1, -5, 0, 39)
-	Button.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-	Button.BorderSizePixel = 0
-	Button.Text = ""
-	Button.AutoButtonColor = false
-	Button.Parent = Page
+getgenv().SharedToggleControls = {}
 
-	local Label = Instance.new("TextLabel")
-	Label.Size = UDim2.new(1, -65, 1, 0)
-	Label.Position = UDim2.new(0, 12, 0, 0)
-	Label.BackgroundTransparency = 1
-	Label.Text = Name
-	Label.TextColor3 = Color3.fromRGB(240, 240, 240)
-	Label.TextSize = 13
-	Label.Font = Enum.Font.GothamMedium
-	Label.TextXAlignment = Enum.TextXAlignment.Left
-	Label.Parent = Button
+getgenv().SyncToggleVisuals = function(Key, Value)
+    if not Key then return end
 
-	local Toggle = Instance.new("Frame")
-	Toggle.Size = UDim2.new(0, 38, 0, 20)
-	Toggle.Position = UDim2.new(1, -48, 0.5, -10)
-	Toggle.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-	Toggle.BorderSizePixel = 0
-	Toggle.Parent = Button
-	local ToggleCorner = Instance.new("UICorner") ToggleCorner.CornerRadius = UDim.new(0, 4) ToggleCorner.Parent = Toggle
+    local controls = getgenv().SharedToggleControls[Key]
+    if not controls then return end
 
-	local Indicator = Instance.new("Frame")
-	Indicator.Size = UDim2.new(0, 14, 0, 14)
-	Indicator.Position = UDim2.new(0, 3, 0.5, -7)
-	Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	Indicator.BorderSizePixel = 0
-	Indicator.Parent = Toggle
-	local IndicatorCorner = Instance.new("UICorner") IndicatorCorner.CornerRadius = UDim.new(0, 3) IndicatorCorner.Parent = Indicator
-
-	local Enabled = DefaultValue or false
-	local function Update()
-		if Enabled then
-			Toggle.BackgroundColor3 = Color3.fromRGB(50, 180, 70)
-			Indicator.Position = UDim2.new(1, -17, 0.5, -7)
-		else
-			Toggle.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-			Indicator.Position = UDim2.new(0, 3, 0.5, -7)
-		end
-	end
-
-	Button.MouseButton1Click:Connect(function()
-		if Destroyed then return end
-		Enabled = not Enabled
-		Update()
-		Callback(Enabled)
-        if ScriptLoaded then
-            CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100))
+    for _, controller in ipairs(controls) do
+        if controller and controller.SetVisual then
+            controller.SetVisual(Value)
         end
-        AutoSaveConfiguration()
-	end)
-
-	Update()
-	return Button
+    end
 end
 
-getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultValue, CallbackToggle, CallbackValue)
-	local Container = Instance.new("Frame")
-	Container.Size = UDim2.new(1, -5, 0, 39)
-	Container.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-	Container.BorderSizePixel = 0
-	Container.Parent = Page
+local function RegisterSharedToggle(Key, Controller)
+    if not Key or not Controller then return end
 
-	local Label = Instance.new("TextLabel")
-	Label.Size = UDim2.new(1, -125, 1, 0)
-	Label.Position = UDim2.new(0, 12, 0, 0)
-	Label.BackgroundTransparency = 1
-	Label.Text = Name
-	Label.TextColor3 = Color3.fromRGB(240, 240, 240)
-	Label.TextSize = 13
-	Label.Font = Enum.Font.GothamMedium
-	Label.TextXAlignment = Enum.TextXAlignment.Left
-	Label.Parent = Container
+    if not getgenv().SharedToggleControls[Key] then
+        getgenv().SharedToggleControls[Key] = {}
+    end
 
-	local Input = Instance.new("TextBox")
-	Input.Size = UDim2.new(0, 55, 0, 25)
-	Input.Position = UDim2.new(1, -112, 0.5, -12)
-	Input.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
-	Input.BorderSizePixel = 0
-	Input.Text = tostring(DefaultValue)
-	Input.TextColor3 = Color3.fromRGB(255, 255, 255)
-	Input.TextSize = 12
-	Input.Font = Enum.Font.Gotham
-	Input.ClearTextOnFocus = false
-	Input.Parent = Container
-	local InputCorner = Instance.new("UICorner") InputCorner.CornerRadius = UDim.new(0, 4) InputCorner.Parent = Input
+    table.insert(getgenv().SharedToggleControls[Key], Controller)
+end
 
-	local ToggleButton = Instance.new("TextButton")
-	ToggleButton.Size = UDim2.new(0, 38, 0, 20)
-	ToggleButton.Position = UDim2.new(1, -48, 0.5, -10)
-	ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-	ToggleButton.BorderSizePixel = 0
-	ToggleButton.Text = ""
-	ToggleButton.AutoButtonColor = false
-	ToggleButton.Parent = Container
-	local ToggleCorner = Instance.new("UICorner") ToggleCorner.CornerRadius = UDim.new(0, 4) ToggleCorner.Parent = ToggleButton
+getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(1, -5, 0, 39)
+    Button.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    Button.BorderSizePixel = 0
+    Button.Text = ""
+    Button.AutoButtonColor = false
+    Button.Parent = Page
 
-	local Indicator = Instance.new("Frame")
-	Indicator.Size = UDim2.new(0, 14, 0, 14)
-	Indicator.Position = UDim2.new(0, 3, 0.5, -7)
-	Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	Indicator.BorderSizePixel = 0
-	Indicator.Parent = ToggleButton
-	local IndicatorCorner = Instance.new("UICorner") IndicatorCorner.CornerRadius = UDim.new(0, 3) IndicatorCorner.Parent = Indicator
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -65, 1, 0)
+    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = Name
+    Label.TextColor3 = Color3.fromRGB(240, 240, 240)
+    Label.TextSize = 13
+    Label.Font = Enum.Font.GothamMedium
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = Button
 
-	local Enabled = DefaultToggle or false
-	local function UpdateToggle()
-		if Enabled then
-			ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 180, 70)
-			Indicator.Position = UDim2.new(1, -17, 0.5, -7)
-		else
-			ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-			Indicator.Position = UDim2.new(0, 3, 0.5, -7)
-		end
-	end
+    local Toggle = Instance.new("Frame")
+    Toggle.Size = UDim2.new(0, 38, 0, 20)
+    Toggle.Position = UDim2.new(1, -48, 0.5, -10)
+    Toggle.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    Toggle.BorderSizePixel = 0
+    Toggle.Parent = Button
+    local ToggleCorner = Instance.new("UICorner") ToggleCorner.CornerRadius = UDim.new(0, 4) ToggleCorner.Parent = Toggle
 
-	ToggleButton.MouseButton1Click:Connect(function()
-		if Destroyed then return end
-		Enabled = not Enabled
-		UpdateToggle()
-		CallbackToggle(Enabled)
+    local Indicator = Instance.new("Frame")
+    Indicator.Size = UDim2.new(0, 14, 0, 14)
+    Indicator.Position = UDim2.new(0, 3, 0.5, -7)
+    Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Indicator.BorderSizePixel = 0
+    Indicator.Parent = Toggle
+    local IndicatorCorner = Instance.new("UICorner") IndicatorCorner.CornerRadius = UDim.new(0, 3) IndicatorCorner.Parent = Indicator
+
+    local Enabled = DefaultValue or false
+
+    local function Update()
+        if Enabled then
+            Toggle.BackgroundColor3 = Color3.fromRGB(50, 180, 70)
+            Indicator.Position = UDim2.new(1, -17, 0.5, -7)
+        else
+            Toggle.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+            Indicator.Position = UDim2.new(0, 3, 0.5, -7)
+        end
+    end
+
+    local Controller = {
+        Button = Button,
+        SetVisual = function(Value)
+            Enabled = Value == true
+            Update()
+        end
+    }
+
+    RegisterSharedToggle(SyncKey, Controller)
+
+    Button.MouseButton1Click:Connect(function()
+        if Destroyed then return end
+
+        Enabled = not Enabled
+        Update()
+        Callback(Enabled)
+
+        if SyncKey and getgenv().SyncToggleVisuals then
+            getgenv().SyncToggleVisuals(SyncKey, Enabled)
+        end
+
         if ScriptLoaded then
             CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100))
         end
+
         AutoSaveConfiguration()
-	end)
+    end)
 
-	Input.FocusLost:Connect(function()
-		if Destroyed then return end
-		local Number = tonumber(Input.Text)
-		if Number then
-			CallbackValue(Number)
+    Update()
+    return Button
+end
+
+getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultValue, CallbackToggle, CallbackValue, SyncKey)
+    local Container = Instance.new("Frame")
+    Container.Size = UDim2.new(1, -5, 0, 39)
+    Container.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    Container.BorderSizePixel = 0
+    Container.Parent = Page
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -125, 1, 0)
+    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = Name
+    Label.TextColor3 = Color3.fromRGB(240, 240, 240)
+    Label.TextSize = 13
+    Label.Font = Enum.Font.GothamMedium
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = Container
+
+    local Input = Instance.new("TextBox")
+    Input.Size = UDim2.new(0, 55, 0, 25)
+    Input.Position = UDim2.new(1, -112, 0.5, -12)
+    Input.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    Input.BorderSizePixel = 0
+    Input.Text = tostring(DefaultValue)
+    Input.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Input.TextSize = 12
+    Input.Font = Enum.Font.Gotham
+    Input.ClearTextOnFocus = false
+    Input.Parent = Container
+    local InputCorner = Instance.new("UICorner") InputCorner.CornerRadius = UDim.new(0, 4) InputCorner.Parent = Input
+
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Size = UDim2.new(0, 38, 0, 20)
+    ToggleButton.Position = UDim2.new(1, -48, 0.5, -10)
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.Text = ""
+    ToggleButton.AutoButtonColor = false
+    ToggleButton.Parent = Container
+    local ToggleCorner = Instance.new("UICorner") ToggleCorner.CornerRadius = UDim.new(0, 4) ToggleCorner.Parent = ToggleButton
+
+    local Indicator = Instance.new("Frame")
+    Indicator.Size = UDim2.new(0, 14, 0, 14)
+    Indicator.Position = UDim2.new(0, 3, 0.5, -7)
+    Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Indicator.BorderSizePixel = 0
+    Indicator.Parent = ToggleButton
+    local IndicatorCorner = Instance.new("UICorner") IndicatorCorner.CornerRadius = UDim.new(0, 3) IndicatorCorner.Parent = Indicator
+
+    local Enabled = DefaultToggle or false
+
+    local function UpdateToggle()
+        if Enabled then
+            ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 180, 70)
+            Indicator.Position = UDim2.new(1, -17, 0.5, -7)
+        else
+            ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+            Indicator.Position = UDim2.new(0, 3, 0.5, -7)
+        end
+    end
+
+    local Controller = {
+        Button = Container,
+        SetVisual = function(Value)
+            Enabled = Value == true
+            UpdateToggle()
+        end
+    }
+
+    RegisterSharedToggle(SyncKey, Controller)
+
+    ToggleButton.MouseButton1Click:Connect(function()
+        if Destroyed then return end
+
+        Enabled = not Enabled
+        UpdateToggle()
+        CallbackToggle(Enabled)
+
+        if SyncKey and getgenv().SyncToggleVisuals then
+            getgenv().SyncToggleVisuals(SyncKey, Enabled)
+        end
+
+        if ScriptLoaded then
+            CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100))
+        end
+
+        AutoSaveConfiguration()
+    end)
+
+    Input.FocusLost:Connect(function()
+        if Destroyed then return end
+
+        local Number = tonumber(Input.Text)
+
+        if Number then
+            CallbackValue(Number)
             AutoSaveConfiguration()
-		else
-			Input.Text = tostring(DefaultValue)
-		end
-	end)
+        else
+            Input.Text = tostring(DefaultValue)
+        end
+    end)
 
-	UpdateToggle()
-	return Container
+    UpdateToggle()
+    return Container
 end
 
 getgenv().CreateInputWithButton = function(Name, Page, DefaultText, ButtonText, Callback)
