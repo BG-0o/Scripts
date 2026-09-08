@@ -405,12 +405,14 @@ local function ApplyRoleESP(enabled)
     if enabled then
         if not MM2ESPPrevious then
             MM2ESPPrevious = {
+                ESPEnabled = Settings.ESPEnabled == true,
                 ESPNames = Settings.ESPNames == true,
                 Chams = Settings.Chams == true,
                 ESPTeamColors = Settings.ESPTeamColors == true
             }
         end
 
+        SetSharedTemporary("ESPEnabled", true)
         SetSharedTemporary("ESPNames", true)
         SetSharedTemporary("Chams", true)
         SetSharedTemporary("ESPTeamColors", true)
@@ -420,6 +422,7 @@ local function ApplyRoleESP(enabled)
         end
     else
         if MM2ESPPrevious then
+            SetSharedTemporary("ESPEnabled", MM2ESPPrevious.ESPEnabled)
             SetSharedTemporary("ESPNames", MM2ESPPrevious.ESPNames)
             SetSharedTemporary("Chams", MM2ESPPrevious.Chams)
             SetSharedTemporary("ESPTeamColors", MM2ESPPrevious.ESPTeamColors)
