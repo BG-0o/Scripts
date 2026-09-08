@@ -137,7 +137,6 @@ getgenv().Settings = {
     NDSNoTP = false,
 
     MM2RoleESP = false,
-    MM2AutoPlay = false,
     MM2AutoFarm = false,
     MM2AutoFarmSpeed = 55,
     MM2KillAllKey = Enum.KeyCode.K,
@@ -289,7 +288,6 @@ getgenv().AutoSaveConfiguration = function()
             NDSWaterFlySpeed = Settings.NDSWaterFlySpeed,
             NDSNoTP = Settings.NDSNoTP,
             MM2RoleESP = Settings.MM2RoleESP,
-            MM2AutoPlay = Settings.MM2AutoPlay,
             MM2AutoFarm = Settings.MM2AutoFarm,
             MM2AutoFarmSpeed = Settings.MM2AutoFarmSpeed,
             MM2KillAllKey = Settings.MM2KillAllKey and Settings.MM2KillAllKey.Name or "K",
