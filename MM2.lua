@@ -954,8 +954,6 @@ local AutoFarmOriginalRagdoll = true
 local AutoFarmOriginalFallingDown = true
 local AutoFarmCollisionCache = {}
 local AutoFarmPrepared = false
-local AutoFarmUndergroundY = nil
-local AutoFarmOldFallenHeight = nil
 local AutoFarmBagCoins = 0
 local AutoFarmBagMax = 40
 local AutoFarmBagKnown = false
@@ -964,6 +962,8 @@ local AutoFarmCompleting = false
 local AutoFarmAtCoin = false
 local AutoFarmGeneration = 0
 local AutoFarmSessionCollected = 0
+local AutoFarmTravelOffset = 1.9
+local AutoFarmPickupOffset = 1.15
 
 local function IsAliveCharacter()
     local character, humanoid, root = GetCharacterState()
@@ -1275,25 +1275,6 @@ local function TouchCoin(coin)
     return touched
 end
 
-local function GetStableUndergroundY(root)
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = {Player.Character}
-    params.IgnoreWater = true
-
-    local hit = workspace:Raycast(
-        root.Position + Vector3.new(0, 3, 0),
-        Vector3.new(0, -35, 0),
-        params
-    )
-
-    if hit and hit.Position then
-        return hit.Position.Y - 5.25
-    end
-
-    return root.Position.Y - 7
-end
-
 local function SetFarmCollision(enabled)
     local character = Player.Character
 
@@ -1321,7 +1302,7 @@ local function SetFarmCollision(enabled)
     end
 end
 
-local function SetFarmCFrame(x, z, y)
+local function SetFarmPosition(position)
     local character = Player.Character
 
     if not character
@@ -1331,13 +1312,9 @@ local function SetFarmCFrame(x, z, y)
         return false
     end
 
-    local target = CFrame.new(
-        x,
-        y or AutoFarmUndergroundY,
-        z
-    ) * AutoFarmRotation
-
-    character:PivotTo(target)
+    character:PivotTo(
+        CFrame.new(position) * AutoFarmRotation
+    )
 
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
@@ -1432,19 +1409,11 @@ local function StopAutoFarm(restore)
         end)
     end
 
-    if AutoFarmOldFallenHeight ~= nil then
-        pcall(function()
-            workspace.FallenPartsDestroyHeight = AutoFarmOldFallenHeight
-        end)
-    end
-
     AutoFarmRoot = nil
     AutoFarmHumanoid = nil
     AutoFarmReturnCFrame = nil
     AutoFarmRotation = nil
     AutoFarmPrepared = false
-    AutoFarmUndergroundY = nil
-    AutoFarmOldFallenHeight = nil
     AutoFarmSessionCollected = 0
 end
 
@@ -1502,15 +1471,6 @@ local function PrepareAutoFarm()
     AutoFarmPrepared = true
     AutoFarmAtCoin = false
     AutoFarmSessionCollected = 0
-    AutoFarmUndergroundY = GetStableUndergroundY(root)
-
-    pcall(function()
-        AutoFarmOldFallenHeight = workspace.FallenPartsDestroyHeight
-        workspace.FallenPartsDestroyHeight = math.min(
-            AutoFarmOldFallenHeight,
-            AutoFarmUndergroundY - 80
-        )
-    end)
 
     humanoid.PlatformStand = false
     humanoid.Sit = false
@@ -1527,28 +1487,40 @@ local function PrepareAutoFarm()
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
-    SetFarmCFrame(
-        root.Position.X,
-        root.Position.Z,
-        AutoFarmUndergroundY
+    return true
+end
+
+local function GetCoinTravelPosition(coin)
+    return Vector3.new(
+        coin.Position.X,
+        coin.Position.Y - AutoFarmTravelOffset,
+        coin.Position.Z
+    )
+end
+
+local function GetCoinPickupPosition(coin)
+    local offset = math.clamp(
+        coin.Size.Y * 0.5 + AutoFarmPickupOffset,
+        1.15,
+        1.85
     )
 
-    return true
+    return Vector3.new(
+        coin.Position.X,
+        coin.Position.Y - offset,
+        coin.Position.Z
+    )
 end
 
 local function TweenFarmRoot(targetPosition, duration, coin)
     if not AutoFarmRoot
-    or not AutoFarmRoot.Parent
-    or not AutoFarmUndergroundY then
+    or not AutoFarmRoot.Parent then
         return false
     end
 
     local generation = AutoFarmGeneration
     local startPosition = AutoFarmRoot.Position
-    local startX = startPosition.X
-    local startZ = startPosition.Z
-    local deltaX = targetPosition.X - startX
-    local deltaZ = targetPosition.Z - startZ
+    local delta = targetPosition - startPosition
     local startTime = os.clock()
     duration = math.max(duration, 0.035)
 
@@ -1573,10 +1545,8 @@ local function TweenFarmRoot(targetPosition, duration, coin)
             1
         )
 
-        SetFarmCFrame(
-            startX + deltaX * alpha,
-            startZ + deltaZ * alpha,
-            AutoFarmUndergroundY
+        SetFarmPosition(
+            startPosition + delta * alpha
         )
 
         if alpha >= 1 then
@@ -1627,19 +1597,15 @@ end
 local function CollectFarmCoin(coin)
     if not IsCoinValid(coin)
     or not AutoFarmRoot
-    or not AutoFarmRoot.Parent
-    or not AutoFarmUndergroundY then
+    or not AutoFarmRoot.Parent then
         return false
     end
 
     local generation = AutoFarmGeneration
     local serialBefore = AutoFarmCoinSerial
     local bagBefore = AutoFarmBagCoins
-    local pickupY = coin.Position.Y - math.clamp(
-        coin.Size.Y * 0.5 + 1.45,
-        1.55,
-        2.35
-    )
+    local pickupPosition = GetCoinPickupPosition(coin)
+    local travelPosition = GetCoinTravelPosition(coin)
 
     AutoFarmAtCoin = true
 
@@ -1651,23 +1617,14 @@ local function CollectFarmCoin(coin)
             break
         end
 
-        SetFarmCFrame(
-            coin.Position.X,
-            coin.Position.Z,
-            pickupY
-        )
+        SetFarmPosition(pickupPosition)
 
         TouchCoin(coin)
         RunService.Heartbeat:Wait()
         TouchCoin(coin)
         task.wait(0.035)
 
-        SetFarmCFrame(
-            coin.Position.X,
-            coin.Position.Z,
-            AutoFarmUndergroundY
-        )
-
+        SetFarmPosition(travelPosition)
         RunService.Heartbeat:Wait()
 
         if not IsCoinValid(coin)
@@ -1690,11 +1647,7 @@ local function CollectFarmCoin(coin)
     end
 
     if AutoFarmRoot and AutoFarmRoot.Parent then
-        SetFarmCFrame(
-            coin.Position.X,
-            coin.Position.Z,
-            AutoFarmUndergroundY
-        )
+        SetFarmPosition(travelPosition)
     end
 
     AutoFarmAtCoin = false
@@ -1718,15 +1671,12 @@ local function AutoFarmCoin(coin)
         180
     )
 
-    local horizontalDistance = Vector3.new(
-        AutoFarmRoot.Position.X - coin.Position.X,
-        0,
-        AutoFarmRoot.Position.Z - coin.Position.Z
-    ).Magnitude
+    local travelPosition = GetCoinTravelPosition(coin)
+    local distance = (AutoFarmRoot.Position - travelPosition).Magnitude
 
     local arrived = TweenFarmRoot(
-        coin.Position,
-        horizontalDistance / speed,
+        travelPosition,
+        distance / speed,
         coin
     )
 
@@ -1767,25 +1717,14 @@ end
 AddConnection(RunService.Heartbeat:Connect(function()
     if not Settings.MM2AutoFarm
     or not AutoFarmPrepared
-    or AutoFarmAtCoin
     or not AutoFarmRoot
-    or not AutoFarmRoot.Parent
-    or not AutoFarmUndergroundY then
+    or not AutoFarmRoot.Parent then
         return
     end
 
-    local position = AutoFarmRoot.Position
-
-    if math.abs(position.Y - AutoFarmUndergroundY) > 0.05 then
-        SetFarmCFrame(
-            position.X,
-            position.Z,
-            AutoFarmUndergroundY
-        )
-    else
-        AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
-        AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
-    end
+    AutoFarmRoot.Anchored = true
+    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+    AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
 end))
 
 task.spawn(function()
@@ -1806,11 +1745,7 @@ task.spawn(function()
             elseif not ActionBusy then
                 if PrepareAutoFarm() then
                     local coin = GetBestCoin(
-                        Vector3.new(
-                            root.Position.X,
-                            AutoFarmUndergroundY or root.Position.Y,
-                            root.Position.Z
-                        ),
+                        root.Position,
                         false
                     )
 
