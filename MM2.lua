@@ -5,6 +5,7 @@ end
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
@@ -227,6 +228,38 @@ local function KillAll()
     end)
 end
 
+local function FindShootRemote(gun)
+    if not gun then
+        return nil
+    end
+
+    local knifeServer = gun:FindFirstChild("KnifeServer")
+        or gun:FindFirstChild("KnifeServer", true)
+
+    if knifeServer then
+        local remote = knifeServer:FindFirstChild("ShootGun")
+            or knifeServer:FindFirstChild("ShootGun", true)
+
+        if remote and (remote:IsA("RemoteFunction") or remote:IsA("RemoteEvent")) then
+            return remote
+        end
+    end
+
+    local direct = gun:FindFirstChild("ShootGun", true)
+
+    if direct and (direct:IsA("RemoteFunction") or direct:IsA("RemoteEvent")) then
+        return direct
+    end
+
+    local replicated = ReplicatedStorage:FindFirstChild("ShootGun", true)
+
+    if replicated and (replicated:IsA("RemoteFunction") or replicated:IsA("RemoteEvent")) then
+        return replicated
+    end
+
+    return nil
+end
+
 local function ShootMurderer()
     if ActionBusy then
         return
@@ -265,41 +298,64 @@ local function ShootMurderer()
     end
 
     local originalParent = gun.Parent
-
-    if not EquipTool(gun) then
-        CustomNotify("Could not equip Gun", Color3.fromRGB(255, 100, 100))
-        return
-    end
-
-    local knifeServer = gun:FindFirstChild("KnifeServer")
-    local shootRemote = knifeServer and knifeServer:FindFirstChild("ShootGun")
-
-    if not shootRemote then
-        CustomNotify("Shoot remote unavailable", Color3.fromRGB(255, 100, 100))
-        return
-    end
+    local oldNoclip = Settings.Noclip == true
 
     ActionBusy = true
 
     task.spawn(function()
+        if not EquipTool(gun) then
+            ActionBusy = false
+            CustomNotify("Could not equip Gun", Color3.fromRGB(255, 100, 100))
+            return
+        end
+
+        local shootRemote = FindShootRemote(gun)
+
+        if not shootRemote then
+            for _ = 1, 8 do
+                task.wait(0.025)
+                shootRemote = FindShootRemote(gun)
+
+                if shootRemote then
+                    break
+                end
+            end
+        end
+
+        if not shootRemote then
+            if originalParent and originalParent:IsA("Backpack") and gun and gun.Parent == character then
+                pcall(function()
+                    gun.Parent = originalParent
+                end)
+            end
+
+            ActionBusy = false
+            CustomNotify("Shoot remote unavailable", Color3.fromRGB(255, 100, 100))
+            return
+        end
+
         local oldCFrame = root.CFrame
         local allow = getgenv().AllowToxTeleport
 
-        if allow then allow(0.6) end
+        SetSharedTemporary("Noclip", true)
 
+        if allow then
+            allow(0.8)
+        end
+
+        local abovePosition = targetRoot.Position + Vector3.new(0, 7.5, 0)
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
-        root.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 5)
+        root.CFrame = CFrame.new(abovePosition, targetRoot.Position)
 
         RunService.Heartbeat:Wait()
 
-        local velocity = targetRoot.AssemblyLinearVelocity
-        local targetPosition = targetRoot.Position + Vector3.new(velocity.X, 0, velocity.Z) * 0.035
+        local targetPosition = targetRoot.Position
 
         pcall(function()
             if shootRemote:IsA("RemoteFunction") then
                 shootRemote:InvokeServer(0, targetPosition, "AH")
-            elseif shootRemote:IsA("RemoteEvent") then
+            else
                 shootRemote:FireServer(0, targetPosition, "AH")
             end
         end)
@@ -307,11 +363,16 @@ local function ShootMurderer()
         task.wait(0.035)
 
         if root and root.Parent then
-            if allow then allow(0.5) end
+            if allow then
+                allow(0.5)
+            end
+
             root.AssemblyLinearVelocity = Vector3.zero
             root.AssemblyAngularVelocity = Vector3.zero
             root.CFrame = oldCFrame
         end
+
+        SetSharedTemporary("Noclip", oldNoclip)
 
         if originalParent and originalParent:IsA("Backpack") and gun and gun.Parent == character then
             pcall(function()
@@ -405,14 +466,12 @@ local function ApplyRoleESP(enabled)
     if enabled then
         if not MM2ESPPrevious then
             MM2ESPPrevious = {
-                ESPEnabled = Settings.ESPEnabled == true,
                 ESPNames = Settings.ESPNames == true,
                 Chams = Settings.Chams == true,
                 ESPTeamColors = Settings.ESPTeamColors == true
             }
         end
 
-        SetSharedTemporary("ESPEnabled", true)
         SetSharedTemporary("ESPNames", true)
         SetSharedTemporary("Chams", true)
         SetSharedTemporary("ESPTeamColors", true)
@@ -422,7 +481,6 @@ local function ApplyRoleESP(enabled)
         end
     else
         if MM2ESPPrevious then
-            SetSharedTemporary("ESPEnabled", MM2ESPPrevious.ESPEnabled)
             SetSharedTemporary("ESPNames", MM2ESPPrevious.ESPNames)
             SetSharedTemporary("Chams", MM2ESPPrevious.Chams)
             SetSharedTemporary("ESPTeamColors", MM2ESPPrevious.ESPTeamColors)
