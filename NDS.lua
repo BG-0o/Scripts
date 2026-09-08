@@ -39,6 +39,7 @@ Settings.NDSWaterFlySpeed = math.clamp(
 
 local AutoWinConnection = nil
 local AutoWinLastActivate = 0
+local AutoWinLastEquip = 0
 local AutoWinTool = nil
 local AutoWinToolName = nil
 local AutoWinPreviousNoclip = nil
@@ -118,13 +119,61 @@ end
 
 local function PressHotbarTwo()
     pcall(function()
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Two, false, game)
-        task.wait(0.03)
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Two, false, game)
+        VirtualInputManager:SendKeyEvent(
+            true,
+            Enum.KeyCode.Two,
+            false,
+            game
+        )
+
+        task.wait(0.04)
+
+        VirtualInputManager:SendKeyEvent(
+            false,
+            Enum.KeyCode.Two,
+            false,
+            game
+        )
     end)
 end
 
-local function FindAppleByName()
+local function EquipAndGetHotbarTwo()
+    local character, humanoid = GetCharacterState()
+
+    if not character
+    or not humanoid
+    or humanoid.Health <= 0 then
+        return nil
+    end
+
+    PressHotbarTwo()
+    task.wait(0.06)
+
+    local equipped = character:FindFirstChildOfClass("Tool")
+
+    if equipped then
+        return equipped
+    end
+
+    local apple = FindAppleByName and FindAppleByName()
+
+    if apple and apple:IsA("Tool") then
+        pcall(function()
+            humanoid:EquipTool(apple)
+        end)
+
+        task.wait(0.04)
+
+        return character:FindFirstChildOfClass("Tool")
+            or apple
+    end
+
+    return nil
+end
+
+local FindAppleByName
+
+FindAppleByName = function()
     local character = Player.Character
     local backpack = Player:FindFirstChildOfClass("Backpack")
 
@@ -151,8 +200,27 @@ local function FindAutoWinTool()
     local character = Player.Character
     local backpack = Player:FindFirstChildOfClass("Backpack")
 
-    if AutoWinTool and AutoWinTool.Parent and AutoWinTool:IsA("Tool") then
+    if AutoWinTool
+    and AutoWinTool.Parent
+    and AutoWinTool:IsA("Tool") then
         return AutoWinTool
+    end
+
+    local equipped = character
+        and character:FindFirstChildOfClass("Tool")
+
+    if equipped then
+        AutoWinTool = equipped
+        AutoWinToolName = equipped.Name
+        return equipped
+    end
+
+    local hotbarTwo = EquipAndGetHotbarTwo()
+
+    if hotbarTwo then
+        AutoWinTool = hotbarTwo
+        AutoWinToolName = hotbarTwo.Name
+        return hotbarTwo
     end
 
     local namedApple = FindAppleByName()
@@ -160,11 +228,25 @@ local function FindAutoWinTool()
     if namedApple then
         AutoWinTool = namedApple
         AutoWinToolName = namedApple.Name
+
+        if character
+        and namedApple.Parent ~= character then
+            local humanoid =
+                character:FindFirstChildOfClass("Humanoid")
+
+            if humanoid then
+                pcall(function()
+                    humanoid:EquipTool(namedApple)
+                end)
+            end
+        end
+
         return namedApple
     end
 
     if AutoWinToolName then
-        local cached = (character and character:FindFirstChild(AutoWinToolName))
+        local cached =
+            (character and character:FindFirstChild(AutoWinToolName))
             or (backpack and backpack:FindFirstChild(AutoWinToolName))
 
         if cached and cached:IsA("Tool") then
@@ -173,25 +255,42 @@ local function FindAutoWinTool()
         end
     end
 
-    PressHotbarTwo()
-    task.wait(0.06)
-
-    if character then
-        local equipped = character:FindFirstChildOfClass("Tool")
-
-        if equipped then
-            AutoWinTool = equipped
-            AutoWinToolName = equipped.Name
-            return equipped
-        end
-    end
-
     return nil
 end
 
 local function ClickAutoWinTool(tool)
-    if not tool or not tool.Parent then
-        return
+    local character, humanoid = GetCharacterState()
+
+    if not character
+    or not humanoid
+    or humanoid.Health <= 0 then
+        return false
+    end
+
+    if tick() - AutoWinLastEquip >= 0.45 then
+        AutoWinLastEquip = tick()
+        PressHotbarTwo()
+        task.wait(0.055)
+    end
+
+    local equipped =
+        character:FindFirstChildOfClass("Tool")
+
+    if equipped then
+        tool = equipped
+        AutoWinTool = equipped
+        AutoWinToolName = equipped.Name
+    elseif tool and tool:IsA("Tool") then
+        pcall(function()
+            humanoid:EquipTool(tool)
+        end)
+
+        task.wait(0.04)
+    end
+
+    if not tool
+    or not tool.Parent then
+        return false
     end
 
     pcall(function()
@@ -199,11 +298,42 @@ local function ClickAutoWinTool(tool)
     end)
 
     pcall(function()
-        local mousePosition = UserInputService:GetMouseLocation()
-        VirtualInputManager:SendMouseButtonEvent(mousePosition.X, mousePosition.Y, 0, true, game, 0)
-        task.wait(0.03)
-        VirtualInputManager:SendMouseButtonEvent(mousePosition.X, mousePosition.Y, 0, false, game, 0)
+        local camera = workspace.CurrentCamera
+        local x = camera
+            and camera.ViewportSize.X * 0.5
+            or 400
+        local y = camera
+            and camera.ViewportSize.Y * 0.5
+            or 300
+
+        VirtualInputManager:SendMouseButtonEvent(
+            x,
+            y,
+            0,
+            true,
+            game,
+            0
+        )
+
+        task.wait(0.035)
+
+        VirtualInputManager:SendMouseButtonEvent(
+            x,
+            y,
+            0,
+            false,
+            game,
+            0
+        )
     end)
+
+    task.wait(0.025)
+
+    pcall(function()
+        tool:Activate()
+    end)
+
+    return true
 end
 
 local function StopAutoWin()
@@ -220,6 +350,7 @@ local function StopAutoWin()
     AutoWinTool = nil
     AutoWinToolName = nil
     AutoWinLastActivate = 0
+    AutoWinLastEquip = 0
 end
 
 local function StartAutoWin()
@@ -231,6 +362,7 @@ local function StartAutoWin()
     AutoWinTool = nil
     AutoWinToolName = nil
     AutoWinLastActivate = 0
+    AutoWinLastEquip = 0
     AutoWinPreviousNoclip = Settings.Noclip == true
 
     SetShared("Noclip", true)
@@ -292,9 +424,9 @@ local function StartAutoWin()
             end
         end
 
-        if tool.Parent == character
-        and currentHumanoid.Health < currentHumanoid.MaxHealth
-        and tick() - AutoWinLastActivate >= 5.05 then
+        if tool
+        and tool.Parent
+        and tick() - AutoWinLastActivate >= 0.85 then
             AutoWinLastActivate = tick()
             ClickAutoWinTool(tool)
         end
