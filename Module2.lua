@@ -2209,123 +2209,323 @@ end
 
 local LastSafeCFrame = nil
 local AntiVoidConnection = nil
-local function StartAntiVoid()
-	if AntiVoidConnection then AntiVoidConnection:Disconnect() end
-	AntiVoidConnection = AddConnection(RunService.Heartbeat:Connect(function()
-		local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-        local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-        if Destroyed or not ScriptLoaded or not Settings.AntiVoid or not Root or not Hum then return end
-		if Hum.FloorMaterial ~= Enum.Material.Air and Root.Velocity.Y > -10 then LastSafeCFrame = Root.CFrame end
-		local fpdh = workspace.FallenPartsDestroyHeight or -500
-		if Root.Position.Y <= (fpdh + 25) or Root.Position.Y <= -250 then
-			Root.Velocity = Vector3.zero
-			Root.RotVelocity = Vector3.zero
-			Root.CFrame = LastSafeCFrame or CFrame.new(Root.Position.X, 100, Root.Position.Z)
-			CustomNotify("Anti Void Saved You!", Color3.fromRGB(100, 255, 100))
-		end
-	end))
+local AntiVoidCharacterConnection = nil
+local AntiVoidLastSave = 0
+local AntiVoidLastRescue = 0
+
+local function GetVoidThreshold()
+    local fallen =
+        tonumber(
+            workspace.FallenPartsDestroyHeight
+        ) or -500
+
+    return math.max(
+        fallen + 35,
+        -250
+    )
 end
 
-local WalkFlingPreConnection = nil
-local WalkFlingPostConnection = nil
-local WalkFlingRoot = nil
-local WalkFlingSavedLinear = Vector3.zero
-local WalkFlingSavedAngular = Vector3.zero
-local WalkFlingSavedRootCollide = false
-local WalkFlingPulse = false
-local WalkFlingCollisionPulse = {}
+local function IsUsableSafeCFrame(cframe)
+    if typeof(cframe) ~= "CFrame" then
+        return false
+    end
 
-local function RestoreWalkFlingCollisionPulse()
-    for part, oldCanCollide in pairs(
-        WalkFlingCollisionPulse
-    ) do
-        if part and part.Parent then
-            part.CanCollide = oldCanCollide
+    return cframe.Position.Y
+        > GetVoidThreshold() + 20
+end
+
+local function GetSpawnFallbackCFrame(root)
+    local ndsSafe =
+        getgenv().NDSSafeSpawnCFrame
+
+    if game.PlaceId == 189707
+    and IsUsableSafeCFrame(ndsSafe) then
+        return ndsSafe
+    end
+
+    local spawn =
+        workspace:
+            FindFirstChildWhichIsA(
+                "SpawnLocation",
+                true
+            )
+
+    if spawn then
+        return spawn.CFrame
+            + Vector3.new(0, 4, 0)
+    end
+
+    if root then
+        local origin =
+            Vector3.new(
+                root.Position.X,
+                math.max(
+                    root.Position.Y + 500,
+                    500
+                ),
+                root.Position.Z
+            )
+
+        local result =
+            workspace:Raycast(
+                origin,
+                Vector3.new(0, -2000, 0)
+            )
+
+        if result then
+            return CFrame.new(
+                result.Position
+                + Vector3.new(0, 5, 0)
+            )
         end
     end
 
-    table.clear(WalkFlingCollisionPulse)
+    return nil
 end
 
-local function RestoreWalkFlingPulse()
-    RestoreWalkFlingCollisionPulse()
-
-    local root = WalkFlingRoot
-
-    if root and root.Parent then
-        root.AssemblyLinearVelocity =
-            WalkFlingSavedLinear
-
-        root.AssemblyAngularVelocity =
-            WalkFlingSavedAngular
-
-        root.CanCollide =
-            WalkFlingSavedRootCollide
+local function SetLastSafeCFrame(cframe)
+    if IsUsableSafeCFrame(cframe) then
+        LastSafeCFrame = cframe
+        getgenv().ToxLastSafeCFrame =
+            cframe
     end
-
-    WalkFlingPulse = false
 end
 
-local function StopWalkFling()
-    if WalkFlingPreConnection then
-        WalkFlingPreConnection:Disconnect()
-        WalkFlingPreConnection = nil
-    end
+getgenv().SetToxLastSafeCFrame =
+    SetLastSafeCFrame
 
-    if WalkFlingPostConnection then
-        WalkFlingPostConnection:Disconnect()
-        WalkFlingPostConnection = nil
-    end
-
-    RestoreWalkFlingPulse()
-
-    WalkFlingRoot = nil
-    WalkFlingSavedLinear = Vector3.zero
-    WalkFlingSavedAngular = Vector3.zero
-    WalkFlingSavedRootCollide = false
-end
-
-local function PrepareWalkFlingContacts(
+local function RescueFromVoid(
     character,
+    humanoid,
     root
 )
-    if not Settings.AntiFling then
-        return
+    if not character
+    or not character.Parent
+    or not humanoid
+    or humanoid.Health <= 0
+    or not root
+    or not root.Parent then
+        return false
     end
 
-    for _, target in ipairs(
-        Players:GetPlayers()
-    ) do
-        if target ~= Player
-        and target.Character then
-            local targetRoot =
-                target.Character:
-                    FindFirstChild(
-                        "HumanoidRootPart"
-                    )
+    if tick() - AntiVoidLastRescue < 0.8 then
+        return false
+    end
 
-            if targetRoot
-            and (
-                targetRoot.Position
-                - root.Position
-            ).Magnitude <= 9 then
-                for _, part in ipairs(
-                    target.Character:
-                        GetDescendants()
-                ) do
-                    if part:IsA("BasePart") then
-                        if WalkFlingCollisionPulse[part]
-                        == nil then
-                            WalkFlingCollisionPulse[part] =
-                                part.CanCollide
+    AntiVoidLastRescue = tick()
+
+    local safe =
+        IsUsableSafeCFrame(LastSafeCFrame)
+        and LastSafeCFrame
+        or GetSpawnFallbackCFrame(root)
+
+    if not safe then
+        return false
+    end
+
+    local allow =
+        getgenv().AllowToxTeleport
+
+    if allow then
+        allow(1.5)
+    end
+
+    if getgenv().SetNDSNoTPAnchor then
+        pcall(function()
+            getgenv().SetNDSNoTPAnchor(
+                safe,
+                true
+            )
+        end)
+    end
+
+    humanoid.Sit = false
+    humanoid.PlatformStand = false
+
+    root.AssemblyLinearVelocity =
+        Vector3.zero
+    root.AssemblyAngularVelocity =
+        Vector3.zero
+    root.CFrame = safe
+
+    pcall(function()
+        humanoid:ChangeState(
+            Enum.HumanoidStateType.GettingUp
+        )
+    end)
+
+    SetLastSafeCFrame(safe)
+    return true
+end
+
+local function StopAntiVoid()
+    if AntiVoidConnection then
+        AntiVoidConnection:Disconnect()
+        AntiVoidConnection = nil
+    end
+
+    if AntiVoidCharacterConnection then
+        AntiVoidCharacterConnection:
+            Disconnect()
+        AntiVoidCharacterConnection = nil
+    end
+end
+
+local function StartAntiVoid()
+    StopAntiVoid()
+
+    AntiVoidCharacterConnection =
+        AddConnection(
+            Player.CharacterAdded:
+                Connect(function(character)
+                    task.spawn(function()
+                        local root =
+                            character:
+                                WaitForChild(
+                                    "HumanoidRootPart",
+                                    8
+                                )
+                        local humanoid =
+                            character:
+                                FindFirstChildOfClass(
+                                    "Humanoid"
+                                )
+
+                        if not root
+                        or not humanoid then
+                            return
                         end
 
-                        part.CanCollide = true
+                        task.wait(0.45)
+
+                        if not Settings.AntiVoid
+                        or Destroyed then
+                            return
+                        end
+
+                        if root.Position.Y
+                        <= GetVoidThreshold() then
+                            RescueFromVoid(
+                                character,
+                                humanoid,
+                                root
+                            )
+                        end
+                    end)
+                end)
+        )
+
+    AntiVoidConnection =
+        AddConnection(
+            RunService.Heartbeat:
+                Connect(function()
+                    if Destroyed
+                    or not ScriptLoaded
+                    or not Settings.AntiVoid then
+                        return
                     end
-                end
+
+                    local character =
+                        Player.Character
+                    local root =
+                        character
+                        and character:
+                            FindFirstChild(
+                                "HumanoidRootPart"
+                            )
+                    local humanoid =
+                        character
+                        and character:
+                            FindFirstChildOfClass(
+                                "Humanoid"
+                            )
+
+                    if not root
+                    or not humanoid
+                    or humanoid.Health <= 0 then
+                        return
+                    end
+
+                    local threshold =
+                        GetVoidThreshold()
+
+                    if humanoid.FloorMaterial
+                    ~= Enum.Material.Air
+                    and root.Position.Y
+                        > threshold + 20
+                    and root.AssemblyLinearVelocity.Y
+                        > -25
+                    and tick() - AntiVoidLastSave
+                        >= 0.15 then
+                        AntiVoidLastSave = tick()
+                        SetLastSafeCFrame(
+                            root.CFrame
+                        )
+                    end
+
+                    if root.Position.Y
+                    <= threshold then
+                        RescueFromVoid(
+                            character,
+                            humanoid,
+                            root
+                        )
+                    end
+                end)
+        )
+end
+
+local WalkFlingGeneration = 0
+local WalkFlingCollisionDefaults =
+    setmetatable({}, {__mode = "k"})
+local WalkFlingImpulseActive = false
+
+local function RestoreWalkFlingCollisions()
+    local character = Player.Character
+
+    for part, oldCanCollide in pairs(
+        WalkFlingCollisionDefaults
+    ) do
+        if part
+        and part.Parent
+        and character
+        and part:IsDescendantOf(character) then
+            if Settings.Noclip then
+                part.CanCollide = false
+            else
+                part.CanCollide =
+                    oldCanCollide
             end
         end
     end
+
+    table.clear(
+        WalkFlingCollisionDefaults
+    )
+end
+
+local function ApplyWalkFlingNoclip(
+    character
+)
+    for _, part in ipairs(
+        character:GetDescendants()
+    ) do
+        if part:IsA("BasePart") then
+            if WalkFlingCollisionDefaults[part]
+            == nil then
+                WalkFlingCollisionDefaults[part] =
+                    part.CanCollide
+            end
+
+            part.CanCollide = false
+        end
+    end
+end
+
+local function StopWalkFling()
+    WalkFlingGeneration += 1
+    WalkFlingImpulseActive = false
+    RestoreWalkFlingCollisions()
 end
 
 local function StartWalkFling()
@@ -2336,103 +2536,111 @@ local function StartWalkFling()
         return
     end
 
-    local preSignal =
-        RunService.PreSimulation
-        or RunService.Stepped
+    if Settings.AntiFling then
+        RestoreAntiFlingDefaults()
+    end
 
-    local postSignal =
-        RunService.PostSimulation
-        or RunService.Heartbeat
+    local generation =
+        WalkFlingGeneration
 
-    WalkFlingPreConnection =
-        AddConnection(
-            preSignal:Connect(function()
-                if Destroyed
-                or not ScriptLoaded
-                or not Settings.WalkFling then
-                    return
-                end
+    task.spawn(function()
+        local moveLift = 0.1
 
-                if WalkFlingPulse then
-                    RestoreWalkFlingPulse()
-                end
+        while Settings.WalkFling
+        and not Destroyed
+        and ScriptLoaded
+        and generation
+            == WalkFlingGeneration do
+            RunService.Heartbeat:Wait()
 
-                local character = Player.Character
-                local humanoid =
-                    character
-                    and character:
-                        FindFirstChildOfClass(
-                            "Humanoid"
-                        )
-                local root =
-                    character
-                    and character:
-                        FindFirstChild(
-                            "HumanoidRootPart"
-                        )
+            local character =
+                Player.Character
+            local humanoid =
+                character
+                and character:
+                    FindFirstChildOfClass(
+                        "Humanoid"
+                    )
+            local root =
+                character
+                and character:
+                    FindFirstChild(
+                        "HumanoidRootPart"
+                    )
 
-                if not humanoid
-                or humanoid.Health <= 0
-                or not root
-                or humanoid.SeatPart then
-                    return
-                end
+            if not character
+            or not character.Parent
+            or not humanoid
+            or humanoid.Health <= 0
+            or not root
+            or not root.Parent then
+                task.wait()
+                continue
+            end
 
-                WalkFlingRoot = root
-                WalkFlingSavedLinear =
-                    root.AssemblyLinearVelocity
-                WalkFlingSavedAngular =
-                    root.AssemblyAngularVelocity
-                WalkFlingSavedRootCollide =
-                    root.CanCollide
-                WalkFlingPulse = true
+            ApplyWalkFlingNoclip(
+                character
+            )
 
-                PrepareWalkFlingContacts(
-                    character,
-                    root
+            local velocity =
+                root.Velocity
+
+            WalkFlingImpulseActive = true
+
+            root.Velocity =
+                velocity * 10000
+                + Vector3.new(
+                    0,
+                    10000,
+                    0
                 )
 
-                root.CanCollide = true
+            RunService.RenderStepped:Wait()
 
-                local moveDirection =
-                    humanoid.MoveDirection
+            if generation
+                ~= WalkFlingGeneration
+            or not Settings.WalkFling then
+                break
+            end
 
-                local impulse =
-                    Vector3.new(0, 28, 0)
+            if character.Parent
+            and root.Parent then
+                root.Velocity =
+                    velocity
+            end
 
-                if moveDirection.Magnitude > 0.05 then
-                    impulse =
-                        moveDirection.Unit * 1350
-                        + Vector3.new(
-                            0,
-                            28,
-                            0
-                        )
-                end
+            WalkFlingImpulseActive = false
 
-                root.AssemblyLinearVelocity =
-                    WalkFlingSavedLinear
-                    + impulse
+            RunService.Stepped:Wait()
 
-                root.AssemblyAngularVelocity =
-                    Vector3.new(
+            if generation
+                ~= WalkFlingGeneration
+            or not Settings.WalkFling then
+                break
+            end
+
+            if character.Parent
+            and root.Parent then
+                root.Velocity =
+                    velocity
+                    + Vector3.new(
                         0,
-                        12000,
+                        moveLift,
                         0
                     )
-            end)
-        )
 
-    WalkFlingPostConnection =
-        AddConnection(
-            postSignal:Connect(function()
-                if not WalkFlingPulse then
-                    return
-                end
+                moveLift =
+                    moveLift * -1
+            end
+        end
 
-                RestoreWalkFlingPulse()
-            end)
-        )
+        WalkFlingImpulseActive = false
+
+        if generation
+        == WalkFlingGeneration then
+            RestoreWalkFlingCollisions()
+        end
+    end)
 end
 
 getgenv().SetWalkFling = function(
@@ -2627,6 +2835,8 @@ getgenv().ToxSetSharedOption = function(Key, Value)
 
         if enabled then
             StartAntiVoid()
+        else
+            StopAntiVoid()
         end
     elseif Key == "AntiFling" then
         Settings.AntiFling = enabled
@@ -3595,6 +3805,7 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     Settings.AntiFling = false
     Settings.WalkFling = false
     StopWalkFling()
+    StopAntiVoid()
     Settings.HitboxExpander = false
     Settings.FOVEnabled = false
     Settings.ForceShiftLock = false
@@ -3821,16 +4032,41 @@ AddConnection(RunService.Stepped:Connect(function()
     end
 
     if Settings.AntiFling then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= Player and p.Character then
-                for _, part in ipairs(p.Character:GetChildren()) do
-                    if part:IsA("BasePart") then
-                        if AntiFlingDefaults[part] == nil then
-                            AntiFlingDefaults[part] = part.CanCollide
-                        end
+        if Settings.WalkFling then
+            local root =
+                Player.Character
+                and Player.Character:
+                    FindFirstChild(
+                        "HumanoidRootPart"
+                    )
 
-                        if not Settings.WalkFling
-                        or not WalkFlingPulse then
+            if root
+            and not WalkFlingImpulseActive
+            and root.AssemblyLinearVelocity.Magnitude
+                > 350 then
+                root.AssemblyLinearVelocity =
+                    Vector3.zero
+                root.AssemblyAngularVelocity =
+                    Vector3.zero
+            end
+        else
+            for _, p in ipairs(
+                Players:GetPlayers()
+            ) do
+                if p ~= Player
+                and p.Character then
+                    for _, part in ipairs(
+                        p.Character:GetChildren()
+                    ) do
+                        if part:IsA(
+                            "BasePart"
+                        ) then
+                            if AntiFlingDefaults[part]
+                            == nil then
+                                AntiFlingDefaults[part] =
+                                    part.CanCollide
+                            end
+
                             part.CanCollide = false
                         end
                     end
