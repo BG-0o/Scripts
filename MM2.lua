@@ -46,112 +46,54 @@ Settings.MM2FlingTarget = Settings.MM2FlingTarget or "Murderer"
 
 local ActionBusy = false
 
-local function FindMM2RadioTool()
-    local character = Player.Character
-    local backpack = Player:FindFirstChildOfClass("Backpack")
-    local best = nil
+local function IsInsideToxGui(obj)
+    local toxGui = getgenv().Gui
 
-    local function scan(container)
-        if not container then
-            return nil
-        end
-
-        for _, child in ipairs(container:GetChildren()) do
-            if child:IsA("Tool") then
-                local lower = string.lower(child.Name)
-
-                if string.find(lower, "radio", 1, true)
-                or string.find(lower, "boombox", 1, true)
-                or string.find(lower, "boom box", 1, true) then
-                    return child
-                end
-
-                if not best then
-                    for _, desc in ipairs(child:GetDescendants()) do
-                        if desc:IsA("RemoteEvent") or desc:IsA("RemoteFunction") then
-                            local rname = string.lower(desc.Name)
-
-                            if string.find(rname, "radio", 1, true)
-                            or string.find(rname, "song", 1, true)
-                            or string.find(rname, "music", 1, true) then
-                                best = child
-                                break
-                            end
-                        end
-                    end
-                end
-            end
-        end
-
-        return nil
+    if toxGui and obj then
+        return obj == toxGui or obj:IsDescendantOf(toxGui)
     end
 
-    return scan(character) or scan(backpack) or best
+    return false
 end
 
-local function FindRadioGuiControls()
-    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
-
-    if not playerGui then
-        return nil, nil
+local function IsGuiVisible(obj)
+    if not obj or not obj:IsA("GuiObject") then
+        return false
     end
 
-    local textBox = nil
-    local playButton = nil
+    local current = obj
 
-    for _, obj in ipairs(playerGui:GetDescendants()) do
-        if obj:IsA("TextBox") and obj.Visible then
-            local blob = string.lower(
-                tostring(obj.Name or "") .. " "
-                .. tostring(obj.PlaceholderText or "") .. " "
-                .. tostring(obj.Text or "")
-            )
-
-            if string.find(blob, "radio", 1, true)
-            or string.find(blob, "audio", 1, true)
-            or string.find(blob, "song", 1, true)
-            or string.find(blob, "music", 1, true)
-            or string.find(blob, "id", 1, true) then
-                textBox = obj
-                break
-            end
+    while current do
+        if current:IsA("GuiObject") and not current.Visible then
+            return false
         end
-    end
 
-    if textBox then
-        local parent = textBox.Parent
-
-        for _ = 1, 4 do
-            if not parent then
-                break
-            end
-
-            for _, obj in ipairs(parent:GetDescendants()) do
-                if obj:IsA("TextButton") and obj.Visible then
-                    local blob = string.lower(tostring(obj.Name or "") .. " " .. tostring(obj.Text or ""))
-
-                    if string.find(blob, "play", 1, true)
-                    or string.find(blob, "submit", 1, true)
-                    or string.find(blob, "enter", 1, true) then
-                        playButton = obj
-                        break
-                    end
-                end
-            end
-
-            if playButton then
-                break
-            end
-
-            parent = parent.Parent
+        if current:IsA("ScreenGui") and not current.Enabled then
+            return false
         end
+
+        current = current.Parent
     end
 
-    return textBox, playButton
+    return true
+end
+
+local function GuiBlob(obj)
+    local parts = {tostring(obj.Name or "")}
+
+    if obj:IsA("TextButton") or obj:IsA("TextLabel") or obj:IsA("TextBox") then
+        table.insert(parts, tostring(obj.Text or ""))
+    end
+
+    if obj:IsA("TextBox") then
+        table.insert(parts, tostring(obj.PlaceholderText or ""))
+    end
+
+    return string.lower(table.concat(parts, " "))
 end
 
 local function ClickGuiButton(button)
-    if not button then
+    if not button or not button.Parent then
         return false
     end
 
@@ -165,53 +107,263 @@ local function ClickGuiButton(button)
         end
     end
 
-    local ok = pcall(function()
-        local center = button.AbsolutePosition + (button.AbsoluteSize / 2)
-        VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 0)
-        task.wait()
-        VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, false, game, 0)
-    end)
+    return pcall(function()
+        local center = button.AbsolutePosition + button.AbsoluteSize / 2
 
-    return ok
+        VirtualInputManager:SendMouseButtonEvent(
+            center.X,
+            center.Y,
+            0,
+            true,
+            game,
+            0
+        )
+
+        task.wait(0.02)
+
+        VirtualInputManager:SendMouseButtonEvent(
+            center.X,
+            center.Y,
+            0,
+            false,
+            game,
+            0
+        )
+    end)
 end
 
-local function TryRadioRemote(tool, id)
-    if not tool then
-        return false
-    end
+local function FindMM2RadioTool()
+    local character = Player.Character
+    local backpack = Player:FindFirstChildOfClass("Backpack")
 
-    local remotes = {}
+    for _, container in ipairs({character, backpack}) do
+        if container then
+            for _, child in ipairs(container:GetChildren()) do
+                if child:IsA("Tool") then
+                    local lower = string.lower(child.Name)
 
-    for _, obj in ipairs(tool:GetDescendants()) do
-        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-            table.insert(remotes, obj)
-        end
-    end
-
-    for _, remote in ipairs(remotes) do
-        local remoteName = string.lower(remote.Name)
-        local parentName = remote.Parent and string.lower(remote.Parent.Name) or ""
-
-        if string.find(remoteName, "radio", 1, true)
-        or string.find(remoteName, "song", 1, true)
-        or string.find(remoteName, "music", 1, true)
-        or string.find(parentName, "radio", 1, true)
-        or string.find(parentName, "boombox", 1, true) then
-            local ok = pcall(function()
-                if remote:IsA("RemoteFunction") then
-                    remote:InvokeServer("PlaySong", tostring(id))
-                else
-                    remote:FireServer("PlaySong", tostring(id))
+                    if string.find(lower, "radio", 1, true)
+                    or string.find(lower, "boombox", 1, true)
+                    or string.find(lower, "boom box", 1, true) then
+                        return child
+                    end
                 end
-            end)
-
-            if ok then
-                return true
             end
         end
     end
 
-    return false
+    return nil
+end
+
+local function FindRadioOpenButton()
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+
+    if not playerGui then
+        return nil
+    end
+
+    local best = nil
+    local bestScore = -1
+
+    for _, obj in ipairs(playerGui:GetDescendants()) do
+        if (obj:IsA("TextButton") or obj:IsA("ImageButton"))
+        and IsGuiVisible(obj)
+        and not IsInsideToxGui(obj) then
+            local blob = GuiBlob(obj)
+            local score = 0
+
+            if blob == "radio" then
+                score = score + 20
+            end
+
+            if string.find(blob, "radio", 1, true) then
+                score = score + 10
+            end
+
+            if string.find(string.lower(obj.Name), "radio", 1, true) then
+                score = score + 8
+            end
+
+            if score > bestScore then
+                best = obj
+                bestScore = score
+            end
+        end
+    end
+
+    if bestScore > 0 then
+        return best
+    end
+
+    return nil
+end
+
+local function FindMySongsButton()
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+
+    if not playerGui then
+        return nil
+    end
+
+    for _, obj in ipairs(playerGui:GetDescendants()) do
+        if (obj:IsA("TextButton") or obj:IsA("ImageButton"))
+        and IsGuiVisible(obj)
+        and not IsInsideToxGui(obj) then
+            local blob = GuiBlob(obj)
+
+            if string.find(blob, "my songs", 1, true)
+            or string.find(blob, "mysongs", 1, true) then
+                return obj
+            end
+        end
+    end
+
+    return nil
+end
+
+local function FindRadioTextBox()
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+
+    if not playerGui then
+        return nil
+    end
+
+    local best = nil
+    local bestScore = -1
+
+    for _, obj in ipairs(playerGui:GetDescendants()) do
+        if obj:IsA("TextBox")
+        and IsGuiVisible(obj)
+        and not IsInsideToxGui(obj) then
+            local blob = GuiBlob(obj)
+            local score = 0
+
+            if string.find(blob, "enter sound id", 1, true) then
+                score = score + 50
+            end
+
+            if string.find(blob, "sound id", 1, true) then
+                score = score + 30
+            end
+
+            if string.find(blob, "song id", 1, true) then
+                score = score + 30
+            end
+
+            if string.find(blob, "audio id", 1, true) then
+                score = score + 25
+            end
+
+            if string.find(blob, "radio", 1, true) then
+                score = score + 15
+            end
+
+            if string.find(blob, "song", 1, true)
+            or string.find(blob, "sound", 1, true)
+            or string.find(blob, "music", 1, true) then
+                score = score + 8
+            end
+
+            if string.find(string.lower(obj.Name), "id", 1, true) then
+                score = score + 4
+            end
+
+            if score > bestScore then
+                best = obj
+                bestScore = score
+            end
+        end
+    end
+
+    if bestScore > 0 then
+        return best
+    end
+
+    return nil
+end
+
+local function FindButtonNearTextBox(textBox, words)
+    if not textBox then
+        return nil
+    end
+
+    local current = textBox.Parent
+
+    for _ = 1, 6 do
+        if not current then
+            break
+        end
+
+        for _, obj in ipairs(current:GetDescendants()) do
+            if (obj:IsA("TextButton") or obj:IsA("ImageButton"))
+            and IsGuiVisible(obj)
+            and not IsInsideToxGui(obj) then
+                local blob = GuiBlob(obj)
+
+                for _, word in ipairs(words) do
+                    if blob == word or string.find(blob, word, 1, true) then
+                        return obj
+                    end
+                end
+            end
+        end
+
+        current = current.Parent
+    end
+
+    return nil
+end
+
+local function OpenMM2RadioInterface()
+    local textBox = FindRadioTextBox()
+
+    if textBox then
+        return textBox
+    end
+
+    local radioButton = FindRadioOpenButton()
+
+    if radioButton then
+        ClickGuiButton(radioButton)
+        task.wait(0.15)
+    else
+        local tool = FindMM2RadioTool()
+
+        if tool then
+            local character = Player.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+            if humanoid and tool.Parent ~= character then
+                pcall(function()
+                    humanoid:EquipTool(tool)
+                end)
+
+                task.wait(0.08)
+            end
+
+            pcall(function()
+                tool:Activate()
+            end)
+
+            task.wait(0.15)
+        end
+    end
+
+    textBox = FindRadioTextBox()
+
+    if textBox then
+        return textBox
+    end
+
+    local mySongs = FindMySongsButton()
+
+    if mySongs then
+        ClickGuiButton(mySongs)
+        task.wait(0.12)
+        textBox = FindRadioTextBox()
+    end
+
+    return textBox
 end
 
 getgenv().ToxPlayMM2Radio = function(id)
@@ -223,49 +375,50 @@ getgenv().ToxPlayMM2Radio = function(id)
     end
 
     task.spawn(function()
-        local tool = FindMM2RadioTool()
-        local character, humanoid = GetCharacterState()
+        local textBox = OpenMM2RadioInterface()
 
-        if tool and character and humanoid and tool.Parent ~= character then
-            pcall(function()
-                humanoid:EquipTool(tool)
-            end)
-
-            task.wait(0.08)
+        if not textBox then
+            CustomNotify("MM2 Radio ID box not found", Color3.fromRGB(255, 180, 70))
+            return
         end
 
-        if tool then
-            pcall(function()
-                tool:Activate()
-            end)
-        end
+        textBox.Text = cleanID
 
-        task.wait(0.12)
+        pcall(function()
+            textBox:CaptureFocus()
+        end)
 
-        local textBox, playButton = FindRadioGuiControls()
+        task.wait(0.03)
 
-        if textBox then
-            textBox.Text = cleanID
+        pcall(function()
+            textBox:ReleaseFocus(true)
+        end)
 
-            pcall(function()
-                textBox:CaptureFocus()
-                textBox:ReleaseFocus(true)
-            end)
+        task.wait(0.05)
 
-            task.wait(0.03)
+        local playButton = FindButtonNearTextBox(textBox, {"play"})
+        local addButton = FindButtonNearTextBox(textBox, {"add", "save"})
 
-            if playButton and ClickGuiButton(playButton) then
-                CustomNotify("MM2 Radio: " .. cleanID, Color3.fromRGB(100, 255, 100))
-                return
-            end
-        end
-
-        if TryRadioRemote(tool, cleanID) then
+        if playButton and ClickGuiButton(playButton) then
             CustomNotify("MM2 Radio: " .. cleanID, Color3.fromRGB(100, 255, 100))
             return
         end
 
-        CustomNotify("MM2 Radio interface not found", Color3.fromRGB(255, 180, 70))
+        if addButton and ClickGuiButton(addButton) then
+            task.wait(0.15)
+
+            textBox = FindRadioTextBox() or textBox
+            playButton = FindButtonNearTextBox(textBox, {"play"})
+
+            if playButton then
+                ClickGuiButton(playButton)
+            end
+
+            CustomNotify("MM2 Radio ID added: " .. cleanID, Color3.fromRGB(100, 255, 100))
+            return
+        end
+
+        CustomNotify("MM2 Radio Play button not found", Color3.fromRGB(255, 180, 70))
     end)
 end
 
