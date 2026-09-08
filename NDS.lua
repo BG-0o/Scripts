@@ -95,6 +95,7 @@ local function SetShared(Key, Value)
             NoFallDamage = "NoFallDamage",
             AntiVoid = "AntiVoid",
             AntiFling = "AntiFling",
+            WalkFling = "WalkFling",
             CtrlClickTP = "CtrlClickTP",
             CarFly = "CarFly",
             SmoothFly = "SmoothFly",
@@ -787,14 +788,6 @@ getgenv().SetNDSNoTP = function(Value, Silent)
     end
 end
 
-CreateButton("SPAWN", GamePage, function()
-    TeleportTo(SpawnCFrame, "SPAWN")
-end)
-
-CreateButton("ISLAND", GamePage, function()
-    TeleportTo(IslandCFrame, "ISLAND")
-end)
-
 CreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
     Settings.NDSAutoWin = v
 
@@ -852,6 +845,18 @@ end, "AntiVoid")
 CreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
     SetShared("AntiFling", v)
 end, "AntiFling")
+
+CreateToggle("Walk Fling", GamePage, Settings.WalkFling, function(v)
+    SetShared("WalkFling", v)
+end, "WalkFling")
+
+CreateButton("SPAWN", GamePage, function()
+    TeleportTo(SpawnCFrame, "SPAWN")
+end)
+
+CreateButton("ISLAND", GamePage, function()
+    TeleportTo(IslandCFrame, "ISLAND")
+end)
 
 if Settings.NDSAutoWin then
     StartAutoWin()
