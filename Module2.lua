@@ -1069,7 +1069,7 @@ local function ResolveJoinUserId(text)
     return nil, "User not found"
 end
 
-local function PresenceRequest(userId)
+local function PresenceRequestOnce(userId)
     local requestData = {
         Url = "https://presence.roblox.com/v1/presence/users",
         Method = "POST",
@@ -1118,11 +1118,7 @@ local function PresenceRequest(userId)
     end
 
     if typeof(body) ~= "string" or body == "" then
-        return nil, "Presence unavailable"
-    end
-
-    if typeof(body) ~= "string" or body == "" then
-        return nil, "Presence unavailable"
+        return nil
     end
 
     local decodedOk, decoded = pcall(function()
@@ -1130,16 +1126,68 @@ local function PresenceRequest(userId)
     end)
 
     if not decodedOk or typeof(decoded) ~= "table" then
-        return nil, "Presence unavailable"
+        return nil
     end
 
     local presence = decoded.userPresences and decoded.userPresences[1]
 
     if typeof(presence) ~= "table" then
-        return nil, "Presence unavailable"
+        return nil
     end
 
     return presence
+end
+
+local function PresenceRequest(userId)
+    local bestPresence = nil
+    local bestScore = -1
+
+    for attempt = 1, 4 do
+        local presence = PresenceRequestOnce(userId)
+
+        if presence then
+            local presenceType = tonumber(presence.userPresenceType) or 0
+            local placeId = tonumber(presence.placeId)
+                or tonumber(presence.rootPlaceId)
+            local gameId = presence.gameId and tostring(presence.gameId) or nil
+
+            local score = presenceType
+
+            if presenceType == 2 then
+                score = score + 10
+            end
+
+            if placeId then
+                score = score + 20
+            end
+
+            if gameId and gameId ~= "" then
+                score = score + 40
+            end
+
+            if score > bestScore then
+                bestScore = score
+                bestPresence = presence
+            end
+
+            if presenceType == 2
+            and placeId
+            and gameId
+            and gameId ~= "" then
+                break
+            end
+        end
+
+        if attempt < 4 then
+            task.wait(0.3)
+        end
+    end
+
+    if not bestPresence then
+        return nil, "Presence unavailable"
+    end
+
+    return bestPresence
 end
 
 local function UpdateJoinStatus(text, notifyFailure)
@@ -1211,6 +1259,7 @@ local function UpdateJoinStatus(text, notifyFailure)
     local presenceType = tonumber(presence.userPresenceType) or 0
     local lastLocation = tostring(presence.lastLocation or "")
     local placeId = tonumber(presence.placeId)
+        or tonumber(presence.rootPlaceId)
     local gameId = presence.gameId and tostring(presence.gameId) or nil
 
     JoinTargetCache = {
@@ -1465,7 +1514,7 @@ local function JoinTargetPlayer()
     end
 
     CustomNotify(
-        "Roblox hides this player's game/server",
+        "Roblox did not expose this player's PlaceId/JobId",
         Color3.fromRGB(255, 100, 100)
     )
 end
