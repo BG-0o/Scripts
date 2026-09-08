@@ -2,7 +2,7 @@ if game.PlaceId ~= 142823291 then
     return
 end
 
-local MM2ModuleVersion = "2026-09-08-auto-state-shoot-clear-4"
+local MM2ModuleVersion = "2026-09-08-guided-silent-aim-5"
 
 if getgenv().ToxMM2ModuleLoadedJobId == game.JobId
 and getgenv().ToxMM2ModuleVersion == MM2ModuleVersion
@@ -55,6 +55,7 @@ or not CreateKeybindToggle then
     return
 end
 
+Settings.MM2SilentAimKey = Settings.MM2SilentAimKey or Enum.KeyCode.E
 Settings.MM2KillAllKey = Settings.MM2KillAllKey or Enum.KeyCode.K
 Settings.MM2KillAllAutoV2 = Settings.MM2KillAllAutoV2 == true or Settings.MM2KillAllAuto == true
 Settings.MM2KillAllAuto = false
@@ -1213,46 +1214,134 @@ local function NormalGunClick()
     end)
 end
 
-local function GetPredictedMurderPosition(targetPart)
-    local velocity = targetPart.AssemblyLinearVelocity
+local ShootSafetySerial = 0
+local GuidedShotBusy = false
 
-    return targetPart.Position + Vector3.new(
-        math.clamp(velocity.X * 0.008, -0.8, 0.8),
-        math.clamp(velocity.Y * 0.006, -0.55, 0.75),
-        math.clamp(velocity.Z * 0.008, -0.8, 0.8)
-    )
-end
-
-local function ClickGunAtPosition(worldPosition)
-    if not Camera then
+local function IsMM2PlayerAlive(target)
+    if not target or not target.Character then
         return false
     end
 
-    local screenPosition, onScreen = Camera:WorldToViewportPoint(worldPosition)
-    local inset = GuiService:GetGuiInset()
+    local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
+    local root = target.Character:FindFirstChild("HumanoidRootPart")
 
-    local x = onScreen and screenPosition.X or Camera.ViewportSize.X * 0.5
-    local y = onScreen
-        and (screenPosition.Y + inset.Y)
-        or (Camera.ViewportSize.Y * 0.5 + inset.Y)
-
-    return pcall(function()
-        VirtualInputManager:SendMouseMoveEvent(x, y, game)
-        VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
-        task.wait(0.018)
-        VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
-    end)
+    return humanoid
+        and humanoid.Health > 0
+        and root ~= nil
 end
 
-local function FireMM2GunRemote(gun, targetPosition)
+local function GetOrEquipGuidedGun()
+    local character = Player.Character
+
+    if not character then
+        return nil
+    end
+
+    local gun = character:FindFirstChild("Gun")
+        or character:FindFirstChild("Revolver")
+
+    if gun and gun:IsA("Tool") then
+        return gun
+    end
+
+    local backpack = Player:FindFirstChildOfClass("Backpack")
+
+    if not backpack then
+        return nil
+    end
+
+    gun = backpack:FindFirstChild("Gun")
+        or backpack:FindFirstChild("Revolver")
+
+    if not gun or not gun:IsA("Tool") then
+        return nil
+    end
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+
+    if not humanoid or humanoid.Health <= 0 then
+        return nil
+    end
+
+    pcall(function()
+        humanoid:EquipTool(gun)
+    end)
+
+    task.wait(0.1)
+
+    return character:FindFirstChild("Gun")
+        or character:FindFirstChild("Revolver")
+        or gun
+end
+
+local function FindGuidedMurderer()
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= Player and IsMM2PlayerAlive(target) then
+            local character = target.Character
+            local backpack = target:FindFirstChildOfClass("Backpack")
+
+            local hasKnife = character
+                and character:FindFirstChild("Knife")
+
+            if not hasKnife and backpack then
+                hasKnife = backpack:FindFirstChild("Knife")
+            end
+
+            if hasKnife then
+                return target
+            end
+        end
+    end
+
+    local roleTarget = GetPlayerByRole("Murderer")
+
+    if roleTarget and IsMM2PlayerAlive(roleTarget) then
+        return roleTarget
+    end
+
+    local getPlayerData = ReplicatedStorage:FindFirstChild(
+        "GetPlayerData",
+        true
+    )
+
+    if getPlayerData
+    and getPlayerData:IsA("RemoteFunction") then
+        local ok, data = pcall(function()
+            return getPlayerData:InvokeServer()
+        end)
+
+        if ok and typeof(data) == "table" then
+            for playerName, info in pairs(data) do
+                if typeof(info) == "table"
+                and info.Role == "Murderer"
+                and not info.Dead then
+                    local target = Players:FindFirstChild(
+                        tostring(playerName)
+                    )
+
+                    if target and IsMM2PlayerAlive(target) then
+                        return target
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function FireGuidedGunShot(gun, targetPosition)
     local fired = false
+
     local shootRemote = gun:FindFirstChild("Shoot")
         or gun:FindFirstChild("Shoot", true)
 
     if shootRemote and shootRemote:IsA("RemoteEvent") then
         local ok = pcall(function()
             shootRemote:FireServer(
-                CFrame.new(targetPosition + Vector3.new(0, 0.5, 0)),
+                CFrame.new(
+                    targetPosition + Vector3.new(0, 0.5, 0)
+                ),
                 CFrame.new(targetPosition)
             )
         end)
@@ -1262,367 +1351,78 @@ local function FireMM2GunRemote(gun, targetPosition)
         end
     end
 
-    local knifeLocal = gun:FindFirstChild("KnifeLocal")
-        or gun:FindFirstChild("KnifeLocal", true)
-    local createBeam = knifeLocal and (
-        knifeLocal:FindFirstChild("CreateBeam")
-        or knifeLocal:FindFirstChild("CreateBeam", true)
-    )
-    local remoteFunction = createBeam and (
-        createBeam:FindFirstChild("RemoteFunction")
-        or createBeam:FindFirstChildWhichIsA("RemoteFunction", true)
-    )
+    pcall(function()
+        local knifeLocal = gun:FindFirstChild("KnifeLocal")
+            or gun:FindFirstChild("KnifeLocal", true)
 
-    if remoteFunction and remoteFunction:IsA("RemoteFunction") then
-        local ok = pcall(function()
-            remoteFunction:InvokeServer(1, targetPosition, "AH2")
-        end)
+        local createBeam = knifeLocal and (
+            knifeLocal:FindFirstChild("CreateBeam")
+            or knifeLocal:FindFirstChild("CreateBeam", true)
+        )
 
-        if ok then
+        local remoteFunction = createBeam and (
+            createBeam:FindFirstChild("RemoteFunction")
+            or createBeam:FindFirstChildWhichIsA(
+                "RemoteFunction",
+                true
+            )
+        )
+
+        if remoteFunction
+        and remoteFunction:IsA("RemoteFunction") then
+            remoteFunction:InvokeServer(
+                1,
+                targetPosition,
+                "AH2"
+            )
+
             fired = true
         end
-    end
+    end)
 
     return fired
 end
 
-local function IsClearShot(origin, targetPosition, targetCharacter)
-    local direction = targetPosition - origin
-
-    if direction.Magnitude < 0.2 then
-        return true
-    end
-
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = {Player.Character}
-    params.IgnoreWater = true
-
-    local hit = workspace:Raycast(origin, direction, params)
-
-    if not hit then
-        return true
-    end
-
-    return targetCharacter
-        and hit.Instance
-        and hit.Instance:IsDescendantOf(targetCharacter)
-end
-
-local function IsShootPositionBlocked(position, targetCharacter)
-    local params = OverlapParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = {
-        Player.Character,
-        targetCharacter
-    }
-
-    local parts = workspace:GetPartBoundsInBox(
-        CFrame.new(position),
-        Vector3.new(2.8, 4.8, 2.8),
-        params
-    )
-
-    for _, part in ipairs(parts) do
-        if part:IsA("BasePart")
-        and part.CanCollide
-        and part.Transparency < 0.9 then
-            return true
-        end
-    end
-
-    return false
-end
-
-local function GetClearShootCFrame(targetCharacter, targetRoot, targetAim)
-    local targetPosition = targetAim.Position
-    local rootCFrame = targetRoot.CFrame
-    local right = rootCFrame.RightVector
-    local forward = rootCFrame.LookVector
-
-    local offsets = {
-        Vector3.new(0, 4.4, 0),
-        -forward * 3.2 + Vector3.new(0, 2.8, 0),
-        forward * 3.2 + Vector3.new(0, 2.8, 0),
-        right * 3.2 + Vector3.new(0, 2.8, 0),
-        -right * 3.2 + Vector3.new(0, 2.8, 0),
-        (right - forward).Unit * 3.4 + Vector3.new(0, 2.7, 0),
-        (-right - forward).Unit * 3.4 + Vector3.new(0, 2.7, 0),
-        (right + forward).Unit * 3.4 + Vector3.new(0, 2.7, 0),
-        (-right + forward).Unit * 3.4 + Vector3.new(0, 2.7, 0)
-    }
-
-    for _, offset in ipairs(offsets) do
-        local position = targetRoot.Position + offset
-        local cameraOrigin = position + Vector3.new(0, 0.8, 0)
-
-        if not IsShootPositionBlocked(position, targetCharacter)
-        and IsClearShot(cameraOrigin, targetPosition, targetCharacter) then
-            return CFrame.lookAt(position, targetPosition)
-        end
-    end
-
-    local fallback = targetRoot.Position + Vector3.new(0, 3.2, 0)
-    return CFrame.lookAt(fallback, targetPosition)
-end
-
-local ShootSafetySerial = 0
-
 local function ShootMurderer()
-    if ActionBusy or getgenv().Destroyed then
+    if GuidedShotBusy or getgenv().Destroyed then
         return false
     end
 
-    local gun = FindNamedTool({"gun", "revolver"})
-
-    if not gun then
-        CustomNotify(
-            "You need the Gun",
-            Color3.fromRGB(255, 100, 100)
-        )
-        return false
-    end
-
-    local murderer = GetPlayerByRole("Murderer")
-
-    if not murderer or not murderer.Character then
-        return false
-    end
-
-    local targetCharacter = murderer.Character
-    local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
-    local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
-    local targetAim = targetCharacter:FindFirstChild("Head")
-        or targetCharacter:FindFirstChild("UpperTorso")
-        or targetCharacter:FindFirstChild("Torso")
-        or targetRoot
-
-    if not targetHumanoid
-    or targetHumanoid.Health <= 0
-    or not targetRoot
-    or not targetAim then
-        return false
-    end
-
-    local character, humanoid, root = GetCharacterState()
-
-    if not character
-    or not humanoid
-    or humanoid.Health <= 0
-    or not root then
-        return false
-    end
-
-    ActionBusy = true
+    GuidedShotBusy = true
     ShootSafetySerial = ShootSafetySerial + 1
 
-    local shotSerial = ShootSafetySerial
-    local oldCharacterCFrame = character:GetPivot()
-    local oldAutoRotate = humanoid.AutoRotate
-    local oldPlatformStand = humanoid.PlatformStand
-    local oldSit = humanoid.Sit
-    local oldCameraType = Camera and Camera.CameraType
-    local oldCameraSubject = Camera and Camera.CameraSubject
-    local oldCameraCFrame = Camera and Camera.CFrame
-    local oldMousePosition = UserInputService:GetMouseLocation()
-    local originalParent = gun.Parent
-    local collisionCache = {}
+    local gun = GetOrEquipGuidedGun()
 
-    local function ShotCancelled()
-        return getgenv().Destroyed
-            or shotSerial ~= ShootSafetySerial
-            or not targetRoot.Parent
-            or not targetAim.Parent
-            or targetHumanoid.Health <= 0
-    end
-
-    local function RestoreShot()
-        pcall(function()
-            VirtualInputManager:SendMouseMoveEvent(
-                oldMousePosition.X,
-                oldMousePosition.Y,
-                game
-            )
-        end)
-
-        if Camera then
-            pcall(function()
-                Camera.CameraType = oldCameraType or Enum.CameraType.Custom
-                Camera.CameraSubject = oldCameraSubject or humanoid
-
-                if oldCameraCFrame then
-                    Camera.CFrame = oldCameraCFrame
-                end
-            end)
-        end
-
-        for part, oldCanCollide in pairs(collisionCache) do
-            if part and part.Parent then
-                part.CanCollide = oldCanCollide
-            end
-        end
-
-        if character
-        and character.Parent
-        and root
-        and root.Parent
-        and humanoid
-        and humanoid.Parent
-        and humanoid.Health > 0 then
-            local allow = getgenv().AllowToxTeleport
-
-            if allow then
-                allow(0.55)
-            end
-
-            root.Anchored = false
-            character:PivotTo(oldCharacterCFrame)
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.AssemblyAngularVelocity = Vector3.zero
-
-            humanoid.PlatformStand = oldPlatformStand
-            humanoid.Sit = oldSit
-            humanoid.AutoRotate = oldAutoRotate
-
-            pcall(function()
-                humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-            end)
-        end
-
-        if originalParent
-        and originalParent:IsA("Backpack")
-        and gun
-        and gun.Parent == character then
-            pcall(function()
-                gun.Parent = originalParent
-            end)
-        end
-
-        ActionBusy = false
-    end
-
-    local success = false
-
-    local ok = pcall(function()
-        if not EquipTool(gun) then
-            return
-        end
-
-        task.wait(0.03)
-
-        if ShotCancelled() then
-            return
-        end
-
-        for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                collisionCache[part] = part.CanCollide
-                part.CanCollide = false
-            end
-        end
-
-        humanoid.PlatformStand = true
-        humanoid.Sit = false
-        humanoid.AutoRotate = false
-        root.Anchored = false
-
-        local allow = getgenv().AllowToxTeleport
-
-        if allow then
-            allow(0.45)
-        end
-
-        local shootCFrame = GetClearShootCFrame(
-            targetCharacter,
-            targetRoot,
-            targetAim
-        )
-
-        for _ = 1, 3 do
-            if ShotCancelled() then
-                return
-            end
-
-            shootCFrame = GetClearShootCFrame(
-                targetCharacter,
-                targetRoot,
-                targetAim
-            )
-
-            root.CFrame = shootCFrame
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.AssemblyAngularVelocity = Vector3.zero
-
-            if Camera then
-                Camera.CameraType = Enum.CameraType.Custom
-                Camera.CameraSubject = humanoid
-                Camera.CFrame = CFrame.lookAt(
-                    shootCFrame.Position + Vector3.new(0, 0.8, 0),
-                    targetAim.Position
-                )
-            end
-
-            RunService.Heartbeat:Wait()
-        end
-
-        if ShotCancelled() then
-            return
-        end
-
-        local exactTarget = targetAim.Position
-        local predictedTarget = GetPredictedMurderPosition(targetAim)
-
-        shootCFrame = GetClearShootCFrame(
-            targetCharacter,
-            targetRoot,
-            targetAim
-        )
-
-        root.CFrame = shootCFrame
-        root.AssemblyLinearVelocity = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
-
-        if Camera then
-            Camera.CFrame = CFrame.lookAt(
-                shootCFrame.Position + Vector3.new(0, 0.8, 0),
-                predictedTarget
-            )
-        end
-
-        RunService.RenderStepped:Wait()
-
-        if ShotCancelled() then
-            return
-        end
-
-        pcall(function()
-            gun:Activate()
-        end)
-
-        ClickGunAtPosition(predictedTarget)
-
-        pcall(function()
-            gun:Activate()
-        end)
-
-        NormalGunClick()
-
-        local remoteFired = FireMM2GunRemote(
-            gun,
-            exactTarget
-        )
-
-        task.wait(remoteFired and 0.025 or 0.045)
-        success = true
-    end)
-
-    RestoreShot()
-
-    if not ok then
+    if not gun then
+        GuidedShotBusy = false
         return false
     end
 
-    return success
+    local murderer = FindGuidedMurderer()
+
+    if not murderer or not murderer.Character then
+        GuidedShotBusy = false
+        return false
+    end
+
+    local targetPart = murderer.Character:FindFirstChild("Head")
+        or murderer.Character:FindFirstChild("HumanoidRootPart")
+
+    if not targetPart then
+        GuidedShotBusy = false
+        return false
+    end
+
+    local fired = FireGuidedGunShot(
+        gun,
+        targetPart.Position
+    )
+
+    task.delay(0.22, function()
+        GuidedShotBusy = false
+    end)
+
+    return fired
 end
 
 local function FindGunDrop()
@@ -2668,6 +2468,10 @@ local MM2AutoRuntime = {
     GrabGun = Settings.MM2GrabGunAutoV2 == true
 }
 
+CreateKeybindButton("Silent Aim", GamePage, Settings.MM2SilentAimKey, function(key)
+    Settings.MM2SilentAimKey = key
+end)
+
 CreateKeybindToggle("Kill All", GamePage, Settings.MM2KillAllKey, MM2AutoRuntime.KillAll, function(key)
     Settings.MM2KillAllKey = key
 end, function(enabled)
@@ -2784,6 +2588,17 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
         return
     end
 
+    if Settings.MM2SilentAimKey
+    and input.KeyCode == Settings.MM2SilentAimKey then
+        task.defer(function()
+            if not getgenv().Destroyed then
+                ShootMurderer()
+            end
+        end)
+
+        return
+    end
+
     if Settings.MM2KillAllKey and input.KeyCode == Settings.MM2KillAllKey then
         KillAll()
         return
@@ -2838,6 +2653,7 @@ getgenv().ToxMM2Cleanup = function()
     MM2AutoRuntime.Shoot = false
     MM2AutoRuntime.GrabGun = false
     ShootSafetySerial = ShootSafetySerial + 1
+    GuidedShotBusy = false
     ActionBusy = false
     AutoShootLastAttempt = 0
     table.clear(KnifeTargetIds)
