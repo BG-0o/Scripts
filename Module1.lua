@@ -155,6 +155,12 @@ getgenv().Settings = {
     MM2FlingTarget = "Murderer"
 }
 
+local PersistedSettingKeys = {}
+
+for key in pairs(getgenv().Settings) do
+    PersistedSettingKeys[key] = true
+end
+
 getgenv().SavedIDs = {}
 getgenv().SavedJoinGames = {}
 getgenv().SavedWaypoints = {}
@@ -224,140 +230,416 @@ local function PersistentSetting(Key)
     return Settings[Key]
 end
 
+local function SerializeConfigValue(value, seen)
+    local valueType = typeof(value)
+
+    if value == nil then
+        return {
+            __toxType = "Nil"
+        }
+    end
+
+    if valueType == "boolean"
+    or valueType == "number"
+    or valueType == "string" then
+        return value
+    end
+
+    if valueType == "EnumItem" then
+        local enumTypeName = tostring(value.EnumType):match("^Enum%.(.+)$")
+
+        return {
+            __toxType = "EnumItem",
+            enumType = enumTypeName,
+            name = value.Name
+        }
+    end
+
+    if valueType == "Color3" then
+        return {
+            __toxType = "Color3",
+            r = value.R,
+            g = value.G,
+            b = value.B
+        }
+    end
+
+    if valueType == "Vector2" then
+        return {
+            __toxType = "Vector2",
+            x = value.X,
+            y = value.Y
+        }
+    end
+
+    if valueType == "Vector3" then
+        return {
+            __toxType = "Vector3",
+            x = value.X,
+            y = value.Y,
+            z = value.Z
+        }
+    end
+
+    if valueType == "UDim" then
+        return {
+            __toxType = "UDim",
+            scale = value.Scale,
+            offset = value.Offset
+        }
+    end
+
+    if valueType == "UDim2" then
+        return {
+            __toxType = "UDim2",
+            xScale = value.X.Scale,
+            xOffset = value.X.Offset,
+            yScale = value.Y.Scale,
+            yOffset = value.Y.Offset
+        }
+    end
+
+    if valueType == "CFrame" then
+        return {
+            __toxType = "CFrame",
+            components = {value:GetComponents()}
+        }
+    end
+
+    if valueType == "Instance" then
+        if value:IsA("Player") then
+            return {
+                __toxType = "Player",
+                userId = value.UserId
+            }
+        end
+
+        return {
+            __toxType = "Unsupported"
+        }
+    end
+
+    if valueType == "table" then
+        seen = seen or {}
+
+        if seen[value] then
+            return {
+                __toxType = "Cycle"
+            }
+        end
+
+        seen[value] = true
+
+        local result = {}
+
+        for key, item in pairs(value) do
+            local serializedKey = key
+
+            if typeof(key) ~= "string"
+            and typeof(key) ~= "number" then
+                serializedKey = tostring(key)
+            end
+
+            result[serializedKey] = SerializeConfigValue(
+                item,
+                seen
+            )
+        end
+
+        seen[value] = nil
+        return result
+    end
+
+    return {
+        __toxType = "Unsupported"
+    }
+end
+
+local function DeserializeConfigValue(value)
+    if typeof(value) ~= "table" then
+        return value
+    end
+
+    local marker = rawget(value, "__toxType")
+
+    if marker == "Nil" then
+        return nil
+    end
+
+    if marker == "EnumItem" then
+        local enumType = value.enumType and Enum[value.enumType]
+
+        if enumType and value.name then
+            local ok, enumItem = pcall(function()
+                return enumType[value.name]
+            end)
+
+            if ok then
+                return enumItem
+            end
+        end
+
+        return nil
+    end
+
+    if marker == "Color3" then
+        return Color3.new(
+            tonumber(value.r) or 0,
+            tonumber(value.g) or 0,
+            tonumber(value.b) or 0
+        )
+    end
+
+    if marker == "Vector2" then
+        return Vector2.new(
+            tonumber(value.x) or 0,
+            tonumber(value.y) or 0
+        )
+    end
+
+    if marker == "Vector3" then
+        return Vector3.new(
+            tonumber(value.x) or 0,
+            tonumber(value.y) or 0,
+            tonumber(value.z) or 0
+        )
+    end
+
+    if marker == "UDim" then
+        return UDim.new(
+            tonumber(value.scale) or 0,
+            tonumber(value.offset) or 0
+        )
+    end
+
+    if marker == "UDim2" then
+        return UDim2.new(
+            tonumber(value.xScale) or 0,
+            tonumber(value.xOffset) or 0,
+            tonumber(value.yScale) or 0,
+            tonumber(value.yOffset) or 0
+        )
+    end
+
+    if marker == "CFrame" then
+        local components = value.components
+
+        if typeof(components) == "table"
+        and #components >= 12 then
+            return CFrame.new(table.unpack(components))
+        end
+
+        return CFrame.new()
+    end
+
+    if marker == "Player" then
+        return Players:GetPlayerByUserId(
+            tonumber(value.userId) or 0
+        )
+    end
+
+    if marker == "Unsupported"
+    or marker == "Cycle" then
+        return nil
+    end
+
+    local result = {}
+
+    for key, item in pairs(value) do
+        result[key] = DeserializeConfigValue(item)
+    end
+
+    return result
+end
+
+local function BuildSettingsSnapshot()
+    local snapshot = {}
+    local keys = {}
+
+    for key in pairs(PersistedSettingKeys) do
+        keys[key] = true
+    end
+
+    for key in pairs(Settings) do
+        keys[key] = true
+    end
+
+    for key in pairs(keys) do
+        local value
+
+        if SharedPersistentKeys[key] then
+            value = PersistentSetting(key)
+        else
+            value = Settings[key]
+        end
+
+        snapshot[key] = SerializeConfigValue(value)
+    end
+
+    return snapshot
+end
+
 getgenv().AutoSaveConfiguration = function()
-    if getgenv().Destroyed then return end
+    if getgenv().Destroyed then
+        return
+    end
+
     EnsureFolder()
-    if not writefile then return end
+
+    if not writefile then
+        return
+    end
 
     local data = {
-        Settings = {
-            Speed = PersistentSetting("Speed"),
-            SpeedValue = PersistentSetting("SpeedValue"),
-            Jump = Settings.Jump,
-            JumpValue = Settings.JumpValue,
-            SmoothFly = Settings.SmoothFly,
-            NormalFly = Settings.NormalFly,
-            FlySpeed = Settings.FlySpeed,
-            Noclip = PersistentSetting("Noclip"),
-            InfiniteJump = Settings.InfiniteJump,
-            CtrlClickTP = PersistentSetting("CtrlClickTP"),
-            NoFallDamage = PersistentSetting("NoFallDamage"),
-            AntiVoid = PersistentSetting("AntiVoid"),
-            AntiFling = PersistentSetting("AntiFling"),
-            AntiAFK = Settings.AntiAFK,
-            ChatLogs = Settings.ChatLogs,
-            Render3D = Settings.Render3D,
-            AutoExecute = Settings.AutoExecute,
-            FOVEnabled = Settings.FOVEnabled,
-            FOVValue = Settings.FOVValue,
-            ForceShiftLock = Settings.ForceShiftLock,
-            ShiftLockKey = Settings.ShiftLockKey,
-            Bhop = Settings.Bhop,
-            AirWalk = Settings.AirWalk,
-            CarSpeed = Settings.CarSpeed,
-            CarSpeedValue = Settings.CarSpeedValue,
-            CarFly = PersistentSetting("CarFly"),
-            CarFlySpeed = PersistentSetting("CarFlySpeed"),
-            ESPEnabled = PersistentSetting("ESPEnabled"),
-            ESPNames = PersistentSetting("ESPNames"),
-            ESPNameMode = Settings.ESPNameMode,
-            ESPDistance = Settings.ESPDistance,
-            ESPTracers = Settings.ESPTracers,
-            ESPBox = Settings.ESPBox,
-            ESPHeadDot = Settings.ESPHeadDot,
-            Crosshair = Settings.Crosshair,
-            MouseIconID = Settings.MouseIconID,
-            MouseIconSize = Settings.MouseIconSize,
-            Fullbright = Settings.Fullbright,
-            TracerOrigin = Settings.TracerOrigin,
-            EspMaxDistance = Settings.EspMaxDistance,
-            Chams = PersistentSetting("Chams"),
-            EspColorName = Settings.EspColorName,
-            ESPTeamColors = PersistentSetting("ESPTeamColors"),
-            Aimbot = Settings.Aimbot,
-            AimbotSmoothness = Settings.AimbotSmoothness,
-            AimPart = Settings.AimPart,
-            AimWallCheck = Settings.AimWallCheck,
-            ShowFOV = Settings.ShowFOV,
-            FOVRadius = Settings.FOVRadius,
-            SilentAim = Settings.SilentAim,
-            Triggerbot = Settings.Triggerbot,
-            Spinbot = Settings.Spinbot,
-            SpinSpeed = Settings.SpinSpeed,
-            HitboxExpander = Settings.HitboxExpander,
-            HitboxSize = Settings.HitboxSize,
-            KillAura = Settings.KillAura,
-            KillAuraRange = Settings.KillAuraRange,
-            GUIKeybind = Settings.GUIKeybind and Settings.GUIKeybind.Name or "NONE",
-            MusicAutoPlay = Settings.MusicAutoPlay,
-            MusicLoop = Settings.MusicLoop,
-            MusicVolume = Settings.MusicVolume,
-            NDSAutoWin = Settings.NDSAutoWin,
-            NDSWaterFly = Settings.NDSWaterFly,
-            NDSWaterFlySpeed = Settings.NDSWaterFlySpeed,
-            NDSNoTP = Settings.NDSNoTP,
-            MM2RoleESP = Settings.MM2RoleESP,
-            MM2AutoFarm = false,
-            MM2AutoFarmV2 = Settings.MM2AutoFarmV2,
-            MM2AutoFarmSpeed = Settings.MM2AutoFarmSpeed,
-            MM2Whitelist = Settings.MM2Whitelist,
-            MM2SilentAimKey = Settings.MM2SilentAimKey and Settings.MM2SilentAimKey.Name or "E",
-            MM2KillAllKey = Settings.MM2KillAllKey and Settings.MM2KillAllKey.Name or "K",
-            MM2KillAllAuto = false,
-            MM2KillAllAutoV2 = Settings.MM2KillAllAutoV2,
-            MM2ShootMurderKey = Settings.MM2ShootMurderKey and Settings.MM2ShootMurderKey.Name or "C",
-            MM2ShootMurderAuto = false,
-            MM2ShootMurderAutoV2 = Settings.MM2ShootMurderAutoV2,
-            MM2GrabGunKey = Settings.MM2GrabGunKey and Settings.MM2GrabGunKey.Name or "G",
-            MM2GrabGunAuto = false,
-            MM2GrabGunAutoV2 = Settings.MM2GrabGunAutoV2,
-            MM2FlingTarget = Settings.MM2FlingTarget
-        },
-        SavedIDs = getgenv().SavedIDs,
-        SavedJoinGames = getgenv().SavedJoinGames,
-        SavedWaypoints = getgenv().SavedWaypoints,
-        UIPositions = getgenv().UIPositions,
-        GameSharedSettings = getgenv().GameSharedSettings
+        ConfigVersion = 3,
+        Settings = BuildSettingsSnapshot(),
+        SavedIDs = SerializeConfigValue(
+            getgenv().SavedIDs
+        ),
+        SavedJoinGames = SerializeConfigValue(
+            getgenv().SavedJoinGames
+        ),
+        SavedWaypoints = SerializeConfigValue(
+            getgenv().SavedWaypoints
+        ),
+        UIPositions = SerializeConfigValue(
+            getgenv().UIPositions
+        ),
+        GameSharedSettings = SerializeConfigValue(
+            getgenv().GameSharedSettings
+        ),
+        BaseSharedSettings = SerializeConfigValue(
+            getgenv().BaseSharedSettings
+        )
     }
 
     pcall(function()
-        writefile(ConfigFilePath, HttpService:JSONEncode(data))
+        writefile(
+            ConfigFilePath,
+            HttpService:JSONEncode(data)
+        )
     end)
 end
 
 local function LoadConfiguration()
-    if not isfile or not readfile or not isfile(ConfigFilePath) then return end
+    if not isfile
+    or not readfile
+    or not isfile(ConfigFilePath) then
+        return
+    end
+
     pcall(function()
-        local data = HttpService:JSONDecode(readfile(ConfigFilePath))
-        if data then
-            if data.Settings then
-                for k, v in pairs(data.Settings) do
-                    if k == "GUIKeybind"
-                    or k == "MM2SilentAimKey"
-                    or k == "MM2KillAllKey"
-                    or k == "MM2ShootMurderKey"
-                    or k == "MM2GrabGunKey" then
-                        if v == "NONE" or not v then
-                            Settings[k] = nil
-                        else
-                            pcall(function() Settings[k] = Enum.KeyCode[v] end)
-                        end
-                    elseif k == "EspColorName" then
-                        Settings.EspColorName = v
-                        Settings.EspColor = ColorMap[v] or Color3.fromRGB(255, 255, 255)
+        local raw = readfile(ConfigFilePath)
+
+        if not raw or raw == "" then
+            return
+        end
+
+        local data = HttpService:JSONDecode(raw)
+
+        if typeof(data) ~= "table" then
+            return
+        end
+
+        if typeof(data.Settings) == "table" then
+            for key, savedValue in pairs(data.Settings) do
+                local value
+
+                if typeof(savedValue) == "table"
+                and savedValue.__toxType then
+                    value = DeserializeConfigValue(savedValue)
+                elseif key == "GUIKeybind"
+                or key == "MM2SilentAimKey"
+                or key == "MM2KillAllKey"
+                or key == "MM2ShootMurderKey"
+                or key == "MM2GrabGunKey" then
+                    if savedValue == "NONE"
+                    or savedValue == nil then
+                        value = nil
                     else
-                        Settings[k] = v
+                        local ok, enumItem = pcall(function()
+                            return Enum.KeyCode[savedValue]
+                        end)
+
+                        if ok then
+                            value = enumItem
+                        end
                     end
+                else
+                    value = DeserializeConfigValue(savedValue)
                 end
+
+                if key == "EspColorName" then
+                    Settings.EspColorName = value
+                    Settings.EspColor =
+                        ColorMap[value]
+                        or Settings.EspColor
+                elseif key == "EspColor"
+                and typeof(value) == "Color3" then
+                    Settings.EspColor = value
+                else
+                    Settings[key] = value
+                end
+
+                PersistedSettingKeys[key] = true
             end
-            if data.SavedIDs then getgenv().SavedIDs = data.SavedIDs end
-            if data.SavedJoinGames and typeof(data.SavedJoinGames) == "table" then getgenv().SavedJoinGames = data.SavedJoinGames end
-            if data.SavedWaypoints then getgenv().SavedWaypoints = data.SavedWaypoints end
-            if data.UIPositions and typeof(data.UIPositions) == "table" then
-                getgenv().UIPositions = data.UIPositions
+        end
+
+        if data.SavedIDs ~= nil then
+            local value = DeserializeConfigValue(data.SavedIDs)
+
+            if typeof(value) == "table" then
+                getgenv().SavedIDs = value
             end
-            if data.GameSharedSettings and typeof(data.GameSharedSettings) == "table" then
-                getgenv().GameSharedSettings = data.GameSharedSettings
+        end
+
+        if data.SavedJoinGames ~= nil then
+            local value = DeserializeConfigValue(
+                data.SavedJoinGames
+            )
+
+            if typeof(value) == "table" then
+                getgenv().SavedJoinGames = value
+            end
+        end
+
+        if data.SavedWaypoints ~= nil then
+            local value = DeserializeConfigValue(
+                data.SavedWaypoints
+            )
+
+            if typeof(value) == "table" then
+                getgenv().SavedWaypoints = value
+            end
+        end
+
+        if data.UIPositions ~= nil then
+            local value = DeserializeConfigValue(
+                data.UIPositions
+            )
+
+            if typeof(value) == "table" then
+                getgenv().UIPositions = value
+            end
+        end
+
+        if data.GameSharedSettings ~= nil then
+            local value = DeserializeConfigValue(
+                data.GameSharedSettings
+            )
+
+            if typeof(value) == "table" then
+                getgenv().GameSharedSettings = value
+            end
+        end
+
+        if data.BaseSharedSettings ~= nil then
+            local value = DeserializeConfigValue(
+                data.BaseSharedSettings
+            )
+
+            if typeof(value) == "table" then
+                getgenv().BaseSharedSettings = value
             end
         end
     end)
@@ -477,7 +759,9 @@ if Settings.AutoExecute then
 end
 
 for Key in pairs(SharedPersistentKeys) do
-    getgenv().BaseSharedSettings[Key] = Settings[Key]
+    if getgenv().BaseSharedSettings[Key] == nil then
+        getgenv().BaseSharedSettings[Key] = Settings[Key]
+    end
 end
 
 pcall(function()
