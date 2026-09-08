@@ -2053,8 +2053,10 @@ getgenv().ToxESPLabels = ESPLabels
 local MM2GameId = 66654135
 local MM2PlaceId = 142823291
 local MM2RoleCache = {}
+local MM2DeadCache = {}
 local MM2RoleCacheTime = 0
 local MM2PlayerDataRemote = nil
+local MM2HasAuthoritativeData = false
 
 local RoleColors = {
     Murderer = Color3.fromRGB(255, 50, 50),
@@ -2062,6 +2064,8 @@ local RoleColors = {
     Innocent = Color3.fromRGB(50, 255, 50),
     Hero = Color3.fromRGB(50, 255, 255)
 }
+
+local MM2UnknownColor = Color3.fromRGB(235, 235, 235)
 
 local function NormalizeRoleName(value)
     if typeof(value) ~= "string" or value == "" then
@@ -2099,32 +2103,158 @@ local function NormalizeRoleName(value)
     return nil
 end
 
-local function ApplyMM2PlayerData(data)
+local function ResolveMM2Player(nameOrId)
+    if typeof(nameOrId) == "string" then
+        local byName = Players:FindFirstChild(nameOrId)
+
+        if byName then
+            return byName
+        end
+
+        local numeric = tonumber(nameOrId)
+
+        if numeric then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p.UserId == numeric then
+                    return p
+                end
+            end
+        end
+    elseif typeof(nameOrId) == "number" then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.UserId == nameOrId then
+                return p
+            end
+        end
+    end
+
+    return nil
+end
+
+local function LooksLikeMM2PlayerData(data)
     if typeof(data) ~= "table" then
         return false
     end
 
-    local changed = false
-    local newCache = {}
+    local inspected = 0
 
-    for playerName, info in pairs(data) do
-        local roleValue = typeof(info) == "table" and info.Role or info
-        local role = NormalizeRoleName(roleValue)
-        local target = typeof(playerName) == "string" and Players:FindFirstChild(playerName) or nil
+    for key, info in pairs(data) do
+        if ResolveMM2Player(key) then
+            inspected = inspected + 1
 
-        if target and role then
-            newCache[target] = role
-            changed = true
+            if typeof(info) == "table"
+            and (
+                info.Role ~= nil
+                or info.Dead ~= nil
+                or info.Killed ~= nil
+                or info.Eliminated ~= nil
+            ) then
+                return true
+            end
+        end
+
+        if inspected >= 3 then
+            break
         end
     end
 
-    if changed then
-        MM2RoleCache = newCache
+    return false
+end
+
+local function NormalizeMM2PlayerDataContainer(data)
+    if typeof(data) ~= "table" then
+        return nil
+    end
+
+    for _, key in ipairs({"Players", "PlayerData", "Data", "Roles"}) do
+        if typeof(data[key]) == "table" and LooksLikeMM2PlayerData(data[key]) then
+            return data[key]
+        end
+    end
+
+    if LooksLikeMM2PlayerData(data) then
+        return data
+    end
+
+    return nil
+end
+
+local function ApplyMM2PlayerData(data)
+    local roleData = NormalizeMM2PlayerDataContainer(data)
+
+    if not roleData then
+        return false
+    end
+
+    local newRoles = {}
+    local newDead = {}
+    local foundCurrentPlayer = false
+
+    for playerKey, info in pairs(roleData) do
+        local target = ResolveMM2Player(playerKey)
+
+        if target then
+            foundCurrentPlayer = true
+
+            if typeof(info) == "table" then
+                local dead = info.Dead == true
+                    or info.Killed == true
+                    or info.Eliminated == true
+
+                newDead[target] = dead
+
+                if not dead then
+                    local role = NormalizeRoleName(info.Role)
+
+                    if role then
+                        newRoles[target] = role
+                    end
+                end
+            else
+                local role = NormalizeRoleName(info)
+
+                if role then
+                    newRoles[target] = role
+                    newDead[target] = false
+                end
+            end
+        end
+    end
+
+    if foundCurrentPlayer then
+        MM2RoleCache = newRoles
+        MM2DeadCache = newDead
+        MM2HasAuthoritativeData = true
         MM2RoleCacheTime = tick()
         return true
     end
 
     return false
+end
+
+local function ApplyMM2PlayerUpdate(playerKey, info)
+    local target = ResolveMM2Player(playerKey)
+
+    if not target or typeof(info) ~= "table" then
+        return false
+    end
+
+    MM2HasAuthoritativeData = true
+    MM2RoleCacheTime = tick()
+
+    local dead = info.Dead == true
+        or info.Killed == true
+        or info.Eliminated == true
+
+    MM2DeadCache[target] = dead
+
+    if dead then
+        MM2RoleCache[target] = nil
+    else
+        MM2RoleCache[target] = NormalizeRoleName(info.Role)
+    end
+
+    return true
 end
 
 local function HasNamedTool(p, names)
@@ -2161,8 +2291,6 @@ local function GetAttributeRole(p)
 
     local roleKeys = {
         "Role",
-        "Team",
-        "TeamName",
         "RoleName"
     }
 
@@ -2202,6 +2330,51 @@ local function GetAttributeRole(p)
     return nil
 end
 
+local function BuildMM2FallbackRoles()
+    local newCache = {}
+    local detectedSpecialRole = false
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        local attributeRole = GetAttributeRole(p)
+
+        if attributeRole then
+            newCache[p] = attributeRole
+
+            if attributeRole == "Murderer"
+            or attributeRole == "Sheriff"
+            or attributeRole == "Hero" then
+                detectedSpecialRole = true
+            end
+        elseif HasNamedTool(p, {"knife"}) then
+            newCache[p] = "Murderer"
+            detectedSpecialRole = true
+        elseif HasNamedTool(p, {"gun", "revolver"}) then
+            newCache[p] = "Sheriff"
+            detectedSpecialRole = true
+        end
+    end
+
+    if detectedSpecialRole then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if not newCache[p] then
+                local char = p.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+                if hum and hum.Health > 0 then
+                    newCache[p] = "Innocent"
+                end
+            end
+        end
+
+        MM2RoleCache = newCache
+        MM2DeadCache = {}
+        MM2RoleCacheTime = tick()
+        return true
+    end
+
+    return false
+end
+
 local function RefreshMM2Roles(force)
     if game.GameId ~= MM2GameId and game.PlaceId ~= MM2PlaceId then
         return
@@ -2224,42 +2397,22 @@ local function RefreshMM2Roles(force)
             return MM2PlayerDataRemote:InvokeServer()
         end)
 
-        if ok and ApplyMM2PlayerData(data) then
-            return
-        end
-    end
+        if ok then
+            local applied = ApplyMM2PlayerData(data)
 
-    local newCache = {}
-    local roundDetected = false
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        local attributeRole = GetAttributeRole(p)
-
-        if attributeRole then
-            newCache[p] = attributeRole
-            roundDetected = true
-        elseif HasNamedTool(p, {"knife"}) then
-            newCache[p] = "Murderer"
-            roundDetected = true
-        elseif HasNamedTool(p, {"gun", "revolver"}) then
-            newCache[p] = "Sheriff"
-            roundDetected = true
-        end
-    end
-
-    if roundDetected then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if not newCache[p] then
-                local char = p.Character
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-
-                if hum and hum.Health > 0 then
-                    newCache[p] = "Innocent"
-                end
+            if applied then
+                return
             end
-        end
 
-        MM2RoleCache = newCache
+            MM2RoleCache = {}
+            MM2DeadCache = {}
+            MM2HasAuthoritativeData = false
+        end
+    end
+
+    if not BuildMM2FallbackRoles() then
+        MM2RoleCache = {}
+        MM2DeadCache = {}
     end
 end
 
@@ -2273,9 +2426,11 @@ getgenv().ToxGetMM2Role = function(p)
     if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
         RefreshMM2Roles(false)
 
-        if MM2RoleCache[p] then
-            return MM2RoleCache[p]
+        if MM2DeadCache[p] then
+            return nil
         end
+
+        return MM2RoleCache[p]
     end
 
     return GetAttributeRole(p)
@@ -2285,23 +2440,52 @@ if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
     local updatePlayerData = ReplicatedStorage:FindFirstChild("UpdatePlayerData", true)
 
     if updatePlayerData and updatePlayerData:IsA("RemoteEvent") then
-        AddConnection(updatePlayerData.OnClientEvent:Connect(function(data)
-            ApplyMM2PlayerData(data)
+        AddConnection(updatePlayerData.OnClientEvent:Connect(function(...)
+            local args = {...}
+
+            if #args >= 2 and ApplyMM2PlayerUpdate(args[1], args[2]) then
+                return
+            end
+
+            for _, value in ipairs(args) do
+                if ApplyMM2PlayerData(value) then
+                    return
+                end
+            end
+
+            task.defer(function()
+                RefreshMM2Roles(true)
+            end)
         end))
     end
 
     local roleSelect = ReplicatedStorage:FindFirstChild("RoleSelect", true)
 
     if roleSelect and roleSelect:IsA("RemoteEvent") then
-        AddConnection(roleSelect.OnClientEvent:Connect(function(role)
-            local normalized = NormalizeRoleName(role)
+        AddConnection(roleSelect.OnClientEvent:Connect(function(...)
+            local args = {...}
 
-            if normalized then
-                MM2RoleCache[Player] = normalized
-                MM2RoleCacheTime = tick()
+            for _, value in ipairs(args) do
+                local normalized = NormalizeRoleName(value)
+
+                if normalized then
+                    MM2RoleCache[Player] = normalized
+                    MM2DeadCache[Player] = false
+                    MM2RoleCacheTime = tick()
+                    break
+                end
             end
+
+            task.delay(0.1, function()
+                RefreshMM2Roles(true)
+            end)
         end))
     end
+
+    AddConnection(Players.PlayerRemoving:Connect(function(p)
+        MM2RoleCache[p] = nil
+        MM2DeadCache[p] = nil
+    end))
 
     task.spawn(function()
         while not getgenv().Destroyed and game.PlaceId == MM2PlaceId do
@@ -2318,10 +2502,20 @@ local function GetESPVisualInfo(p)
         return defaultColor, nil
     end
 
-    local role = getgenv().ToxGetMM2Role and getgenv().ToxGetMM2Role(p) or GetAttributeRole(p)
+    if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
+        local role = getgenv().ToxGetMM2Role and getgenv().ToxGetMM2Role(p) or nil
 
-    if role then
-        return RoleColors[role] or defaultColor, role
+        if role then
+            return RoleColors[role] or MM2UnknownColor, role
+        end
+
+        return MM2UnknownColor, nil
+    end
+
+    local attributeRole = GetAttributeRole(p)
+
+    if attributeRole then
+        return RoleColors[attributeRole] or defaultColor, attributeRole
     end
 
     if p and p.Team then
