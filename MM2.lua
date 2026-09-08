@@ -6,6 +6,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
@@ -233,12 +234,10 @@ local function FindShootRemote(gun)
         return nil, nil
     end
 
-    local knifeLocal = gun:FindFirstChild("KnifeLocal")
-        or gun:FindFirstChild("KnifeLocal", true)
+    local knifeLocal = gun:FindFirstChild("KnifeLocal", true)
 
     if knifeLocal then
-        local createBeam = knifeLocal:FindFirstChild("CreateBeam")
-            or knifeLocal:FindFirstChild("CreateBeam", true)
+        local createBeam = knifeLocal:FindFirstChild("CreateBeam", true)
 
         if createBeam then
             local remoteFunction = createBeam:FindFirstChild("RemoteFunction")
@@ -257,12 +256,12 @@ local function FindShootRemote(gun)
     end
 
     for _, obj in ipairs(gun:GetDescendants()) do
-        if obj:IsA("RemoteFunction") then
-            local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
+        if obj:IsA("RemoteFunction") or obj:IsA("RemoteEvent") then
             local objectName = string.lower(obj.Name)
+            local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
 
-            if objectName == "remotefunction"
-            or objectName == "shootgun"
+            if objectName == "shootgun"
+            or objectName == "remotefunction"
             or string.find(parentName, "createbeam", 1, true) then
                 return obj, "AH2"
             end
@@ -292,6 +291,160 @@ local function FireMM2Gun(remote, mode, targetPosition)
     end)
 
     return ok
+end
+
+local function InstallShotRedirect(gun, getTargetPosition)
+    if not getrawmetatable
+    or not setreadonly
+    or not newcclosure
+    or not getnamecallmethod then
+        return function() end, function() return false end
+    end
+
+    local mt = getrawmetatable(game)
+    local oldNamecall = mt.__namecall
+    local active = true
+    local intercepted = false
+
+    local function IsGunRemote(self, args, method)
+        if method ~= "InvokeServer" and method ~= "FireServer" then
+            return false
+        end
+
+        if typeof(self) ~= "Instance"
+        or (not self:IsA("RemoteFunction") and not self:IsA("RemoteEvent")) then
+            return false
+        end
+
+        if gun and self:IsDescendantOf(gun) then
+            return true
+        end
+
+        local lowerName = string.lower(self.Name)
+
+        if lowerName == "shootgun" then
+            return true
+        end
+
+        local node = self.Parent
+
+        for _ = 1, 6 do
+            if not node then
+                break
+            end
+
+            local nodeName = string.lower(node.Name)
+
+            if nodeName == "knifelocal"
+            or nodeName == "createbeam"
+            or nodeName == "gun" then
+                return true
+            end
+
+            node = node.Parent
+        end
+
+        if typeof(args[2]) == "Vector3" then
+            local third = tostring(args[3] or "")
+
+            if third == "AH2" or third == "AH" then
+                return true
+            end
+        end
+
+        return false
+    end
+
+    local ok = pcall(function()
+        setreadonly(mt, false)
+
+        mt.__namecall = newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            local args = {...}
+
+            if active and IsGunRemote(self, args, method) then
+                local targetPosition = getTargetPosition()
+
+                if targetPosition then
+                    if typeof(args[2]) == "Vector3" then
+                        args[2] = targetPosition
+                    elseif typeof(args[1]) == "Vector3" then
+                        args[1] = targetPosition
+                    else
+                        args[1] = 1
+                        args[2] = targetPosition
+                        args[3] = "AH2"
+                    end
+
+                    intercepted = true
+                end
+
+                return oldNamecall(self, unpack(args))
+            end
+
+            return oldNamecall(self, ...)
+        end)
+
+        setreadonly(mt, true)
+    end)
+
+    if not ok then
+        pcall(function()
+            setreadonly(mt, true)
+        end)
+
+        return function() end, function() return false end
+    end
+
+    local function cleanup()
+        if not active then
+            return
+        end
+
+        active = false
+
+        pcall(function()
+            setreadonly(mt, false)
+            mt.__namecall = oldNamecall
+            setreadonly(mt, true)
+        end)
+    end
+
+    local function wasIntercepted()
+        return intercepted
+    end
+
+    return cleanup, wasIntercepted
+end
+
+local function TriggerGunShot(gun)
+    pcall(function()
+        gun:Activate()
+    end)
+
+    pcall(function()
+        local mousePosition = UserInputService:GetMouseLocation()
+
+        VirtualInputManager:SendMouseButtonEvent(
+            mousePosition.X,
+            mousePosition.Y,
+            0,
+            true,
+            game,
+            0
+        )
+
+        task.wait()
+
+        VirtualInputManager:SendMouseButtonEvent(
+            mousePosition.X,
+            mousePosition.Y,
+            0,
+            false,
+            game,
+            0
+        )
+    end)
 end
 
 local function ShootMurderer()
@@ -343,30 +496,6 @@ local function ShootMurderer()
             return
         end
 
-        local shootRemote, shootMode = nil, nil
-
-        for _ = 1, 20 do
-            shootRemote, shootMode = FindShootRemote(gun)
-
-            if shootRemote then
-                break
-            end
-
-            task.wait(0.025)
-        end
-
-        if not shootRemote then
-            if originalParent and originalParent:IsA("Backpack") and gun and gun.Parent == character then
-                pcall(function()
-                    gun.Parent = originalParent
-                end)
-            end
-
-            ActionBusy = false
-            CustomNotify("Shoot remote unavailable", Color3.fromRGB(255, 100, 100))
-            return
-        end
-
         local oldCFrame = root.CFrame
         local allow = getgenv().AllowToxTeleport
 
@@ -376,7 +505,17 @@ local function ShootMurderer()
             allow(1)
         end
 
-        local abovePosition = targetRoot.Position + Vector3.new(0, 5.5, 0)
+        local function CurrentTargetPosition()
+            if targetRoot and targetRoot.Parent and targetHumanoid.Health > 0 then
+                return targetRoot.Position
+            end
+
+            return nil
+        end
+
+        local cleanupRedirect, wasIntercepted = InstallShotRedirect(gun, CurrentTargetPosition)
+
+        local abovePosition = targetRoot.Position + Vector3.new(0, 4.5, 0)
 
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
@@ -384,14 +523,29 @@ local function ShootMurderer()
 
         RunService.Heartbeat:Wait()
 
-        local targetPosition = targetRoot.Position
-        FireMM2Gun(shootRemote, shootMode, targetPosition)
+        TriggerGunShot(gun)
 
-        task.wait(0.025)
+        task.wait(0.06)
+
+        if not wasIntercepted() then
+            local shootRemote, shootMode = FindShootRemote(gun)
+
+            if shootRemote then
+                FireMM2Gun(shootRemote, shootMode, targetRoot.Position)
+            else
+                TriggerGunShot(gun)
+                task.wait(0.06)
+            end
+        end
+
+        cleanupRedirect()
 
         if targetHumanoid.Health > 0 and targetRoot.Parent then
-            targetPosition = targetRoot.Position
-            FireMM2Gun(shootRemote, shootMode, targetPosition)
+            local shootRemote, shootMode = FindShootRemote(gun)
+
+            if shootRemote then
+                FireMM2Gun(shootRemote, shootMode, targetRoot.Position)
+            end
         end
 
         task.wait(0.025)
@@ -492,37 +646,15 @@ local function GrabGun()
     end)
 end
 
-local MM2ESPPrevious = nil
-
 local function ApplyRoleESP(enabled)
     Settings.MM2RoleESP = enabled == true
 
-    if enabled then
-        if not MM2ESPPrevious then
-            MM2ESPPrevious = {
-                ESPNames = Settings.ESPNames == true,
-                Chams = Settings.Chams == true,
-                ESPTeamColors = Settings.ESPTeamColors == true
-            }
-        end
+    if enabled and getgenv().ToxRefreshMM2Roles then
+        getgenv().ToxRefreshMM2Roles(true)
+    end
 
-        SetShared("ESPEnabled", true)
-        SetSharedTemporary("ESPNames", true)
-        SetSharedTemporary("Chams", true)
-        SetSharedTemporary("ESPTeamColors", true)
-
-        if getgenv().ToxRefreshMM2Roles then
-            getgenv().ToxRefreshMM2Roles(true)
-        end
-    else
-        SetShared("ESPEnabled", false)
-
-        if MM2ESPPrevious then
-            SetSharedTemporary("ESPNames", MM2ESPPrevious.ESPNames)
-            SetSharedTemporary("Chams", MM2ESPPrevious.Chams)
-            SetSharedTemporary("ESPTeamColors", MM2ESPPrevious.ESPTeamColors)
-            MM2ESPPrevious = nil
-        end
+    if AutoSaveConfiguration then
+        AutoSaveConfiguration()
     end
 end
 
@@ -559,9 +691,9 @@ local function FlingSelectedRole()
     end)
 end
 
-CreateToggle("ESP", GamePage, Settings.ESPEnabled, function(v)
+CreateToggle("ESP", GamePage, Settings.MM2RoleESP, function(v)
     ApplyRoleESP(v)
-end, "ESPEnabled")
+end, "MM2RoleESP")
 
 CreateToggleWithValue("Speed", GamePage, Settings.Speed, Settings.SpeedValue, function(v)
     SetShared("Speed", v)
@@ -623,6 +755,6 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end))
 
-if Settings.ESPEnabled then
+if Settings.MM2RoleESP then
     ApplyRoleESP(true)
 end
