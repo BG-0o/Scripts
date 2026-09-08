@@ -25,7 +25,17 @@ if not Settings or not GamePage or not CreateToggle or not CreateToggleWithValue
     return
 end
 
-Settings.NDSWaterFlySpeed = tonumber(Settings.NDSWaterFlySpeed) or 12
+local configuredWaterFlySpeed = tonumber(Settings.NDSWaterFlySpeed)
+
+if not configuredWaterFlySpeed or configuredWaterFlySpeed == 12 then
+    configuredWaterFlySpeed = 40
+end
+
+Settings.NDSWaterFlySpeed = math.clamp(
+    configuredWaterFlySpeed,
+    5,
+    250
+)
 
 local AutoWinConnection = nil
 local AutoWinLastActivate = 0
@@ -326,8 +336,8 @@ local function EnsureWaterFlyMovers(root)
 
         WaterFlyVelocity = Instance.new("BodyVelocity")
         WaterFlyVelocity.Name = "ToxNDSWaterFlyVelocity"
-        WaterFlyVelocity.MaxForce = Vector3.new(65000, 65000, 65000)
-        WaterFlyVelocity.P = 650
+        WaterFlyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        WaterFlyVelocity.P = 2500
         WaterFlyVelocity.Velocity = Vector3.zero
         WaterFlyVelocity.Parent = root
     end
@@ -337,9 +347,9 @@ local function EnsureWaterFlyMovers(root)
 
         WaterFlyGyro = Instance.new("BodyGyro")
         WaterFlyGyro.Name = "ToxNDSWaterFlyGyro"
-        WaterFlyGyro.MaxTorque = Vector3.new(50000, 50000, 50000)
-        WaterFlyGyro.P = 1500
-        WaterFlyGyro.D = 250
+        WaterFlyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+        WaterFlyGyro.P = 3500
+        WaterFlyGyro.D = 350
         WaterFlyGyro.CFrame = root.CFrame
         WaterFlyGyro.Parent = root
     end
@@ -386,7 +396,11 @@ local function StartWaterFly()
         if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then direction += Vector3.new(0, 0.65, 0) end
         if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then direction -= Vector3.new(0, 0.65, 0) end
 
-        local speed = math.clamp(tonumber(Settings.NDSWaterFlySpeed) or 12, 3, 60)
+        local speed = math.clamp(
+            tonumber(Settings.NDSWaterFlySpeed) or 40,
+            5,
+            250
+        )
 
         if direction.Magnitude > 0 then
             WaterFlyVelocity.Velocity = direction.Unit * speed
@@ -626,7 +640,11 @@ end, "Noclip")
 CreateToggleWithValue("Water Fly", GamePage, Settings.NDSWaterFly, Settings.NDSWaterFlySpeed, function(v)
     getgenv().SetNDSWaterFly(v, true)
 end, function(value)
-    Settings.NDSWaterFlySpeed = math.clamp(tonumber(value) or 12, 3, 60)
+    Settings.NDSWaterFlySpeed = math.clamp(
+        tonumber(value) or 40,
+        5,
+        250
+    )
 
     if SyncValueVisuals then
         SyncValueVisuals("NDSWaterFly", Settings.NDSWaterFlySpeed)
