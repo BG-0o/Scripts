@@ -46,7 +46,7 @@ getgenv().GameModuleRegistry = {
     [142823291] = {
         ShortName = "MM2",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/MM2.lua",
-        Ready = false
+        Ready = true
     }
 }
 
@@ -132,7 +132,13 @@ getgenv().Settings = {
     NDSAutoWin = false,
     NDSWaterFly = false,
     NDSWaterFlySpeed = 12,
-    NDSNoTP = false
+    NDSNoTP = false,
+
+    MM2RoleESP = false,
+    MM2KillAllKey = Enum.KeyCode.K,
+    MM2ShootMurderKey = Enum.KeyCode.C,
+    MM2GrabGunKey = Enum.KeyCode.G,
+    MM2FlingTarget = "Murderer"
 }
 
 getgenv().SavedIDs = {}
@@ -240,7 +246,12 @@ getgenv().AutoSaveConfiguration = function()
             NDSAutoWin = Settings.NDSAutoWin,
             NDSWaterFly = Settings.NDSWaterFly,
             NDSWaterFlySpeed = Settings.NDSWaterFlySpeed,
-            NDSNoTP = Settings.NDSNoTP
+            NDSNoTP = Settings.NDSNoTP,
+            MM2RoleESP = Settings.MM2RoleESP,
+            MM2KillAllKey = Settings.MM2KillAllKey and Settings.MM2KillAllKey.Name or "K",
+            MM2ShootMurderKey = Settings.MM2ShootMurderKey and Settings.MM2ShootMurderKey.Name or "C",
+            MM2GrabGunKey = Settings.MM2GrabGunKey and Settings.MM2GrabGunKey.Name or "G",
+            MM2FlingTarget = Settings.MM2FlingTarget
         },
         SavedIDs = getgenv().SavedIDs,
         SavedWaypoints = getgenv().SavedWaypoints,
@@ -259,11 +270,14 @@ local function LoadConfiguration()
         if data then
             if data.Settings then
                 for k, v in pairs(data.Settings) do
-                    if k == "GUIKeybind" then
+                    if k == "GUIKeybind"
+                    or k == "MM2KillAllKey"
+                    or k == "MM2ShootMurderKey"
+                    or k == "MM2GrabGunKey" then
                         if v == "NONE" or not v then
-                            Settings.GUIKeybind = nil
+                            Settings[k] = nil
                         else
-                            pcall(function() Settings.GUIKeybind = Enum.KeyCode[v] end)
+                            pcall(function() Settings[k] = Enum.KeyCode[v] end)
                         end
                     elseif k == "EspColorName" then
                         Settings.EspColorName = v
@@ -283,6 +297,14 @@ local function LoadConfiguration()
 end
 
 LoadConfiguration()
+
+pcall(function()
+    if cleardrawcache then
+        cleardrawcache()
+    elseif Drawing and Drawing.clear then
+        Drawing.clear()
+    end
+end)
 
 if getgenv().FOVCircle then pcall(function() getgenv().FOVCircle:Remove() end) end
 local FOVCircle = (Drawing and Drawing.new) and Drawing.new("Circle") or nil
@@ -2192,30 +2214,34 @@ getgenv().CreateKeybindButton = function(Name, Page, DefaultKey, Callback)
     Button.Parent = Box
 
     local Binding = false
+    local CurrentKey = DefaultKey
 
     Button.MouseButton1Click:Connect(function()
         if Binding then return end
         Binding = true
         Button.Text = "Press Key..."
-        
+
         local conn
-        conn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        conn = UserInputService.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.Keyboard then
                 conn:Disconnect()
                 Binding = false
+
                 if input.KeyCode == Enum.KeyCode.Escape then
-                    Settings.GUIKeybind = nil
+                    CurrentKey = nil
                     Button.Text = "NONE"
                 else
-                    Settings.GUIKeybind = input.KeyCode
+                    CurrentKey = input.KeyCode
                     Button.Text = input.KeyCode.Name
                 end
-                Callback(Settings.GUIKeybind)
+
+                Callback(CurrentKey)
                 AutoSaveConfiguration()
-            elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
+            elseif input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.MouseButton2 then
                 conn:Disconnect()
                 Binding = false
-                Settings.GUIKeybind = nil
+                CurrentKey = nil
                 Button.Text = "NONE"
                 Callback(nil)
                 AutoSaveConfiguration()
