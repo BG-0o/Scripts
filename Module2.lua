@@ -1378,6 +1378,109 @@ local function GetPopulatedPublicServer(placeId)
     return bestServer
 end
 
+local ReturnButtonCleanupPayload = [[
+local CoreGui = game:GetService("CoreGui")
+
+local function hideReturnObject(obj)
+    if not obj then
+        return
+    end
+
+    local text = nil
+
+    if obj:IsA("TextLabel")
+    or obj:IsA("TextButton") then
+        text = tostring(obj.Text or "")
+    end
+
+    if not text or text == "" then
+        return
+    end
+
+    local lower = string.lower(text)
+
+    if not string.find(lower, "return to", 1, true)
+    and not string.find(lower, "voltar para", 1, true) then
+        return
+    end
+
+    local current = obj
+
+    for _ = 1, 6 do
+        if not current then
+            break
+        end
+
+        if current:IsA("GuiObject") then
+            pcall(function()
+                current.Visible = false
+            end)
+        end
+
+        if current:IsA("TextButton")
+        or current:IsA("ImageButton") then
+            break
+        end
+
+        current = current.Parent
+    end
+end
+
+local function scan()
+    for _, obj in ipairs(CoreGui:GetDescendants()) do
+        hideReturnObject(obj)
+    end
+end
+
+task.spawn(function()
+    task.wait(1)
+    scan()
+
+    CoreGui.DescendantAdded:Connect(function(obj)
+        task.defer(function()
+            hideReturnObject(obj)
+
+            if obj:IsA("TextLabel")
+            or obj:IsA("TextButton") then
+                pcall(function()
+                    obj:GetPropertyChangedSignal("Text"):Connect(function()
+                        hideReturnObject(obj)
+                    end)
+                end)
+            end
+        end)
+    end)
+
+    for _ = 1, 30 do
+        task.wait(1)
+        scan()
+    end
+end)
+]]
+
+local function QueueReturnButtonCleanup()
+    local queueFunction = nil
+    local env = getgenv()
+
+    if env and type(env.queue_on_teleport) == "function" then
+        queueFunction = env.queue_on_teleport
+    elseif type(queue_on_teleport) == "function" then
+        queueFunction = queue_on_teleport
+    elseif syn and type(syn.queue_on_teleport) == "function" then
+        queueFunction = syn.queue_on_teleport
+    elseif fluxus and type(fluxus.queue_on_teleport) == "function" then
+        queueFunction = fluxus.queue_on_teleport
+    end
+
+    if not queueFunction then
+        return false
+    end
+
+    return pcall(function()
+        queueFunction(ReturnButtonCleanupPayload)
+    end)
+end
+
 local function JoinPublicGame(placeId)
     placeId = tonumber(placeId)
 
@@ -1389,6 +1492,7 @@ local function JoinPublicGame(placeId)
         pcall(getgenv().QueueToxAutoExecute)
     end
 
+    QueueReturnButtonCleanup()
     task.wait(0.12)
 
     if not placeId or placeId <= 0 then
@@ -1441,6 +1545,7 @@ local function JoinTargetPlayer()
         pcall(getgenv().QueueToxAutoExecute)
     end
 
+    QueueReturnButtonCleanup()
     task.wait(0.12)
 
     local target = UpdateJoinStatus(JoinTargetBox.Text, true)
