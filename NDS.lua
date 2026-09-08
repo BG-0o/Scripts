@@ -1,4 +1,18 @@
-if game.PlaceId ~= 189707 then
+local NDSPlaceId = 189707
+
+if game.PlaceId ~= NDSPlaceId then
+    local env = getgenv()
+
+    if env.SetNDSNoTP then
+        pcall(function()
+            env.SetNDSNoTP(false, true)
+        end)
+    end
+
+    if env.Settings then
+        env.Settings.NDSNoTP = false
+    end
+
     return
 end
 
@@ -617,7 +631,9 @@ getgenv().SetNDSNoFall = function(Value, Silent)
 end
 
 local function RestoreNoTPCharacter(character)
-    if not Settings.NDSNoTP or not NoTPAnchorCFrame then
+    if game.PlaceId ~= NDSPlaceId
+    or not Settings.NDSNoTP
+    or not NoTPAnchorCFrame then
         return
     end
 
@@ -667,6 +683,12 @@ local function StopNoTP()
 end
 
 local function StartNoTP()
+    if game.PlaceId ~= NDSPlaceId then
+        Settings.NDSNoTP = false
+        StopNoTP()
+        return
+    end
+
     if NoTPConnection then
         NoTPConnection:Disconnect()
         NoTPConnection = nil
@@ -690,6 +712,12 @@ local function StartNoTP()
     end))
 
     NoTPConnection = AddConnection(RunService.Heartbeat:Connect(function()
+        if game.PlaceId ~= NDSPlaceId then
+            Settings.NDSNoTP = false
+            StopNoTP()
+            return
+        end
+
         if not Settings.NDSNoTP then
             return
         end
@@ -733,6 +761,32 @@ local function StartNoTP()
     end))
 end
 
+getgenv().SetNDSNoTP = function(Value, Silent)
+    local enabled =
+        Value == true
+        and game.PlaceId == NDSPlaceId
+
+    Settings.NDSNoTP = enabled
+
+    if enabled then
+        StartNoTP()
+    else
+        StopNoTP()
+    end
+
+    if SyncToggleVisuals then
+        SyncToggleVisuals(
+            "NDSNoTP",
+            enabled
+        )
+    end
+
+    if not Silent
+    and AutoSaveConfiguration then
+        AutoSaveConfiguration()
+    end
+end
+
 CreateButton("SPAWN", GamePage, function()
     TeleportTo(SpawnCFrame, "SPAWN")
 end)
@@ -756,13 +810,7 @@ CreateToggle("Ctrl Click TP", GamePage, Settings.CtrlClickTP, function(v)
 end, "CtrlClickTP")
 
 CreateToggle("No TP", GamePage, Settings.NDSNoTP, function(v)
-    Settings.NDSNoTP = v
-
-    if v then
-        StartNoTP()
-    else
-        StopNoTP()
-    end
+    getgenv().SetNDSNoTP(v, true)
 end, "NDSNoTP")
 
 CreateToggle("Noclip", GamePage, Settings.Noclip, function(v)
@@ -818,5 +866,7 @@ if Settings.NDSWaterFly then
 end
 
 if Settings.NDSNoTP then
-    StartNoTP()
+    getgenv().SetNDSNoTP(true, true)
+else
+    StopNoTP()
 end
