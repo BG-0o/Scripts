@@ -142,6 +142,7 @@ getgenv().Settings = {
     MM2AutoFarmV2 = false,
     MM2AutoFarmSpeed = 50,
     MM2Whitelist = {},
+    MM2SilentAimKey = Enum.KeyCode.E,
     MM2KillAllKey = Enum.KeyCode.K,
     MM2KillAllAuto = false,
     MM2KillAllAutoV2 = false,
@@ -300,6 +301,7 @@ getgenv().AutoSaveConfiguration = function()
             MM2AutoFarmV2 = Settings.MM2AutoFarmV2,
             MM2AutoFarmSpeed = Settings.MM2AutoFarmSpeed,
             MM2Whitelist = Settings.MM2Whitelist,
+            MM2SilentAimKey = Settings.MM2SilentAimKey and Settings.MM2SilentAimKey.Name or "E",
             MM2KillAllKey = Settings.MM2KillAllKey and Settings.MM2KillAllKey.Name or "K",
             MM2KillAllAuto = false,
             MM2KillAllAutoV2 = Settings.MM2KillAllAutoV2,
@@ -331,6 +333,7 @@ local function LoadConfiguration()
             if data.Settings then
                 for k, v in pairs(data.Settings) do
                     if k == "GUIKeybind"
+                    or k == "MM2SilentAimKey"
                     or k == "MM2KillAllKey"
                     or k == "MM2ShootMurderKey"
                     or k == "MM2GrabGunKey" then
