@@ -47,6 +47,11 @@ getgenv().GameModuleRegistry = {
         ShortName = "MM2",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/MM2.lua",
         Ready = true
+    },
+    [4522347649] = {
+        ShortName = "ADMIN",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ADMIN.lua",
+        Ready = true
     }
 }
 
@@ -152,7 +157,11 @@ getgenv().Settings = {
     MM2GrabGunKey = Enum.KeyCode.G,
     MM2GrabGunAuto = false,
     MM2GrabGunAutoV2 = false,
-    MM2FlingTarget = "Murderer"
+    MM2FlingTarget = "Murderer",
+
+    ADMINPrefix = ".",
+    ADMINKillTarget = "",
+    ADMINKillAll = false
 }
 
 local PersistedSettingKeys = {}
