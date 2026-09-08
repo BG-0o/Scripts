@@ -139,14 +139,18 @@ getgenv().Settings = {
 
     MM2RoleESP = false,
     MM2AutoFarm = false,
+    MM2AutoFarmV2 = false,
     MM2AutoFarmSpeed = 50,
     MM2Whitelist = {},
     MM2KillAllKey = Enum.KeyCode.K,
     MM2KillAllAuto = false,
+    MM2KillAllAutoV2 = false,
     MM2ShootMurderKey = Enum.KeyCode.C,
     MM2ShootMurderAuto = false,
+    MM2ShootMurderAutoV2 = false,
     MM2GrabGunKey = Enum.KeyCode.G,
     MM2GrabGunAuto = false,
+    MM2GrabGunAutoV2 = false,
     MM2FlingTarget = "Murderer"
 }
 
@@ -292,15 +296,19 @@ getgenv().AutoSaveConfiguration = function()
             NDSWaterFlySpeed = Settings.NDSWaterFlySpeed,
             NDSNoTP = Settings.NDSNoTP,
             MM2RoleESP = Settings.MM2RoleESP,
-            MM2AutoFarm = Settings.MM2AutoFarm,
+            MM2AutoFarm = false,
+            MM2AutoFarmV2 = Settings.MM2AutoFarmV2,
             MM2AutoFarmSpeed = Settings.MM2AutoFarmSpeed,
             MM2Whitelist = Settings.MM2Whitelist,
             MM2KillAllKey = Settings.MM2KillAllKey and Settings.MM2KillAllKey.Name or "K",
-            MM2KillAllAuto = Settings.MM2KillAllAuto,
+            MM2KillAllAuto = false,
+            MM2KillAllAutoV2 = Settings.MM2KillAllAutoV2,
             MM2ShootMurderKey = Settings.MM2ShootMurderKey and Settings.MM2ShootMurderKey.Name or "C",
-            MM2ShootMurderAuto = Settings.MM2ShootMurderAuto,
+            MM2ShootMurderAuto = false,
+            MM2ShootMurderAutoV2 = Settings.MM2ShootMurderAutoV2,
             MM2GrabGunKey = Settings.MM2GrabGunKey and Settings.MM2GrabGunKey.Name or "G",
-            MM2GrabGunAuto = Settings.MM2GrabGunAuto,
+            MM2GrabGunAuto = false,
+            MM2GrabGunAutoV2 = Settings.MM2GrabGunAutoV2,
             MM2FlingTarget = Settings.MM2FlingTarget
         },
         SavedIDs = getgenv().SavedIDs,
@@ -2061,9 +2069,19 @@ getgenv().SyncToggleVisuals = function(Key, Value)
     local controls = getgenv().SharedToggleControls[Key]
     if not controls then return end
 
-    for _, controller in ipairs(controls) do
-        if controller and controller.SetVisual then
-            controller.SetVisual(Value)
+    for index = #controls, 1, -1 do
+        local controller = controls[index]
+        local button = controller and controller.Button
+
+        if not controller
+        or not controller.SetVisual
+        or not button
+        or not button.Parent then
+            table.remove(controls, index)
+        else
+            pcall(function()
+                controller.SetVisual(Value)
+            end)
         end
     end
 end
@@ -2595,7 +2613,7 @@ getgenv().CreateKeybindButton = function(Name, Page, DefaultKey, Callback)
 end
 
 
-getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, KeyCallback, ToggleCallback)
+getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, KeyCallback, ToggleCallback, SyncKey)
     local Box = Instance.new("Frame")
     Box.Size = UDim2.new(1, -5, 0, 48)
     Box.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
@@ -2670,8 +2688,18 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
         end
     end
 
+    local Controller = {
+        Button = Box,
+        SetVisual = function(Value)
+            Enabled = Value == true
+            UpdateToggle()
+        end
+    }
+
+    RegisterSharedToggle(SyncKey, Controller)
+
     KeyButton.MouseButton1Click:Connect(function()
-        if Binding then return end
+        if Destroyed or Binding then return end
 
         Binding = true
         KeyButton.Text = "..."
@@ -2705,16 +2733,29 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     end)
 
     Toggle.MouseButton1Click:Connect(function()
+        if Destroyed then return end
+
         Enabled = not Enabled
         UpdateToggle()
         ToggleCallback(Enabled)
+
+        if SyncKey and getgenv().SyncToggleVisuals then
+            getgenv().SyncToggleVisuals(SyncKey, Enabled)
+        end
+
         AutoSaveConfiguration()
 
         if ScriptLoaded then
-            CustomNotify(Name .. " Auto " .. (Enabled and "Enabled" or "Disabled"), Enabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100))
+            CustomNotify(
+                Name .. " Auto " .. (Enabled and "Enabled" or "Disabled"),
+                Enabled
+                    and Color3.fromRGB(100, 255, 100)
+                    or Color3.fromRGB(255, 100, 100)
+            )
         end
     end)
 
     UpdateToggle()
     return Box
 end
+
