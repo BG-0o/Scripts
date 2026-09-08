@@ -4,6 +4,7 @@ end
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TextChatService = game:GetService("TextChatService")
 local CoreGui = game:GetService("CoreGui")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 
@@ -23,6 +24,12 @@ Settings.ADMINKillAll = Settings.ADMINKillAll == true
 Settings.ADMINRocketTarget = tostring(Settings.ADMINRocketTarget or "")
 Settings.ADMINRocketAll = Settings.ADMINRocketAll == true
 Settings.ADMINKickTarget = tostring(Settings.ADMINKickTarget or "")
+Settings.ADMINCommandMode = tostring(Settings.ADMINCommandMode or "CMD")
+
+if Settings.ADMINCommandMode ~= "CHAT"
+and Settings.ADMINCommandMode ~= "CMD" then
+    Settings.ADMINCommandMode = "CMD"
+end
 
 local function Save()
     if AutoSaveConfiguration then
@@ -467,75 +474,229 @@ local function ExecuteOnBar(candidate, command)
     return fired
 end
 
+local CachedHDAdminSignals = nil
 local CachedRequestCommand = nil
+local CachedRetrieveData = nil
 
-local function FindRequestCommandRemote()
-    if CachedRequestCommand
-    and CachedRequestCommand.Parent
-    and CachedRequestCommand:IsA("RemoteFunction") then
-        return CachedRequestCommand
+local function GetHDAdminSignals()
+    if CachedHDAdminSignals
+    and CachedHDAdminSignals.Parent then
+        return CachedHDAdminSignals
     end
 
-    local best = nil
-    local bestScore = -1
+    local client =
+        ReplicatedStorage:FindFirstChild(
+            "HDAdminClient"
+        )
 
-    for _, obj in ipairs(
-        ReplicatedStorage:GetDescendants()
-    ) do
-        if obj:IsA("RemoteFunction")
-        and obj.Name == "RequestCommand" then
-            local score = 100
-            local current = obj.Parent
+    if not client then
+        local ok, value = pcall(function()
+            return ReplicatedStorage:
+                WaitForChild(
+                    "HDAdminClient",
+                    3
+                )
+        end)
 
-            for _ = 1, 6 do
-                if not current then
-                    break
-                end
-
-                local name =
-                    string.lower(
-                        tostring(current.Name or "")
-                    )
-
-                if string.find(
-                    name,
-                    "hdadmin",
-                    1,
-                    true
-                ) then
-                    score = score + 100
-                end
-
-                if string.find(
-                    name,
-                    "signal",
-                    1,
-                    true
-                ) then
-                    score = score + 50
-                end
-
-                if string.find(
-                    name,
-                    "main",
-                    1,
-                    true
-                ) then
-                    score = score + 25
-                end
-
-                current = current.Parent
-            end
-
-            if score > bestScore then
-                bestScore = score
-                best = obj
-            end
+        if ok then
+            client = value
         end
     end
 
-    CachedRequestCommand = best
-    return best
+    if not client then
+        return nil
+    end
+
+    local signals =
+        client:FindFirstChild(
+            "Signals"
+        )
+
+    if not signals then
+        local ok, value = pcall(function()
+            return client:WaitForChild(
+                "Signals",
+                2
+            )
+        end)
+
+        if ok then
+            signals = value
+        end
+    end
+
+    CachedHDAdminSignals = signals
+    return signals
+end
+
+local function GetRequestCommand()
+    if CachedRequestCommand
+    and CachedRequestCommand.Parent
+    and CachedRequestCommand:IsA(
+        "RemoteFunction"
+    ) then
+        return CachedRequestCommand
+    end
+
+    local signals = GetHDAdminSignals()
+
+    if not signals then
+        return nil
+    end
+
+    local remote =
+        signals:FindFirstChild(
+            "RequestCommand"
+        )
+
+    if remote
+    and remote:IsA("RemoteFunction") then
+        CachedRequestCommand = remote
+        return remote
+    end
+
+    return nil
+end
+
+local function GetRetrieveData()
+    if CachedRetrieveData
+    and CachedRetrieveData.Parent
+    and CachedRetrieveData:IsA(
+        "RemoteFunction"
+    ) then
+        return CachedRetrieveData
+    end
+
+    local signals = GetHDAdminSignals()
+
+    if not signals then
+        return nil
+    end
+
+    local remote =
+        signals:FindFirstChild(
+            "RetrieveData"
+        )
+
+    if remote
+    and remote:IsA("RemoteFunction") then
+        CachedRetrieveData = remote
+        return remote
+    end
+
+    return nil
+end
+
+local function GetHDAdminPrefix()
+    local fallback =
+        tostring(
+            Settings.ADMINPrefix or "."
+        )
+
+    local retrieve = GetRetrieveData()
+
+    if not retrieve then
+        return fallback
+    end
+
+    local ok, data = pcall(function()
+        return retrieve:InvokeServer()
+    end)
+
+    if not ok
+    or typeof(data) ~= "table" then
+        return fallback
+    end
+
+    local pdata = data.pdata
+
+    if typeof(pdata) == "table"
+    and typeof(pdata.Prefix) == "string"
+    and pdata.Prefix ~= "" then
+        return pdata.Prefix
+    end
+
+    return fallback
+end
+
+local function SendCommandToChat(
+    commandName,
+    target
+)
+    local prefix =
+        tostring(
+            Settings.ADMINPrefix or "."
+        )
+
+    local message =
+        prefix
+        .. commandName
+        .. " "
+        .. target
+
+    local sent = false
+
+    pcall(function()
+        local inputConfig =
+            TextChatService:
+                FindFirstChild(
+                    "ChatInputBarConfiguration"
+                )
+
+        local channel =
+            inputConfig
+            and inputConfig.TargetTextChannel
+
+        if channel then
+            channel:SendAsync(message)
+            sent = true
+        end
+    end)
+
+    if not sent then
+        pcall(function()
+            Players:Chat(message)
+            sent = true
+        end)
+    end
+
+    return sent
+end
+
+local function SendCommandDirect(
+    commandName,
+    target
+)
+    local request =
+        GetRequestCommand()
+
+    if not request then
+        CachedHDAdminSignals = nil
+        CachedRequestCommand = nil
+        CachedRetrieveData = nil
+
+        request =
+            GetRequestCommand()
+    end
+
+    if not request then
+        return false
+    end
+
+    local prefix =
+        GetHDAdminPrefix()
+
+    local command =
+        prefix
+        .. commandName
+        .. " "
+        .. target
+
+    local ok = pcall(function()
+        request:InvokeServer(command)
+    end)
+
+    return ok
 end
 
 local function RunHDAdminCommand(
@@ -555,61 +716,17 @@ local function RunHDAdminCommand(
         return false
     end
 
-    local prefix =
-        tostring(
-            Settings.ADMINPrefix or "."
+    if Settings.ADMINCommandMode == "CHAT" then
+        return SendCommandToChat(
+            commandName,
+            target
         )
-
-    local command =
-        prefix
-        .. commandName
-        .. " "
-        .. target
-
-    local requestCommand =
-        FindRequestCommandRemote()
-
-    if requestCommand then
-        local ok = pcall(function()
-            requestCommand:InvokeServer(
-                command
-            )
-        end)
-
-        if ok then
-            return true
-        end
-
-        CachedRequestCommand = nil
     end
 
-    local box, execute =
-        FindAnyCommandBar()
-
-    if not box or not execute then
-        return false
-    end
-
-    local oldText = box.Text
-
-    box.Text =
-        commandName
-        .. " "
-        .. target
-
-    task.wait(0.03)
-
-    local fired =
-        ClickExecute(execute)
-
-    task.delay(0.12, function()
-        if box
-        and box.Parent then
-            box.Text = oldText
-        end
-    end)
-
-    return fired
+    return SendCommandDirect(
+        commandName,
+        target
+    )
 end
 
 local function MakeCorner(parent, radius)
@@ -625,41 +742,97 @@ end
 local function CreatePrefixRow()
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, -5, 0, 42)
-    row.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    row.BackgroundColor3 =
+        Color3.fromRGB(18, 18, 26)
     row.BorderSizePixel = 0
     row.Parent = GamePage
     MakeCorner(row, 4)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -110, 1, 0)
-    label.Position = UDim2.new(0, 12, 0, 0)
+    label.Size = UDim2.new(0, 54, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = "Prefix"
-    label.TextColor3 = Color3.fromRGB(240, 240, 240)
+    label.TextColor3 =
+        Color3.fromRGB(240, 240, 240)
     label.TextSize = 13
     label.Font = Enum.Font.GothamMedium
-    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextXAlignment =
+        Enum.TextXAlignment.Left
     label.Parent = row
 
     local input = Instance.new("TextBox")
-    input.Size = UDim2.new(0, 90, 0, 27)
-    input.Position = UDim2.new(1, -102, 0.5, -13)
-    input.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    input.Size = UDim2.new(0, 50, 0, 27)
+    input.Position =
+        UDim2.new(1, -174, 0.5, -13)
+    input.BackgroundColor3 =
+        Color3.fromRGB(28, 28, 42)
     input.BorderSizePixel = 0
     input.Text = Settings.ADMINPrefix
     input.PlaceholderText = "."
-    input.TextColor3 = Color3.fromRGB(255, 255, 255)
+    input.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
     input.TextSize = 12
     input.Font = Enum.Font.Gotham
     input.ClearTextOnFocus = false
     input.Parent = row
     MakeCorner(input, 4)
 
+    local chatButton =
+        Instance.new("TextButton")
+
+    chatButton.Size =
+        UDim2.new(0, 54, 0, 27)
+    chatButton.Position =
+        UDim2.new(1, -120, 0.5, -13)
+    chatButton.BorderSizePixel = 0
+    chatButton.Text = "CHAT"
+    chatButton.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+    chatButton.TextSize = 10
+    chatButton.Font =
+        Enum.Font.GothamBold
+    chatButton.AutoButtonColor = false
+    chatButton.Parent = row
+    MakeCorner(chatButton, 4)
+
+    local cmdButton =
+        Instance.new("TextButton")
+
+    cmdButton.Size =
+        UDim2.new(0, 54, 0, 27)
+    cmdButton.Position =
+        UDim2.new(1, -62, 0.5, -13)
+    cmdButton.BorderSizePixel = 0
+    cmdButton.Text = "CMD"
+    cmdButton.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+    cmdButton.TextSize = 10
+    cmdButton.Font =
+        Enum.Font.GothamBold
+    cmdButton.AutoButtonColor = false
+    cmdButton.Parent = row
+    MakeCorner(cmdButton, 4)
+
+    local function UpdateMode()
+        if Settings.ADMINCommandMode == "CHAT" then
+            chatButton.BackgroundColor3 =
+                Color3.fromRGB(50, 180, 70)
+
+            cmdButton.BackgroundColor3 =
+                Color3.fromRGB(28, 28, 42)
+        else
+            chatButton.BackgroundColor3 =
+                Color3.fromRGB(28, 28, 42)
+
+            cmdButton.BackgroundColor3 =
+                Color3.fromRGB(50, 180, 70)
+        end
+    end
+
     input.FocusLost:Connect(function()
         local value =
-            tostring(
-                input.Text or ""
-            )
+            tostring(input.Text or "")
 
         if value == "" then
             value = "."
@@ -669,6 +842,36 @@ local function CreatePrefixRow()
         Settings.ADMINPrefix = value
         Save()
     end)
+
+    chatButton.MouseButton1Click:
+        Connect(function()
+            if Settings.ADMINCommandMode
+            == "CHAT" then
+                return
+            end
+
+            Settings.ADMINCommandMode =
+                "CHAT"
+
+            UpdateMode()
+            Save()
+        end)
+
+    cmdButton.MouseButton1Click:
+        Connect(function()
+            if Settings.ADMINCommandMode
+            == "CMD" then
+                return
+            end
+
+            Settings.ADMINCommandMode =
+                "CMD"
+
+            UpdateMode()
+            Save()
+        end)
+
+    UpdateMode()
 end
 
 local function CreateTargetCommandRow(
