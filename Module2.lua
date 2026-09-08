@@ -31,6 +31,9 @@ local ToxChatStatus = getgenv().ToxChatStatus
 local AddToxChatMessage = getgenv().AddToxChatMessage
 local JoinGamesGui = getgenv().JoinGamesGui
 local JoinGamesScroll = getgenv().JoinGamesScroll
+local JoinGameIdBox = getgenv().JoinGameIdBox
+local JoinGameAddButton = getgenv().JoinGameAddButton
+local SavedJoinGames = getgenv().SavedJoinGames or {}
 local CheckMusicIDsBtn = getgenv().CheckMusicIDsBtn
 local SetMusicIDStatus = getgenv().SetMusicIDStatus
 
@@ -1003,12 +1006,6 @@ for _, page in pairs(Pages) do
     end
 end
 
-local QuickJoinGames = {
-    {Name = "MM2", PlaceId = 142823291},
-    {Name = "NDS", PlaceId = 189707}
-}
-getgenv().QuickJoinGames = QuickJoinGames
-
 local JoinTargetCache = nil
 local JoinLookupGeneration = 0
 
@@ -1216,6 +1213,132 @@ local function UpdateJoinStatus(text, notifyFailure)
     return JoinTargetCache
 end
 
+local function RequestJson(url)
+    local body = nil
+
+    if RequestFunction then
+        local ok, response = pcall(function()
+            return RequestFunction({
+                Url = url,
+                Method = "GET"
+            })
+        end)
+
+        if ok and typeof(response) == "table" then
+            body = response.Body or response.body
+        end
+    end
+
+    if typeof(body) ~= "string" or body == "" then
+        local ok, result = pcall(function()
+            return game:HttpGet(url)
+        end)
+
+        if ok and typeof(result) == "string" then
+            body = result
+        end
+    end
+
+    if typeof(body) ~= "string" or body == "" then
+        return nil
+    end
+
+    local ok, decoded = pcall(function()
+        return HttpService:JSONDecode(body)
+    end)
+
+    if ok and typeof(decoded) == "table" then
+        return decoded
+    end
+
+    return nil
+end
+
+local function GetPopulatedPublicServer(placeId)
+    local cursor = nil
+    local bestServer = nil
+    local bestPlaying = -1
+
+    for _ = 1, 3 do
+        local url = "https://games.roblox.com/v1/games/"
+            .. tostring(placeId)
+            .. "/servers/Public?sortOrder=Desc&excludeFullGames=true&limit=100"
+
+        if cursor and cursor ~= "" then
+            url = url .. "&cursor=" .. HttpService:UrlEncode(cursor)
+        end
+
+        local decoded = RequestJson(url)
+
+        if not decoded or typeof(decoded.data) ~= "table" then
+            break
+        end
+
+        for _, server in ipairs(decoded.data) do
+            local serverId = tostring(server.id or "")
+            local playing = tonumber(server.playing) or 0
+            local maxPlayers = tonumber(server.maxPlayers) or 0
+
+            if serverId ~= ""
+            and serverId ~= game.JobId
+            and playing > 0
+            and (maxPlayers <= 0 or playing < maxPlayers)
+            and playing > bestPlaying then
+                bestPlaying = playing
+                bestServer = server
+            end
+        end
+
+        cursor = decoded.nextPageCursor
+
+        if not cursor or cursor == "" then
+            break
+        end
+    end
+
+    return bestServer
+end
+
+local function JoinPublicGame(placeId)
+    placeId = tonumber(placeId)
+
+    if not placeId or placeId <= 0 then
+        CustomNotify("Invalid Place ID", Color3.fromRGB(255, 100, 100))
+        return false
+    end
+
+    local server = GetPopulatedPublicServer(placeId)
+
+    if server and server.id then
+        CustomNotify(
+            "Joining public server • "
+                .. tostring(server.playing or 0)
+                .. "/"
+                .. tostring(server.maxPlayers or "?"),
+            Color3.fromRGB(100, 255, 100)
+        )
+
+        local ok = pcall(function()
+            TeleportService:TeleportToPlaceInstance(
+                placeId,
+                tostring(server.id),
+                Player
+            )
+        end)
+
+        return ok
+    end
+
+    CustomNotify(
+        "No populated server found, using normal matchmaking",
+        Color3.fromRGB(255, 215, 70)
+    )
+
+    return pcall(function()
+        TeleportService:Teleport(placeId, Player)
+    end)
+end
+
 local function JoinTargetPlayer()
     if not JoinTargetBox then
         return
@@ -1237,14 +1360,70 @@ local function JoinTargetPlayer()
         return
     end
 
-    if not target.PlaceId or not target.GameId or target.GameId == "" then
-        CustomNotify("Player joins are unavailable", Color3.fromRGB(255, 100, 100))
+    if target.PlaceId and target.GameId and target.GameId ~= "" then
+        local fallbackConnection = nil
+        local fallbackUsed = false
+
+        fallbackConnection = TeleportService.TeleportInitFailed:Connect(function(player)
+            if player ~= Player or fallbackUsed then
+                return
+            end
+
+            fallbackUsed = true
+
+            if fallbackConnection then
+                fallbackConnection:Disconnect()
+            end
+
+            CustomNotify(
+                "Exact server blocked; joining a public server in the same game",
+                Color3.fromRGB(255, 180, 70)
+            )
+
+            task.spawn(function()
+                JoinPublicGame(target.PlaceId)
+            end)
+        end)
+
+        task.delay(8, function()
+            if fallbackConnection then
+                fallbackConnection:Disconnect()
+            end
+        end)
+
+        local ok = pcall(function()
+            TeleportService:TeleportToPlaceInstance(
+                target.PlaceId,
+                target.GameId,
+                Player
+            )
+        end)
+
+        if not ok then
+            if fallbackConnection then
+                fallbackConnection:Disconnect()
+            end
+
+            JoinPublicGame(target.PlaceId)
+        end
+
         return
     end
 
-    pcall(function()
-        TeleportService:TeleportToPlaceInstance(target.PlaceId, target.GameId, Player)
-    end)
+    if target.PlaceId then
+        CustomNotify(
+            "Roblox hides the exact server; joining the same game instead",
+            Color3.fromRGB(255, 180, 70)
+        )
+
+        JoinPublicGame(target.PlaceId)
+        return
+    end
+
+    CustomNotify(
+        "Roblox hides this player's game/server",
+        Color3.fromRGB(255, 100, 100)
+    )
 end
 
 local function CreateJoinInterface()
@@ -1346,47 +1525,208 @@ local function CreateJoinInterface()
     end)
 end
 
-local function PopulateQuickJoinGames()
+local function ResolvePlaceName(placeId)
+    local ok, info = pcall(function()
+        return MarketplaceService:GetProductInfo(
+            placeId,
+            Enum.InfoType.Asset
+        )
+    end)
+
+    if ok and typeof(info) == "table" then
+        local name = tostring(info.Name or "")
+
+        if name ~= "" then
+            return name
+        end
+    end
+
+    return "Place " .. tostring(placeId)
+end
+
+local function RefreshQuickJoinGames()
     if not JoinGamesScroll then
         return
     end
 
     for _, child in ipairs(JoinGamesScroll:GetChildren()) do
-        if child:IsA("TextButton") then
+        if child:IsA("Frame") then
             child:Destroy()
         end
     end
 
-    for _, info in ipairs(QuickJoinGames) do
-        local button = Instance.new("TextButton")
-        button.Size = UDim2.new(1, -4, 0, 38)
-        button.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
-        button.BorderSizePixel = 0
-        button.Text = info.Name
-        button.TextColor3 = Color3.fromRGB(245, 245, 245)
-        button.Font = Enum.Font.GothamBold
-        button.TextSize = 12
-        button.Parent = JoinGamesScroll
+    for idx, info in ipairs(SavedJoinGames) do
+        local placeId = tonumber(info.id or info.PlaceId)
+        local gameName = tostring(info.name or info.Name or ("Place " .. tostring(placeId or "?")))
+        local favorite = info.favorite == true
 
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 4)
-        corner.Parent = button
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, -4, 0, 48)
+        row.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+        row.BorderSizePixel = 0
+        row.LayoutOrder = idx
+        row.Parent = JoinGamesScroll
 
-        button.MouseButton1Click:Connect(function()
-            if game.PlaceId == info.PlaceId then
-                CustomNotify("Already in " .. info.Name, Color3.fromRGB(255, 215, 70))
-                return
+        local rowCorner = Instance.new("UICorner")
+        rowCorner.CornerRadius = UDim.new(0, 4)
+        rowCorner.Parent = row
+
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(0, 225, 0, 24)
+        nameLabel.Position = UDim2.new(0, 8, 0, 3)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = (favorite and "★ " or "") .. gameName
+        nameLabel.TextColor3 = favorite
+            and Color3.fromRGB(255, 215, 70)
+            or Color3.fromRGB(245, 245, 245)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 11
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        nameLabel.Parent = row
+
+        local idLabel = Instance.new("TextLabel")
+        idLabel.Size = UDim2.new(0, 225, 0, 16)
+        idLabel.Position = UDim2.new(0, 8, 0, 27)
+        idLabel.BackgroundTransparency = 1
+        idLabel.Text = "ID: " .. tostring(placeId or "?")
+        idLabel.TextColor3 = Color3.fromRGB(145, 145, 165)
+        idLabel.Font = Enum.Font.Gotham
+        idLabel.TextSize = 9
+        idLabel.TextXAlignment = Enum.TextXAlignment.Left
+        idLabel.Parent = row
+
+        local function makeButton(text, x, width)
+            local button = Instance.new("TextButton")
+            button.Size = UDim2.new(0, width, 0, 24)
+            button.Position = UDim2.new(1, x, 0.5, -12)
+            button.BackgroundColor3 = Color3.fromRGB(25, 25, 38)
+            button.BorderSizePixel = 0
+            button.Text = text
+            button.TextColor3 = Color3.fromRGB(240, 240, 240)
+            button.Font = Enum.Font.GothamBold
+            button.TextSize = 9
+            button.Parent = row
+
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 4)
+            corner.Parent = button
+
+            return button
+        end
+
+        local joinButton = makeButton("Join", -205, 42)
+        local upButton = makeButton("Up", -159, 28)
+        local downButton = makeButton("Down", -127, 38)
+        local favoriteButton = makeButton("Fav", -85, 32)
+        local removeButton = makeButton("Remove", -49, 45)
+
+        favoriteButton.TextColor3 = favorite
+            and Color3.fromRGB(255, 215, 70)
+            or Color3.fromRGB(210, 210, 220)
+
+        joinButton.MouseButton1Click:Connect(function()
+            if placeId then
+                task.spawn(function()
+                    JoinPublicGame(placeId)
+                end)
             end
+        end)
 
-            pcall(function()
-                TeleportService:Teleport(info.PlaceId, Player)
-            end)
+        upButton.MouseButton1Click:Connect(function()
+            if idx > 1 then
+                SavedJoinGames[idx], SavedJoinGames[idx - 1] =
+                    SavedJoinGames[idx - 1], SavedJoinGames[idx]
+
+                AutoSaveConfiguration()
+                RefreshQuickJoinGames()
+            end
+        end)
+
+        downButton.MouseButton1Click:Connect(function()
+            if idx < #SavedJoinGames then
+                SavedJoinGames[idx], SavedJoinGames[idx + 1] =
+                    SavedJoinGames[idx + 1], SavedJoinGames[idx]
+
+                AutoSaveConfiguration()
+                RefreshQuickJoinGames()
+            end
+        end)
+
+        favoriteButton.MouseButton1Click:Connect(function()
+            SavedJoinGames[idx].favorite = not favorite
+            AutoSaveConfiguration()
+            RefreshQuickJoinGames()
+        end)
+
+        removeButton.MouseButton1Click:Connect(function()
+            table.remove(SavedJoinGames, idx)
+            AutoSaveConfiguration()
+            RefreshQuickJoinGames()
         end)
     end
 end
 
+getgenv().RefreshQuickJoinGames = RefreshQuickJoinGames
+
+local function AddQuickJoinGame()
+    if not JoinGameIdBox then
+        return
+    end
+
+    local cleaned = tostring(JoinGameIdBox.Text or ""):match("%d+")
+    local placeId = tonumber(cleaned)
+
+    if not placeId or placeId <= 0 then
+        CustomNotify("Invalid Place ID", Color3.fromRGB(255, 100, 100))
+        return
+    end
+
+    for _, info in ipairs(SavedJoinGames) do
+        if tonumber(info.id or info.PlaceId) == placeId then
+            CustomNotify("Game already saved", Color3.fromRGB(255, 215, 70))
+            return
+        end
+    end
+
+    JoinGameAddButton.Text = "Adding..."
+
+    task.spawn(function()
+        local name = ResolvePlaceName(placeId)
+
+        table.insert(SavedJoinGames, {
+            id = placeId,
+            name = name,
+            favorite = false
+        })
+
+        AutoSaveConfiguration()
+        RefreshQuickJoinGames()
+
+        JoinGameIdBox.Text = ""
+        JoinGameAddButton.Text = "Add Game"
+
+        CustomNotify(
+            "Saved: " .. name,
+            Color3.fromRGB(100, 255, 100)
+        )
+    end)
+end
+
+if JoinGameAddButton then
+    JoinGameAddButton.MouseButton1Click:Connect(AddQuickJoinGame)
+end
+
+if JoinGameIdBox then
+    JoinGameIdBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            AddQuickJoinGame()
+        end
+    end)
+end
+
 CreateJoinInterface()
-PopulateQuickJoinGames()
+RefreshQuickJoinGames()
 
 local function SkidFling(TargetPlayer)
     if not TargetPlayer or not TargetPlayer.Character then return end
