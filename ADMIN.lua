@@ -445,6 +445,60 @@ local function ResolveRequest()
         return CachedRequest
     end
 
+    local hdClient =
+        ReplicatedStorage:FindFirstChild(
+            "HDAdminHDClient"
+        )
+
+    local hdSignals =
+        hdClient
+        and hdClient:FindFirstChild(
+            "Signals"
+        )
+
+    local exact =
+        hdSignals
+        and hdSignals:FindFirstChild(
+            "RequestCommand"
+        )
+
+    if IsRemoteFunction(exact) then
+        CachedRequest = exact
+        return exact
+    end
+
+    local setup =
+        ReplicatedStorage:FindFirstChild(
+            "HDAdminSetup"
+        )
+
+    if setup
+    and setup:IsA("ModuleScript") then
+        local ok, setupModule =
+            pcall(require, setup)
+
+        if ok
+        and setupModule
+        and setupModule.GetMain then
+            local mainOk, main =
+                pcall(function()
+                    return setupModule:GetMain()
+                end)
+
+            if mainOk
+            and typeof(main) == "table"
+            and typeof(main.signals) == "table"
+            and IsRemoteFunction(
+                main.signals.RequestCommand
+            ) then
+                CachedMain = main
+                CachedRequest =
+                    main.signals.RequestCommand
+                return CachedRequest
+            end
+        end
+    end
+
     local main = ResolveMain()
 
     if main
@@ -486,6 +540,28 @@ local function ResolveRetrieve()
     if IsRemoteFunction(CachedRetrieve)
     and CachedRetrieve.Parent then
         return CachedRetrieve
+    end
+
+    local hdClient =
+        ReplicatedStorage:FindFirstChild(
+            "HDAdminHDClient"
+        )
+
+    local hdSignals =
+        hdClient
+        and hdClient:FindFirstChild(
+            "Signals"
+        )
+
+    local exact =
+        hdSignals
+        and hdSignals:FindFirstChild(
+            "RetrieveData"
+        )
+
+    if IsRemoteFunction(exact) then
+        CachedRetrieve = exact
+        return exact
     end
 
     local main = ResolveMain()
@@ -730,11 +806,26 @@ local function RunHDAdminCommand(
         return SendChatCommand(raw)
     end
 
-    if ExecuteThroughCmdBar(raw) then
+    if ExecuteDirect(raw) then
         return true
     end
 
-    return ExecuteDirect(raw)
+    return ExecuteThroughCmdBar(raw)
+end
+
+getgenv().ToxPlayAdminMusic = function(id)
+    local cleanID =
+        tostring(id or "")
+            :match("%d+")
+
+    if not cleanID then
+        return false
+    end
+
+    return RunHDAdminCommand(
+        "music",
+        cleanID
+    )
 end
 
 local LoopGeneration = {}
@@ -806,7 +897,9 @@ end
 local function CreateLoopControls(
     parent,
     id,
-    callback
+    callback,
+    loopX,
+    secondsX
 )
     local stateKey, secondsKey =
         InitializeLoopState(id)
@@ -815,18 +908,14 @@ local function CreateLoopControls(
         Instance.new("TextButton")
 
     loopButton.Size =
-        UDim2.new(0, 46, 0, 20)
+        UDim2.new(0, 38, 0, 24)
     loopButton.Position =
-        UDim2.new(0, 86, 1, -23)
+        UDim2.new(0, loopX, 0.5, -12)
     loopButton.BorderSizePixel = 0
     loopButton.Text = "LOOP"
     loopButton.TextColor3 =
-        Color3.fromRGB(
-            255,
-            255,
-            255
-        )
-    loopButton.TextSize = 9
+        Color3.fromRGB(255, 255, 255)
+    loopButton.TextSize = 8
     loopButton.Font =
         Enum.Font.GothamBold
     loopButton.AutoButtonColor = false
@@ -837,79 +926,35 @@ local function CreateLoopControls(
         Instance.new("TextBox")
 
     secondsBox.Size =
-        UDim2.new(0, 48, 0, 20)
+        UDim2.new(0, 30, 0, 24)
     secondsBox.Position =
-        UDim2.new(0, 136, 1, -23)
+        UDim2.new(0, secondsX, 0.5, -12)
     secondsBox.BackgroundColor3 =
         Color3.fromRGB(28, 28, 42)
     secondsBox.BorderSizePixel = 0
     secondsBox.Text =
-        tostring(
-            Settings[secondsKey]
-        )
+        tostring(Settings[secondsKey])
     secondsBox.PlaceholderText = "1"
     secondsBox.TextColor3 =
-        Color3.fromRGB(
-            255,
-            255,
-            255
-        )
-    secondsBox.TextSize = 10
-    secondsBox.Font =
-        Enum.Font.Gotham
+        Color3.fromRGB(255, 255, 255)
+    secondsBox.TextSize = 9
+    secondsBox.Font = Enum.Font.Gotham
     secondsBox.ClearTextOnFocus = false
     secondsBox.Parent = parent
     MakeCorner(secondsBox, 4)
 
-    local secondsLabel =
-        Instance.new("TextLabel")
-
-    secondsLabel.Size =
-        UDim2.new(0, 18, 0, 20)
-    secondsLabel.Position =
-        UDim2.new(0, 186, 1, -23)
-    secondsLabel.BackgroundTransparency = 1
-    secondsLabel.Text = "s"
-    secondsLabel.TextColor3 =
-        Color3.fromRGB(
-            180,
-            180,
-            195
-        )
-    secondsLabel.TextSize = 10
-    secondsLabel.Font =
-        Enum.Font.Gotham
-    secondsLabel.Parent = parent
-
     local function UpdateLoop()
-        if Settings[stateKey] then
-            loopButton.BackgroundColor3 =
-                Color3.fromRGB(
-                    50,
-                    180,
-                    70
-                )
-        else
-            loopButton.BackgroundColor3 =
-                Color3.fromRGB(
-                    28,
-                    28,
-                    42
-                )
-        end
+        loopButton.BackgroundColor3 =
+            Settings[stateKey]
+            and Color3.fromRGB(50, 180, 70)
+            or Color3.fromRGB(28, 28, 42)
     end
 
     secondsBox.FocusLost:Connect(function()
         local value =
-            tonumber(
-                secondsBox.Text
-            )
-
-        if not value then
-            value =
-                Settings[secondsKey]
-                or 1
-        end
+            tonumber(secondsBox.Text)
+            or tonumber(Settings[secondsKey])
+            or 1
 
         value =
             math.clamp(
@@ -919,9 +964,7 @@ local function CreateLoopControls(
             )
 
         Settings[secondsKey] = value
-        secondsBox.Text =
-            tostring(value)
-
+        secondsBox.Text = tostring(value)
         Save()
     end)
 
@@ -934,10 +977,7 @@ local function CreateLoopControls(
             Save()
 
             if Settings[stateKey] then
-                StartLoop(
-                    id,
-                    callback
-                )
+                StartLoop(id, callback)
             else
                 StopLoop(id)
             end
@@ -947,10 +987,7 @@ local function CreateLoopControls(
 
     if Settings[stateKey] then
         task.defer(function()
-            StartLoop(
-                id,
-                callback
-            )
+            StartLoop(id, callback)
         end)
     end
 end
@@ -1093,7 +1130,7 @@ end
 
 local function CreateCustomCommandRow()
     local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, -5, 0, 70)
+    row.Size = UDim2.new(1, -5, 0, 42)
     row.BackgroundColor3 =
         Color3.fromRGB(18, 18, 26)
     row.BorderSizePixel = 0
@@ -1101,44 +1138,38 @@ local function CreateCustomCommandRow()
     MakeCorner(row, 4)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 38, 0, 40)
-    label.Position = UDim2.new(0, 8, 0, 0)
+    label.Size = UDim2.new(0, 28, 1, 0)
+    label.Position = UDim2.new(0, 6, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = "Cmd"
     label.TextColor3 =
         Color3.fromRGB(240, 240, 240)
-    label.TextSize = 12
-    label.Font =
-        Enum.Font.GothamMedium
+    label.TextSize = 10
+    label.Font = Enum.Font.GothamMedium
     label.Parent = row
 
     local commandBox =
         Instance.new("TextBox")
-    commandBox.Size =
-        UDim2.new(0, 70, 0, 25)
-    commandBox.Position =
-        UDim2.new(0, 48, 0, 8)
+    commandBox.Size = UDim2.new(0, 48, 0, 24)
+    commandBox.Position = UDim2.new(0, 34, 0.5, -12)
     commandBox.BackgroundColor3 =
         Color3.fromRGB(28, 28, 42)
     commandBox.BorderSizePixel = 0
     commandBox.Text =
         Settings.ADMINCustomCommand
-    commandBox.PlaceholderText = "Command"
+    commandBox.PlaceholderText = "Cmd"
     commandBox.TextColor3 =
         Color3.fromRGB(255, 255, 255)
-    commandBox.TextSize = 10
-    commandBox.Font =
-        Enum.Font.Gotham
+    commandBox.TextSize = 9
+    commandBox.Font = Enum.Font.Gotham
     commandBox.ClearTextOnFocus = false
     commandBox.Parent = row
     MakeCorner(commandBox, 4)
 
     local targetBox =
         Instance.new("TextBox")
-    targetBox.Size =
-        UDim2.new(0, 68, 0, 25)
-    targetBox.Position =
-        UDim2.new(0, 122, 0, 8)
+    targetBox.Size = UDim2.new(0, 50, 0, 24)
+    targetBox.Position = UDim2.new(0, 86, 0.5, -12)
     targetBox.BackgroundColor3 =
         Color3.fromRGB(28, 28, 42)
     targetBox.BorderSizePixel = 0
@@ -1147,61 +1178,45 @@ local function CreateCustomCommandRow()
     targetBox.PlaceholderText = "Nick"
     targetBox.TextColor3 =
         Color3.fromRGB(255, 255, 255)
-    targetBox.TextSize = 10
-    targetBox.Font =
-        Enum.Font.Gotham
+    targetBox.TextSize = 9
+    targetBox.Font = Enum.Font.Gotham
     targetBox.ClearTextOnFocus = false
     targetBox.Parent = row
     MakeCorner(targetBox, 4)
 
     local allButton =
         Instance.new("TextButton")
-    allButton.Size =
-        UDim2.new(0, 42, 0, 25)
-    allButton.Position =
-        UDim2.new(0, 194, 0, 8)
+    allButton.Size = UDim2.new(0, 30, 0, 24)
+    allButton.Position = UDim2.new(0, 140, 0.5, -12)
     allButton.BorderSizePixel = 0
     allButton.Text = "ALL"
     allButton.TextColor3 =
         Color3.fromRGB(255, 255, 255)
-    allButton.TextSize = 10
-    allButton.Font =
-        Enum.Font.GothamBold
+    allButton.TextSize = 8
+    allButton.Font = Enum.Font.GothamBold
     allButton.AutoButtonColor = false
     allButton.Parent = row
     MakeCorner(allButton, 4)
 
     local useButton =
         Instance.new("TextButton")
-    useButton.Size =
-        UDim2.new(0, 48, 0, 25)
-    useButton.Position =
-        UDim2.new(1, -54, 0, 8)
-    useButton.BackgroundColor3 =
-        MAIN_COLOR
+    useButton.Size = UDim2.new(0, 38, 0, 24)
+    useButton.Position = UDim2.new(0, 174, 0.5, -12)
+    useButton.BackgroundColor3 = MAIN_COLOR
     useButton.BorderSizePixel = 0
     useButton.Text = "USE"
     useButton.TextColor3 =
         Color3.fromRGB(255, 255, 255)
-    useButton.TextSize = 10
-    useButton.Font =
-        Enum.Font.GothamBold
+    useButton.TextSize = 8
+    useButton.Font = Enum.Font.GothamBold
     useButton.Parent = row
     MakeCorner(useButton, 4)
 
     local function UpdateAll()
         allButton.BackgroundColor3 =
             Settings.ADMINCustomAll
-            and Color3.fromRGB(
-                50,
-                180,
-                70
-            )
-            or Color3.fromRGB(
-                28,
-                28,
-                42
-            )
+            and Color3.fromRGB(50, 180, 70)
+            or Color3.fromRGB(28, 28, 42)
     end
 
     local function SyncFields()
@@ -1252,7 +1267,9 @@ local function CreateCustomCommandRow()
     CreateLoopControls(
         row,
         "Custom",
-        Execute
+        Execute,
+        216,
+        258
     )
 
     UpdateAll()
@@ -1266,15 +1283,12 @@ local function CreateCommandRow(
     allSetting
 )
     Settings[targetSetting] =
-        tostring(
-            Settings[targetSetting]
-            or ""
-        )
+        tostring(Settings[targetSetting] or "")
     Settings[allSetting] =
         Settings[allSetting] == true
 
     local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, -5, 0, 70)
+    row.Size = UDim2.new(1, -5, 0, 42)
     row.BackgroundColor3 =
         Color3.fromRGB(18, 18, 26)
     row.BorderSizePixel = 0
@@ -1282,89 +1296,69 @@ local function CreateCommandRow(
     MakeCorner(row, 4)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 80, 0, 38)
-    label.Position = UDim2.new(0, 8, 0, 1)
+    label.Size = UDim2.new(0, 58, 1, 0)
+    label.Position = UDim2.new(0, 6, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = labelText
     label.TextColor3 =
         Color3.fromRGB(240, 240, 240)
     label.TextSize =
-        #labelText > 8 and 10 or 12
-    label.Font =
-        Enum.Font.GothamMedium
+        #labelText > 8 and 8 or 10
+    label.Font = Enum.Font.GothamMedium
     label.TextXAlignment =
         Enum.TextXAlignment.Left
     label.Parent = row
 
     local targetBox =
         Instance.new("TextBox")
-    targetBox.Size =
-        UDim2.new(0, 78, 0, 25)
-    targetBox.Position =
-        UDim2.new(0, 86, 0, 8)
+    targetBox.Size = UDim2.new(0, 54, 0, 24)
+    targetBox.Position = UDim2.new(0, 60, 0.5, -12)
     targetBox.BackgroundColor3 =
         Color3.fromRGB(28, 28, 42)
     targetBox.BorderSizePixel = 0
-    targetBox.Text =
-        Settings[targetSetting]
+    targetBox.Text = Settings[targetSetting]
     targetBox.PlaceholderText = "Nick"
     targetBox.TextColor3 =
         Color3.fromRGB(255, 255, 255)
-    targetBox.TextSize = 10
-    targetBox.Font =
-        Enum.Font.Gotham
+    targetBox.TextSize = 9
+    targetBox.Font = Enum.Font.Gotham
     targetBox.ClearTextOnFocus = false
     targetBox.Parent = row
     MakeCorner(targetBox, 4)
 
     local allButton =
         Instance.new("TextButton")
-    allButton.Size =
-        UDim2.new(0, 42, 0, 25)
-    allButton.Position =
-        UDim2.new(0, 168, 0, 8)
+    allButton.Size = UDim2.new(0, 30, 0, 24)
+    allButton.Position = UDim2.new(0, 118, 0.5, -12)
     allButton.BorderSizePixel = 0
     allButton.Text = "ALL"
     allButton.TextColor3 =
         Color3.fromRGB(255, 255, 255)
-    allButton.TextSize = 10
-    allButton.Font =
-        Enum.Font.GothamBold
+    allButton.TextSize = 8
+    allButton.Font = Enum.Font.GothamBold
     allButton.AutoButtonColor = false
     allButton.Parent = row
     MakeCorner(allButton, 4)
 
     local useButton =
         Instance.new("TextButton")
-    useButton.Size =
-        UDim2.new(0, 48, 0, 25)
-    useButton.Position =
-        UDim2.new(1, -54, 0, 8)
-    useButton.BackgroundColor3 =
-        MAIN_COLOR
+    useButton.Size = UDim2.new(0, 38, 0, 24)
+    useButton.Position = UDim2.new(0, 152, 0.5, -12)
+    useButton.BackgroundColor3 = MAIN_COLOR
     useButton.BorderSizePixel = 0
     useButton.Text = "USE"
     useButton.TextColor3 =
         Color3.fromRGB(255, 255, 255)
-    useButton.TextSize = 10
-    useButton.Font =
-        Enum.Font.GothamBold
+    useButton.TextSize = 8
+    useButton.Font = Enum.Font.GothamBold
     useButton.Parent = row
     MakeCorner(useButton, 4)
 
     local function UpdateAll()
         allButton.BackgroundColor3 =
             Settings[allSetting]
-            and Color3.fromRGB(
-                50,
-                180,
-                70
-            )
-            or Color3.fromRGB(
-                28,
-                28,
-                42
-            )
+            and Color3.fromRGB(50, 180, 70)
+            or Color3.fromRGB(28, 28, 42)
     end
 
     local function Execute()
@@ -1409,7 +1403,9 @@ local function CreateCommandRow(
     CreateLoopControls(
         row,
         id,
-        Execute
+        Execute,
+        194,
+        236
     )
 
     UpdateAll()
@@ -1472,21 +1468,7 @@ CreateCommandRow(
     "ADMINRocketAll"
 )
 
-CreateCommandRow(
-    "Poop",
-    "Poop",
-    "poop",
-    "ADMINPoopTarget",
-    "ADMINPoopAll"
-)
 
-CreateCommandRow(
-    "Kill",
-    "Kill",
-    "kill",
-    "ADMINKillTarget",
-    "ADMINKillAll"
-)
 
 CreateCommandRow(
     "Punish",
