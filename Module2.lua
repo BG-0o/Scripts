@@ -1195,7 +1195,10 @@ local function ExecuteTeleport(TargetInput, mode)
         local tHrp = targetObj.Character.HumanoidRootPart
         local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
         if mode == "TP" then
-            if Root then Root.CFrame = tHrp.CFrame * CFrame.new(0, 0, -3) end
+            if Root then
+                if getgenv().AllowToxTeleport then getgenv().AllowToxTeleport(1.25) end
+                Root.CFrame = tHrp.CFrame * CFrame.new(0, 0, -3)
+            end
             CustomNotify("Teleported to " .. targetObj.DisplayName, Color3.fromRGB(100, 255, 100))
         elseif mode == "LOOP" then
             if Settings.LoopTPTarget == targetObj then
@@ -1264,6 +1267,78 @@ local function StartAntiVoid()
 			CustomNotify("Anti Void Saved You!", Color3.fromRGB(100, 255, 100))
 		end
 	end))
+end
+
+getgenv().ToxSetSharedOption = function(Key, Value)
+    local enabled = Value == true
+
+    if Key == "Noclip" then
+        if enabled then
+            CaptureNoclipDefaults()
+        end
+
+        Settings.Noclip = enabled
+
+        if not enabled then
+            RestoreNoclipDefaults()
+        end
+    elseif Key == "NoFallDamage" then
+        Settings.NoFallDamage = enabled
+
+        if getgenv().SetNDSNoFall then
+            getgenv().SetNDSNoFall(enabled, true)
+        end
+    elseif Key == "AntiVoid" then
+        Settings.AntiVoid = enabled
+
+        if enabled then
+            StartAntiVoid()
+        end
+    elseif Key == "AntiFling" then
+        Settings.AntiFling = enabled
+
+        if not enabled then
+            RestoreAntiFlingDefaults()
+        end
+    elseif Key == "CtrlClickTP" then
+        Settings.CtrlClickTP = enabled
+    elseif Key == "CarFly" then
+        Settings.CarFly = enabled
+    elseif Key == "SmoothFly" then
+        Settings.SmoothFly = enabled
+
+        if enabled then
+            Settings.NormalFly = false
+
+            if getgenv().SyncToggleVisuals then
+                getgenv().SyncToggleVisuals("NormalFly", false)
+            end
+
+            if getgenv().SetNDSWaterFly then
+                getgenv().SetNDSWaterFly(false, true)
+            end
+        end
+    elseif Key == "NormalFly" then
+        Settings.NormalFly = enabled
+
+        if enabled then
+            Settings.SmoothFly = false
+
+            if getgenv().SyncToggleVisuals then
+                getgenv().SyncToggleVisuals("SmoothFly", false)
+            end
+
+            if getgenv().SetNDSWaterFly then
+                getgenv().SetNDSWaterFly(false, true)
+            end
+        end
+    else
+        Settings[Key] = enabled
+    end
+
+    if getgenv().SyncToggleVisuals then
+        getgenv().SyncToggleVisuals(Key, enabled)
+    end
 end
 
 local function IsPartVisible(part)
@@ -1340,23 +1415,37 @@ CreateToggleWithValue("Jump", PlayerPage, Settings.Jump, Settings.JumpValue, fun
     end
 end, function(val) Settings.JumpValue = val end)
 CreateToggle("Air Walk (Platform)", PlayerPage, Settings.AirWalk, function(v) Settings.AirWalk = v UpdateAirWalk() end)
-CreateToggleWithValue("Smooth Fly", PlayerPage, Settings.SmoothFly, Settings.FlySpeed, function(v) Settings.SmoothFly = v if v then Settings.NormalFly = false end end, function(val) Settings.FlySpeed = val end)
-CreateToggleWithValue("Normal Fly", PlayerPage, Settings.NormalFly, Settings.FlySpeed, function(v) Settings.NormalFly = v if v then Settings.SmoothFly = false end end, function(val) Settings.FlySpeed = val end)
+CreateToggleWithValue("Smooth Fly", PlayerPage, Settings.SmoothFly, Settings.FlySpeed, function(v)
+    if getgenv().ToxSetSharedOption then
+        getgenv().ToxSetSharedOption("SmoothFly", v)
+    else
+        Settings.SmoothFly = v
+        if v then Settings.NormalFly = false end
+    end
+end, function(val) Settings.FlySpeed = val end, "SmoothFly")
+CreateToggleWithValue("Normal Fly", PlayerPage, Settings.NormalFly, Settings.FlySpeed, function(v)
+    if getgenv().ToxSetSharedOption then
+        getgenv().ToxSetSharedOption("NormalFly", v)
+    else
+        Settings.NormalFly = v
+        if v then Settings.SmoothFly = false end
+    end
+end, function(val) Settings.FlySpeed = val end, "NormalFly")
 CreateToggle("Noclip", PlayerPage, Settings.Noclip, function(v)
-    if v then
-        CaptureNoclipDefaults()
+    if getgenv().ToxSetSharedOption then
+        getgenv().ToxSetSharedOption("Noclip", v)
     end
-
-    Settings.Noclip = v
-
-    if not v then
-        RestoreNoclipDefaults()
-    end
-end)
+end, "Noclip")
 CreateToggle("Infinite Jump", PlayerPage, Settings.InfiniteJump, function(v) Settings.InfiniteJump = v end)
 CreateToggleWithValue("Bhop (Auto Jump)", PlayerPage, Settings.Bhop, Settings.BhopInterval, function(v) Settings.Bhop = v end, function(val) Settings.BhopInterval = math.max(0.05, val) end)
 CreateToggleWithValue("Car Speed", PlayerPage, Settings.CarSpeed, Settings.CarSpeedValue, function(v) Settings.CarSpeed = v end, function(val) Settings.CarSpeedValue = val end)
-CreateToggleWithValue("Car Fly", PlayerPage, Settings.CarFly, Settings.CarFlySpeed, function(v) Settings.CarFly = v end, function(val) Settings.CarFlySpeed = val end)
+CreateToggleWithValue("Car Fly", PlayerPage, Settings.CarFly, Settings.CarFlySpeed, function(v)
+    if getgenv().ToxSetSharedOption then
+        getgenv().ToxSetSharedOption("CarFly", v)
+    else
+        Settings.CarFly = v
+    end
+end, function(val) Settings.CarFlySpeed = val end, "CarFly")
 
 CreateToggle("Chams (Wallhack)", VisualsPage, Settings.Chams, function(v) Settings.Chams = v end)
 CreateToggle("Names / Display", VisualsPage, Settings.ESPNames, function(v) Settings.ESPNames = v end)
@@ -1601,13 +1690,18 @@ local function ClearESPForPlayer(p)
     end
 end
 
-CreateToggle("Ctrl Click TP", FlingPage, Settings.CtrlClickTP, function(v) Settings.CtrlClickTP = v end)
-CreateToggle("No Fall Damage", FlingPage, Settings.NoFallDamage, function(v) Settings.NoFallDamage = v end)
-CreateToggle("Anti Void", FlingPage, Settings.AntiVoid, function(v) Settings.AntiVoid = v if v then StartAntiVoid() end end)
+CreateToggle("Ctrl Click TP", FlingPage, Settings.CtrlClickTP, function(v)
+    if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("CtrlClickTP", v) end
+end, "CtrlClickTP")
+CreateToggle("No Fall Damage", FlingPage, Settings.NoFallDamage, function(v)
+    if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("NoFallDamage", v) end
+end, "NoFallDamage")
+CreateToggle("Anti Void", FlingPage, Settings.AntiVoid, function(v)
+    if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("AntiVoid", v) end
+end, "AntiVoid")
 CreateToggle("Anti Fling", FlingPage, Settings.AntiFling, function(v)
-    Settings.AntiFling = v
-    if not v then RestoreAntiFlingDefaults() end
-end)
+    if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("AntiFling", v) end
+end, "AntiFling")
 CreateToggle("Fullbright", FlingPage, Settings.Fullbright, function(v) Settings.Fullbright = v UpdateFullbright() end)
 CreateToggle("Force Shift Lock", FlingPage, Settings.ForceShiftLock, function(v)
     if v then
@@ -1742,6 +1836,7 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
             local mouse = Player:GetMouse()
             local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
             if mouse and mouse.Hit and Root then
+                if getgenv().AllowToxTeleport then getgenv().AllowToxTeleport(1.25) end
                 Root.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0, 3, 0))
             end
         end
@@ -1889,6 +1984,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
     end
 
     if Settings.LoopTPTarget and Settings.LoopTPTarget.Character and Settings.LoopTPTarget.Character:FindFirstChild("HumanoidRootPart") and Root then
+        if getgenv().AllowToxTeleport then getgenv().AllowToxTeleport(0.2) end
         Root.CFrame = Settings.LoopTPTarget.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3)
     end
 
@@ -2343,3 +2439,24 @@ if Minimize then
 end
 
 if Settings.AntiVoid then StartAntiVoid() end
+
+local DetectedGameModule = getgenv().CurrentGameModule
+
+if DetectedGameModule and DetectedGameModule.Ready and DetectedGameModule.Url and getgenv().GamePage then
+    task.spawn(function()
+        local ok, err = pcall(function()
+            local source = game:HttpGet(DetectedGameModule.Url)
+            local chunk = loadstring(source)
+
+            if not chunk then
+                error("invalid game module")
+            end
+
+            chunk()
+        end)
+
+        if not ok then
+            CustomNotify(DetectedGameModule.ShortName .. " module failed to load", Color3.fromRGB(255, 100, 100), 5)
+        end
+    end)
+end
