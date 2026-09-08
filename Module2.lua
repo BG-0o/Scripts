@@ -35,6 +35,7 @@ getgenv().MusicIDStatus = getgenv().MusicIDStatus or {}
 local MusicIDStatus = getgenv().MusicIDStatus
 local MusicCheckRunning = false
 local MusicCheckGeneration = 0
+local MusicInitialNoticeShown = false
 
 local function GetSavedMusicIDs()
     local ids = {}
@@ -161,10 +162,13 @@ local function CheckSavedMusicIDs(force)
             CheckMusicIDsBtn.Active = true
         end
 
-        CustomNotify(
-            tostring(activeCount) .. " active | " .. tostring(unavailableCount) .. " unavailable",
-            unavailableCount > 0 and Color3.fromRGB(255, 180, 70) or Color3.fromRGB(100, 255, 100)
-        )
+        if not MusicInitialNoticeShown then
+            MusicInitialNoticeShown = true
+            CustomNotify(
+                tostring(activeCount) .. " active | " .. tostring(unavailableCount) .. " unavailable",
+                unavailableCount > 0 and Color3.fromRGB(255, 180, 70) or Color3.fromRGB(100, 255, 100)
+            )
+        end
     end)
 end
 
@@ -1147,6 +1151,8 @@ local function SkidFling(TargetPlayer)
     end)
 end
 
+getgenv().ToxFlingPlayer = SkidFling
+
 local function ExecuteFling(TargetInput)
     if not TargetInput or TargetInput == "" then
         return CustomNotify("Enter username or 'all'", Color3.fromRGB(255, 100, 100))
@@ -1272,7 +1278,18 @@ end
 getgenv().ToxSetSharedOption = function(Key, Value)
     local enabled = Value == true
 
-    if Key == "Noclip" then
+    if Key == "Speed" then
+        if enabled then
+            local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
+            GetHumanoidDefaults(hum)
+        end
+
+        Settings.Speed = enabled
+
+        if not enabled then
+            RestoreSpeed()
+        end
+    elseif Key == "Noclip" then
         if enabled then
             CaptureNoclipDefaults()
         end
@@ -1390,17 +1407,12 @@ end, function(val) Settings.HitboxSize = val end)
 CreateToggleWithValue("Kill Aura", CombatPage, Settings.KillAura, Settings.KillAuraRange, function(v) Settings.KillAura = v end, function(val) Settings.KillAuraRange = val end)
 
 CreateToggleWithValue("Speed", PlayerPage, Settings.Speed, Settings.SpeedValue, function(v)
-    if v then
-        local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-        GetHumanoidDefaults(hum)
+    if getgenv().ToxSetSharedOption then
+        getgenv().ToxSetSharedOption("Speed", v)
     end
-
-    Settings.Speed = v
-
-    if not v then
-        RestoreSpeed()
-    end
-end, function(val) Settings.SpeedValue = val end)
+end, function(val)
+    Settings.SpeedValue = val
+end, "Speed")
 
 CreateToggleWithValue("Jump", PlayerPage, Settings.Jump, Settings.JumpValue, function(v)
     if v then
@@ -1447,15 +1459,15 @@ CreateToggleWithValue("Car Fly", PlayerPage, Settings.CarFly, Settings.CarFlySpe
     end
 end, function(val) Settings.CarFlySpeed = val end, "CarFly")
 
-CreateToggle("Chams (Wallhack)", VisualsPage, Settings.Chams, function(v) Settings.Chams = v end)
-CreateToggle("Names / Display", VisualsPage, Settings.ESPNames, function(v) Settings.ESPNames = v end)
+CreateToggle("Chams (Wallhack)", VisualsPage, Settings.Chams, function(v) Settings.Chams = v end, "Chams")
+CreateToggle("Names / Display", VisualsPage, Settings.ESPNames, function(v) Settings.ESPNames = v end, "ESPNames")
 CreateToggle("Distance", VisualsPage, Settings.ESPDistance, function(v) Settings.ESPDistance = v end)
 CreateToggle("2D Box ESP", VisualsPage, Settings.ESPBox, function(v) Settings.ESPBox = v end)
 CreateToggle("Head Dot ESP", VisualsPage, Settings.ESPHeadDot, function(v) Settings.ESPHeadDot = v end)
 CreateToggle("Tracers", VisualsPage, Settings.ESPTracers, function(v) Settings.ESPTracers = v end)
 CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
     Settings.ESPTeamColors = v
-end)
+end, "ESPTeamColors")
 CreateDropdown("Tracer Mode", {"DOWN", "UP", "MOUSE"}, VisualsPage, Settings.TracerOrigin, function(v) Settings.TracerOrigin = v end)
 CreateToggleWithValue("Camera FOV", VisualsPage, Settings.FOVEnabled, Settings.FOVValue, function(v)
     if v then
@@ -1476,8 +1488,27 @@ CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", 
 end)
 
 
+if getgenv().ToxESPDrawings then
+    for _, drawings in pairs(getgenv().ToxESPDrawings) do
+        for _, drawing in pairs(drawings) do
+            pcall(function() drawing:Remove() end)
+        end
+    end
+end
+
+if getgenv().ToxESPHighlights then
+    for _, highlight in pairs(getgenv().ToxESPHighlights) do
+        pcall(function() highlight:Destroy() end)
+    end
+end
+
 local ESPDrawings = {}
 local Highlights = {}
+local ESPCharacterRefs = {}
+local LastESPSafetyRefresh = tick()
+
+getgenv().ToxESPDrawings = ESPDrawings
+getgenv().ToxESPHighlights = Highlights
 
 local MM2GameId = 66654135
 local MM2PlaceId = 142823291
@@ -1643,6 +1674,22 @@ local function GetAttributeRole(p)
     return nil
 end
 
+getgenv().ToxGetMM2Role = function(p)
+    if not p then
+        return nil
+    end
+
+    if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
+        RefreshMM2Roles()
+
+        if MM2RoleCache[p] then
+            return MM2RoleCache[p]
+        end
+    end
+
+    return GetAttributeRole(p)
+end
+
 local function GetESPVisualInfo(p)
     local defaultColor = Settings.EspColor or Color3.fromRGB(255, 255, 255)
 
@@ -1650,20 +1697,10 @@ local function GetESPVisualInfo(p)
         return defaultColor, nil
     end
 
-    if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
-        RefreshMM2Roles()
+    local role = getgenv().ToxGetMM2Role and getgenv().ToxGetMM2Role(p) or GetAttributeRole(p)
 
-        local role = MM2RoleCache[p]
-
-        if role then
-            return RoleColors[role] or defaultColor, role
-        end
-    end
-
-    local attributeRole = GetAttributeRole(p)
-
-    if attributeRole then
-        return RoleColors[attributeRole] or defaultColor, attributeRole
+    if role then
+        return RoleColors[role] or defaultColor, role
     end
 
     if p and p.Team then
@@ -1684,10 +1721,13 @@ local function ClearESPForPlayer(p)
         for _, d in pairs(ESPDrawings[p]) do pcall(function() d:Remove() end) end
         ESPDrawings[p] = nil
     end
+
     if Highlights[p] then
         pcall(function() Highlights[p]:Destroy() end)
         Highlights[p] = nil
     end
+
+    ESPCharacterRefs[p] = nil
 end
 
 CreateToggle("Ctrl Click TP", FlingPage, Settings.CtrlClickTP, function(v)
@@ -2093,6 +2133,33 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         end
     end
 
+    local anyESPActive = Settings.ESPNames
+        or Settings.ESPDistance
+        or Settings.ESPTracers
+        or Settings.ESPBox
+        or Settings.ESPHeadDot
+        or Settings.Chams
+
+    if anyESPActive and tick() - LastESPSafetyRefresh >= 6 then
+        LastESPSafetyRefresh = tick()
+
+        local refreshPlayers = {}
+
+        for p in pairs(ESPDrawings) do
+            table.insert(refreshPlayers, p)
+        end
+
+        for p in pairs(Highlights) do
+            if not ESPDrawings[p] then
+                table.insert(refreshPlayers, p)
+            end
+        end
+
+        for _, p in ipairs(refreshPlayers) do
+            ClearESPForPlayer(p)
+        end
+    end
+
     for p, _ in pairs(ESPDrawings) do
         if not p or not p.Parent or not Players:FindFirstChild(p.Name) then
             ClearESPForPlayer(p)
@@ -2103,6 +2170,13 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         if p ~= Player then
             if p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChildOfClass("Humanoid") then
                 local char = p.Character
+
+                if ESPCharacterRefs[p] and ESPCharacterRefs[p] ~= char then
+                    ClearESPForPlayer(p)
+                end
+
+                ESPCharacterRefs[p] = char
+
                 local hrp = char.HumanoidRootPart
                 local hum = char:FindFirstChildOfClass("Humanoid")
                 local espColor, espRole = GetESPVisualInfo(p)
