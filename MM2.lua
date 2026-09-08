@@ -25,6 +25,8 @@ local CustomNotify = getgenv().CustomNotify
 local AutoSaveConfiguration = getgenv().AutoSaveConfiguration
 local SyncToggleVisuals = getgenv().SyncToggleVisuals
 local SyncValueVisuals = getgenv().SyncValueVisuals
+local MAIN_COLOR = getgenv().MAIN_COLOR or Color3.fromRGB(9, 0, 136)
+local MakeDraggable = getgenv().MakeDraggable
 
 if not Settings
 or not GamePage
@@ -887,7 +889,7 @@ local function RefreshPlayerSelector()
         if PlayerSelectorMode == "whitelist" then
             if whitelisted then
                 selectButton.Text = "SAFE"
-                selectButton.BackgroundColor3 = Color3.fromRGB(45, 150, 75)
+                selectButton.BackgroundColor3 = MAIN_COLOR
             else
                 selectButton.Text = "Whitelist"
                 selectButton.BackgroundColor3 = Color3.fromRGB(55, 55, 75)
@@ -895,10 +897,10 @@ local function RefreshPlayerSelector()
         else
             if whitelisted then
                 selectButton.Text = "SAFE"
-                selectButton.BackgroundColor3 = Color3.fromRGB(45, 150, 75)
+                selectButton.BackgroundColor3 = MAIN_COLOR
             elseif KnifeTargetIds[target.UserId] then
                 selectButton.Text = "SELECTED"
-                selectButton.BackgroundColor3 = Color3.fromRGB(150, 55, 55)
+                selectButton.BackgroundColor3 = MAIN_COLOR
             else
                 selectButton.Text = "Select"
                 selectButton.BackgroundColor3 = Color3.fromRGB(55, 55, 75)
@@ -941,13 +943,13 @@ local function CreatePlayerSelector()
 
     PlayerSelectorFrame = Instance.new("Frame")
     PlayerSelectorFrame.Name = "ToxMM2PlayerSelector"
-    PlayerSelectorFrame.Size = UDim2.new(0, 390, 0, 360)
-    PlayerSelectorFrame.Position = UDim2.new(0.5, -195, 0.5, -180)
+    PlayerSelectorFrame.Size = UDim2.new(0, 410, 0, 360)
+    PlayerSelectorFrame.Position = UDim2.new(0.5, -205, 0.5, -180)
     PlayerSelectorFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
     PlayerSelectorFrame.BorderSizePixel = 0
     PlayerSelectorFrame.Visible = false
     PlayerSelectorFrame.Active = true
-    PlayerSelectorFrame.Draggable = true
+    PlayerSelectorFrame.ClipsDescendants = true
     PlayerSelectorFrame.Parent = gui
 
     local frameCorner = Instance.new("UICorner")
@@ -955,12 +957,22 @@ local function CreatePlayerSelector()
     frameCorner.Parent = PlayerSelectorFrame
 
     local frameStroke = Instance.new("UIStroke")
-    frameStroke.Color = Color3.fromRGB(130, 70, 255)
+    frameStroke.Color = MAIN_COLOR
     frameStroke.Thickness = 2
     frameStroke.Parent = PlayerSelectorFrame
 
+    local topBar = Instance.new("Frame")
+    topBar.Size = UDim2.new(1, 0, 0, 32)
+    topBar.BackgroundColor3 = MAIN_COLOR
+    topBar.BorderSizePixel = 0
+    topBar.Parent = PlayerSelectorFrame
+
+    if MakeDraggable then
+        MakeDraggable(PlayerSelectorFrame, topBar)
+    end
+
     PlayerSelectorTitle = Instance.new("TextLabel")
-    PlayerSelectorTitle.Size = UDim2.new(1, -46, 0, 34)
+    PlayerSelectorTitle.Size = UDim2.new(1, -54, 1, 0)
     PlayerSelectorTitle.Position = UDim2.new(0, 10, 0, 0)
     PlayerSelectorTitle.BackgroundTransparency = 1
     PlayerSelectorTitle.Text = "Knife Targets"
@@ -968,26 +980,26 @@ local function CreatePlayerSelector()
     PlayerSelectorTitle.Font = Enum.Font.GothamBold
     PlayerSelectorTitle.TextSize = 13
     PlayerSelectorTitle.TextXAlignment = Enum.TextXAlignment.Left
-    PlayerSelectorTitle.Parent = PlayerSelectorFrame
+    PlayerSelectorTitle.Parent = topBar
 
     local closeButton = Instance.new("TextButton")
-    closeButton.Size = UDim2.new(0, 26, 0, 24)
-    closeButton.Position = UDim2.new(1, -32, 0, 5)
-    closeButton.BackgroundColor3 = Color3.fromRGB(30, 30, 42)
+    closeButton.Size = UDim2.new(0, 22, 0, 20)
+    closeButton.Position = UDim2.new(1, -26, 0.5, -10)
+    closeButton.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
     closeButton.BorderSizePixel = 0
     closeButton.Text = "X"
-    closeButton.TextColor3 = Color3.fromRGB(230, 230, 230)
+    closeButton.TextColor3 = Color3.fromRGB(210, 210, 220)
     closeButton.Font = Enum.Font.GothamBold
     closeButton.TextSize = 11
-    closeButton.Parent = PlayerSelectorFrame
+    closeButton.Parent = topBar
 
     local closeCorner = Instance.new("UICorner")
     closeCorner.CornerRadius = UDim.new(0, 4)
     closeCorner.Parent = closeButton
 
     PlayerSelectorInput = Instance.new("TextBox")
-    PlayerSelectorInput.Size = UDim2.new(1, -104, 0, 30)
-    PlayerSelectorInput.Position = UDim2.new(0, 8, 0, 38)
+    PlayerSelectorInput.Size = UDim2.new(1, -108, 0, 30)
+    PlayerSelectorInput.Position = UDim2.new(0, 8, 0, 40)
     PlayerSelectorInput.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
     PlayerSelectorInput.BorderSizePixel = 0
     PlayerSelectorInput.Text = ""
@@ -1004,9 +1016,9 @@ local function CreatePlayerSelector()
     inputCorner.Parent = PlayerSelectorInput
 
     local addButton = Instance.new("TextButton")
-    addButton.Size = UDim2.new(0, 88, 0, 30)
-    addButton.Position = UDim2.new(1, -96, 0, 38)
-    addButton.BackgroundColor3 = Color3.fromRGB(100, 65, 210)
+    addButton.Size = UDim2.new(0, 92, 0, 30)
+    addButton.Position = UDim2.new(1, -100, 0, 40)
+    addButton.BackgroundColor3 = MAIN_COLOR
     addButton.BorderSizePixel = 0
     addButton.Text = "Add"
     addButton.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1019,12 +1031,12 @@ local function CreatePlayerSelector()
     addCorner.Parent = addButton
 
     PlayerSelectorScroll = Instance.new("ScrollingFrame")
-    PlayerSelectorScroll.Size = UDim2.new(1, -16, 1, -120)
-    PlayerSelectorScroll.Position = UDim2.new(0, 8, 0, 76)
+    PlayerSelectorScroll.Size = UDim2.new(1, -16, 1, -122)
+    PlayerSelectorScroll.Position = UDim2.new(0, 8, 0, 78)
     PlayerSelectorScroll.BackgroundTransparency = 1
     PlayerSelectorScroll.BorderSizePixel = 0
     PlayerSelectorScroll.ScrollBarThickness = 3
-    PlayerSelectorScroll.ScrollBarImageColor3 = Color3.fromRGB(130, 70, 255)
+    PlayerSelectorScroll.ScrollBarImageColor3 = MAIN_COLOR
     PlayerSelectorScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
     PlayerSelectorScroll.Parent = PlayerSelectorFrame
 
@@ -1041,7 +1053,7 @@ local function CreatePlayerSelector()
     PlayerSelectorAction = Instance.new("TextButton")
     PlayerSelectorAction.Size = UDim2.new(1, -16, 0, 32)
     PlayerSelectorAction.Position = UDim2.new(0, 8, 1, -38)
-    PlayerSelectorAction.BackgroundColor3 = Color3.fromRGB(100, 65, 210)
+    PlayerSelectorAction.BackgroundColor3 = MAIN_COLOR
     PlayerSelectorAction.BorderSizePixel = 0
     PlayerSelectorAction.Text = "Kill Selected (0)"
     PlayerSelectorAction.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1182,196 +1194,194 @@ local function GetPredictedMurderPosition(targetRoot)
         + vertical
 end
 
-local function ShootMurderer()
-    if ActionBusy then
+local function ClickGunAtPosition(worldPosition)
+    if not Camera then
         return
+    end
+
+    local screenPosition, onScreen = Camera:WorldToViewportPoint(worldPosition)
+
+    if not onScreen then
+        NormalGunClick()
+        return
+    end
+
+    local inset = GuiService:GetGuiInset()
+    local x = screenPosition.X
+    local y = screenPosition.Y + inset.Y
+
+    pcall(function()
+        VirtualInputManager:SendMouseMoveEvent(x, y, game)
+        VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
+        task.wait(0.018)
+        VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
+    end)
+end
+
+local function FireMM2GunRemote(gun, targetPosition)
+    local fired = false
+
+    local shootRemote = gun:FindFirstChild("Shoot", true)
+
+    if shootRemote and shootRemote:IsA("RemoteEvent") then
+        pcall(function()
+            shootRemote:FireServer(
+                CFrame.new(targetPosition + Vector3.new(0, 0.45, 0)),
+                CFrame.new(targetPosition)
+            )
+            fired = true
+        end)
+    end
+
+    local knifeLocal = gun:FindFirstChild("KnifeLocal", true)
+    local createBeam = knifeLocal and knifeLocal:FindFirstChild("CreateBeam", true)
+    local remoteFunction = createBeam and createBeam:FindFirstChildWhichIsA("RemoteFunction", true)
+
+    if remoteFunction then
+        pcall(function()
+            remoteFunction:InvokeServer(1, targetPosition, "AH2")
+            fired = true
+        end)
+    end
+
+    return fired
+end
+
+local function ShootMurderer()
+    if ActionBusy or getgenv().Destroyed then
+        return false
     end
 
     local gun = FindNamedTool({"gun", "revolver"})
 
     if not gun then
         CustomNotify("You need the Gun", Color3.fromRGB(255, 100, 100))
-        return
+        return false
     end
 
     local murderer = GetPlayerByRole("Murderer")
 
     if not murderer or not murderer.Character then
-        CustomNotify("Murderer not found", Color3.fromRGB(255, 180, 70))
-        return
+        return false
     end
 
-    local targetRoot = murderer.Character:FindFirstChild("HumanoidRootPart")
-        or murderer.Character:FindFirstChild("UpperTorso")
-        or murderer.Character:FindFirstChild("Torso")
-        or murderer.Character:FindFirstChild("Head")
+    local targetCharacter = murderer.Character
+    local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+    local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
+        or targetCharacter:FindFirstChild("UpperTorso")
+        or targetCharacter:FindFirstChild("Torso")
+        or targetCharacter:FindFirstChild("Head")
 
-    local targetHumanoid = murderer.Character:FindFirstChildOfClass("Humanoid")
-
-    if not targetRoot or not targetHumanoid or targetHumanoid.Health <= 0 then
-        CustomNotify("Murderer target unavailable", Color3.fromRGB(255, 100, 100))
-        return
+    if not targetHumanoid or targetHumanoid.Health <= 0 or not targetRoot then
+        return false
     end
 
     local character, humanoid, root = GetCharacterState()
 
     if not character or not humanoid or humanoid.Health <= 0 or not root then
-        return
+        return false
     end
 
     local originalParent = gun.Parent
+    local oldCameraType = Camera and Camera.CameraType
+    local oldCameraSubject = Camera and Camera.CameraSubject
+    local oldCameraCFrame = Camera and Camera.CFrame
+    local oldMousePosition = UserInputService:GetMouseLocation()
 
     ActionBusy = true
 
-    task.spawn(function()
+    local success = false
+
+    local ok = pcall(function()
         if not EquipTool(gun) then
-            ActionBusy = false
-            CustomNotify("Could not equip Gun", Color3.fromRGB(255, 100, 100))
             return
         end
 
-        task.wait(0.07)
+        task.wait(0.04)
 
         if not targetRoot.Parent or targetHumanoid.Health <= 0 then
-            ActionBusy = false
             return
         end
 
-        local oldCFrame = root.CFrame
-        local oldLinearVelocity = root.AssemblyLinearVelocity
-        local oldAngularVelocity = root.AssemblyAngularVelocity
-        local oldAnchored = root.Anchored
-        local oldAutoRotate = humanoid.AutoRotate
-        local oldPlatformStand = humanoid.PlatformStand
-        local oldSit = humanoid.Sit
-        local oldCameraType = Camera.CameraType
-        local oldCameraSubject = Camera.CameraSubject
-        local oldCameraCFrame = Camera.CFrame
-        local oldMousePosition = UserInputService:GetMouseLocation()
-        local oldRagdollEnabled = humanoid:GetStateEnabled(Enum.HumanoidStateType.Ragdoll)
-        local oldFallingDownEnabled = humanoid:GetStateEnabled(Enum.HumanoidStateType.FallingDown)
-        local allow = getgenv().AllowToxTeleport
+        local aimPosition = GetPredictedMurderPosition(targetRoot)
 
-        if allow then
-            allow(1)
+        if Camera then
+            Camera.CameraType = Enum.CameraType.Custom
+            Camera.CameraSubject = humanoid
+            Camera.CFrame = CFrame.lookAt(
+                Camera.CFrame.Position,
+                aimPosition
+            )
         end
 
+        RunService.RenderStepped:Wait()
+
+        if not targetRoot.Parent or targetHumanoid.Health <= 0 then
+            return
+        end
+
+        aimPosition = GetPredictedMurderPosition(targetRoot)
+
         pcall(function()
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+            gun:Activate()
         end)
 
+        ClickGunAtPosition(aimPosition)
+
+        local remoteFired = FireMM2GunRemote(gun, aimPosition)
+
+        task.wait(remoteFired and 0.035 or 0.06)
+        success = true
+    end)
+
+    pcall(function()
+        VirtualInputManager:SendMouseMoveEvent(
+            oldMousePosition.X,
+            oldMousePosition.Y,
+            game
+        )
+    end)
+
+    if Camera then
+        pcall(function()
+            Camera.CameraType = oldCameraType or Enum.CameraType.Custom
+            Camera.CameraSubject = oldCameraSubject or humanoid
+
+            if oldCameraCFrame then
+                Camera.CFrame = oldCameraCFrame
+            end
+        end)
+    end
+
+    if originalParent
+    and originalParent:IsA("Backpack")
+    and gun
+    and character
+    and gun.Parent == character then
+        pcall(function()
+            gun.Parent = originalParent
+        end)
+    end
+
+    if humanoid and humanoid.Parent and humanoid.Health > 0 then
         humanoid.PlatformStand = false
         humanoid.Sit = false
-        humanoid.AutoRotate = false
+        humanoid.AutoRotate = true
+    end
 
-        root.Anchored = true
+    if root and root.Parent then
+        root.Anchored = false
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
+    end
 
-        Camera.CameraType = Enum.CameraType.Scriptable
+    ActionBusy = false
 
-        for _ = 1, 4 do
-            if not targetRoot.Parent or targetHumanoid.Health <= 0 then
-                break
-            end
+    if not ok then
+        return false
+    end
 
-            local aimPosition = GetPredictedMurderPosition(targetRoot)
-            local targetVelocity = targetRoot.AssemblyLinearVelocity
-            local followOffset = Vector3.new(
-                targetVelocity.X * 0.035,
-                0,
-                targetVelocity.Z * 0.035
-            )
-            local shootPosition = targetRoot.Position + followOffset + Vector3.new(0, 5.2, 0)
-
-            root.CFrame = CFrame.lookAt(shootPosition, aimPosition)
-            Camera.CFrame = CFrame.lookAt(
-                shootPosition + Vector3.new(0, 1.35, 0),
-                aimPosition
-            )
-
-            RunService.RenderStepped:Wait()
-        end
-
-        if targetRoot.Parent and targetHumanoid.Health > 0 then
-            local aimPosition = GetPredictedMurderPosition(targetRoot)
-            local shootPosition = targetRoot.Position + Vector3.new(0, 5.2, 0)
-
-            root.CFrame = CFrame.lookAt(shootPosition, aimPosition)
-            Camera.CFrame = CFrame.lookAt(
-                shootPosition + Vector3.new(0, 1.35, 0),
-                aimPosition
-            )
-
-            pcall(function()
-                gun:Activate()
-            end)
-
-            NormalGunClick()
-        end
-
-        task.wait(0.055)
-
-        pcall(function()
-            VirtualInputManager:SendMouseMoveEvent(oldMousePosition.X, oldMousePosition.Y, game)
-        end)
-
-        Camera.CameraType = oldCameraType
-        Camera.CameraSubject = oldCameraSubject
-        Camera.CFrame = oldCameraCFrame
-
-        if root and root.Parent then
-            if allow then
-                allow(0.8)
-            end
-
-            root.CFrame = oldCFrame
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.AssemblyAngularVelocity = Vector3.zero
-            root.Anchored = oldAnchored
-        end
-
-        if humanoid and humanoid.Parent and humanoid.Health > 0 then
-            humanoid.PlatformStand = oldPlatformStand
-            humanoid.Sit = oldSit
-            humanoid.AutoRotate = oldAutoRotate
-
-            pcall(function()
-                humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, oldRagdollEnabled)
-                humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, oldFallingDownEnabled)
-            end)
-
-            if not oldPlatformStand and not oldSit then
-                pcall(function()
-                    humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-                end)
-
-                task.wait()
-
-                pcall(function()
-                    humanoid:ChangeState(Enum.HumanoidStateType.Running)
-                end)
-            end
-        end
-
-        if root and root.Parent and not oldAnchored then
-            root.AssemblyLinearVelocity = Vector3.new(
-                oldLinearVelocity.X,
-                math.max(oldLinearVelocity.Y, 0),
-                oldLinearVelocity.Z
-            )
-            root.AssemblyAngularVelocity = oldAngularVelocity
-        end
-
-        if originalParent and originalParent:IsA("Backpack") and gun and gun.Parent == character then
-            pcall(function()
-                gun.Parent = originalParent
-            end)
-        end
-
-        ActionBusy = false
-    end)
+    return success
 end
 
 local function FindGunDrop()
@@ -2375,10 +2385,6 @@ end, function(enabled)
     Settings.MM2KillAllAuto = enabled
 end)
 
-CreateButton("Knife Targets", GamePage, function()
-    OpenPlayerSelector("targets")
-end)
-
 CreateKeybindToggle("Shoot Murderer", GamePage, Settings.MM2ShootMurderKey, Settings.MM2ShootMurderAuto, function(key)
     Settings.MM2ShootMurderKey = key
 end, function(enabled)
@@ -2391,10 +2397,6 @@ end, function(enabled)
     Settings.MM2GrabGunAuto = enabled
 end)
 
-CreateButton("Whitelist", GamePage, function()
-    OpenPlayerSelector("whitelist")
-end)
-
 CreateDropdown("Fling Target", {"Murderer", "Sheriff"}, GamePage, Settings.MM2FlingTarget, function(value)
     Settings.MM2FlingTarget = value
     AutoSaveConfiguration()
@@ -2402,8 +2404,16 @@ end)
 
 CreateButton("Fling", GamePage, FlingSelectedRole)
 
+CreateButton("Knife Targets", GamePage, function()
+    OpenPlayerSelector("targets")
+end)
+
+CreateButton("Whitelist", GamePage, function()
+    OpenPlayerSelector("whitelist")
+end)
+
 local AutoKnifeOwned = false
-local AutoGunOwned = false
+local AutoShootLastAttempt = 0
 local AutoGrabAttemptedDrops = setmetatable({}, {__mode = "k"})
 
 task.spawn(function()
@@ -2426,15 +2436,23 @@ task.spawn(function()
             AutoKnifeOwned = knife ~= nil
         end
 
-        if Settings.MM2ShootMurderAuto and not Settings.MM2AutoFarm then
-            if gun and not AutoGunOwned and alive and not ActionBusy then
-                AutoGunOwned = true
+        if Settings.MM2ShootMurderAuto
+        and not Settings.MM2AutoFarm
+        and gun
+        and alive
+        and not ActionBusy then
+            local murderer = GetPlayerByRole("Murderer")
+            local murderHumanoid = murderer
+                and murderer.Character
+                and murderer.Character:FindFirstChildOfClass("Humanoid")
+
+            if murderer
+            and murderHumanoid
+            and murderHumanoid.Health > 0
+            and os.clock() - AutoShootLastAttempt >= 0.55 then
+                AutoShootLastAttempt = os.clock()
                 task.spawn(ShootMurderer)
-            elseif not gun then
-                AutoGunOwned = false
             end
-        else
-            AutoGunOwned = gun ~= nil
         end
 
         if Settings.MM2GrabGunAuto
@@ -2488,6 +2506,38 @@ getgenv().ToxMM2Cleanup = function()
     Settings.MM2ShootMurderAuto = false
     Settings.MM2GrabGunAuto = false
     ActionBusy = false
+    AutoShootLastAttempt = 0
+    table.clear(KnifeTargetIds)
+
+    if Camera then
+        pcall(function()
+            Camera.CameraType = Enum.CameraType.Custom
+
+            local character = Player.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+            if humanoid then
+                Camera.CameraSubject = humanoid
+            end
+        end)
+    end
+
+    local cleanupCharacter = Player.Character
+    local cleanupHumanoid = cleanupCharacter and cleanupCharacter:FindFirstChildOfClass("Humanoid")
+    local cleanupRoot = cleanupCharacter and cleanupCharacter:FindFirstChild("HumanoidRootPart")
+
+    if cleanupHumanoid then
+        cleanupHumanoid.PlatformStand = false
+        cleanupHumanoid.Sit = false
+        cleanupHumanoid.AutoRotate = true
+    end
+
+    if cleanupRoot then
+        cleanupRoot.Anchored = false
+        cleanupRoot.AssemblyLinearVelocity = Vector3.zero
+        cleanupRoot.AssemblyAngularVelocity = Vector3.zero
+    end
+
     table.clear(KnifeTargetIds)
 
     if AutoFarmPrepared then
