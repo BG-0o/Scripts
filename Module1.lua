@@ -1897,38 +1897,73 @@ VolumeArea.BackgroundTransparency = 1
 VolumeArea.Parent = MusicContent
 
 local VolLabel = Instance.new("TextLabel")
-VolLabel.Size = UDim2.new(0.30, 0, 1, 0)
+VolLabel.Size = UDim2.new(0.13, 0, 1, 0)
 VolLabel.Position = UDim2.new(0, 0, 0, 0)
 VolLabel.BackgroundTransparency = 1
-VolLabel.Text = "Volume: " .. tostring(Settings.MusicVolume) .. "%"
+VolLabel.Text = "Vol"
 VolLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 VolLabel.Font = Enum.Font.GothamBold
 VolLabel.TextSize = 10
 VolLabel.TextXAlignment = Enum.TextXAlignment.Left
 VolLabel.Parent = VolumeArea
 
-local VolDownBtn = CreateDarkBtn("-", UDim2.new(0.31, 0, 0, 0), UDim2.new(0.08, 0, 1, 0), VolumeArea)
+local VolInput = Instance.new("TextBox")
+VolInput.Size = UDim2.new(0.13, 0, 1, 0)
+VolInput.Position = UDim2.new(0.13, 0, 0, 0)
+VolInput.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+VolInput.BorderSizePixel = 0
+VolInput.Text = tostring(Settings.MusicVolume)
+VolInput.PlaceholderText = "0-100"
+VolInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+VolInput.Font = Enum.Font.Gotham
+VolInput.TextSize = 10
+VolInput.ClearTextOnFocus = false
+VolInput.Parent = VolumeArea
+local VolInputCorner = Instance.new("UICorner")
+VolInputCorner.CornerRadius = UDim.new(0, 4)
+VolInputCorner.Parent = VolInput
+
+local function ApplyMusicVolume(value)
+    local number = math.clamp(
+        math.floor((tonumber(value) or Settings.MusicVolume or 100) + 0.5),
+        0,
+        100
+    )
+
+    Settings.MusicVolume = number
+    VolInput.Text = tostring(number)
+
+    if getgenv().ActiveSound then
+        getgenv().ActiveSound.Volume = number / 100
+    end
+
+    AutoSaveConfiguration()
+end
+
+VolInput.FocusLost:Connect(function()
+    ApplyMusicVolume(VolInput.Text)
+end)
+
+local VolDownBtn = CreateDarkBtn("-", UDim2.new(0.27, 0, 0, 0), UDim2.new(0.07, 0, 1, 0), VolumeArea)
 VolDownBtn.MouseButton1Click:Connect(function()
-    Settings.MusicVolume = math.max(0, Settings.MusicVolume - 10)
-    VolLabel.Text = "Volume: " .. tostring(Settings.MusicVolume) .. "%"
-    if getgenv().ActiveSound then getgenv().ActiveSound.Volume = Settings.MusicVolume / 100 end
-    AutoSaveConfiguration()
+    ApplyMusicVolume((Settings.MusicVolume or 100) - 1)
 end)
 
-local VolUpBtn = CreateDarkBtn("+", UDim2.new(0.40, 0, 0, 0), UDim2.new(0.08, 0, 1, 0), VolumeArea)
+local VolUpBtn = CreateDarkBtn("+", UDim2.new(0.35, 0, 0, 0), UDim2.new(0.07, 0, 1, 0), VolumeArea)
 VolUpBtn.MouseButton1Click:Connect(function()
-    Settings.MusicVolume = math.min(100, Settings.MusicVolume + 10)
-    VolLabel.Text = "Volume: " .. tostring(Settings.MusicVolume) .. "%"
-    if getgenv().ActiveSound then getgenv().ActiveSound.Volume = Settings.MusicVolume / 100 end
-    AutoSaveConfiguration()
+    ApplyMusicVolume((Settings.MusicVolume or 100) + 1)
 end)
 
-local CheckMusicIDsBtn = CreateDarkBtn("Check IDs", UDim2.new(0.52, 0, 0, 0), UDim2.new(0.23, 0, 1, 0), VolumeArea)
+local CheckMusicIDsBtn = CreateDarkBtn("Check IDs", UDim2.new(0.44, 0, 0, 0), UDim2.new(0.27, 0, 1, 0), VolumeArea)
 getgenv().CheckMusicIDsBtn = CheckMusicIDsBtn
 
 local MM2RadioBtn = nil
+local AdminMusicBtn = nil
+
 if game.PlaceId == 142823291 then
-    MM2RadioBtn = CreateDarkBtn("Radio", UDim2.new(0.77, 0, 0, 0), UDim2.new(0.23, 0, 1, 0), VolumeArea)
+    MM2RadioBtn = CreateDarkBtn("Radio", UDim2.new(0.73, 0, 0, 0), UDim2.new(0.27, 0, 1, 0), VolumeArea)
+elseif game.PlaceId == 4522347649 then
+    AdminMusicBtn = CreateDarkBtn("Music", UDim2.new(0.73, 0, 0, 0), UDim2.new(0.27, 0, 1, 0), VolumeArea)
 end
 
 local PlaylistScroll = Instance.new("ScrollingFrame")
@@ -2122,6 +2157,31 @@ if MM2RadioBtn then
             getgenv().ToxPlayMM2Radio(id)
         else
             CustomNotify("MM2 Radio is not ready", Color3.fromRGB(255, 180, 70))
+        end
+    end)
+end
+
+if AdminMusicBtn then
+    AdminMusicBtn.MouseButton1Click:Connect(function()
+        local id = tonumber(SoundInput.Text)
+
+        if not id and SavedIDs[Settings.CurrentTrackIndex] then
+            id = tonumber(SavedIDs[Settings.CurrentTrackIndex].id)
+
+            if id then
+                SoundInput.Text = tostring(id)
+            end
+        end
+
+        if not id then
+            CustomNotify("Select a song or enter an ID", Color3.fromRGB(255, 180, 70))
+            return
+        end
+
+        if getgenv().ToxPlayAdminMusic then
+            getgenv().ToxPlayAdminMusic(id)
+        else
+            CustomNotify("ADMIN Music is not ready", Color3.fromRGB(255, 180, 70))
         end
     end)
 end
