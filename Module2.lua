@@ -2229,9 +2229,42 @@ end
 local WalkFlingPreConnection = nil
 local WalkFlingPostConnection = nil
 local WalkFlingRoot = nil
+local WalkFlingSavedLinear = Vector3.zero
 local WalkFlingSavedAngular = Vector3.zero
-local WalkFlingSavedRotation = nil
+local WalkFlingSavedRootCollide = false
 local WalkFlingPulse = false
+local WalkFlingCollisionPulse = {}
+
+local function RestoreWalkFlingCollisionPulse()
+    for part, oldCanCollide in pairs(
+        WalkFlingCollisionPulse
+    ) do
+        if part and part.Parent then
+            part.CanCollide = oldCanCollide
+        end
+    end
+
+    table.clear(WalkFlingCollisionPulse)
+end
+
+local function RestoreWalkFlingPulse()
+    RestoreWalkFlingCollisionPulse()
+
+    local root = WalkFlingRoot
+
+    if root and root.Parent then
+        root.AssemblyLinearVelocity =
+            WalkFlingSavedLinear
+
+        root.AssemblyAngularVelocity =
+            WalkFlingSavedAngular
+
+        root.CanCollide =
+            WalkFlingSavedRootCollide
+    end
+
+    WalkFlingPulse = false
+end
 
 local function StopWalkFling()
     if WalkFlingPreConnection then
@@ -2244,22 +2277,55 @@ local function StopWalkFling()
         WalkFlingPostConnection = nil
     end
 
-    if WalkFlingRoot
-    and WalkFlingRoot.Parent then
-        WalkFlingRoot.AssemblyAngularVelocity =
-            WalkFlingSavedAngular or Vector3.zero
-
-        if WalkFlingSavedRotation then
-            WalkFlingRoot.CFrame =
-                CFrame.new(WalkFlingRoot.Position)
-                * WalkFlingSavedRotation
-        end
-    end
+    RestoreWalkFlingPulse()
 
     WalkFlingRoot = nil
+    WalkFlingSavedLinear = Vector3.zero
     WalkFlingSavedAngular = Vector3.zero
-    WalkFlingSavedRotation = nil
-    WalkFlingPulse = false
+    WalkFlingSavedRootCollide = false
+end
+
+local function PrepareWalkFlingContacts(
+    character,
+    root
+)
+    if not Settings.AntiFling then
+        return
+    end
+
+    for _, target in ipairs(
+        Players:GetPlayers()
+    ) do
+        if target ~= Player
+        and target.Character then
+            local targetRoot =
+                target.Character:
+                    FindFirstChild(
+                        "HumanoidRootPart"
+                    )
+
+            if targetRoot
+            and (
+                targetRoot.Position
+                - root.Position
+            ).Magnitude <= 9 then
+                for _, part in ipairs(
+                    target.Character:
+                        GetDescendants()
+                ) do
+                    if part:IsA("BasePart") then
+                        if WalkFlingCollisionPulse[part]
+                        == nil then
+                            WalkFlingCollisionPulse[part] =
+                                part.CanCollide
+                        end
+
+                        part.CanCollide = true
+                    end
+                end
+            end
+        end
+    end
 end
 
 local function StartWalkFling()
@@ -2276,7 +2342,7 @@ local function StartWalkFling()
 
     local postSignal =
         RunService.PostSimulation
-        or RunService.RenderStepped
+        or RunService.Heartbeat
 
     WalkFlingPreConnection =
         AddConnection(
@@ -2285,6 +2351,10 @@ local function StartWalkFling()
                 or not ScriptLoaded
                 or not Settings.WalkFling then
                     return
+                end
+
+                if WalkFlingPulse then
+                    RestoreWalkFlingPulse()
                 end
 
                 local character = Player.Character
@@ -2305,21 +2375,49 @@ local function StartWalkFling()
                 or humanoid.Health <= 0
                 or not root
                 or humanoid.SeatPart then
-                    WalkFlingPulse = false
                     return
                 end
 
                 WalkFlingRoot = root
+                WalkFlingSavedLinear =
+                    root.AssemblyLinearVelocity
                 WalkFlingSavedAngular =
                     root.AssemblyAngularVelocity
-                WalkFlingSavedRotation =
-                    root.CFrame.Rotation
+                WalkFlingSavedRootCollide =
+                    root.CanCollide
                 WalkFlingPulse = true
+
+                PrepareWalkFlingContacts(
+                    character,
+                    root
+                )
+
+                root.CanCollide = true
+
+                local moveDirection =
+                    humanoid.MoveDirection
+
+                local impulse =
+                    Vector3.new(0, 28, 0)
+
+                if moveDirection.Magnitude > 0.05 then
+                    impulse =
+                        moveDirection.Unit * 1350
+                        + Vector3.new(
+                            0,
+                            28,
+                            0
+                        )
+                end
+
+                root.AssemblyLinearVelocity =
+                    WalkFlingSavedLinear
+                    + impulse
 
                 root.AssemblyAngularVelocity =
                     Vector3.new(
                         0,
-                        90000000,
+                        12000,
                         0
                     )
             end)
@@ -2332,23 +2430,7 @@ local function StartWalkFling()
                     return
                 end
 
-                WalkFlingPulse = false
-
-                local root = WalkFlingRoot
-
-                if not root
-                or not root.Parent then
-                    return
-                end
-
-                root.AssemblyAngularVelocity =
-                    WalkFlingSavedAngular
-
-                if WalkFlingSavedRotation then
-                    root.CFrame =
-                        CFrame.new(root.Position)
-                        * WalkFlingSavedRotation
-                end
+                RestoreWalkFlingPulse()
             end)
         )
 end
@@ -2361,18 +2443,6 @@ getgenv().SetWalkFling = function(
     Settings.WalkFling = enabled
 
     if enabled then
-        if Settings.AntiFling then
-            Settings.AntiFling = false
-            RestoreAntiFlingDefaults()
-
-            if getgenv().SyncToggleVisuals then
-                getgenv().SyncToggleVisuals(
-                    "AntiFling",
-                    false
-                )
-            end
-        end
-
         StartWalkFling()
     else
         StopWalkFling()
@@ -3758,7 +3828,11 @@ AddConnection(RunService.Stepped:Connect(function()
                         if AntiFlingDefaults[part] == nil then
                             AntiFlingDefaults[part] = part.CanCollide
                         end
-                        part.CanCollide = false
+
+                        if not Settings.WalkFling
+                        or not WalkFlingPulse then
+                            part.CanCollide = false
+                        end
                     end
                 end
             end
