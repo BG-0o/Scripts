@@ -6,6 +6,8 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local GuiService = game:GetService("GuiService")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
@@ -43,6 +45,229 @@ Settings.MM2GrabGunAuto = Settings.MM2GrabGunAuto == true
 Settings.MM2FlingTarget = Settings.MM2FlingTarget or "Murderer"
 
 local ActionBusy = false
+
+local function FindMM2RadioTool()
+    local character = Player.Character
+    local backpack = Player:FindFirstChildOfClass("Backpack")
+    local best = nil
+
+    local function scan(container)
+        if not container then
+            return nil
+        end
+
+        for _, child in ipairs(container:GetChildren()) do
+            if child:IsA("Tool") then
+                local lower = string.lower(child.Name)
+
+                if string.find(lower, "radio", 1, true)
+                or string.find(lower, "boombox", 1, true)
+                or string.find(lower, "boom box", 1, true) then
+                    return child
+                end
+
+                if not best then
+                    for _, desc in ipairs(child:GetDescendants()) do
+                        if desc:IsA("RemoteEvent") or desc:IsA("RemoteFunction") then
+                            local rname = string.lower(desc.Name)
+
+                            if string.find(rname, "radio", 1, true)
+                            or string.find(rname, "song", 1, true)
+                            or string.find(rname, "music", 1, true) then
+                                best = child
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        return nil
+    end
+
+    return scan(character) or scan(backpack) or best
+end
+
+local function FindRadioGuiControls()
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+
+    if not playerGui then
+        return nil, nil
+    end
+
+    local textBox = nil
+    local playButton = nil
+
+    for _, obj in ipairs(playerGui:GetDescendants()) do
+        if obj:IsA("TextBox") and obj.Visible then
+            local blob = string.lower(
+                tostring(obj.Name or "") .. " "
+                .. tostring(obj.PlaceholderText or "") .. " "
+                .. tostring(obj.Text or "")
+            )
+
+            if string.find(blob, "radio", 1, true)
+            or string.find(blob, "audio", 1, true)
+            or string.find(blob, "song", 1, true)
+            or string.find(blob, "music", 1, true)
+            or string.find(blob, "id", 1, true) then
+                textBox = obj
+                break
+            end
+        end
+    end
+
+    if textBox then
+        local parent = textBox.Parent
+
+        for _ = 1, 4 do
+            if not parent then
+                break
+            end
+
+            for _, obj in ipairs(parent:GetDescendants()) do
+                if obj:IsA("TextButton") and obj.Visible then
+                    local blob = string.lower(tostring(obj.Name or "") .. " " .. tostring(obj.Text or ""))
+
+                    if string.find(blob, "play", 1, true)
+                    or string.find(blob, "submit", 1, true)
+                    or string.find(blob, "enter", 1, true) then
+                        playButton = obj
+                        break
+                    end
+                end
+            end
+
+            if playButton then
+                break
+            end
+
+            parent = parent.Parent
+        end
+    end
+
+    return textBox, playButton
+end
+
+local function ClickGuiButton(button)
+    if not button then
+        return false
+    end
+
+    if firesignal then
+        local ok = pcall(function()
+            firesignal(button.MouseButton1Click)
+        end)
+
+        if ok then
+            return true
+        end
+    end
+
+    local ok = pcall(function()
+        local center = button.AbsolutePosition + (button.AbsoluteSize / 2)
+        VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 0)
+        task.wait()
+        VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, false, game, 0)
+    end)
+
+    return ok
+end
+
+local function TryRadioRemote(tool, id)
+    if not tool then
+        return false
+    end
+
+    local remotes = {}
+
+    for _, obj in ipairs(tool:GetDescendants()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            table.insert(remotes, obj)
+        end
+    end
+
+    for _, remote in ipairs(remotes) do
+        local remoteName = string.lower(remote.Name)
+        local parentName = remote.Parent and string.lower(remote.Parent.Name) or ""
+
+        if string.find(remoteName, "radio", 1, true)
+        or string.find(remoteName, "song", 1, true)
+        or string.find(remoteName, "music", 1, true)
+        or string.find(parentName, "radio", 1, true)
+        or string.find(parentName, "boombox", 1, true) then
+            local ok = pcall(function()
+                if remote:IsA("RemoteFunction") then
+                    remote:InvokeServer("PlaySong", tostring(id))
+                else
+                    remote:FireServer("PlaySong", tostring(id))
+                end
+            end)
+
+            if ok then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+getgenv().ToxPlayMM2Radio = function(id)
+    local cleanID = tostring(id or ""):match("%d+")
+
+    if not cleanID then
+        CustomNotify("Invalid Radio ID", Color3.fromRGB(255, 100, 100))
+        return
+    end
+
+    task.spawn(function()
+        local tool = FindMM2RadioTool()
+        local character, humanoid = GetCharacterState()
+
+        if tool and character and humanoid and tool.Parent ~= character then
+            pcall(function()
+                humanoid:EquipTool(tool)
+            end)
+
+            task.wait(0.08)
+        end
+
+        if tool then
+            pcall(function()
+                tool:Activate()
+            end)
+        end
+
+        task.wait(0.12)
+
+        local textBox, playButton = FindRadioGuiControls()
+
+        if textBox then
+            textBox.Text = cleanID
+
+            pcall(function()
+                textBox:CaptureFocus()
+                textBox:ReleaseFocus(true)
+            end)
+
+            task.wait(0.03)
+
+            if playButton and ClickGuiButton(playButton) then
+                CustomNotify("MM2 Radio: " .. cleanID, Color3.fromRGB(100, 255, 100))
+                return
+            end
+        end
+
+        if TryRadioRemote(tool, cleanID) then
+            CustomNotify("MM2 Radio: " .. cleanID, Color3.fromRGB(100, 255, 100))
+            return
+        end
+
+        CustomNotify("MM2 Radio interface not found", Color3.fromRGB(255, 180, 70))
+    end)
+end
 
 local function SetShared(Key, Value)
     if getgenv().ToxSetSharedOption then
@@ -233,29 +458,41 @@ local function KillAll()
     end)
 end
 
-local function GetMM2GunRemote(character, equippedGun)
-    local gun = character and (
-        character:FindFirstChild("Gun")
-        or character:FindFirstChild("Revolver")
-    ) or equippedGun
+local function SetCharacterCollision(character, value, cache)
+    for _, obj in ipairs(character:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            if cache and cache[obj] == nil then
+                cache[obj] = obj.CanCollide
+            end
 
-    if not gun then
-        return nil
-    end
-
-    for _ = 1, 16 do
-        local knifeLocal = gun:FindFirstChild("KnifeLocal")
-        local createBeam = knifeLocal and knifeLocal:FindFirstChild("CreateBeam")
-        local remote = createBeam and createBeam:FindFirstChild("RemoteFunction")
-
-        if remote and remote:IsA("RemoteFunction") then
-            return remote
+            obj.CanCollide = value
         end
-
-        task.wait(0.025)
     end
+end
 
-    return nil
+local function RestoreCharacterCollision(cache)
+    for part, oldValue in pairs(cache) do
+        if part and part.Parent then
+            part.CanCollide = oldValue
+        end
+    end
+end
+
+local function NormalGunClick()
+    local viewport = Camera.ViewportSize
+    local inset = GuiService:GetGuiInset()
+    local x = viewport.X / 2
+    local y = viewport.Y / 2 + inset.Y
+
+    pcall(function()
+        VirtualInputManager:SendMouseMoveEvent(x, y, game)
+    end)
+
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
+        task.wait(0.02)
+        VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
+    end)
 end
 
 local function ShootMurderer()
@@ -306,19 +543,7 @@ local function ShootMurderer()
             return
         end
 
-        local remote = GetMM2GunRemote(character, gun)
-
-        if not remote then
-            if originalParent and originalParent:IsA("Backpack") and gun and gun.Parent == character then
-                pcall(function()
-                    gun.Parent = originalParent
-                end)
-            end
-
-            ActionBusy = false
-            CustomNotify("Gun remote not ready", Color3.fromRGB(255, 100, 100))
-            return
-        end
+        task.wait(0.08)
 
         if not targetRoot.Parent or targetHumanoid.Health <= 0 then
             ActionBusy = false
@@ -328,47 +553,62 @@ local function ShootMurderer()
         local oldCFrame = root.CFrame
         local oldLinearVelocity = root.AssemblyLinearVelocity
         local oldAngularVelocity = root.AssemblyAngularVelocity
+        local oldCameraType = Camera.CameraType
+        local oldCameraSubject = Camera.CameraSubject
+        local oldCameraCFrame = Camera.CFrame
+        local oldMousePosition = UserInputService:GetMouseLocation()
+        local collisionCache = {}
         local allow = getgenv().AllowToxTeleport
 
         if allow then
-            allow(0.8)
+            allow(1)
         end
 
-        local shootCFrame = CFrame.new(
-            targetRoot.Position + Vector3.new(0, 3.2, 0),
-            targetRoot.Position
-        )
+        SetCharacterCollision(character, false, collisionCache)
+
+        local targetPosition = targetRoot.Position + Vector3.new(0, 1.1, 0)
+        local shootPosition = targetRoot.Position + Vector3.new(0, 6.5, 0)
 
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
-        root.CFrame = shootCFrame
+        root.CFrame = CFrame.lookAt(shootPosition, targetPosition)
 
-        RunService.Heartbeat:Wait()
+        Camera.CameraType = Enum.CameraType.Scriptable
+        Camera.CFrame = CFrame.lookAt(
+            shootPosition + Vector3.new(0, 1.5, 0),
+            targetPosition
+        )
 
-        if root and root.Parent and targetRoot and targetRoot.Parent then
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.AssemblyAngularVelocity = Vector3.zero
-            root.CFrame = CFrame.new(
-                targetRoot.Position + Vector3.new(0, 3.2, 0),
-                targetRoot.Position
-            )
+        RunService.RenderStepped:Wait()
+        RunService.RenderStepped:Wait()
 
-            local targetPosition = targetRoot.Position
+        pcall(function()
+            gun:Activate()
+        end)
 
-            pcall(function()
-                remote:InvokeServer(1, targetPosition, "AH2")
-            end)
-        end
+        NormalGunClick()
+
+        task.wait(0.06)
+
+        pcall(function()
+            VirtualInputManager:SendMouseMoveEvent(oldMousePosition.X, oldMousePosition.Y, game)
+        end)
+
+        Camera.CameraType = oldCameraType
+        Camera.CameraSubject = oldCameraSubject
+        Camera.CFrame = oldCameraCFrame
 
         if root and root.Parent then
             if allow then
-                allow(0.6)
+                allow(0.8)
             end
 
             root.CFrame = oldCFrame
             root.AssemblyLinearVelocity = oldLinearVelocity
             root.AssemblyAngularVelocity = oldAngularVelocity
         end
+
+        RestoreCharacterCollision(collisionCache)
 
         if originalParent and originalParent:IsA("Backpack") and gun and gun.Parent == character then
             pcall(function()
