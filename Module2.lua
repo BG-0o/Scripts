@@ -2126,19 +2126,11 @@ local SharedValueSettingMap = {
     NormalFly = "FlySpeed"
 }
 
-local function GetCurrentGameSharedState()
-    if not getgenv().CurrentGameModule then
-        return nil
-    end
+local function GetGlobalSharedState()
+    getgenv().BaseSharedSettings =
+        getgenv().BaseSharedSettings or {}
 
-    local placeKey = tostring(game.PlaceId)
-    getgenv().GameSharedSettings = getgenv().GameSharedSettings or {}
-
-    if typeof(getgenv().GameSharedSettings[placeKey]) ~= "table" then
-        getgenv().GameSharedSettings[placeKey] = {}
-    end
-
-    return getgenv().GameSharedSettings[placeKey]
+    return getgenv().BaseSharedSettings
 end
 
 local function RecordSharedToggle(Key, Value)
@@ -2152,13 +2144,9 @@ local function RecordSharedToggle(Key, Value)
         return
     end
 
-    local gameState = GetCurrentGameSharedState()
-
-    if gameState then
-        gameState[settingKey] = Value == true
-    elseif getgenv().BaseSharedSettings then
-        getgenv().BaseSharedSettings[settingKey] = Value == true
-    end
+    local globalState = GetGlobalSharedState()
+    globalState[settingKey] = Value == true
+    Settings[settingKey] = Value == true
 end
 
 getgenv().ToxOnSharedValueChanged = function(Key, Value)
@@ -2173,13 +2161,9 @@ getgenv().ToxOnSharedValueChanged = function(Key, Value)
         return
     end
 
-    local gameState = GetCurrentGameSharedState()
-
-    if gameState then
-        gameState[settingKey] = number
-    elseif getgenv().BaseSharedSettings then
-        getgenv().BaseSharedSettings[settingKey] = number
-    end
+    local globalState = GetGlobalSharedState()
+    globalState[settingKey] = number
+    Settings[settingKey] = number
 end
 
 local CarFlyVelocity = nil
@@ -2337,35 +2321,45 @@ getgenv().ToxSetSharedOption = function(Key, Value)
 end
 
 getgenv().ApplyCurrentGameSharedSettings = function()
-    local gameState = GetCurrentGameSharedState()
-
-    if not gameState then
-        return
-    end
-
-    if game.PlaceId == 142823291 and gameState.NoFallDamage == nil then
-        gameState.NoFallDamage = false
-    end
+    local globalState = GetGlobalSharedState()
 
     getgenv().ToxApplyingGameState = true
 
     for Key, settingKey in pairs(SharedValueSettingMap) do
-        local value = gameState[settingKey]
+        local value = globalState[settingKey]
+
+        if value == nil then
+            value = Settings[settingKey]
+        end
 
         if value ~= nil then
             Settings[settingKey] = value
+            globalState[settingKey] = value
 
             if getgenv().SyncValueVisuals then
-                getgenv().SyncValueVisuals(Key, value)
+                getgenv().SyncValueVisuals(
+                    Key,
+                    value
+                )
             end
         end
     end
 
     for Key, settingKey in pairs(SharedToggleSettingMap) do
-        local value = gameState[settingKey]
+        local value = globalState[settingKey]
+
+        if value == nil then
+            value = Settings[settingKey]
+        end
 
         if value ~= nil then
-            getgenv().ToxSetSharedOption(Key, value)
+            globalState[settingKey] =
+                value == true
+
+            getgenv().ToxSetSharedOption(
+                Key,
+                value == true
+            )
         end
     end
 
@@ -3141,7 +3135,13 @@ CreateToggle("Auto Execute", ConfigPage, Settings.AutoExecute, function(v)
         )
     end
 end)
-CreateKeybindButton("GUI Keybind", ConfigPage, Settings.GUIKeybind, function(key) Settings.GUIKeybind = key end)
+CreateKeybindButton("GUI Keybind", ConfigPage, Settings.GUIKeybind, function(key)
+    Settings.GUIKeybind = key
+
+    if getgenv().AutoSaveConfiguration then
+        getgenv().AutoSaveConfiguration()
+    end
+end)
 CreateConfirmButton("FPS Booster", ConfigPage, function() BoostFPS() end)
 CreateConfirmButton("Server Hop", ConfigPage, function() ServerHop() end)
 CreateConfirmButton("Rejoin Server", ConfigPage, function()
@@ -3186,9 +3186,10 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     Settings.MM2ShootMurderAuto = false
     Settings.MM2GrabGunAuto = false
 
-    local sharedKeys = getgenv().SharedPersistentKeys or {}
-    local baseShared = getgenv().BaseSharedSettings or {}
-    local gameShared = getgenv().GameSharedSettings or {}
+    local sharedKeys =
+        getgenv().SharedPersistentKeys or {}
+    local baseShared =
+        getgenv().BaseSharedSettings or {}
 
     for key in pairs(sharedKeys) do
         if typeof(Settings[key]) == "boolean" then
@@ -3197,13 +3198,6 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
 
         if typeof(baseShared[key]) == "boolean" then
             baseShared[key] = false
-        end
-
-        for _, state in pairs(gameShared) do
-            if typeof(state) == "table"
-            and typeof(state[key]) == "boolean" then
-                state[key] = false
-            end
         end
     end
 
