@@ -14,6 +14,22 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
+local NDSPlaceId = 189707
+
+if game.PlaceId ~= NDSPlaceId then
+    local env = getgenv()
+
+    if env.SetNDSNoTP then
+        pcall(function()
+            env.SetNDSNoTP(false, true)
+        end)
+    end
+
+    if env.Settings then
+        env.Settings.NDSNoTP = false
+    end
+end
+
 local HumanoidDefaults = setmetatable({}, {__mode = "k"})
 local NoclipDefaults = setmetatable({}, {__mode = "k"})
 local AntiFlingDefaults = setmetatable({}, {__mode = "k"})
@@ -3271,6 +3287,12 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     if getgenv().SetNDSWaterFly then
         pcall(function()
             getgenv().SetNDSWaterFly(false, true)
+        end)
+    end
+
+    if getgenv().SetNDSNoTP then
+        pcall(function()
+            getgenv().SetNDSNoTP(false, true)
         end)
     end
 
