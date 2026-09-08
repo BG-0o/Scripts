@@ -45,7 +45,8 @@ Settings.MM2GrabGunKey = Settings.MM2GrabGunKey or Enum.KeyCode.G
 Settings.MM2GrabGunAuto = Settings.MM2GrabGunAuto == true
 Settings.MM2FlingTarget = Settings.MM2FlingTarget or "Murderer"
 Settings.MM2AutoFarm = Settings.MM2AutoFarm == true
-Settings.MM2AutoFarmSpeed = tonumber(Settings.MM2AutoFarmSpeed) or 55
+Settings.MM2AutoFarmSpeed = tonumber(Settings.MM2AutoFarmSpeed) or 50
+Settings.MM2Whitelist = typeof(Settings.MM2Whitelist) == "table" and Settings.MM2Whitelist or {}
 
 local ActionBusy = false
 
@@ -532,6 +533,128 @@ local function EquipTool(tool)
     return tool.Parent == character
 end
 
+local KnifeTargetIds = {}
+local PlayerSelectorFrame = nil
+local PlayerSelectorScroll = nil
+local PlayerSelectorTitle = nil
+local PlayerSelectorInput = nil
+local PlayerSelectorAction = nil
+local PlayerSelectorMode = "targets"
+
+local function IsWhitelisted(target)
+    if not target then
+        return false
+    end
+
+    for _, userId in ipairs(Settings.MM2Whitelist) do
+        if tonumber(userId) == target.UserId then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function SetWhitelisted(target, enabled)
+    if not target or target == Player then
+        return
+    end
+
+    local foundIndex = nil
+
+    for index, userId in ipairs(Settings.MM2Whitelist) do
+        if tonumber(userId) == target.UserId then
+            foundIndex = index
+            break
+        end
+    end
+
+    if enabled and not foundIndex then
+        table.insert(Settings.MM2Whitelist, target.UserId)
+    elseif not enabled and foundIndex then
+        table.remove(Settings.MM2Whitelist, foundIndex)
+    end
+
+    if enabled then
+        KnifeTargetIds[target.UserId] = nil
+    end
+
+    AutoSaveConfiguration()
+end
+
+local function FindCurrentPlayer(text)
+    local clean = string.lower(
+        tostring(text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    )
+
+    if clean == "" then
+        return nil
+    end
+
+    local numericId = tonumber(clean)
+
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= Player then
+            if numericId and target.UserId == numericId then
+                return target
+            end
+
+            if string.lower(target.Name) == clean
+            or string.lower(target.DisplayName) == clean then
+                return target
+            end
+        end
+    end
+
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= Player then
+            local name = string.lower(target.Name)
+            local displayName = string.lower(target.DisplayName)
+
+            if name:sub(1, #clean) == clean
+            or displayName:sub(1, #clean) == clean then
+                return target
+            end
+        end
+    end
+
+    return nil
+end
+
+local function CleanKnifeTargets()
+    local present = {}
+
+    for _, target in ipairs(Players:GetPlayers()) do
+        present[target.UserId] = true
+    end
+
+    for userId in pairs(KnifeTargetIds) do
+        if not present[userId] then
+            KnifeTargetIds[userId] = nil
+        end
+    end
+end
+
+local function GetSelectedKnifeTargets()
+    CleanKnifeTargets()
+
+    local targets = {}
+
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= Player
+        and KnifeTargetIds[target.UserId]
+        and not IsWhitelisted(target) then
+            local humanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
+
+            if humanoid and humanoid.Health > 0 then
+                table.insert(targets, target)
+            end
+        end
+    end
+
+    return targets
+end
+
 local function TouchKnifeTarget(knife, target)
     if not knife or not target or not target.Character then
         return false
@@ -604,7 +727,7 @@ local function KillAll()
 
     task.spawn(function()
         for _, target in ipairs(Players:GetPlayers()) do
-            if target ~= Player then
+            if target ~= Player and not IsWhitelisted(target) then
                 TouchKnifeTarget(knife, target)
                 task.wait(0.025)
             end
@@ -613,6 +736,411 @@ local function KillAll()
         ActionBusy = false
     end)
 end
+
+local function KillSelectedTargets()
+    if ActionBusy then
+        return
+    end
+
+    local knife = FindNamedTool({"knife"})
+
+    if not knife then
+        CustomNotify(
+            "Kill Selected requires the Knife",
+            Color3.fromRGB(255, 100, 100)
+        )
+        return
+    end
+
+    local targets = GetSelectedKnifeTargets()
+
+    if #targets == 0 then
+        CustomNotify(
+            "No selected players available",
+            Color3.fromRGB(255, 180, 70)
+        )
+        return
+    end
+
+    if not EquipTool(knife) then
+        CustomNotify(
+            "Could not equip Knife",
+            Color3.fromRGB(255, 100, 100)
+        )
+        return
+    end
+
+    ActionBusy = true
+
+    task.spawn(function()
+        for _, target in ipairs(targets) do
+            if getgenv().Destroyed then
+                break
+            end
+
+            if target.Parent == Players
+            and not IsWhitelisted(target) then
+                TouchKnifeTarget(knife, target)
+                task.wait(0.04)
+            end
+        end
+
+        ActionBusy = false
+    end)
+end
+
+local function UpdateSelectorActionText()
+    if not PlayerSelectorAction then
+        return
+    end
+
+    if PlayerSelectorMode == "targets" then
+        local count = 0
+
+        for _ in pairs(KnifeTargetIds) do
+            count = count + 1
+        end
+
+        PlayerSelectorAction.Text = "Kill Selected (" .. tostring(count) .. ")"
+    else
+        PlayerSelectorAction.Text = "Close"
+    end
+end
+
+local function RefreshPlayerSelector()
+    if not PlayerSelectorScroll then
+        return
+    end
+
+    if PlayerSelectorMode == "targets" then
+        CleanKnifeTargets()
+    end
+
+    for _, child in ipairs(PlayerSelectorScroll:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+
+    local playerList = {}
+
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= Player then
+            table.insert(playerList, target)
+        end
+    end
+
+    table.sort(playerList, function(a, b)
+        return string.lower(a.Name) < string.lower(b.Name)
+    end)
+
+    for index, target in ipairs(playerList) do
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, -4, 0, 42)
+        row.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+        row.BorderSizePixel = 0
+        row.LayoutOrder = index
+        row.Parent = PlayerSelectorScroll
+
+        local rowCorner = Instance.new("UICorner")
+        rowCorner.CornerRadius = UDim.new(0, 4)
+        rowCorner.Parent = row
+
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(1, -112, 0, 20)
+        nameLabel.Position = UDim2.new(0, 8, 0, 3)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = target.DisplayName
+        nameLabel.TextColor3 = Color3.fromRGB(245, 245, 245)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 11
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        nameLabel.Parent = row
+
+        local userLabel = Instance.new("TextLabel")
+        userLabel.Size = UDim2.new(1, -112, 0, 16)
+        userLabel.Position = UDim2.new(0, 8, 0, 22)
+        userLabel.BackgroundTransparency = 1
+        userLabel.Text = "@" .. target.Name
+        userLabel.TextColor3 = Color3.fromRGB(140, 140, 160)
+        userLabel.Font = Enum.Font.Gotham
+        userLabel.TextSize = 9
+        userLabel.TextXAlignment = Enum.TextXAlignment.Left
+        userLabel.Parent = row
+
+        local selectButton = Instance.new("TextButton")
+        selectButton.Size = UDim2.new(0, 94, 0, 26)
+        selectButton.Position = UDim2.new(1, -102, 0.5, -13)
+        selectButton.BorderSizePixel = 0
+        selectButton.Font = Enum.Font.GothamBold
+        selectButton.TextSize = 10
+        selectButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        selectButton.Parent = row
+
+        local selectCorner = Instance.new("UICorner")
+        selectCorner.CornerRadius = UDim.new(0, 4)
+        selectCorner.Parent = selectButton
+
+        local whitelisted = IsWhitelisted(target)
+
+        if PlayerSelectorMode == "whitelist" then
+            if whitelisted then
+                selectButton.Text = "SAFE"
+                selectButton.BackgroundColor3 = Color3.fromRGB(45, 150, 75)
+            else
+                selectButton.Text = "Whitelist"
+                selectButton.BackgroundColor3 = Color3.fromRGB(55, 55, 75)
+            end
+        else
+            if whitelisted then
+                selectButton.Text = "SAFE"
+                selectButton.BackgroundColor3 = Color3.fromRGB(45, 150, 75)
+            elseif KnifeTargetIds[target.UserId] then
+                selectButton.Text = "SELECTED"
+                selectButton.BackgroundColor3 = Color3.fromRGB(150, 55, 55)
+            else
+                selectButton.Text = "Select"
+                selectButton.BackgroundColor3 = Color3.fromRGB(55, 55, 75)
+            end
+        end
+
+        selectButton.MouseButton1Click:Connect(function()
+            if PlayerSelectorMode == "whitelist" then
+                SetWhitelisted(target, not IsWhitelisted(target))
+            else
+                if IsWhitelisted(target) then
+                    CustomNotify(
+                        target.Name .. " is whitelisted",
+                        Color3.fromRGB(255, 180, 70)
+                    )
+                    return
+                end
+
+                KnifeTargetIds[target.UserId] =
+                    not KnifeTargetIds[target.UserId] or nil
+            end
+
+            RefreshPlayerSelector()
+        end)
+    end
+
+    UpdateSelectorActionText()
+end
+
+local function CreatePlayerSelector()
+    if PlayerSelectorFrame and PlayerSelectorFrame.Parent then
+        return
+    end
+
+    local gui = getgenv().Gui
+
+    if not gui then
+        return
+    end
+
+    PlayerSelectorFrame = Instance.new("Frame")
+    PlayerSelectorFrame.Name = "ToxMM2PlayerSelector"
+    PlayerSelectorFrame.Size = UDim2.new(0, 390, 0, 360)
+    PlayerSelectorFrame.Position = UDim2.new(0.5, -195, 0.5, -180)
+    PlayerSelectorFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+    PlayerSelectorFrame.BorderSizePixel = 0
+    PlayerSelectorFrame.Visible = false
+    PlayerSelectorFrame.Active = true
+    PlayerSelectorFrame.Draggable = true
+    PlayerSelectorFrame.Parent = gui
+
+    local frameCorner = Instance.new("UICorner")
+    frameCorner.CornerRadius = UDim.new(0, 8)
+    frameCorner.Parent = PlayerSelectorFrame
+
+    local frameStroke = Instance.new("UIStroke")
+    frameStroke.Color = Color3.fromRGB(130, 70, 255)
+    frameStroke.Thickness = 2
+    frameStroke.Parent = PlayerSelectorFrame
+
+    PlayerSelectorTitle = Instance.new("TextLabel")
+    PlayerSelectorTitle.Size = UDim2.new(1, -46, 0, 34)
+    PlayerSelectorTitle.Position = UDim2.new(0, 10, 0, 0)
+    PlayerSelectorTitle.BackgroundTransparency = 1
+    PlayerSelectorTitle.Text = "Knife Targets"
+    PlayerSelectorTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    PlayerSelectorTitle.Font = Enum.Font.GothamBold
+    PlayerSelectorTitle.TextSize = 13
+    PlayerSelectorTitle.TextXAlignment = Enum.TextXAlignment.Left
+    PlayerSelectorTitle.Parent = PlayerSelectorFrame
+
+    local closeButton = Instance.new("TextButton")
+    closeButton.Size = UDim2.new(0, 26, 0, 24)
+    closeButton.Position = UDim2.new(1, -32, 0, 5)
+    closeButton.BackgroundColor3 = Color3.fromRGB(30, 30, 42)
+    closeButton.BorderSizePixel = 0
+    closeButton.Text = "X"
+    closeButton.TextColor3 = Color3.fromRGB(230, 230, 230)
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.TextSize = 11
+    closeButton.Parent = PlayerSelectorFrame
+
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 4)
+    closeCorner.Parent = closeButton
+
+    PlayerSelectorInput = Instance.new("TextBox")
+    PlayerSelectorInput.Size = UDim2.new(1, -104, 0, 30)
+    PlayerSelectorInput.Position = UDim2.new(0, 8, 0, 38)
+    PlayerSelectorInput.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+    PlayerSelectorInput.BorderSizePixel = 0
+    PlayerSelectorInput.Text = ""
+    PlayerSelectorInput.PlaceholderText = "Username / DisplayName / UserId"
+    PlayerSelectorInput.TextColor3 = Color3.fromRGB(245, 245, 245)
+    PlayerSelectorInput.PlaceholderColor3 = Color3.fromRGB(125, 125, 145)
+    PlayerSelectorInput.Font = Enum.Font.Gotham
+    PlayerSelectorInput.TextSize = 11
+    PlayerSelectorInput.ClearTextOnFocus = false
+    PlayerSelectorInput.Parent = PlayerSelectorFrame
+
+    local inputCorner = Instance.new("UICorner")
+    inputCorner.CornerRadius = UDim.new(0, 4)
+    inputCorner.Parent = PlayerSelectorInput
+
+    local addButton = Instance.new("TextButton")
+    addButton.Size = UDim2.new(0, 88, 0, 30)
+    addButton.Position = UDim2.new(1, -96, 0, 38)
+    addButton.BackgroundColor3 = Color3.fromRGB(100, 65, 210)
+    addButton.BorderSizePixel = 0
+    addButton.Text = "Add"
+    addButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    addButton.Font = Enum.Font.GothamBold
+    addButton.TextSize = 11
+    addButton.Parent = PlayerSelectorFrame
+
+    local addCorner = Instance.new("UICorner")
+    addCorner.CornerRadius = UDim.new(0, 4)
+    addCorner.Parent = addButton
+
+    PlayerSelectorScroll = Instance.new("ScrollingFrame")
+    PlayerSelectorScroll.Size = UDim2.new(1, -16, 1, -120)
+    PlayerSelectorScroll.Position = UDim2.new(0, 8, 0, 76)
+    PlayerSelectorScroll.BackgroundTransparency = 1
+    PlayerSelectorScroll.BorderSizePixel = 0
+    PlayerSelectorScroll.ScrollBarThickness = 3
+    PlayerSelectorScroll.ScrollBarImageColor3 = Color3.fromRGB(130, 70, 255)
+    PlayerSelectorScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    PlayerSelectorScroll.Parent = PlayerSelectorFrame
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 5)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = PlayerSelectorScroll
+
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        PlayerSelectorScroll.CanvasSize =
+            UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 8)
+    end)
+
+    PlayerSelectorAction = Instance.new("TextButton")
+    PlayerSelectorAction.Size = UDim2.new(1, -16, 0, 32)
+    PlayerSelectorAction.Position = UDim2.new(0, 8, 1, -38)
+    PlayerSelectorAction.BackgroundColor3 = Color3.fromRGB(100, 65, 210)
+    PlayerSelectorAction.BorderSizePixel = 0
+    PlayerSelectorAction.Text = "Kill Selected (0)"
+    PlayerSelectorAction.TextColor3 = Color3.fromRGB(255, 255, 255)
+    PlayerSelectorAction.Font = Enum.Font.GothamBold
+    PlayerSelectorAction.TextSize = 11
+    PlayerSelectorAction.Parent = PlayerSelectorFrame
+
+    local actionCorner = Instance.new("UICorner")
+    actionCorner.CornerRadius = UDim.new(0, 4)
+    actionCorner.Parent = PlayerSelectorAction
+
+    closeButton.MouseButton1Click:Connect(function()
+        PlayerSelectorFrame.Visible = false
+    end)
+
+    local function AddFromInput()
+        local target = FindCurrentPlayer(PlayerSelectorInput.Text)
+
+        if not target then
+            CustomNotify(
+                "Player not found in server",
+                Color3.fromRGB(255, 180, 70)
+            )
+            return
+        end
+
+        if PlayerSelectorMode == "whitelist" then
+            SetWhitelisted(target, true)
+        else
+            if IsWhitelisted(target) then
+                CustomNotify(
+                    target.Name .. " is whitelisted",
+                    Color3.fromRGB(255, 180, 70)
+                )
+                return
+            end
+
+            KnifeTargetIds[target.UserId] = true
+        end
+
+        PlayerSelectorInput.Text = ""
+        RefreshPlayerSelector()
+    end
+
+    addButton.MouseButton1Click:Connect(AddFromInput)
+
+    PlayerSelectorInput.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            AddFromInput()
+        end
+    end)
+
+    PlayerSelectorAction.MouseButton1Click:Connect(function()
+        if PlayerSelectorMode == "targets" then
+            KillSelectedTargets()
+        else
+            PlayerSelectorFrame.Visible = false
+        end
+    end)
+end
+
+local function OpenPlayerSelector(mode)
+    CreatePlayerSelector()
+
+    if not PlayerSelectorFrame then
+        return
+    end
+
+    PlayerSelectorMode = mode == "whitelist" and "whitelist" or "targets"
+    PlayerSelectorTitle.Text =
+        PlayerSelectorMode == "whitelist" and "Whitelist" or "Knife Targets"
+    PlayerSelectorInput.Text = ""
+    PlayerSelectorFrame.Visible = true
+    RefreshPlayerSelector()
+end
+
+AddConnection(Players.PlayerAdded:Connect(function()
+    if PlayerSelectorFrame and PlayerSelectorFrame.Visible then
+        task.defer(RefreshPlayerSelector)
+    end
+end))
+
+AddConnection(Players.PlayerRemoving:Connect(function(target)
+    KnifeTargetIds[target.UserId] = nil
+
+    if PlayerSelectorFrame and PlayerSelectorFrame.Visible then
+        task.defer(RefreshPlayerSelector)
+    end
+end))
+
+task.spawn(function()
+    while not getgenv().Destroyed and game.PlaceId == 142823291 do
+        if PlayerSelectorFrame and PlayerSelectorFrame.Visible then
+            RefreshPlayerSelector()
+        end
+
+        task.wait(0.75)
+    end
+end)
 
 local function NormalGunClick()
     local viewport = Camera.ViewportSize
@@ -962,8 +1490,6 @@ local AutoFarmCompleting = false
 local AutoFarmAtCoin = false
 local AutoFarmGeneration = 0
 local AutoFarmSessionCollected = 0
-local AutoFarmTravelOffset = 1.9
-local AutoFarmPickupOffset = 1.15
 
 local function IsAliveCharacter()
     local character, humanoid, root = GetCharacterState()
@@ -1491,25 +2017,11 @@ local function PrepareAutoFarm()
 end
 
 local function GetCoinTravelPosition(coin)
-    return Vector3.new(
-        coin.Position.X,
-        coin.Position.Y - AutoFarmTravelOffset,
-        coin.Position.Z
-    )
+    return coin.Position
 end
 
 local function GetCoinPickupPosition(coin)
-    local offset = math.clamp(
-        coin.Size.Y * 0.5 + AutoFarmPickupOffset,
-        1.15,
-        1.85
-    )
-
-    return Vector3.new(
-        coin.Position.X,
-        coin.Position.Y - offset,
-        coin.Position.Z
-    )
+    return coin.Position
 end
 
 local function TweenFarmRoot(targetPosition, duration, coin)
@@ -1665,11 +2177,13 @@ local function AutoFarmCoin(coin)
         return true
     end
 
-    local speed = math.clamp(
-        tonumber(Settings.MM2AutoFarmSpeed) or 55,
-        15,
-        180
+    local speedValue = math.clamp(
+        tonumber(Settings.MM2AutoFarmSpeed) or 50,
+        5,
+        250
     )
+
+    local speed = speedValue * 4
 
     local travelPosition = GetCoinTravelPosition(coin)
     local distance = (AutoFarmRoot.Position - travelPosition).Magnitude
@@ -1829,7 +2343,7 @@ CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarm, Settings.MM2A
 
     AutoSaveConfiguration()
 end, function(value)
-    Settings.MM2AutoFarmSpeed = math.clamp(tonumber(value) or 55, 15, 180)
+    Settings.MM2AutoFarmSpeed = math.clamp(tonumber(value) or 50, 5, 250)
     AutoSaveConfiguration()
 end, "MM2AutoFarm")
 
@@ -1861,6 +2375,10 @@ end, function(enabled)
     Settings.MM2KillAllAuto = enabled
 end)
 
+CreateButton("Knife Targets", GamePage, function()
+    OpenPlayerSelector("targets")
+end)
+
 CreateKeybindToggle("Shoot Murderer", GamePage, Settings.MM2ShootMurderKey, Settings.MM2ShootMurderAuto, function(key)
     Settings.MM2ShootMurderKey = key
 end, function(enabled)
@@ -1871,6 +2389,10 @@ CreateKeybindToggle("Grab Gun", GamePage, Settings.MM2GrabGunKey, Settings.MM2Gr
     Settings.MM2GrabGunKey = key
 end, function(enabled)
     Settings.MM2GrabGunAuto = enabled
+end)
+
+CreateButton("Whitelist", GamePage, function()
+    OpenPlayerSelector("whitelist")
 end)
 
 CreateDropdown("Fling Target", {"Murderer", "Sheriff"}, GamePage, Settings.MM2FlingTarget, function(value)
@@ -1958,6 +2480,29 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
         GrabGun()
     end
 end))
+
+getgenv().ToxMM2Cleanup = function()
+    Settings.MM2AutoFarm = false
+    Settings.MM2RoleESP = false
+    Settings.MM2KillAllAuto = false
+    Settings.MM2ShootMurderAuto = false
+    Settings.MM2GrabGunAuto = false
+    ActionBusy = false
+    table.clear(KnifeTargetIds)
+
+    if AutoFarmPrepared then
+        StopAutoFarm(true)
+    end
+
+    if PlayerSelectorFrame then
+        PlayerSelectorFrame.Visible = false
+    end
+
+    if getgenv().SyncToggleVisuals then
+        getgenv().SyncToggleVisuals("MM2AutoFarm", false)
+        getgenv().SyncToggleVisuals("MM2RoleESP", false)
+    end
+end
 
 if Settings.MM2RoleESP then
     ApplyRoleESP(true)
