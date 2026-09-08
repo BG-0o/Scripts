@@ -1414,7 +1414,7 @@ RefreshMusicPlaylistUI = function()
         local trackID = itemData.id
 
         local item = Instance.new("Frame")
-        item.Size = UDim2.new(1, -4, 0, 26)
+        item.Size = game.PlaceId == 142823291 and UDim2.new(1, -4, 0, 48) or UDim2.new(1, -4, 0, 26)
         item.BackgroundColor3 = Color3.fromRGB(16, 16, 24)
         item.BorderSizePixel = 0
         item.Parent = PlaylistScroll
@@ -1456,46 +1456,98 @@ RefreshMusicPlaylistUI = function()
             end
         end)
 
-        local pBtn = CreateDarkBtn("Play", UDim2.new(0.61, 0, 0.5, -9), UDim2.new(0, 28, 0, 18), item)
-        pBtn.MouseButton1Click:Connect(function()
-            Settings.CurrentTrackIndex = idx
-            SoundInput.Text = tostring(trackID)
-            SongNameInput.Text = nameBox.Text
-            PlayMusicByID(trackID, nameBox.Text)
-        end)
+        if game.PlaceId == 142823291 then
+            local pBtn = CreateDarkBtn("Play", UDim2.new(0, 4, 0, 28), UDim2.new(0, 34, 0, 18), item)
+            pBtn.MouseButton1Click:Connect(function()
+                Settings.CurrentTrackIndex = idx
+                SoundInput.Text = tostring(trackID)
+                SongNameInput.Text = nameBox.Text
+                PlayMusicByID(trackID, nameBox.Text)
+            end)
 
-        local upBtn = CreateDarkBtn("Up", UDim2.new(0.61, 31, 0.5, -9), UDim2.new(0, 22, 0, 18), item)
-        upBtn.MouseButton1Click:Connect(function()
-            if idx > 1 then
-                SavedIDs[idx], SavedIDs[idx - 1] = SavedIDs[idx - 1], SavedIDs[idx]
+            local radioBtn = CreateDarkBtn("Radio", UDim2.new(0, 41, 0, 28), UDim2.new(0, 38, 0, 18), item)
+            radioBtn.MouseButton1Click:Connect(function()
+                if getgenv().ToxPlayMM2Radio then
+                    getgenv().ToxPlayMM2Radio(trackID)
+                else
+                    CustomNotify("MM2 Radio is not ready", Color3.fromRGB(255, 180, 70))
+                end
+            end)
+
+            local upBtn = CreateDarkBtn("Up", UDim2.new(0, 82, 0, 28), UDim2.new(0, 28, 0, 18), item)
+            upBtn.MouseButton1Click:Connect(function()
+                if idx > 1 then
+                    SavedIDs[idx], SavedIDs[idx - 1] = SavedIDs[idx - 1], SavedIDs[idx]
+                    AutoSaveConfiguration()
+                    RefreshMusicPlaylistUI()
+                end
+            end)
+
+            local downBtn = CreateDarkBtn("Down", UDim2.new(0, 113, 0, 28), UDim2.new(0, 34, 0, 18), item)
+            downBtn.MouseButton1Click:Connect(function()
+                if idx < #SavedIDs then
+                    SavedIDs[idx], SavedIDs[idx + 1] = SavedIDs[idx + 1], SavedIDs[idx]
+                    AutoSaveConfiguration()
+                    RefreshMusicPlaylistUI()
+                end
+            end)
+
+            local copyBtn = CreateDarkBtn("Copy", UDim2.new(0, 150, 0, 28), UDim2.new(0, 34, 0, 18), item)
+            copyBtn.MouseButton1Click:Connect(function()
+                if setclipboard then
+                    setclipboard(tostring(trackID))
+                    CustomNotify("Copied ID to clipboard", Color3.fromRGB(100, 255, 100))
+                end
+            end)
+
+            local dBtn = CreateDarkBtn("X", UDim2.new(0, 187, 0, 28), UDim2.new(0, 20, 0, 18), item)
+            dBtn.MouseButton1Click:Connect(function()
+                table.remove(SavedIDs, idx)
                 AutoSaveConfiguration()
                 RefreshMusicPlaylistUI()
-            end
-        end)
+            end)
+        else
+            local pBtn = CreateDarkBtn("Play", UDim2.new(0.61, 0, 0.5, -9), UDim2.new(0, 28, 0, 18), item)
+            pBtn.MouseButton1Click:Connect(function()
+                Settings.CurrentTrackIndex = idx
+                SoundInput.Text = tostring(trackID)
+                SongNameInput.Text = nameBox.Text
+                PlayMusicByID(trackID, nameBox.Text)
+            end)
 
-        local downBtn = CreateDarkBtn("Down", UDim2.new(0.61, 56, 0.5, -9), UDim2.new(0, 28, 0, 18), item)
-        downBtn.MouseButton1Click:Connect(function()
-            if idx < #SavedIDs then
-                SavedIDs[idx], SavedIDs[idx + 1] = SavedIDs[idx + 1], SavedIDs[idx]
+            local upBtn = CreateDarkBtn("Up", UDim2.new(0.61, 31, 0.5, -9), UDim2.new(0, 22, 0, 18), item)
+            upBtn.MouseButton1Click:Connect(function()
+                if idx > 1 then
+                    SavedIDs[idx], SavedIDs[idx - 1] = SavedIDs[idx - 1], SavedIDs[idx]
+                    AutoSaveConfiguration()
+                    RefreshMusicPlaylistUI()
+                end
+            end)
+
+            local downBtn = CreateDarkBtn("Down", UDim2.new(0.61, 56, 0.5, -9), UDim2.new(0, 28, 0, 18), item)
+            downBtn.MouseButton1Click:Connect(function()
+                if idx < #SavedIDs then
+                    SavedIDs[idx], SavedIDs[idx + 1] = SavedIDs[idx + 1], SavedIDs[idx]
+                    AutoSaveConfiguration()
+                    RefreshMusicPlaylistUI()
+                end
+            end)
+
+            local copyBtn = CreateDarkBtn("Copy", UDim2.new(0.61, 87, 0.5, -9), UDim2.new(0, 28, 0, 18), item)
+            copyBtn.MouseButton1Click:Connect(function()
+                if setclipboard then
+                    setclipboard(tostring(trackID))
+                    CustomNotify("Copied ID to clipboard", Color3.fromRGB(100, 255, 100))
+                end
+            end)
+
+            local dBtn = CreateDarkBtn("X", UDim2.new(0.61, 118, 0.5, -9), UDim2.new(0, 18, 0, 18), item)
+            dBtn.MouseButton1Click:Connect(function()
+                table.remove(SavedIDs, idx)
                 AutoSaveConfiguration()
                 RefreshMusicPlaylistUI()
-            end
-        end)
-
-        local copyBtn = CreateDarkBtn("Copy", UDim2.new(0.61, 87, 0.5, -9), UDim2.new(0, 28, 0, 18), item)
-        copyBtn.MouseButton1Click:Connect(function()
-            if setclipboard then
-                setclipboard(tostring(trackID))
-                CustomNotify("Copied ID to clipboard", Color3.fromRGB(100, 255, 100))
-            end
-        end)
-
-        local dBtn = CreateDarkBtn("X", UDim2.new(0.61, 118, 0.5, -9), UDim2.new(0, 18, 0, 18), item)
-        dBtn.MouseButton1Click:Connect(function()
-            table.remove(SavedIDs, idx)
-            AutoSaveConfiguration()
-            RefreshMusicPlaylistUI()
-        end)
+            end)
+        end
     end
 end
 
