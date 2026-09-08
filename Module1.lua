@@ -134,13 +134,13 @@ getgenv().Settings = {
 
     NDSAutoWin = false,
     NDSWaterFly = false,
-    NDSWaterFlySpeed = 12,
+    NDSWaterFlySpeed = 40,
     NDSNoTP = false,
 
     MM2RoleESP = false,
     MM2AutoFarm = false,
     MM2AutoFarmV2 = false,
-    MM2AutoFarmSpeed = 50,
+    MM2AutoFarmSpeed = 5,
     MM2Whitelist = {},
     MM2SilentAimKey = Enum.KeyCode.E,
     MM2KillAllKey = Enum.KeyCode.K,
