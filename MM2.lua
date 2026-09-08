@@ -68,7 +68,17 @@ Settings.MM2GrabGunAuto = false
 Settings.MM2FlingTarget = Settings.MM2FlingTarget or "Murderer"
 Settings.MM2AutoFarmV2 = Settings.MM2AutoFarmV2 == true or Settings.MM2AutoFarmV2 == true
 Settings.MM2AutoFarmV2 = false
-Settings.MM2AutoFarmV2Speed = tonumber(Settings.MM2AutoFarmV2Speed) or 50
+local configuredAutoFarmSpeed = tonumber(Settings.MM2AutoFarmSpeed)
+
+if not configuredAutoFarmSpeed or configuredAutoFarmSpeed == 50 then
+    configuredAutoFarmSpeed = 5
+end
+
+Settings.MM2AutoFarmSpeed = math.clamp(
+    configuredAutoFarmSpeed,
+    5,
+    250
+)
 Settings.MM2Whitelist = typeof(Settings.MM2Whitelist) == "table" and Settings.MM2Whitelist or {}
 
 local ActionBusy = false
@@ -2151,7 +2161,7 @@ local function CompleteAutoFarm()
     StopAutoFarm(true)
 
     if SyncToggleVisuals then
-        SyncToggleVisuals("MM2AutoFarm", false)
+        SyncToggleVisuals("MM2AutoFarmV2", false)
     end
 
     AutoSaveConfiguration()
@@ -2375,7 +2385,7 @@ local function AutoFarmCoin(coin)
     end
 
     local speedValue = math.clamp(
-        tonumber(Settings.MM2AutoFarmV2Speed) or 50,
+        tonumber(Settings.MM2AutoFarmSpeed) or 5,
         5,
         250
     )
@@ -2546,7 +2556,7 @@ local function FlingSelectedRole()
     end)
 end
 
-CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarmV2, Settings.MM2AutoFarmV2Speed, function(v)
+CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarmV2, Settings.MM2AutoFarmSpeed, function(v)
     if v then
         Settings.MM2AutoFarmV2 = true
         AutoFarmBagKnown = false
@@ -2577,7 +2587,7 @@ CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarmV2, Settings.MM
 
     AutoSaveConfiguration()
 end, function(value)
-    Settings.MM2AutoFarmV2Speed = math.clamp(tonumber(value) or 50, 5, 250)
+    Settings.MM2AutoFarmSpeed = math.clamp(tonumber(value) or 5, 5, 250)
     AutoSaveConfiguration()
 end, "MM2AutoFarmV2")
 
