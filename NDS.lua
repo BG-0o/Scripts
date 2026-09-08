@@ -29,6 +29,9 @@ Settings.NDSWaterFlySpeed = tonumber(Settings.NDSWaterFlySpeed) or 12
 local AutoWinConnection = nil
 local AutoWinLastActivate = 0
 local AutoWinTool = nil
+local AutoWinToolName = nil
+local AutoWinPreviousNoclip = nil
+local AutoWinCFrame = CFrame.new(-279.846, 166.742, 341.409)
 
 local WaterFlyConnection = nil
 local WaterFlyVelocity = nil
@@ -102,49 +105,85 @@ local function TeleportTo(cframe, name)
     CustomNotify("Teleported to " .. name, Color3.fromRGB(100, 255, 100))
 end
 
-local function FindAppleTool()
-    local character = Player.Character
-    local backpack = Player:FindFirstChildOfClass("Backpack")
-    local candidates = {}
-    local seen = {}
+local function GetTools(container)
+    local tools = {}
 
-    local function scan(container)
-        if not container then
-            return
-        end
-
+    if container then
         for _, child in ipairs(container:GetChildren()) do
-            if child:IsA("Tool") and not seen[child] then
-                seen[child] = true
-                table.insert(candidates, child)
-
-                local lowerName = string.lower(child.Name)
-
-                if string.find(lowerName, "apple", 1, true)
-                or string.find(lowerName, "maca", 1, true)
-                or string.find(lowerName, "maç", 1, true)
-                or string.find(lowerName, "heal", 1, true) then
-                    return child
-                end
+            if child:IsA("Tool") then
+                table.insert(tools, child)
             end
         end
     end
 
-    local direct = scan(character)
-    if direct then return direct end
+    return tools
+end
 
-    direct = scan(backpack)
-    if direct then return direct end
+local function FindAutoWinTool()
+    local character = Player.Character
+    local backpack = Player:FindFirstChildOfClass("Backpack")
 
     if AutoWinTool and AutoWinTool.Parent and AutoWinTool:IsA("Tool") then
         return AutoWinTool
     end
 
-    if #candidates >= 2 then
-        return candidates[2]
+    if AutoWinToolName then
+        if character then
+            local found = character:FindFirstChild(AutoWinToolName)
+
+            if found and found:IsA("Tool") then
+                AutoWinTool = found
+                return found
+            end
+        end
+
+        if backpack then
+            local found = backpack:FindFirstChild(AutoWinToolName)
+
+            if found and found:IsA("Tool") then
+                AutoWinTool = found
+                return found
+            end
+        end
     end
 
-    return candidates[1]
+    local backpackTools = GetTools(backpack)
+
+    if #backpackTools >= 2 then
+        AutoWinTool = backpackTools[2]
+        AutoWinToolName = AutoWinTool.Name
+        return AutoWinTool
+    end
+
+    if character then
+        for _, tool in ipairs(GetTools(character)) do
+            local lowerName = string.lower(tool.Name)
+
+            if string.find(lowerName, "apple", 1, true)
+            or string.find(lowerName, "maca", 1, true)
+            or string.find(lowerName, "maç", 1, true)
+            or string.find(lowerName, "heal", 1, true) then
+                AutoWinTool = tool
+                AutoWinToolName = tool.Name
+                return tool
+            end
+        end
+    end
+
+    for _, tool in ipairs(backpackTools) do
+        local lowerName = string.lower(tool.Name)
+
+        if string.find(lowerName, "apple", 1, true)
+        or string.find(lowerName, "maca", 1, true)
+        or string.find(lowerName, "maç", 1, true)
+        or string.find(lowerName, "heal", 1, true) then
+            AutoWinTool = tool
+            AutoWinToolName = tool.Name
+            return tool
+        end
+    end
+
+    return nil
 end
 
 local function StopAutoWin()
@@ -153,40 +192,82 @@ local function StopAutoWin()
         AutoWinConnection = nil
     end
 
+    if AutoWinPreviousNoclip ~= nil then
+        SetShared("Noclip", AutoWinPreviousNoclip)
+    end
+
+    AutoWinPreviousNoclip = nil
     AutoWinTool = nil
+    AutoWinToolName = nil
     AutoWinLastActivate = 0
 end
 
 local function StartAutoWin()
-    StopAutoWin()
+    if AutoWinConnection then
+        AutoWinConnection:Disconnect()
+        AutoWinConnection = nil
+    end
+
+    AutoWinTool = nil
+    AutoWinToolName = nil
+    AutoWinLastActivate = 0
+    AutoWinPreviousNoclip = Settings.Noclip == true
+
+    SetShared("Noclip", true)
+
+    local _, humanoid, root = GetCharacterState()
+
+    if humanoid and humanoid.Health > 0 and root then
+        AllowToxTeleport(2)
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        root.CFrame = AutoWinCFrame
+
+        if Settings.NDSNoTP then
+            NoTPAnchorCFrame = AutoWinCFrame
+        end
+    end
 
     AutoWinConnection = AddConnection(RunService.Heartbeat:Connect(function()
         if not Settings.NDSAutoWin then
             return
         end
 
-        local character, humanoid = GetCharacterState()
+        local character, currentHumanoid, currentRoot = GetCharacterState()
 
-        if not character or not humanoid or humanoid.Health <= 0 then
+        if not character or not currentHumanoid or currentHumanoid.Health <= 0 or not currentRoot then
             return
         end
 
-        local tool = FindAppleTool()
+        if not Settings.Noclip then
+            SetShared("Noclip", true)
+        end
+
+        if (currentRoot.Position - AutoWinCFrame.Position).Magnitude > 5 then
+            AllowToxTeleport(0.35)
+            currentRoot.AssemblyLinearVelocity = Vector3.zero
+            currentRoot.AssemblyAngularVelocity = Vector3.zero
+            currentRoot.CFrame = AutoWinCFrame
+
+            if Settings.NDSNoTP then
+                NoTPAnchorCFrame = AutoWinCFrame
+            end
+        end
+
+        local tool = FindAutoWinTool()
 
         if not tool then
             return
         end
 
-        AutoWinTool = tool
-
         if tool.Parent ~= character then
             pcall(function()
-                humanoid:EquipTool(tool)
+                currentHumanoid:EquipTool(tool)
             end)
         end
 
         if tool.Parent == character
-        and humanoid.Health < humanoid.MaxHealth
+        and currentHumanoid.Health < currentHumanoid.MaxHealth
         and tick() - AutoWinLastActivate >= 0.28 then
             AutoWinLastActivate = tick()
 
@@ -493,6 +574,14 @@ local function StartNoTP()
     end))
 end
 
+CreateButton("SPAWN", GamePage, function()
+    TeleportTo(SpawnCFrame, "SPAWN")
+end)
+
+CreateButton("ISLAND", GamePage, function()
+    TeleportTo(IslandCFrame, "ISLAND")
+end)
+
 CreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
     Settings.NDSAutoWin = v
 
@@ -502,14 +591,6 @@ CreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
         StopAutoWin()
     end
 end, "NDSAutoWin")
-
-CreateButton("SPAWN", GamePage, function()
-    TeleportTo(SpawnCFrame, "SPAWN")
-end)
-
-CreateButton("ISLAND", GamePage, function()
-    TeleportTo(IslandCFrame, "ISLAND")
-end)
 
 CreateToggle("Ctrl Click TP", GamePage, Settings.CtrlClickTP, function(v)
     SetShared("CtrlClickTP", v)
