@@ -2,7 +2,7 @@ if game.PlaceId ~= 142823291 then
     return
 end
 
-local MM2ModuleVersion = "2026-09-08-sheriff-shoot-tp-3"
+local MM2ModuleVersion = "2026-09-08-auto-state-shoot-clear-4"
 
 if getgenv().ToxMM2ModuleLoadedJobId == game.JobId
 and getgenv().ToxMM2ModuleVersion == MM2ModuleVersion
@@ -56,14 +56,18 @@ or not CreateKeybindToggle then
 end
 
 Settings.MM2KillAllKey = Settings.MM2KillAllKey or Enum.KeyCode.K
-Settings.MM2KillAllAuto = Settings.MM2KillAllAuto == true
+Settings.MM2KillAllAutoV2 = Settings.MM2KillAllAutoV2 == true or Settings.MM2KillAllAuto == true
+Settings.MM2KillAllAuto = false
 Settings.MM2ShootMurderKey = Settings.MM2ShootMurderKey or Enum.KeyCode.C
-Settings.MM2ShootMurderAuto = Settings.MM2ShootMurderAuto == true
+Settings.MM2ShootMurderAutoV2 = Settings.MM2ShootMurderAutoV2 == true or Settings.MM2ShootMurderAuto == true
+Settings.MM2ShootMurderAuto = false
 Settings.MM2GrabGunKey = Settings.MM2GrabGunKey or Enum.KeyCode.G
-Settings.MM2GrabGunAuto = Settings.MM2GrabGunAuto == true
+Settings.MM2GrabGunAutoV2 = Settings.MM2GrabGunAutoV2 == true or Settings.MM2GrabGunAuto == true
+Settings.MM2GrabGunAuto = false
 Settings.MM2FlingTarget = Settings.MM2FlingTarget or "Murderer"
-Settings.MM2AutoFarm = Settings.MM2AutoFarm == true
-Settings.MM2AutoFarmSpeed = tonumber(Settings.MM2AutoFarmSpeed) or 50
+Settings.MM2AutoFarmV2 = Settings.MM2AutoFarmV2 == true or Settings.MM2AutoFarmV2 == true
+Settings.MM2AutoFarmV2 = false
+Settings.MM2AutoFarmV2Speed = tonumber(Settings.MM2AutoFarmV2Speed) or 50
 Settings.MM2Whitelist = typeof(Settings.MM2Whitelist) == "table" and Settings.MM2Whitelist or {}
 
 local ActionBusy = false
@@ -1211,32 +1215,28 @@ end
 
 local function GetPredictedMurderPosition(targetPart)
     local velocity = targetPart.AssemblyLinearVelocity
-    local lead = Vector3.new(
-        math.clamp(velocity.X * 0.022, -2.4, 2.4),
-        math.clamp(velocity.Y * 0.016, -1.5, 2.0),
-        math.clamp(velocity.Z * 0.022, -2.4, 2.4)
-    )
 
-    return targetPart.Position + lead
+    return targetPart.Position + Vector3.new(
+        math.clamp(velocity.X * 0.008, -0.8, 0.8),
+        math.clamp(velocity.Y * 0.006, -0.55, 0.75),
+        math.clamp(velocity.Z * 0.008, -0.8, 0.8)
+    )
 end
 
 local function ClickGunAtPosition(worldPosition)
     if not Camera then
-        return
+        return false
     end
 
     local screenPosition, onScreen = Camera:WorldToViewportPoint(worldPosition)
-
-    if not onScreen then
-        NormalGunClick()
-        return
-    end
-
     local inset = GuiService:GetGuiInset()
-    local x = screenPosition.X
-    local y = screenPosition.Y + inset.Y
 
-    pcall(function()
+    local x = onScreen and screenPosition.X or Camera.ViewportSize.X * 0.5
+    local y = onScreen
+        and (screenPosition.Y + inset.Y)
+        or (Camera.ViewportSize.Y * 0.5 + inset.Y)
+
+    return pcall(function()
         VirtualInputManager:SendMouseMoveEvent(x, y, game)
         VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
         task.wait(0.018)
@@ -1246,31 +1246,124 @@ end
 
 local function FireMM2GunRemote(gun, targetPosition)
     local fired = false
-
-    local shootRemote = gun:FindFirstChild("Shoot", true)
+    local shootRemote = gun:FindFirstChild("Shoot")
+        or gun:FindFirstChild("Shoot", true)
 
     if shootRemote and shootRemote:IsA("RemoteEvent") then
-        pcall(function()
+        local ok = pcall(function()
             shootRemote:FireServer(
-                CFrame.new(targetPosition + Vector3.new(0, 0.45, 0)),
+                CFrame.new(targetPosition + Vector3.new(0, 0.5, 0)),
                 CFrame.new(targetPosition)
             )
-            fired = true
         end)
+
+        if ok then
+            fired = true
+        end
     end
 
-    local knifeLocal = gun:FindFirstChild("KnifeLocal", true)
-    local createBeam = knifeLocal and knifeLocal:FindFirstChild("CreateBeam", true)
-    local remoteFunction = createBeam and createBeam:FindFirstChildWhichIsA("RemoteFunction", true)
+    local knifeLocal = gun:FindFirstChild("KnifeLocal")
+        or gun:FindFirstChild("KnifeLocal", true)
+    local createBeam = knifeLocal and (
+        knifeLocal:FindFirstChild("CreateBeam")
+        or knifeLocal:FindFirstChild("CreateBeam", true)
+    )
+    local remoteFunction = createBeam and (
+        createBeam:FindFirstChild("RemoteFunction")
+        or createBeam:FindFirstChildWhichIsA("RemoteFunction", true)
+    )
 
-    if remoteFunction then
-        pcall(function()
+    if remoteFunction and remoteFunction:IsA("RemoteFunction") then
+        local ok = pcall(function()
             remoteFunction:InvokeServer(1, targetPosition, "AH2")
-            fired = true
         end)
+
+        if ok then
+            fired = true
+        end
     end
 
     return fired
+end
+
+local function IsClearShot(origin, targetPosition, targetCharacter)
+    local direction = targetPosition - origin
+
+    if direction.Magnitude < 0.2 then
+        return true
+    end
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {Player.Character}
+    params.IgnoreWater = true
+
+    local hit = workspace:Raycast(origin, direction, params)
+
+    if not hit then
+        return true
+    end
+
+    return targetCharacter
+        and hit.Instance
+        and hit.Instance:IsDescendantOf(targetCharacter)
+end
+
+local function IsShootPositionBlocked(position, targetCharacter)
+    local params = OverlapParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {
+        Player.Character,
+        targetCharacter
+    }
+
+    local parts = workspace:GetPartBoundsInBox(
+        CFrame.new(position),
+        Vector3.new(2.8, 4.8, 2.8),
+        params
+    )
+
+    for _, part in ipairs(parts) do
+        if part:IsA("BasePart")
+        and part.CanCollide
+        and part.Transparency < 0.9 then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function GetClearShootCFrame(targetCharacter, targetRoot, targetAim)
+    local targetPosition = targetAim.Position
+    local rootCFrame = targetRoot.CFrame
+    local right = rootCFrame.RightVector
+    local forward = rootCFrame.LookVector
+
+    local offsets = {
+        Vector3.new(0, 4.4, 0),
+        -forward * 3.2 + Vector3.new(0, 2.8, 0),
+        forward * 3.2 + Vector3.new(0, 2.8, 0),
+        right * 3.2 + Vector3.new(0, 2.8, 0),
+        -right * 3.2 + Vector3.new(0, 2.8, 0),
+        (right - forward).Unit * 3.4 + Vector3.new(0, 2.7, 0),
+        (-right - forward).Unit * 3.4 + Vector3.new(0, 2.7, 0),
+        (right + forward).Unit * 3.4 + Vector3.new(0, 2.7, 0),
+        (-right + forward).Unit * 3.4 + Vector3.new(0, 2.7, 0)
+    }
+
+    for _, offset in ipairs(offsets) do
+        local position = targetRoot.Position + offset
+        local cameraOrigin = position + Vector3.new(0, 0.8, 0)
+
+        if not IsShootPositionBlocked(position, targetCharacter)
+        and IsClearShot(cameraOrigin, targetPosition, targetCharacter) then
+            return CFrame.lookAt(position, targetPosition)
+        end
+    end
+
+    local fallback = targetRoot.Position + Vector3.new(0, 3.2, 0)
+    return CFrame.lookAt(fallback, targetPosition)
 end
 
 local ShootSafetySerial = 0
@@ -1299,9 +1392,9 @@ local function ShootMurderer()
     local targetCharacter = murderer.Character
     local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
     local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
-    local targetAim = targetCharacter:FindFirstChild("UpperTorso")
+    local targetAim = targetCharacter:FindFirstChild("Head")
+        or targetCharacter:FindFirstChild("UpperTorso")
         or targetCharacter:FindFirstChild("Torso")
-        or targetCharacter:FindFirstChild("Head")
         or targetRoot
 
     if not targetHumanoid
@@ -1325,7 +1418,6 @@ local function ShootMurderer()
 
     local shotSerial = ShootSafetySerial
     local oldCharacterCFrame = character:GetPivot()
-    local oldRootAnchored = root.Anchored
     local oldAutoRotate = humanoid.AutoRotate
     local oldPlatformStand = humanoid.PlatformStand
     local oldSit = humanoid.Sit
@@ -1335,6 +1427,14 @@ local function ShootMurderer()
     local oldMousePosition = UserInputService:GetMouseLocation()
     local originalParent = gun.Parent
     local collisionCache = {}
+
+    local function ShotCancelled()
+        return getgenv().Destroyed
+            or shotSerial ~= ShootSafetySerial
+            or not targetRoot.Parent
+            or not targetAim.Parent
+            or targetHumanoid.Health <= 0
+    end
 
     local function RestoreShot()
         pcall(function()
@@ -1356,6 +1456,12 @@ local function ShootMurderer()
             end)
         end
 
+        for part, oldCanCollide in pairs(collisionCache) do
+            if part and part.Parent then
+                part.CanCollide = oldCanCollide
+            end
+        end
+
         if character
         and character.Parent
         and root
@@ -1366,10 +1472,10 @@ local function ShootMurderer()
             local allow = getgenv().AllowToxTeleport
 
             if allow then
-                allow(0.45)
+                allow(0.55)
             end
 
-            root.Anchored = true
+            root.Anchored = false
             character:PivotTo(oldCharacterCFrame)
             root.AssemblyLinearVelocity = Vector3.zero
             root.AssemblyAngularVelocity = Vector3.zero
@@ -1378,20 +1484,9 @@ local function ShootMurderer()
             humanoid.Sit = oldSit
             humanoid.AutoRotate = oldAutoRotate
 
-            RunService.Heartbeat:Wait()
-
-            root.Anchored = oldRootAnchored
-
-            if not oldRootAnchored then
-                root.AssemblyLinearVelocity = Vector3.zero
-                root.AssemblyAngularVelocity = Vector3.zero
-            end
-        end
-
-        for part, oldCanCollide in pairs(collisionCache) do
-            if part and part.Parent then
-                part.CanCollide = oldCanCollide
-            end
+            pcall(function()
+                humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+            end)
         end
 
         if originalParent
@@ -1406,21 +1501,6 @@ local function ShootMurderer()
         ActionBusy = false
     end
 
-    task.delay(0.45, function()
-        if ShootSafetySerial ~= shotSerial then
-            return
-        end
-
-        if root and root.Parent and root.Anchored and not oldRootAnchored then
-            root.Anchored = false
-        end
-
-        if humanoid and humanoid.Parent and humanoid.Health > 0 then
-            humanoid.PlatformStand = false
-            humanoid.Sit = false
-        end
-    end)
-
     local success = false
 
     local ok = pcall(function()
@@ -1428,11 +1508,9 @@ local function ShootMurderer()
             return
         end
 
-        task.wait(0.035)
+        task.wait(0.03)
 
-        if not targetRoot.Parent
-        or not targetAim.Parent
-        or targetHumanoid.Health <= 0 then
+        if ShotCancelled() then
             return
         end
 
@@ -1443,54 +1521,35 @@ local function ShootMurderer()
             end
         end
 
-        humanoid.PlatformStand = false
+        humanoid.PlatformStand = true
         humanoid.Sit = false
         humanoid.AutoRotate = false
-
-        root.AssemblyLinearVelocity = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
-        root.Anchored = true
+        root.Anchored = false
 
         local allow = getgenv().AllowToxTeleport
 
         if allow then
-            allow(0.35)
+            allow(0.45)
         end
 
+        local shootCFrame = GetClearShootCFrame(
+            targetCharacter,
+            targetRoot,
+            targetAim
+        )
+
         for _ = 1, 3 do
-            if getgenv().Destroyed
-            or not targetRoot.Parent
-            or not targetAim.Parent
-            or targetHumanoid.Health <= 0 then
-                break
+            if ShotCancelled() then
+                return
             end
 
-            local aimPosition = GetPredictedMurderPosition(targetAim)
-            local targetVelocity = targetRoot.AssemblyLinearVelocity
-            local horizontalVelocity = Vector3.new(
-                targetVelocity.X,
-                0,
-                targetVelocity.Z
+            shootCFrame = GetClearShootCFrame(
+                targetCharacter,
+                targetRoot,
+                targetAim
             )
 
-            local followOffset = Vector3.zero
-
-            if horizontalVelocity.Magnitude > 0.1 then
-                followOffset = horizontalVelocity.Unit
-                    * math.min(horizontalVelocity.Magnitude * 0.018, 1.4)
-            end
-
-            local shootPosition = targetRoot.Position
-                + followOffset
-                + Vector3.new(0, 4.6, 0)
-
-            character:PivotTo(
-                CFrame.lookAt(
-                    shootPosition,
-                    aimPosition
-                )
-            )
-
+            root.CFrame = shootCFrame
             root.AssemblyLinearVelocity = Vector3.zero
             root.AssemblyAngularVelocity = Vector3.zero
 
@@ -1498,63 +1557,62 @@ local function ShootMurderer()
                 Camera.CameraType = Enum.CameraType.Custom
                 Camera.CameraSubject = humanoid
                 Camera.CFrame = CFrame.lookAt(
-                    shootPosition + Vector3.new(0, 0.85, 0),
-                    aimPosition
+                    shootCFrame.Position + Vector3.new(0, 0.8, 0),
+                    targetAim.Position
                 )
             end
 
-            RunService.RenderStepped:Wait()
+            RunService.Heartbeat:Wait()
         end
 
-        if not targetRoot.Parent
-        or not targetAim.Parent
-        or targetHumanoid.Health <= 0 then
+        if ShotCancelled() then
             return
         end
 
-        local finalAim = GetPredictedMurderPosition(targetAim)
-        local finalShootPosition = targetRoot.Position
-            + Vector3.new(0, 4.6, 0)
+        local exactTarget = targetAim.Position
+        local predictedTarget = GetPredictedMurderPosition(targetAim)
 
-        character:PivotTo(
-            CFrame.lookAt(
-                finalShootPosition,
-                finalAim
-            )
+        shootCFrame = GetClearShootCFrame(
+            targetCharacter,
+            targetRoot,
+            targetAim
         )
 
+        root.CFrame = shootCFrame
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
 
         if Camera then
-            Camera.CameraType = Enum.CameraType.Custom
-            Camera.CameraSubject = humanoid
             Camera.CFrame = CFrame.lookAt(
-                finalShootPosition + Vector3.new(0, 0.85, 0),
-                finalAim
+                shootCFrame.Position + Vector3.new(0, 0.8, 0),
+                predictedTarget
             )
         end
 
         RunService.RenderStepped:Wait()
 
+        if ShotCancelled() then
+            return
+        end
+
+        pcall(function()
+            gun:Activate()
+        end)
+
+        ClickGunAtPosition(predictedTarget)
+
         pcall(function()
             gun:Activate()
         end)
 
         NormalGunClick()
 
-        RunService.RenderStepped:Wait()
+        local remoteFired = FireMM2GunRemote(
+            gun,
+            exactTarget
+        )
 
-        finalAim = GetPredictedMurderPosition(targetAim)
-
-        pcall(function()
-            gun:Activate()
-        end)
-
-        NormalGunClick()
-        FireMM2GunRemote(gun, finalAim)
-
-        task.wait(0.035)
+        task.wait(remoteFired and 0.025 or 0.045)
         success = true
     end)
 
@@ -2148,7 +2206,7 @@ local function CompleteAutoFarm()
     end
 
     AutoFarmCompleting = true
-    Settings.MM2AutoFarm = false
+    Settings.MM2AutoFarmV2 = false
     StopAutoFarm(true)
 
     if SyncToggleVisuals then
@@ -2234,7 +2292,7 @@ local function TweenFarmRoot(targetPosition, duration, coin)
     local startTime = os.clock()
     duration = math.max(duration, 0.025)
 
-    while Settings.MM2AutoFarm
+    while Settings.MM2AutoFarmV2
     and AutoFarmPrepared
     and generation == AutoFarmGeneration
     and AutoFarmRoot
@@ -2320,7 +2378,7 @@ local function CollectFarmCoin(coin)
     AutoFarmAtCoin = true
 
     for _ = 1, 3 do
-        if not Settings.MM2AutoFarm
+        if not Settings.MM2AutoFarmV2
         or generation ~= AutoFarmGeneration
         or IsFarmBagFull()
         or not IsCoinValid(coin) then
@@ -2376,7 +2434,7 @@ local function AutoFarmCoin(coin)
     end
 
     local speedValue = math.clamp(
-        tonumber(Settings.MM2AutoFarmSpeed) or 50,
+        tonumber(Settings.MM2AutoFarmV2Speed) or 50,
         5,
         250
     )
@@ -2392,7 +2450,7 @@ local function AutoFarmCoin(coin)
         coin
     )
 
-    if not Settings.MM2AutoFarm then
+    if not Settings.MM2AutoFarmV2 then
         return false
     end
 
@@ -2427,7 +2485,7 @@ local function AutoFarmCoin(coin)
 end
 
 AddConnection(RunService.Heartbeat:Connect(function()
-    if not Settings.MM2AutoFarm
+    if not Settings.MM2AutoFarmV2
     or not AutoFarmPrepared
     or not AutoFarmRoot
     or not AutoFarmRoot.Parent then
@@ -2449,7 +2507,7 @@ end))
 
 task.spawn(function()
     while not getgenv().Destroyed and game.PlaceId == 142823291 do
-        if Settings.MM2AutoFarm then
+        if Settings.MM2AutoFarmV2 then
             local _, humanoid, root, alive = IsAliveCharacter()
 
             if not alive then
@@ -2547,14 +2605,14 @@ local function FlingSelectedRole()
     end)
 end
 
-CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarm, Settings.MM2AutoFarmSpeed, function(v)
+CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarmV2, Settings.MM2AutoFarmV2Speed, function(v)
     if v then
-        Settings.MM2AutoFarm = true
+        Settings.MM2AutoFarmV2 = true
         AutoFarmBagKnown = false
         AutoFarmSessionCollected = 0
         RefreshFarmBagState()
     else
-        Settings.MM2AutoFarm = false
+        Settings.MM2AutoFarmV2 = false
         StopAutoFarm(true)
 
         local character = Player.Character
@@ -2578,9 +2636,9 @@ CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarm, Settings.MM2A
 
     AutoSaveConfiguration()
 end, function(value)
-    Settings.MM2AutoFarmSpeed = math.clamp(tonumber(value) or 50, 5, 250)
+    Settings.MM2AutoFarmV2Speed = math.clamp(tonumber(value) or 50, 5, 250)
     AutoSaveConfiguration()
-end, "MM2AutoFarm")
+end, "MM2AutoFarmV2")
 
 CreateToggle("ESP", GamePage, Settings.MM2RoleESP, function(v)
     ApplyRoleESP(v)
@@ -2604,23 +2662,36 @@ CreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
     SetShared("AntiFling", v)
 end, "AntiFling")
 
-CreateKeybindToggle("Kill All", GamePage, Settings.MM2KillAllKey, Settings.MM2KillAllAuto, function(key)
+local MM2AutoRuntime = {
+    KillAll = Settings.MM2KillAllAutoV2 == true,
+    Shoot = Settings.MM2ShootMurderAutoV2 == true,
+    GrabGun = Settings.MM2GrabGunAutoV2 == true
+}
+
+CreateKeybindToggle("Kill All", GamePage, Settings.MM2KillAllKey, MM2AutoRuntime.KillAll, function(key)
     Settings.MM2KillAllKey = key
 end, function(enabled)
-    Settings.MM2KillAllAuto = enabled
-end)
+    MM2AutoRuntime.KillAll = enabled == true
+    Settings.MM2KillAllAutoV2 = MM2AutoRuntime.KillAll
+end, "MM2KillAllAutoV2")
 
-CreateKeybindToggle("Shoot Murderer", GamePage, Settings.MM2ShootMurderKey, Settings.MM2ShootMurderAuto, function(key)
+CreateKeybindToggle("Shoot Murderer", GamePage, Settings.MM2ShootMurderKey, MM2AutoRuntime.Shoot, function(key)
     Settings.MM2ShootMurderKey = key
 end, function(enabled)
-    Settings.MM2ShootMurderAuto = enabled
-end)
+    MM2AutoRuntime.Shoot = enabled == true
+    Settings.MM2ShootMurderAutoV2 = MM2AutoRuntime.Shoot
 
-CreateKeybindToggle("Grab Gun", GamePage, Settings.MM2GrabGunKey, Settings.MM2GrabGunAuto, function(key)
+    if not MM2AutoRuntime.Shoot then
+        ShootSafetySerial = ShootSafetySerial + 1
+    end
+end, "MM2ShootMurderAutoV2")
+
+CreateKeybindToggle("Grab Gun", GamePage, Settings.MM2GrabGunKey, MM2AutoRuntime.GrabGun, function(key)
     Settings.MM2GrabGunKey = key
 end, function(enabled)
-    Settings.MM2GrabGunAuto = enabled
-end)
+    MM2AutoRuntime.GrabGun = enabled == true
+    Settings.MM2GrabGunAutoV2 = MM2AutoRuntime.GrabGun
+end, "MM2GrabGunAutoV2")
 
 CreateDropdown("Fling Target", {"Murderer", "Sheriff"}, GamePage, Settings.MM2FlingTarget, function(value)
     Settings.MM2FlingTarget = value
@@ -2650,7 +2721,7 @@ task.spawn(function()
         local alive = humanoid and humanoid.Health > 0
         local localRole = alive and GetRole(Player) or nil
 
-        if Settings.MM2KillAllAuto and not Settings.MM2AutoFarm then
+        if MM2AutoRuntime.KillAll and not Settings.MM2AutoFarmV2 then
             if knife and not AutoKnifeOwned and alive and not ActionBusy then
                 AutoKnifeOwned = true
                 task.spawn(KillAll)
@@ -2661,8 +2732,9 @@ task.spawn(function()
             AutoKnifeOwned = knife ~= nil
         end
 
-        if Settings.MM2ShootMurderAuto
-        and not Settings.MM2AutoFarm
+        if MM2AutoRuntime.Shoot
+        and Settings.MM2ShootMurderAutoV2
+        and not Settings.MM2AutoFarmV2
         and gun
         and alive
         and not ActionBusy then
@@ -2680,8 +2752,9 @@ task.spawn(function()
             end
         end
 
-        if Settings.MM2GrabGunAuto
-        and not Settings.MM2AutoFarm
+        if MM2AutoRuntime.GrabGun
+        and Settings.MM2GrabGunAutoV2
+        and not Settings.MM2AutoFarmV2
         and alive
         and localRole == "Innocent"
         and not gun
@@ -2701,6 +2774,8 @@ task.spawn(function()
 end)
 
 
+local LastManualShootInput = 0
+
 AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed
     or UserInputService:GetFocusedTextBox()
@@ -2715,7 +2790,29 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 
     if Settings.MM2ShootMurderKey and input.KeyCode == Settings.MM2ShootMurderKey then
-        ShootMurderer()
+        if os.clock() - LastManualShootInput < 0.35 then
+            return
+        end
+
+        LastManualShootInput = os.clock()
+
+        MM2AutoRuntime.Shoot = false
+        Settings.MM2ShootMurderAuto = false
+        Settings.MM2ShootMurderAutoV2 = false
+        ShootSafetySerial = ShootSafetySerial + 1
+
+        if SyncToggleVisuals then
+            SyncToggleVisuals("MM2ShootMurderAutoV2", false)
+        end
+
+        AutoSaveConfiguration()
+
+        task.defer(function()
+            if not getgenv().Destroyed then
+                ShootMurderer()
+            end
+        end)
+
         return
     end
 
@@ -2724,13 +2821,23 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end))
 
+
 getgenv().ToxMM2Cleanup = function()
     getgenv().ToxMM2ModuleLoadedJobId = nil
     Settings.MM2AutoFarm = false
+    Settings.MM2AutoFarmV2 = false
     Settings.MM2RoleESP = false
     Settings.MM2KillAllAuto = false
+    Settings.MM2KillAllAutoV2 = false
     Settings.MM2ShootMurderAuto = false
+    Settings.MM2ShootMurderAutoV2 = false
     Settings.MM2GrabGunAuto = false
+    Settings.MM2GrabGunAutoV2 = false
+
+    MM2AutoRuntime.KillAll = false
+    MM2AutoRuntime.Shoot = false
+    MM2AutoRuntime.GrabGun = false
+    ShootSafetySerial = ShootSafetySerial + 1
     ActionBusy = false
     AutoShootLastAttempt = 0
     table.clear(KnifeTargetIds)
@@ -2779,8 +2886,11 @@ getgenv().ToxMM2Cleanup = function()
     end
 
     if getgenv().SyncToggleVisuals then
-        getgenv().SyncToggleVisuals("MM2AutoFarm", false)
+        getgenv().SyncToggleVisuals("MM2AutoFarmV2", false)
         getgenv().SyncToggleVisuals("MM2RoleESP", false)
+        getgenv().SyncToggleVisuals("MM2KillAllAutoV2", false)
+        getgenv().SyncToggleVisuals("MM2ShootMurderAutoV2", false)
+        getgenv().SyncToggleVisuals("MM2GrabGunAutoV2", false)
     end
 end
 
