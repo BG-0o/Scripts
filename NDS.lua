@@ -68,6 +68,7 @@ local NoFallGeneration = 0
 local NoTPConnection = nil
 local NoTPCharacterConnection = nil
 local NoTPAnchorCFrame = nil
+local NoTPLastObservedCFrame = nil
 local NoTPCurrentCharacter = nil
 
 local SpawnCFrame = CFrame.new(-278.442841, 179.499985, 344.097626)
@@ -129,6 +130,7 @@ local function TeleportTo(cframe, name)
 
     if Settings.NDSNoTP then
         NoTPAnchorCFrame = cframe
+        NoTPLastObservedCFrame = cframe
     end
 
     CustomNotify("Teleported to " .. name, Color3.fromRGB(100, 255, 100))
@@ -760,6 +762,7 @@ local function RestoreNoTPCharacter(
             root.CFrame = safe
 
             NoTPAnchorCFrame = safe
+            NoTPLastObservedCFrame = safe
 
             if getgenv().SetToxLastSafeCFrame then
                 getgenv().SetToxLastSafeCFrame(
@@ -768,6 +771,8 @@ local function RestoreNoTPCharacter(
             end
         else
             NoTPAnchorCFrame =
+                root.CFrame
+            NoTPLastObservedCFrame =
                 root.CFrame
 
             if getgenv().SetToxLastSafeCFrame then
@@ -794,6 +799,7 @@ local function StopNoTP()
     end
 
     NoTPAnchorCFrame = nil
+    NoTPLastObservedCFrame = nil
     NoTPCurrentCharacter = nil
 end
 
@@ -816,9 +822,16 @@ local function StartNoTP()
 
     local character, humanoid, root = GetCharacterState()
 
-    if root and humanoid and humanoid.Health > 0 and not NoTPAnchorCFrame then
-        NoTPAnchorCFrame = root.CFrame
-        NoTPCurrentCharacter = character
+    if root
+    and humanoid
+    and humanoid.Health > 0 then
+        NoTPAnchorCFrame =
+            NoTPAnchorCFrame
+            or root.CFrame
+        NoTPLastObservedCFrame =
+            root.CFrame
+        NoTPCurrentCharacter =
+            character
     end
 
     NoTPCharacterConnection = AddConnection(Player.CharacterAdded:Connect(function(newCharacter)
@@ -858,7 +871,10 @@ local function StartNoTP()
             return
         end
 
-        local bypassUntil = tonumber(getgenv().ToxTeleportBypassUntil) or 0
+        local bypassUntil =
+            tonumber(
+                getgenv().ToxTeleportBypassUntil
+            ) or 0
 
         if tick() < bypassUntil then
             if not IsNDSVoidPosition(
@@ -866,24 +882,55 @@ local function StartNoTP()
             ) then
                 NoTPAnchorCFrame =
                     currentRoot.CFrame
+                NoTPLastObservedCFrame =
+                    currentRoot.CFrame
             end
 
             return
         end
 
         if not NoTPAnchorCFrame then
-            NoTPAnchorCFrame = currentRoot.CFrame
+            NoTPAnchorCFrame =
+                currentRoot.CFrame
+        end
+
+        if not NoTPLastObservedCFrame then
+            NoTPLastObservedCFrame =
+                currentRoot.CFrame
+        end
+
+        local frameDistance =
+            (
+                currentRoot.Position
+                - NoTPLastObservedCFrame.Position
+            ).Magnitude
+
+        local protectedDistance =
+            (
+                currentRoot.Position
+                - NoTPAnchorCFrame.Position
+            ).Magnitude
+
+        if frameDistance > 8
+        and protectedDistance > 8 then
+            currentRoot.AssemblyLinearVelocity =
+                Vector3.zero
+            currentRoot.AssemblyAngularVelocity =
+                Vector3.zero
+            currentRoot.CFrame =
+                NoTPAnchorCFrame
+            NoTPLastObservedCFrame =
+                NoTPAnchorCFrame
             return
         end
 
-        local distance = (currentRoot.Position - NoTPAnchorCFrame.Position).Magnitude
-
-        if distance > 28 then
-            currentRoot.AssemblyLinearVelocity = Vector3.zero
-            currentRoot.AssemblyAngularVelocity = Vector3.zero
-            currentRoot.CFrame = NoTPAnchorCFrame
-        else
-            NoTPAnchorCFrame = currentRoot.CFrame
+        if not IsNDSVoidPosition(
+            currentRoot.Position
+        ) then
+            NoTPAnchorCFrame =
+                currentRoot.CFrame
+            NoTPLastObservedCFrame =
+                currentRoot.CFrame
         end
     end))
 end
@@ -898,6 +945,7 @@ getgenv().SetNDSNoTPAnchor = function(
     end
 
     NoTPAnchorCFrame = cframe
+    NoTPLastObservedCFrame = cframe
     NoTPCurrentCharacter =
         Player.Character
 
