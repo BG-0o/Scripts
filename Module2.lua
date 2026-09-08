@@ -23,385 +23,16 @@ local FOVCaptured = false
 local ShiftLockDefaults = nil
 local isShiftLockActive = false
 
-local UIStateFolder = "ToxV1_Data"
-local UIStatePath = UIStateFolder .. "/ui_state.json"
-local UIState = {
-    TeamColors = false,
-    Positions = {}
-}
-local CanSaveGuiPositions = false
-local SaveStateToken = 0
-
-local function EnsureUIStateFolder()
-    if makefolder and isfolder then
-        pcall(function()
-            if not isfolder(UIStateFolder) then
-                makefolder(UIStateFolder)
-            end
-        end)
-    end
-end
-
-local function LoadUIState()
-    EnsureUIStateFolder()
-
-    if not isfile or not readfile or not isfile(UIStatePath) then
-        return
-    end
-
-    pcall(function()
-        local decoded = HttpService:JSONDecode(readfile(UIStatePath))
-        if typeof(decoded) == "table" then
-            if typeof(decoded.TeamColors) == "boolean" then
-                UIState.TeamColors = decoded.TeamColors
-            end
-
-            if typeof(decoded.Positions) == "table" then
-                UIState.Positions = decoded.Positions
-            end
-        end
-    end)
-end
-
-local function SaveUIState()
-    EnsureUIStateFolder()
-
-    if not writefile then
-        return
-    end
-
-    pcall(function()
-        writefile(UIStatePath, HttpService:JSONEncode(UIState))
-    end)
-end
-
-local function QueueUIStateSave()
-    SaveStateToken = SaveStateToken + 1
-    local token = SaveStateToken
-
-    task.delay(0.2, function()
-        if token == SaveStateToken then
-            SaveUIState()
-        end
-    end)
-end
-
-local function EncodePosition(position)
-    return {
-        XS = position.X.Scale,
-        XO = position.X.Offset,
-        YS = position.Y.Scale,
-        YO = position.Y.Offset
-    }
-end
-
-local function DecodePosition(data)
-    if typeof(data) ~= "table" then
-        return nil
-    end
-
-    if typeof(data.XS) ~= "number"
-    or typeof(data.XO) ~= "number"
-    or typeof(data.YS) ~= "number"
-    or typeof(data.YO) ~= "number" then
-        return nil
-    end
-
-    return UDim2.new(data.XS, data.XO, data.YS, data.YO)
-end
-
-local function ApplySavedGuiPosition(key, gui)
-    if not gui then
-        return nil
-    end
-
-    local saved = DecodePosition(UIState.Positions[key])
-    if saved then
-        gui.Position = saved
-        return saved
-    end
-
-    return gui.Position
-end
-
-local function TrackGuiPosition(key, gui)
-    if not gui then
-        return
-    end
-
-    AddConnection(gui:GetPropertyChangedSignal("Position"):Connect(function()
-        if not CanSaveGuiPositions then
-            return
-        end
-
-        UIState.Positions[key] = EncodePosition(gui.Position)
-        QueueUIStateSave()
-    end))
-end
-
-LoadUIState()
-Settings.ESPTeamColors = UIState.TeamColors == true
-
-local ToxChatGui = Instance.new("Frame")
-ToxChatGui.Name = "ToxChatFrame"
-ToxChatGui.Size = UDim2.new(0, 370, 0, 310)
-ToxChatGui.Position = UDim2.new(0.5, -185, 0.5, -155)
-ToxChatGui.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
-ToxChatGui.BorderSizePixel = 0
-ToxChatGui.ClipsDescendants = true
-ToxChatGui.Visible = false
-ToxChatGui.Parent = Gui
-
-local ToxChatCorner = Instance.new("UICorner")
-ToxChatCorner.CornerRadius = UDim.new(0, 8)
-ToxChatCorner.Parent = ToxChatGui
-
-local ToxChatStroke = Instance.new("UIStroke")
-ToxChatStroke.Color = MAIN_COLOR
-ToxChatStroke.Thickness = 2
-ToxChatStroke.Parent = ToxChatGui
-
-local ToxChatTopBar = Instance.new("Frame")
-ToxChatTopBar.Size = UDim2.new(1, 0, 0, 32)
-ToxChatTopBar.BackgroundColor3 = MAIN_COLOR
-ToxChatTopBar.BorderSizePixel = 0
-ToxChatTopBar.Parent = ToxChatGui
-
-MakeDraggable(ToxChatGui, ToxChatTopBar)
-
-local ToxChatTitle = Instance.new("TextLabel")
-ToxChatTitle.Size = UDim2.new(1, -70, 1, 0)
-ToxChatTitle.Position = UDim2.new(0, 10, 0, 0)
-ToxChatTitle.BackgroundTransparency = 1
-ToxChatTitle.Text = "Tox Chat"
-ToxChatTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToxChatTitle.Font = Enum.Font.GothamBold
-ToxChatTitle.TextSize = 13
-ToxChatTitle.TextXAlignment = Enum.TextXAlignment.Left
-ToxChatTitle.Parent = ToxChatTopBar
-
-local ToxChatClose = Instance.new("TextButton")
-ToxChatClose.Size = UDim2.new(0, 22, 0, 20)
-ToxChatClose.Position = UDim2.new(1, -26, 0.5, -10)
-ToxChatClose.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
-ToxChatClose.BorderSizePixel = 0
-ToxChatClose.Text = "X"
-ToxChatClose.TextColor3 = Color3.fromRGB(200, 200, 200)
-ToxChatClose.Font = Enum.Font.GothamBold
-ToxChatClose.TextSize = 11
-ToxChatClose.Parent = ToxChatTopBar
-
-local ToxChatCloseCorner = Instance.new("UICorner")
-ToxChatCloseCorner.CornerRadius = UDim.new(0, 4)
-ToxChatCloseCorner.Parent = ToxChatClose
-
-local ToxChatScroll = Instance.new("ScrollingFrame")
-ToxChatScroll.Size = UDim2.new(1, -16, 1, -88)
-ToxChatScroll.Position = UDim2.new(0, 8, 0, 40)
-ToxChatScroll.BackgroundTransparency = 1
-ToxChatScroll.BorderSizePixel = 0
-ToxChatScroll.ScrollBarThickness = 4
-ToxChatScroll.ScrollBarImageColor3 = MAIN_COLOR
-ToxChatScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-ToxChatScroll.Parent = ToxChatGui
-
-local ToxChatLayout = Instance.new("UIListLayout")
-ToxChatLayout.Padding = UDim.new(0, 5)
-ToxChatLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ToxChatLayout.Parent = ToxChatScroll
-
-ToxChatLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    ToxChatScroll.CanvasSize = UDim2.new(0, 0, 0, ToxChatLayout.AbsoluteContentSize.Y + 8)
-    ToxChatScroll.CanvasPosition = Vector2.new(0, math.max(0, ToxChatLayout.AbsoluteContentSize.Y))
-end)
-
-local ToxChatInput = Instance.new("TextBox")
-ToxChatInput.Size = UDim2.new(1, -88, 0, 32)
-ToxChatInput.Position = UDim2.new(0, 8, 1, -40)
-ToxChatInput.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
-ToxChatInput.BorderSizePixel = 0
-ToxChatInput.PlaceholderText = "Message..."
-ToxChatInput.PlaceholderColor3 = Color3.fromRGB(130, 130, 150)
-ToxChatInput.Text = ""
-ToxChatInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToxChatInput.Font = Enum.Font.Gotham
-ToxChatInput.TextSize = 12
-ToxChatInput.ClearTextOnFocus = false
-ToxChatInput.Parent = ToxChatGui
-
-local ToxChatInputCorner = Instance.new("UICorner")
-ToxChatInputCorner.CornerRadius = UDim.new(0, 4)
-ToxChatInputCorner.Parent = ToxChatInput
-
-local ToxChatSend = Instance.new("TextButton")
-ToxChatSend.Size = UDim2.new(0, 68, 0, 32)
-ToxChatSend.Position = UDim2.new(1, -76, 1, -40)
-ToxChatSend.BackgroundColor3 = MAIN_COLOR
-ToxChatSend.BorderSizePixel = 0
-ToxChatSend.Text = "Send"
-ToxChatSend.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToxChatSend.Font = Enum.Font.GothamBold
-ToxChatSend.TextSize = 12
-ToxChatSend.Parent = ToxChatGui
-
-local ToxChatSendCorner = Instance.new("UICorner")
-ToxChatSendCorner.CornerRadius = UDim.new(0, 4)
-ToxChatSendCorner.Parent = ToxChatSend
-
-local ToxChatTopic = "toxhub-bg0o-4f8c2d7a91e63b0c"
-local ToxChatToken = "toxhub-v1-6d82a17e"
-local ToxChatLastID = nil
-local ToxChatSeen = {}
-local ToxChatLastSend = 0
-
-local function AddToxChatMessage(displayName, message)
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -6, 0, 0)
-    label.AutomaticSize = Enum.AutomaticSize.Y
-    label.BackgroundColor3 = Color3.fromRGB(16, 16, 24)
-    label.BackgroundTransparency = 0.15
-    label.BorderSizePixel = 0
-    label.Text = tostring(displayName) .. ": " .. tostring(message)
-    label.TextColor3 = Color3.fromRGB(235, 235, 245)
-    label.TextWrapped = true
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.TextYAlignment = Enum.TextYAlignment.Top
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 12
-    label.Parent = ToxChatScroll
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 4)
-    corner.Parent = label
-
-    local padding = Instance.new("UIPadding")
-    padding.PaddingLeft = UDim.new(0, 8)
-    padding.PaddingRight = UDim.new(0, 8)
-    padding.PaddingTop = UDim.new(0, 6)
-    padding.PaddingBottom = UDim.new(0, 6)
-    padding.Parent = label
-end
-
-local function DecodeToxChatResponse(response)
-    if typeof(response) ~= "string" or response == "" then
-        return
-    end
-
-    for line in response:gmatch("[^\r\n]+") do
-        local okOuter, outer = pcall(function()
-            return HttpService:JSONDecode(line)
-        end)
-
-        if okOuter and typeof(outer) == "table" and outer.event == "message" and outer.id then
-            if not ToxChatSeen[outer.id] then
-                local okInner, payload = pcall(function()
-                    return HttpService:JSONDecode(tostring(outer.message or ""))
-                end)
-
-                if okInner
-                and typeof(payload) == "table"
-                and payload.token == ToxChatToken
-                and typeof(payload.message) == "string"
-                and typeof(payload.displayName) == "string" then
-                    ToxChatSeen[outer.id] = true
-                    ToxChatLastID = outer.id
-                    AddToxChatMessage(payload.displayName, payload.message)
-                end
-            end
-        end
-    end
-end
-
-local function PollToxChat()
-    local since = ToxChatLastID and HttpService:UrlEncode(ToxChatLastID) or "10m"
-    local url = "https://ntfy.sh/" .. ToxChatTopic .. "/json?poll=1&since=" .. since
-
-    local ok, response = pcall(function()
-        return game:HttpGet(url)
-    end)
-
-    if ok then
-        DecodeToxChatResponse(response)
-    end
-end
-
-local function SendToxChatMessage()
-    if tick() - ToxChatLastSend < 0.8 then
-        return
-    end
-
-    local message = tostring(ToxChatInput.Text or "")
-    message = message:gsub("[\r\n]+", " ")
-    message = message:match("^%s*(.-)%s*$") or ""
-
-    if message == "" then
-        return
-    end
-
-    if #message > 160 then
-        message = string.sub(message, 1, 160)
-    end
-
-    ToxChatLastSend = tick()
-
-    local payload = HttpService:JSONEncode({
-        token = ToxChatToken,
-        displayName = Player.DisplayName,
-        username = Player.Name,
-        userId = Player.UserId,
-        message = message,
-        placeId = game.PlaceId
-    })
-
-    local url = "https://ntfy.sh/" .. ToxChatTopic .. "/publish?title=ToxChat&message=" .. HttpService:UrlEncode(payload)
-
-    ToxChatInput.Text = ""
-
-    task.spawn(function()
-        local ok = pcall(function()
-            game:HttpGet(url)
-        end)
-
-        if not ok then
-            CustomNotify("Tox Chat connection failed", Color3.fromRGB(255, 100, 100))
-        end
-    end)
-end
-
-ToxChatSend.MouseButton1Click:Connect(SendToxChatMessage)
-
-ToxChatInput.FocusLost:Connect(function(enterPressed)
-    if enterPressed then
-        SendToxChatMessage()
-    end
-end)
-
-ToxChatClose.MouseButton1Click:Connect(function()
-    ToxChatGui.Visible = false
-end)
-
-task.spawn(function()
-    while not Destroyed do
-        PollToxChat()
-        task.wait(3)
-    end
-end)
-
-local DefaultMainPosition = UDim2.new(0.5, -165, 0.5, -197)
-local SavedMainPosition = DecodePosition(UIState.Positions.Main) or DefaultMainPosition
-
-ApplySavedGuiPosition("ChatLog", ChatLogGui)
-ApplySavedGuiPosition("Music", MusicGui)
-ApplySavedGuiPosition("Waypoints", WaypointsGui)
-ApplySavedGuiPosition("ToxChat", ToxChatGui)
-
-TrackGuiPosition("Main", Main)
-TrackGuiPosition("ChatLog", ChatLogGui)
-TrackGuiPosition("Music", MusicGui)
-TrackGuiPosition("Waypoints", WaypointsGui)
-TrackGuiPosition("ToxChat", ToxChatGui)
-
-local MusicIDStatus = {}
+local ToxChatGui = getgenv().ToxChatGui
+local ToxChatInput = getgenv().ToxChatInput
+local ToxChatSendBtn = getgenv().ToxChatSendBtn
+local ToxChatStatus = getgenv().ToxChatStatus
+local AddToxChatMessage = getgenv().AddToxChatMessage
+local CheckMusicIDsBtn = getgenv().CheckMusicIDsBtn
+local SetMusicIDStatus = getgenv().SetMusicIDStatus
+
+getgenv().MusicIDStatus = getgenv().MusicIDStatus or {}
+local MusicIDStatus = getgenv().MusicIDStatus
 local MusicCheckRunning = false
 local MusicCheckGeneration = 0
 
@@ -410,7 +41,13 @@ local function GetSavedMusicIDs()
     local seen = {}
 
     for _, item in ipairs(SavedIDs or {}) do
-        local id = tonumber(item.id)
+        local id = nil
+
+        if typeof(item) == "table" then
+            id = tonumber(item.id)
+        else
+            id = tonumber(item)
+        end
 
         if id and not seen[id] then
             seen[id] = true
@@ -419,51 +56,6 @@ local function GetSavedMusicIDs()
     end
 
     return ids
-end
-
-local function GetMusicIDLabels()
-    local result = {}
-    local saved = {}
-
-    for _, id in ipairs(GetSavedMusicIDs()) do
-        saved[tostring(id)] = true
-    end
-
-    if not MusicGui then
-        return result
-    end
-
-    for _, obj in ipairs(MusicGui:GetDescendants()) do
-        if obj:IsA("TextLabel") then
-            local raw = tostring(obj.Text or "")
-            local id = tonumber(raw)
-
-            if id and saved[tostring(id)] then
-                table.insert(result, {
-                    ID = id,
-                    Label = obj
-                })
-            end
-        end
-    end
-
-    return result
-end
-
-local function ApplyMusicIDColors()
-    for _, entry in ipairs(GetMusicIDLabels()) do
-        local status = MusicIDStatus[tostring(entry.ID)]
-
-        if status == true then
-            entry.Label.TextColor3 = Color3.fromRGB(70, 255, 100)
-        elseif status == false then
-            entry.Label.TextColor3 = Color3.fromRGB(255, 70, 70)
-        elseif status == "checking" then
-            entry.Label.TextColor3 = Color3.fromRGB(255, 215, 70)
-        else
-            entry.Label.TextColor3 = Color3.fromRGB(200, 200, 220)
-        end
-    end
 end
 
 local function IsMusicIDActive(id)
@@ -492,72 +84,672 @@ local function IsMusicIDActive(id)
     return true
 end
 
+local function ApplyMusicStatus(id, status)
+    MusicIDStatus[tostring(id)] = status
+
+    if SetMusicIDStatus then
+        SetMusicIDStatus(id, status)
+    end
+end
+
 local function CheckSavedMusicIDs(force)
     if MusicCheckRunning and not force then
         return
     end
 
-    MusicCheckGeneration = MusicCheckGeneration + 1
-    local generation = MusicCheckGeneration
     local ids = GetSavedMusicIDs()
 
     if #ids == 0 then
+        if CheckMusicIDsBtn then
+            CheckMusicIDsBtn.Text = "Check IDs"
+        end
         return
     end
 
+    MusicCheckGeneration = MusicCheckGeneration + 1
+    local generation = MusicCheckGeneration
     MusicCheckRunning = true
+
+    if CheckMusicIDsBtn then
+        CheckMusicIDsBtn.Text = "Checking..."
+        CheckMusicIDsBtn.TextColor3 = Color3.fromRGB(255, 215, 70)
+        CheckMusicIDsBtn.Active = false
+    end
 
     for _, id in ipairs(ids) do
         if force or MusicIDStatus[tostring(id)] == nil then
-            MusicIDStatus[tostring(id)] = "checking"
+            ApplyMusicStatus(id, "checking")
+        else
+            ApplyMusicStatus(id, MusicIDStatus[tostring(id)])
         end
     end
 
-    ApplyMusicIDColors()
-
     task.spawn(function()
+        local activeCount = 0
+        local unavailableCount = 0
+
         for _, id in ipairs(ids) do
             if generation ~= MusicCheckGeneration then
                 return
             end
 
             local key = tostring(id)
+            local status = MusicIDStatus[key]
 
-            if force or MusicIDStatus[key] == nil or MusicIDStatus[key] == "checking" then
-                MusicIDStatus[key] = IsMusicIDActive(id)
-                ApplyMusicIDColors()
+            if force or status == nil or status == "checking" then
+                status = IsMusicIDActive(id)
+                ApplyMusicStatus(id, status)
                 task.wait(0.12)
+            end
+
+            if status == true then
+                activeCount = activeCount + 1
+            elseif status == false then
+                unavailableCount = unavailableCount + 1
             end
         end
 
-        if generation == MusicCheckGeneration then
-            MusicCheckRunning = false
-            ApplyMusicIDColors()
+        if generation ~= MusicCheckGeneration then
+            return
+        end
+
+        MusicCheckRunning = false
+
+        if CheckMusicIDsBtn and CheckMusicIDsBtn.Parent then
+            CheckMusicIDsBtn.Text = "Check IDs"
+            CheckMusicIDsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            CheckMusicIDsBtn.Active = true
+        end
+
+        CustomNotify(
+            tostring(activeCount) .. " active | " .. tostring(unavailableCount) .. " unavailable",
+            unavailableCount > 0 and Color3.fromRGB(255, 180, 70) or Color3.fromRGB(100, 255, 100)
+        )
+    end)
+end
+
+if CheckMusicIDsBtn then
+    CheckMusicIDsBtn.MouseButton1Click:Connect(function()
+        CheckSavedMusicIDs(true)
+    end)
+end
+
+if MusicGui then
+    AddConnection(MusicGui:GetPropertyChangedSignal("Visible"):Connect(function()
+        if MusicGui.Visible then
+            task.defer(function()
+                CheckSavedMusicIDs(false)
+            end)
+        end
+    end))
+end
+
+task.delay(1, function()
+    CheckSavedMusicIDs(false)
+end)
+
+local ToxChatTopic = "toxhub-global-9f4d1c7a8e2b6f305a71"
+local ToxChatToken = "toxchat-v1-7cb3e59f1a"
+local ToxChatLastID = nil
+local ToxChatSeenIDs = {}
+local ToxChatSeenNonces = {}
+local ToxChatLastSend = 0
+local ToxChatSenderState = {}
+
+local RequestFunction = nil
+
+pcall(function()
+    local env = getgenv()
+
+    if syn and syn.request then
+        RequestFunction = syn.request
+    elseif http and http.request then
+        RequestFunction = http.request
+    elseif fluxus and fluxus.request then
+        RequestFunction = fluxus.request
+    elseif krnl and krnl.request then
+        RequestFunction = krnl.request
+    elseif env and env.request then
+        RequestFunction = env.request
+    elseif env and env.http_request then
+        RequestFunction = env.http_request
+    elseif http_request then
+        RequestFunction = http_request
+    elseif request then
+        RequestFunction = request
+    end
+end)
+
+local BlockedChatWords = {
+    caralho = true,
+    porra = true,
+    merda = true,
+    puta = true,
+    puto = true,
+    putaria = true,
+    buceta = true,
+    boceta = true,
+    xereca = true,
+    piroca = true,
+    punheta = true,
+    siririca = true,
+    foder = true,
+    fode = true,
+    foda = true,
+    fodase = true,
+    fdp = true,
+    arrombado = true,
+    arrombada = true,
+    desgracado = true,
+    desgracada = true,
+    cuzao = true,
+    viado = true,
+    viadinho = true,
+    bicha = true,
+    vagabunda = true,
+    vagabundo = true,
+    prostituta = true,
+    porno = true,
+    pornografia = true,
+    nude = true,
+    nudes = true,
+    sexo = true,
+    estupro = true,
+    estuprador = true,
+    estupradora = true,
+    fuck = true,
+    fucking = true,
+    fucker = true,
+    motherfucker = true,
+    shit = true,
+    bullshit = true,
+    bitch = true,
+    asshole = true,
+    dick = true,
+    cock = true,
+    pussy = true,
+    cunt = true,
+    whore = true,
+    slut = true,
+    porn = true,
+    pornography = true,
+    rape = true,
+    rapist = true,
+    nigger = true,
+    nigga = true,
+    faggot = true,
+    retard = true,
+    retarded = true,
+    kys = true
+}
+
+local BlockedCompactChatParts = {
+    "caralho",
+    "buceta",
+    "boceta",
+    "xereca",
+    "piroca",
+    "punheta",
+    "siririca",
+    "arrombado",
+    "arrombada",
+    "desgracado",
+    "desgracada",
+    "vagabunda",
+    "vagabundo",
+    "prostituta",
+    "pornografia",
+    "estupro",
+    "estuprador",
+    "estupradora",
+    "motherfucker",
+    "asshole",
+    "fucking",
+    "bullshit",
+    "pussy",
+    "cunt",
+    "whore",
+    "pornography",
+    "rapist",
+    "nigger",
+    "nigga",
+    "faggot",
+    "retarded",
+    "onlyfans"
+}
+
+local BlockedChatPhrases = {
+    "kill yourself",
+    "go kill yourself",
+    "go die",
+    "se mata",
+    "se matar",
+    "vai se matar",
+    "vou te matar",
+    "vou matar voce",
+    "manda nude",
+    "manda nudes",
+    "send nudes"
+}
+
+local function ReplaceChatAccents(text)
+    local replacements = {
+        ["á"] = "a",
+        ["à"] = "a",
+        ["â"] = "a",
+        ["ã"] = "a",
+        ["ä"] = "a",
+        ["é"] = "e",
+        ["è"] = "e",
+        ["ê"] = "e",
+        ["ë"] = "e",
+        ["í"] = "i",
+        ["ì"] = "i",
+        ["î"] = "i",
+        ["ï"] = "i",
+        ["ó"] = "o",
+        ["ò"] = "o",
+        ["ô"] = "o",
+        ["õ"] = "o",
+        ["ö"] = "o",
+        ["ú"] = "u",
+        ["ù"] = "u",
+        ["û"] = "u",
+        ["ü"] = "u",
+        ["ç"] = "c"
+    }
+
+    for from, to in pairs(replacements) do
+        text = string.gsub(text, from, to)
+    end
+
+    return text
+end
+
+local function CollapseChatRepeats(text)
+    local result = {}
+    local previous = ""
+    local count = 0
+
+    for i = 1, #text do
+        local char = string.sub(text, i, i)
+
+        if char == previous then
+            count = count + 1
+        else
+            previous = char
+            count = 1
+        end
+
+        if count <= 2 then
+            table.insert(result, char)
+        end
+    end
+
+    return table.concat(result)
+end
+
+local function CollapseChatAllRepeats(text)
+    local result = {}
+    local previous = ""
+
+    for i = 1, #text do
+        local char = string.sub(text, i, i)
+
+        if char ~= previous then
+            table.insert(result, char)
+            previous = char
+        end
+    end
+
+    return table.concat(result)
+end
+
+local function NormalizeChatForFilter(message)
+    local text = string.lower(tostring(message or ""))
+    text = ReplaceChatAccents(text)
+    text = text:gsub("@", "a")
+    text = text:gsub("4", "a")
+    text = text:gsub("3", "e")
+    text = text:gsub("1", "i")
+    text = text:gsub("!", "i")
+    text = text:gsub("0", "o")
+    text = text:gsub("5", "s")
+    text = text:gsub("7", "t")
+    text = text:gsub("%$", "s")
+    text = CollapseChatRepeats(text)
+
+    local spaced = text:gsub("[^a-z0-9]+", " ")
+    spaced = spaced:gsub("%s+", " ")
+    spaced = spaced:match("^%s*(.-)%s*$") or ""
+
+    local compact = spaced:gsub("[^a-z0-9]", "")
+
+    return text, spaced, compact
+end
+
+local function ModerateToxChatMessage(message)
+    local raw = tostring(message or "")
+
+    if raw == "" then
+        return false, "empty"
+    end
+
+    if #raw > 160 then
+        return false, "too_long"
+    end
+
+    local rawLower = string.lower(raw)
+
+    if rawLower:find("http://", 1, true)
+    or rawLower:find("https://", 1, true)
+    or rawLower:find("www.", 1, true)
+    or rawLower:find("discord.gg", 1, true)
+    or rawLower:find("discord.com/invite", 1, true)
+    or rawLower:find("t.me/", 1, true)
+    or rawLower:find("bit.ly", 1, true)
+    or rawLower:find("tinyurl", 1, true) then
+        return false, "link"
+    end
+
+    if rawLower:match("[%w%._%%+%-]+@[%w%.%-]+%.[%a][%a]+") then
+        return false, "contact"
+    end
+
+    if rawLower:match("%d+%.%d+%.%d+%.%d+") then
+        return false, "ip"
+    end
+
+    local normalized, spaced, compact = NormalizeChatForFilter(raw)
+    local padded = " " .. spaced .. " "
+
+    for word in spaced:gmatch("[a-z0-9]+") do
+        if BlockedChatWords[word] then
+            return false, "word"
+        end
+    end
+
+    for _, phrase in ipairs(BlockedChatPhrases) do
+        if padded:find(" " .. phrase .. " ", 1, true) then
+            return false, "phrase"
+        end
+    end
+
+    local collapsedCompact = CollapseChatAllRepeats(compact)
+
+    for _, part in ipairs(BlockedCompactChatParts) do
+        if compact:find(part, 1, true)
+        or collapsedCompact:find(CollapseChatAllRepeats(part), 1, true) then
+            return false, "obfuscated"
+        end
+    end
+
+    if normalized:match("%f[%a]p+[%W_]*u+[%W_]*t+[%W_]*a+%f[%A]")
+    or normalized:match("%f[%a]p+[%W_]*o+[%W_]*r+[%W_]*r+[%W_]*a+%f[%A]")
+    or normalized:match("%f[%a]m+[%W_]*e+[%W_]*r+[%W_]*d+[%W_]*a+%f[%A]")
+    or normalized:match("%f[%a]f+[%W_]*o+[%W_]*d+[%W_]*a+%f[%A]")
+    or normalized:match("%f[%a]f+[%W_]*d+[%W_]*p+%f[%A]")
+    or normalized:match("%f[%a]f+[%W_]*u+[%W_]*c+[%W_]*k+%f[%A]")
+    or normalized:match("%f[%a]s+[%W_]*h+[%W_]*i+[%W_]*t+%f[%A]") then
+        return false, "obfuscated"
+    end
+
+    return true, nil
+end
+
+local function IsToxChatSpam(userId, message)
+    local key = tostring(userId or "0")
+    local now = tick()
+    local state = ToxChatSenderState[key]
+
+    if not state then
+        state = {
+            Times = {},
+            LastMessage = "",
+            LastMessageTime = 0
+        }
+        ToxChatSenderState[key] = state
+    end
+
+    local newTimes = {}
+
+    for _, timeValue in ipairs(state.Times) do
+        if now - timeValue <= 10 then
+            table.insert(newTimes, timeValue)
+        end
+    end
+
+    state.Times = newTimes
+
+    local normalizedMessage = string.lower(tostring(message or ""))
+
+    if state.LastMessage == normalizedMessage and now - state.LastMessageTime < 12 then
+        return true
+    end
+
+    if #state.Times >= 5 then
+        return true
+    end
+
+    table.insert(state.Times, now)
+    state.LastMessage = normalizedMessage
+    state.LastMessageTime = now
+
+    return false
+end
+
+local function CleanToxChatDisplayName(displayName)
+    local name = tostring(displayName or "Unknown")
+    name = name:gsub("[\r\n<>]", "")
+    name = name:match("^%s*(.-)%s*$") or "Unknown"
+
+    if name == "" then
+        name = "Unknown"
+    end
+
+    if #name > 40 then
+        name = string.sub(name, 1, 40)
+    end
+
+    return name
+end
+
+local function DecodeToxChatResponse(response)
+    if typeof(response) ~= "string" or response == "" then
+        return
+    end
+
+    for line in response:gmatch("[^\r\n]+") do
+        local okOuter, outer = pcall(function()
+            return HttpService:JSONDecode(line)
+        end)
+
+        if okOuter and typeof(outer) == "table" and outer.event == "message" and outer.id then
+            ToxChatLastID = outer.id
+
+            if not ToxChatSeenIDs[outer.id] then
+                ToxChatSeenIDs[outer.id] = true
+
+                local okInner, payload = pcall(function()
+                    return HttpService:JSONDecode(tostring(outer.message or ""))
+                end)
+
+                if okInner
+                and typeof(payload) == "table"
+                and payload.token == ToxChatToken
+                and typeof(payload.message) == "string"
+                and tonumber(payload.userId) then
+                    local nonce = tostring(payload.nonce or "")
+
+                    if nonce == "" or not ToxChatSeenNonces[nonce] then
+                        if nonce ~= "" then
+                            ToxChatSeenNonces[nonce] = true
+                        end
+
+                        local displayName = CleanToxChatDisplayName(payload.displayName)
+                        local allowed = ModerateToxChatMessage(payload.message)
+                        local spam = IsToxChatSpam(payload.userId, payload.message)
+
+                        if not spam then
+                            if not allowed then
+                                if AddToxChatMessage then
+                                    AddToxChatMessage(displayName, "[message blocked]", true)
+                                end
+                            else
+                                if AddToxChatMessage then
+                                    AddToxChatMessage(displayName, payload.message, false)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function PollToxChat()
+    local since = ToxChatLastID and HttpService:UrlEncode(ToxChatLastID) or "5m"
+    local url = "https://ntfy.sh/" .. ToxChatTopic .. "/json?poll=1&since=" .. since
+
+    local ok, response = pcall(function()
+        return game:HttpGet(url)
+    end)
+
+    if ok then
+        DecodeToxChatResponse(response)
+
+        if ToxChatStatus and ToxChatStatus.Parent then
+            ToxChatStatus.Text = "Global chat • connected"
+            ToxChatStatus.TextColor3 = Color3.fromRGB(100, 255, 130)
+        end
+    else
+        if ToxChatStatus and ToxChatStatus.Parent then
+            ToxChatStatus.Text = "Global chat • reconnecting..."
+            ToxChatStatus.TextColor3 = Color3.fromRGB(255, 180, 70)
+        end
+    end
+end
+
+local function PublishToxChatPayload(payload)
+    local body = HttpService:JSONEncode({
+        topic = ToxChatTopic,
+        title = "ToxChat",
+        message = payload
+    })
+
+    if RequestFunction then
+        local ok, response = pcall(function()
+            return RequestFunction({
+                Url = "https://ntfy.sh",
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                },
+                Body = body
+            })
+        end)
+
+        if ok and response then
+            local statusCode = tonumber(response.StatusCode or response.Status or 0)
+
+            if statusCode == 0 or (statusCode >= 200 and statusCode < 300) then
+                return true
+            end
+        end
+    end
+
+    local ok = pcall(function()
+        HttpService:PostAsync(
+            "https://ntfy.sh",
+            body,
+            Enum.HttpContentType.ApplicationJson,
+            false
+        )
+    end)
+
+    return ok
+end
+
+local function SendToxChatMessage()
+    if not ToxChatInput then
+        return
+    end
+
+    if tick() - ToxChatLastSend < 1.2 then
+        CustomNotify("Wait a moment before sending again", Color3.fromRGB(255, 180, 70))
+        return
+    end
+
+    local message = tostring(ToxChatInput.Text or "")
+    message = message:gsub("[\r\n]+", " ")
+    message = message:match("^%s*(.-)%s*$") or ""
+
+    if #message > 160 then
+        message = string.sub(message, 1, 160)
+    end
+
+    local allowed = ModerateToxChatMessage(message)
+
+    if not allowed then
+        CustomNotify("Message blocked by Tox Chat filter", Color3.fromRGB(255, 100, 100))
+        return
+    end
+
+    if IsToxChatSpam(Player.UserId, message) then
+        CustomNotify("Message blocked as spam", Color3.fromRGB(255, 180, 70))
+        return
+    end
+
+    ToxChatLastSend = tick()
+
+    local nonce = HttpService:GenerateGUID(false)
+    local payload = HttpService:JSONEncode({
+        token = ToxChatToken,
+        version = 1,
+        nonce = nonce,
+        displayName = Player.DisplayName,
+        username = Player.Name,
+        userId = Player.UserId,
+        message = message,
+        placeId = game.PlaceId,
+        gameId = game.GameId,
+        sentAt = os.time()
+    })
+
+    ToxChatSeenNonces[nonce] = true
+    ToxChatInput.Text = ""
+
+    if AddToxChatMessage then
+        AddToxChatMessage(Player.DisplayName, message, false)
+    end
+
+    task.spawn(function()
+        local success = PublishToxChatPayload(payload)
+
+        if not success then
+            CustomNotify("Tox Chat connection failed", Color3.fromRGB(255, 100, 100))
         end
     end)
 end
 
-AddConnection(MusicGui.DescendantAdded:Connect(function(obj)
-    if obj:IsA("TextLabel") then
-        task.defer(function()
-            ApplyMusicIDColors()
-            CheckSavedMusicIDs(false)
-        end)
-    end
-end))
+if ToxChatSendBtn then
+    ToxChatSendBtn.MouseButton1Click:Connect(SendToxChatMessage)
+end
 
-AddConnection(MusicGui:GetPropertyChangedSignal("Visible"):Connect(function()
-    if MusicGui.Visible then
-        task.defer(function()
-            ApplyMusicIDColors()
-            CheckSavedMusicIDs(true)
-        end)
-    end
-end))
+if ToxChatInput then
+    ToxChatInput.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            SendToxChatMessage()
+        end
+    end)
+end
 
-task.delay(1, function()
-    ApplyMusicIDColors()
-    CheckSavedMusicIDs(true)
+task.spawn(function()
+    while not Destroyed do
+        PollToxChat()
+        task.wait(3)
+    end
 end)
 
 local function GetHumanoidDefaults(hum)
@@ -1174,8 +1366,6 @@ CreateToggle("Head Dot ESP", VisualsPage, Settings.ESPHeadDot, function(v) Setti
 CreateToggle("Tracers", VisualsPage, Settings.ESPTracers, function(v) Settings.ESPTracers = v end)
 CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
     Settings.ESPTeamColors = v
-    UIState.TeamColors = v
-    SaveUIState()
 end)
 CreateDropdown("Tracer Mode", {"DOWN", "UP", "MOUSE"}, VisualsPage, Settings.TracerOrigin, function(v) Settings.TracerOrigin = v end)
 CreateToggleWithValue("Camera FOV", VisualsPage, Settings.FOVEnabled, Settings.FOVValue, function(v)
@@ -2075,26 +2265,20 @@ local function ShowCenterLoadSequence()
     fallTween.Completed:Connect(function()
         SplashFrame:Destroy()
         if not Destroyed then
+            local finalPosition = (getgenv().GetSavedGuiPosition and getgenv().GetSavedGuiPosition("Main")) or UDim2.new(0.5, -165, 0.5, -197)
+
             Main.Size = UDim2.new(0, 0, 0, 0)
-            Main.Position = SavedMainPosition
+            Main.Position = finalPosition
             Main.Visible = true
 
             Main:TweenSizeAndPosition(
                 UDim2.new(0, 330, 0, 395),
-                SavedMainPosition,
+                finalPosition,
                 Enum.EasingDirection.Out,
                 Enum.EasingStyle.Back,
                 0.5,
                 true
             )
-
-            task.delay(0.6, function()
-                if not Destroyed then
-                    CanSaveGuiPositions = true
-                    UIState.Positions.Main = EncodePosition(Main.Position)
-                    QueueUIStateSave()
-                end
-            end)
 
             CustomNotify("ToxHub v1 Loaded Successfully!", Color3.fromRGB(100, 255, 100))
         end
