@@ -5,8 +5,6 @@ end
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
@@ -50,6 +48,13 @@ local function SetShared(Key, Value)
             SyncToggleVisuals(Key, Value == true)
         end
     end
+end
+
+local function SetSharedTemporary(Key, Value)
+    local oldApplying = getgenv().ToxApplyingGameState
+    getgenv().ToxApplyingGameState = true
+    SetShared(Key, Value)
+    getgenv().ToxApplyingGameState = oldApplying
 end
 
 local function GetCharacterState()
@@ -241,59 +246,78 @@ local function ShootMurderer()
         return
     end
 
-    local targetPart = murderer.Character:FindFirstChild("HumanoidRootPart")
+    local targetRoot = murderer.Character:FindFirstChild("HumanoidRootPart")
         or murderer.Character:FindFirstChild("UpperTorso")
         or murderer.Character:FindFirstChild("Torso")
         or murderer.Character:FindFirstChild("Head")
 
-    if not targetPart then
+    local targetHumanoid = murderer.Character:FindFirstChildOfClass("Humanoid")
+
+    if not targetRoot or not targetHumanoid or targetHumanoid.Health <= 0 then
         CustomNotify("Murderer target unavailable", Color3.fromRGB(255, 100, 100))
         return
     end
+
+    local character, humanoid, root = GetCharacterState()
+
+    if not character or not humanoid or humanoid.Health <= 0 or not root then
+        return
+    end
+
+    local originalParent = gun.Parent
 
     if not EquipTool(gun) then
         CustomNotify("Could not equip Gun", Color3.fromRGB(255, 100, 100))
         return
     end
 
+    local knifeServer = gun:FindFirstChild("KnifeServer")
+    local shootRemote = knifeServer and knifeServer:FindFirstChild("ShootGun")
+
+    if not shootRemote then
+        CustomNotify("Shoot remote unavailable", Color3.fromRGB(255, 100, 100))
+        return
+    end
+
     ActionBusy = true
 
     task.spawn(function()
-        local oldCamera = Camera.CFrame
-        local oldMouse = UserInputService:GetMouseLocation()
+        local oldCFrame = root.CFrame
+        local allow = getgenv().AllowToxTeleport
+
+        if allow then allow(0.6) end
+
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        root.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 5)
+
+        RunService.Heartbeat:Wait()
+
+        local velocity = targetRoot.AssemblyLinearVelocity
+        local targetPosition = targetRoot.Position + Vector3.new(velocity.X, 0, velocity.Z) * 0.035
 
         pcall(function()
-            Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPart.Position)
+            if shootRemote:IsA("RemoteFunction") then
+                shootRemote:InvokeServer(0, targetPosition, "AH")
+            elseif shootRemote:IsA("RemoteEvent") then
+                shootRemote:FireServer(0, targetPosition, "AH")
+            end
         end)
 
-        RunService.RenderStepped:Wait()
+        task.wait(0.035)
 
-        local screenPosition = Camera:WorldToViewportPoint(targetPart.Position)
-        local x = math.floor(screenPosition.X)
-        local y = math.floor(screenPosition.Y)
+        if root and root.Parent then
+            if allow then allow(0.5) end
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+            root.CFrame = oldCFrame
+        end
 
-        pcall(function()
-            VirtualInputManager:SendMouseMoveEvent(x, y, game)
-        end)
-
-        task.wait(0.02)
-
-        pcall(function()
-            gun:Activate()
-        end)
-
-        pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
-            task.wait(0.025)
-            VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
-        end)
-
-        task.wait(0.03)
-
-        pcall(function()
-            Camera.CFrame = oldCamera
-            VirtualInputManager:SendMouseMoveEvent(oldMouse.X, oldMouse.Y, game)
-        end)
+        if originalParent and originalParent:IsA("Backpack") and gun and gun.Parent == character then
+            pcall(function()
+                gun.Parent = originalParent
+            end)
+        end
 
         ActionBusy = false
     end)
@@ -373,12 +397,35 @@ local function GrabGun()
     end)
 end
 
+local MM2ESPPrevious = nil
+
 local function ApplyRoleESP(enabled)
     Settings.MM2RoleESP = enabled == true
 
-    SetShared("ESPNames", enabled)
-    SetShared("Chams", enabled)
-    SetShared("ESPTeamColors", enabled)
+    if enabled then
+        if not MM2ESPPrevious then
+            MM2ESPPrevious = {
+                ESPNames = Settings.ESPNames == true,
+                Chams = Settings.Chams == true,
+                ESPTeamColors = Settings.ESPTeamColors == true
+            }
+        end
+
+        SetSharedTemporary("ESPNames", true)
+        SetSharedTemporary("Chams", true)
+        SetSharedTemporary("ESPTeamColors", true)
+
+        if getgenv().ToxRefreshMM2Roles then
+            getgenv().ToxRefreshMM2Roles(true)
+        end
+    else
+        if MM2ESPPrevious then
+            SetSharedTemporary("ESPNames", MM2ESPPrevious.ESPNames)
+            SetSharedTemporary("Chams", MM2ESPPrevious.Chams)
+            SetSharedTemporary("ESPTeamColors", MM2ESPPrevious.ESPTeamColors)
+            MM2ESPPrevious = nil
+        end
+    end
 end
 
 local function FlingSelectedRole()
@@ -401,7 +448,7 @@ local function FlingSelectedRole()
 
     task.spawn(function()
         if restoreAntiFling then
-            SetShared("AntiFling", false)
+            SetSharedTemporary("AntiFling", false)
         end
 
         pcall(function()
@@ -409,36 +456,14 @@ local function FlingSelectedRole()
         end)
 
         if restoreAntiFling then
-            SetShared("AntiFling", true)
+            SetSharedTemporary("AntiFling", true)
         end
     end)
 end
 
-CreateToggle("Role ESP", GamePage, Settings.MM2RoleESP, function(v)
+CreateToggle("ESP", GamePage, Settings.MM2RoleESP, function(v)
     ApplyRoleESP(v)
 end, "MM2RoleESP")
-
-CreateButton("Kill All", GamePage, KillAll)
-
-CreateKeybindButton("Kill All Keybind", GamePage, Settings.MM2KillAllKey, function(key)
-    Settings.MM2KillAllKey = key
-end)
-
-CreateButton("Shoot Murderer", GamePage, ShootMurderer)
-
-CreateKeybindButton("Shoot Murderer Keybind", GamePage, Settings.MM2ShootMurderKey, function(key)
-    Settings.MM2ShootMurderKey = key
-end)
-
-CreateButton("Grab Gun", GamePage, GrabGun)
-
-CreateKeybindButton("Grab Gun Keybind", GamePage, Settings.MM2GrabGunKey, function(key)
-    Settings.MM2GrabGunKey = key
-end)
-
-CreateToggle("Noclip", GamePage, Settings.Noclip, function(v)
-    SetShared("Noclip", v)
-end, "Noclip")
 
 CreateToggleWithValue("Speed", GamePage, Settings.Speed, Settings.SpeedValue, function(v)
     SetShared("Speed", v)
@@ -450,16 +475,32 @@ end, function(value)
     end
 end, "Speed")
 
+CreateToggle("Noclip", GamePage, Settings.Noclip, function(v)
+    SetShared("Noclip", v)
+end, "Noclip")
+
 CreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
     SetShared("AntiFling", v)
 end, "AntiFling")
+
+CreateKeybindButton("Kill All", GamePage, Settings.MM2KillAllKey, function(key)
+    Settings.MM2KillAllKey = key
+end)
+
+CreateKeybindButton("Shoot Murderer", GamePage, Settings.MM2ShootMurderKey, function(key)
+    Settings.MM2ShootMurderKey = key
+end)
+
+CreateKeybindButton("Grab Gun", GamePage, Settings.MM2GrabGunKey, function(key)
+    Settings.MM2GrabGunKey = key
+end)
 
 CreateDropdown("Fling Target", {"Murderer", "Sheriff"}, GamePage, Settings.MM2FlingTarget, function(value)
     Settings.MM2FlingTarget = value
     AutoSaveConfiguration()
 end)
 
-CreateButton("Fling Role", GamePage, FlingSelectedRole)
+CreateButton("Fling", GamePage, FlingSelectedRole)
 
 AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed
