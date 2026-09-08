@@ -6,6 +6,8 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local PathfindingService = game:GetService("PathfindingService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local GuiService = game:GetService("GuiService")
 local Player = Players.LocalPlayer
@@ -43,6 +45,9 @@ Settings.MM2ShootMurderAuto = Settings.MM2ShootMurderAuto == true
 Settings.MM2GrabGunKey = Settings.MM2GrabGunKey or Enum.KeyCode.G
 Settings.MM2GrabGunAuto = Settings.MM2GrabGunAuto == true
 Settings.MM2FlingTarget = Settings.MM2FlingTarget or "Murderer"
+Settings.MM2AutoPlay = Settings.MM2AutoPlay == true
+Settings.MM2AutoFarm = Settings.MM2AutoFarm == true
+Settings.MM2AutoFarmSpeed = tonumber(Settings.MM2AutoFarmSpeed) or 55
 
 local ActionBusy = false
 
@@ -935,6 +940,1124 @@ local function GrabGun(silent, requestedDrop)
     return true
 end
 
+local MM2CoinCache = {}
+local MM2CoinScanTime = 0
+local MM2CoinBlacklist = setmetatable({}, {__mode = "k"})
+local AutoFarmTween = nil
+local AutoFarmRoot = nil
+local AutoFarmHumanoid = nil
+local AutoFarmReturnCFrame = nil
+local AutoFarmOriginalAnchored = false
+local AutoFarmPrepared = false
+local AutoPlayPatrolTarget = nil
+local AutoPlayLastShot = 0
+
+local function IsAliveCharacter()
+    local character, humanoid, root = GetCharacterState()
+    return character, humanoid, root, humanoid and humanoid.Health > 0 and root ~= nil
+end
+
+local function IsCoinValid(coin)
+    return coin
+        and coin.Parent
+        and coin:IsA("BasePart")
+        and not coin:GetAttribute("Collected")
+        and not coin:GetAttribute("Delete")
+        and coin.Transparency < 0.95
+end
+
+local function GetMM2Coins(force)
+    local now = os.clock()
+
+    if not force and now - MM2CoinScanTime < 0.3 then
+        local valid = {}
+
+        for _, coin in ipairs(MM2CoinCache) do
+            if IsCoinValid(coin) then
+                table.insert(valid, coin)
+            end
+        end
+
+        MM2CoinCache = valid
+        return valid
+    end
+
+    MM2CoinScanTime = now
+
+    local coins = {}
+    local seen = {}
+
+    local function addCoin(obj)
+        if not obj or not obj.Parent then
+            return
+        end
+
+        local coin = nil
+
+        if obj:IsA("BasePart") then
+            coin = obj
+        elseif obj:IsA("Model") then
+            coin = obj:FindFirstChild("Coin_Server")
+                or obj:FindFirstChild("Handle")
+                or obj:FindFirstChildWhichIsA("BasePart")
+        end
+
+        if coin and coin:IsA("BasePart") and IsCoinValid(coin) and not seen[coin] then
+            seen[coin] = true
+            table.insert(coins, coin)
+        end
+    end
+
+    local containers = {}
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        local lowerName = string.lower(obj.Name)
+
+        if lowerName == "coincontainer"
+        or lowerName == "coins"
+        or lowerName == "coinarea" then
+            table.insert(containers, obj)
+        elseif lowerName == "coin_server"
+        or lowerName == "coin" then
+            if obj:IsA("BasePart") or obj:IsA("Model") then
+                addCoin(obj)
+            end
+        end
+    end
+
+    for _, container in ipairs(containers) do
+        for _, child in ipairs(container:GetChildren()) do
+            addCoin(child)
+        end
+    end
+
+    MM2CoinCache = coins
+    return coins
+end
+
+local function GetOtherPlayerCoinPressure(coin)
+    local bestDistance = math.huge
+    local incoming = false
+
+    for _, other in ipairs(Players:GetPlayers()) do
+        if other ~= Player and other.Character then
+            local otherHumanoid = other.Character:FindFirstChildOfClass("Humanoid")
+            local otherRoot = other.Character:FindFirstChild("HumanoidRootPart")
+
+            if otherHumanoid and otherHumanoid.Health > 0 and otherRoot then
+                local offset = coin.Position - otherRoot.Position
+                local distance = offset.Magnitude
+
+                if distance < bestDistance then
+                    bestDistance = distance
+                end
+
+                if distance > 0.1 then
+                    local horizontalVelocity = Vector3.new(
+                        otherRoot.AssemblyLinearVelocity.X,
+                        0,
+                        otherRoot.AssemblyLinearVelocity.Z
+                    )
+
+                    if horizontalVelocity.Magnitude > 7 then
+                        local direction = Vector3.new(offset.X, 0, offset.Z)
+
+                        if direction.Magnitude > 0.1
+                        and horizontalVelocity.Unit:Dot(direction.Unit) > 0.65 then
+                            incoming = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return bestDistance, incoming
+end
+
+local function GetBestCoin(origin, competitionAware)
+    local coins = GetMM2Coins(false)
+    local bestCoin = nil
+    local bestScore = math.huge
+    local now = os.clock()
+
+    for coin, expiry in pairs(MM2CoinBlacklist) do
+        if not coin.Parent or now >= expiry then
+            MM2CoinBlacklist[coin] = nil
+        end
+    end
+
+    for _, coin in ipairs(coins) do
+        if IsCoinValid(coin) and not MM2CoinBlacklist[coin] then
+            local myDistance = (origin - coin.Position).Magnitude
+            local score = myDistance
+
+            local cluster = 0
+
+            for _, otherCoin in ipairs(coins) do
+                if otherCoin ~= coin
+                and IsCoinValid(otherCoin)
+                and (coin.Position - otherCoin.Position).Magnitude <= 22 then
+                    cluster = cluster + 1
+                end
+            end
+
+            score = score - math.min(cluster * 3.5, 18)
+
+            if competitionAware then
+                local otherDistance, incoming = GetOtherPlayerCoinPressure(coin)
+
+                if otherDistance < myDistance then
+                    score = score + 70 + math.min((myDistance - otherDistance) * 2, 60)
+                end
+
+                if otherDistance < 8 then
+                    score = score + 110
+                end
+
+                if incoming and otherDistance < myDistance + 12 then
+                    score = score + 75
+                end
+            end
+
+            if score < bestScore then
+                bestScore = score
+                bestCoin = coin
+            end
+        end
+    end
+
+    return bestCoin
+end
+
+local function TouchCoin(coin)
+    if not IsCoinValid(coin) then
+        return false
+    end
+
+    local character, humanoid, root, alive = IsAliveCharacter()
+
+    if not alive then
+        return false
+    end
+
+    local touched = false
+
+    if firetouchinterest then
+        pcall(function()
+            firetouchinterest(root, coin, 0)
+            firetouchinterest(root, coin, 1)
+        end)
+
+        local hand = character:FindFirstChild("RightHand")
+            or character:FindFirstChild("Right Arm")
+            or character:FindFirstChild("LeftHand")
+            or character:FindFirstChild("Left Arm")
+
+        if hand and hand:IsA("BasePart") then
+            pcall(function()
+                firetouchinterest(hand, coin, 0)
+                firetouchinterest(hand, coin, 1)
+            end)
+        end
+
+        touched = true
+    end
+
+    if (root.Position - coin.Position).Magnitude <= 4.5 then
+        humanoid:MoveTo(coin.Position)
+        touched = true
+    end
+
+    return touched
+end
+
+local function StopAutoFarm(restore)
+    if AutoFarmTween then
+        pcall(function()
+            AutoFarmTween:Cancel()
+        end)
+    end
+
+    AutoFarmTween = nil
+
+    if AutoFarmRoot and AutoFarmRoot.Parent then
+        if restore and AutoFarmReturnCFrame then
+            local allow = getgenv().AllowToxTeleport
+
+            if allow then
+                allow(0.8)
+            end
+
+            AutoFarmRoot.CFrame = AutoFarmReturnCFrame
+        end
+
+        AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+        AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+        AutoFarmRoot.Anchored = AutoFarmOriginalAnchored
+    end
+
+    if AutoFarmHumanoid and AutoFarmHumanoid.Parent and AutoFarmHumanoid.Health > 0 then
+        AutoFarmHumanoid.PlatformStand = false
+        AutoFarmHumanoid.Sit = false
+        AutoFarmHumanoid.AutoRotate = true
+    end
+
+    AutoFarmRoot = nil
+    AutoFarmHumanoid = nil
+    AutoFarmReturnCFrame = nil
+    AutoFarmPrepared = false
+end
+
+local function PrepareAutoFarm()
+    local _, humanoid, root, alive = IsAliveCharacter()
+
+    if not alive then
+        return false
+    end
+
+    if AutoFarmPrepared and AutoFarmRoot == root then
+        return true
+    end
+
+    StopAutoFarm(false)
+
+    AutoFarmRoot = root
+    AutoFarmHumanoid = humanoid
+    AutoFarmReturnCFrame = root.CFrame
+    AutoFarmOriginalAnchored = root.Anchored
+    AutoFarmPrepared = true
+
+    humanoid.PlatformStand = false
+    humanoid.Sit = false
+    humanoid.AutoRotate = false
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
+    root.Anchored = true
+
+    local below = CFrame.new(
+        root.Position.X,
+        root.Position.Y - 5.5,
+        root.Position.Z
+    ) * root.CFrame.Rotation
+
+    root.CFrame = below
+    return true
+end
+
+local function TweenFarmRoot(targetCFrame, duration, coin)
+    if not AutoFarmRoot or not AutoFarmRoot.Parent then
+        return false
+    end
+
+    duration = math.max(duration, 0.03)
+
+    local tween = TweenService:Create(
+        AutoFarmRoot,
+        TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+        {CFrame = targetCFrame}
+    )
+
+    AutoFarmTween = tween
+    tween:Play()
+
+    while tween.PlaybackState == Enum.PlaybackState.Playing do
+        if not Settings.MM2AutoFarm
+        or not AutoFarmRoot
+        or not AutoFarmRoot.Parent
+        or not AutoFarmHumanoid
+        or AutoFarmHumanoid.Health <= 0 then
+            tween:Cancel()
+            break
+        end
+
+        if coin and not IsCoinValid(coin) then
+            tween:Cancel()
+            break
+        end
+
+        task.wait(0.025)
+    end
+
+    local completed = tween.PlaybackState == Enum.PlaybackState.Completed
+    AutoFarmTween = nil
+    return completed
+end
+
+local function AutoFarmCoin(coin)
+    if not IsCoinValid(coin) or not PrepareAutoFarm() then
+        return false
+    end
+
+    local speed = math.clamp(tonumber(Settings.MM2AutoFarmSpeed) or 55, 15, 180)
+    local current = AutoFarmRoot.Position
+    local targetUnder = coin.Position - Vector3.new(0, 5.5, 0)
+    local distance = (current - targetUnder).Magnitude
+    local targetCFrame = CFrame.new(targetUnder, Vector3.new(coin.Position.X, targetUnder.Y, coin.Position.Z + 1))
+
+    if not TweenFarmRoot(targetCFrame, distance / speed, coin) then
+        return false
+    end
+
+    if not IsCoinValid(coin) then
+        return false
+    end
+
+    local otherDistance = GetOtherPlayerCoinPressure(coin)
+
+    if otherDistance < 3.5 then
+        MM2CoinBlacklist[coin] = os.clock() + 1.2
+        return false
+    end
+
+    AutoFarmRoot.CFrame = CFrame.new(coin.Position - Vector3.new(0, 1.0, 0))
+    TouchCoin(coin)
+    task.wait(0.035)
+
+    if AutoFarmRoot and AutoFarmRoot.Parent then
+        AutoFarmRoot.CFrame = CFrame.new(
+            coin.Position.X,
+            coin.Position.Y - 5.5,
+            coin.Position.Z
+        )
+    end
+
+    MM2CoinBlacklist[coin] = os.clock() + 0.7
+    return true
+end
+
+local function AIWallHit(fromPosition, toPosition, extraIgnore)
+    local direction = toPosition - fromPosition
+
+    if direction.Magnitude < 0.2 then
+        return false
+    end
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.IgnoreWater = true
+
+    local ignore = {Player.Character}
+
+    if extraIgnore then
+        for _, item in ipairs(extraIgnore) do
+            table.insert(ignore, item)
+        end
+    end
+
+    params.FilterDescendantsInstances = ignore
+
+    local result = workspace:Raycast(fromPosition, direction, params)
+
+    if not result then
+        return false
+    end
+
+    local hit = result.Instance
+
+    if not hit or not hit.CanCollide or hit.Transparency >= 0.8 then
+        return false
+    end
+
+    local model = hit:FindFirstAncestorOfClass("Model")
+
+    if model and model:FindFirstChildOfClass("Humanoid") then
+        return false
+    end
+
+    local lowerName = string.lower(hit.Name)
+
+    if string.find(lowerName, "coin", 1, true)
+    or string.find(lowerName, "gun", 1, true)
+    or string.find(lowerName, "trigger", 1, true)
+    or string.find(lowerName, "doorframe", 1, true) then
+        return false
+    end
+
+    return true
+end
+
+local function AICorridorClear(startPosition, targetPosition, extraIgnore)
+    local flat = Vector3.new(
+        targetPosition.X - startPosition.X,
+        0,
+        targetPosition.Z - startPosition.Z
+    )
+
+    if flat.Magnitude < 0.5 then
+        return true
+    end
+
+    local direction = flat.Unit
+    local right = Vector3.new(-direction.Z, 0, direction.X) * 1.15
+
+    for _, height in ipairs({0.8, 2.3}) do
+        local from = startPosition + Vector3.new(0, height, 0)
+        local to = Vector3.new(targetPosition.X, from.Y, targetPosition.Z)
+
+        if AIWallHit(from, to, extraIgnore)
+        or AIWallHit(from + right, to + right, extraIgnore)
+        or AIWallHit(from - right, to - right, extraIgnore) then
+            return false
+        end
+    end
+
+    return true
+end
+
+local function AIHasLineOfSight(targetCharacter, targetPosition)
+    local character, humanoid, root, alive = IsAliveCharacter()
+
+    if not alive then
+        return false
+    end
+
+    local head = character:FindFirstChild("Head")
+    local origin = head and head.Position or root.Position + Vector3.new(0, 1.8, 0)
+
+    return not AIWallHit(origin, targetPosition, targetCharacter and {targetCharacter} or nil)
+end
+
+local function AIGroundPoint(position)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {Player.Character}
+    params.IgnoreWater = true
+
+    local ray = workspace:Raycast(
+        position + Vector3.new(0, 7, 0),
+        Vector3.new(0, -28, 0),
+        params
+    )
+
+    if ray then
+        return ray.Position + Vector3.new(0, 1.5, 0)
+    end
+
+    return position
+end
+
+local function AIObstacleAction(root, direction)
+    if direction.Magnitude < 0.1 then
+        return false, false
+    end
+
+    local flat = Vector3.new(direction.X, 0, direction.Z)
+
+    if flat.Magnitude < 0.1 then
+        return false, false
+    end
+
+    flat = flat.Unit
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {Player.Character}
+    params.IgnoreWater = true
+
+    local low = workspace:Raycast(
+        root.Position + Vector3.new(0, 0.2, 0),
+        flat * 3.3,
+        params
+    )
+
+    local high = workspace:Raycast(
+        root.Position + Vector3.new(0, 2.7, 0),
+        flat * 3.3,
+        params
+    )
+
+    local ceiling = workspace:Raycast(
+        root.Position + Vector3.new(0, 2.3, 0),
+        Vector3.new(0, 3.5, 0),
+        params
+    )
+
+    local lowBlocked = low and low.Instance and low.Instance.CanCollide
+    local highBlocked = high and high.Instance and high.Instance.CanCollide
+
+    if lowBlocked and not highBlocked and not ceiling then
+        return false, true
+    end
+
+    if highBlocked then
+        return true, false
+    end
+
+    return false, false
+end
+
+local function AIWalkSegment(targetPosition, stopDistance, maxTime, continueCheck)
+    local character, humanoid, root, alive = IsAliveCharacter()
+
+    if not alive then
+        return false
+    end
+
+    humanoid.PlatformStand = false
+    humanoid.Sit = false
+    humanoid.AutoRotate = true
+
+    local startTime = os.clock()
+    local lastProgressTime = os.clock()
+    local lastPosition = root.Position
+    local lastJump = 0
+    local sidestepSign = 1
+
+    while Settings.MM2AutoPlay
+    and humanoid.Health > 0
+    and root.Parent
+    and os.clock() - startTime < maxTime do
+        if continueCheck and not continueCheck() then
+            break
+        end
+
+        local flat = Vector3.new(
+            targetPosition.X - root.Position.X,
+            0,
+            targetPosition.Z - root.Position.Z
+        )
+
+        local distance = flat.Magnitude
+
+        if distance <= stopDistance then
+            humanoid:Move(Vector3.zero, false)
+            return true
+        end
+
+        local direction = flat.Unit
+        local wall, jumpable = AIObstacleAction(root, direction)
+
+        if jumpable and os.clock() - lastJump > 0.75 then
+            humanoid.Jump = true
+            lastJump = os.clock()
+        elseif wall then
+            humanoid:Move(Vector3.zero, false)
+            return false
+        end
+
+        humanoid:Move(direction, false)
+
+        local moved = (root.Position - lastPosition).Magnitude
+
+        if moved >= 0.4 then
+            lastPosition = root.Position
+            lastProgressTime = os.clock()
+        else
+            local stalled = os.clock() - lastProgressTime
+
+            if stalled > 0.65 and stalled <= 1.15 then
+                if os.clock() - lastJump > 0.75 then
+                    humanoid.Jump = true
+                    lastJump = os.clock()
+                end
+            elseif stalled > 1.15 and stalled <= 1.65 then
+                sidestepSign = -sidestepSign
+                local side = Vector3.new(-direction.Z, 0, direction.X) * sidestepSign
+                humanoid:Move(side, false)
+            elseif stalled > 1.65 then
+                humanoid:Move(Vector3.zero, false)
+                return false
+            end
+        end
+
+        task.wait(0.04)
+    end
+
+    humanoid:Move(Vector3.zero, false)
+    return false
+end
+
+local function AIWalkTo(targetPosition, stopDistance, maxTime, continueCheck)
+    local _, humanoid, root, alive = IsAliveCharacter()
+
+    if not alive then
+        return false
+    end
+
+    local groundedTarget = AIGroundPoint(targetPosition)
+
+    if AICorridorClear(root.Position, groundedTarget) then
+        return AIWalkSegment(
+            groundedTarget,
+            stopDistance or 2.2,
+            maxTime or 4,
+            continueCheck
+        )
+    end
+
+    local path = PathfindingService:CreatePath({
+        AgentRadius = 2.3,
+        AgentHeight = 5,
+        AgentCanJump = true,
+        WaypointSpacing = 4.5
+    })
+
+    local success = pcall(function()
+        path:ComputeAsync(
+            AIGroundPoint(root.Position),
+            groundedTarget
+        )
+    end)
+
+    if not success or path.Status ~= Enum.PathStatus.Success then
+        return false
+    end
+
+    local waypoints = path:GetWaypoints()
+
+    if #waypoints < 2 then
+        return false
+    end
+
+    local startTime = os.clock()
+    local index = 2
+
+    while index <= #waypoints
+    and Settings.MM2AutoPlay
+    and humanoid.Health > 0
+    and os.clock() - startTime < (maxTime or 6) do
+        if continueCheck and not continueCheck() then
+            return false
+        end
+
+        local currentRoot = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+
+        if not currentRoot then
+            return false
+        end
+
+        local farthest = index
+
+        for testIndex = math.min(#waypoints, index + 3), index, -1 do
+            if AICorridorClear(currentRoot.Position, waypoints[testIndex].Position) then
+                farthest = testIndex
+                break
+            end
+        end
+
+        index = farthest
+        local waypoint = waypoints[index]
+
+        if waypoint.Action == Enum.PathWaypointAction.Jump then
+            humanoid.Jump = true
+        end
+
+        local reached = AIWalkSegment(
+            waypoint.Position,
+            index == #waypoints and (stopDistance or 2.2) or 2.4,
+            2.2,
+            continueCheck
+        )
+
+        if not reached and index < #waypoints then
+            return false
+        end
+
+        index = index + 1
+    end
+
+    local finalRoot = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+
+    return finalRoot
+        and Vector3.new(
+            finalRoot.Position.X - groundedTarget.X,
+            0,
+            finalRoot.Position.Z - groundedTarget.Z
+        ).Magnitude <= (stopDistance or 2.2) + 1.5
+end
+
+local function GetClosestAliveTarget()
+    local _, _, root, alive = IsAliveCharacter()
+
+    if not alive then
+        return nil
+    end
+
+    local best = nil
+    local bestDistance = math.huge
+
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= Player and target.Character then
+            local targetHumanoid = target.Character:FindFirstChildOfClass("Humanoid")
+            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+
+            if targetHumanoid and targetHumanoid.Health > 0 and targetRoot then
+                local distance = (root.Position - targetRoot.Position).Magnitude
+
+                if distance < bestDistance then
+                    bestDistance = distance
+                    best = target
+                end
+            end
+        end
+    end
+
+    return best, bestDistance
+end
+
+local function GetAIShotPosition(targetRoot)
+    local _, _, root, alive = IsAliveCharacter()
+
+    if not alive then
+        return targetRoot.Position
+    end
+
+    local distance = (root.Position - targetRoot.Position).Magnitude
+    local ping = 0.06
+
+    pcall(function()
+        ping = math.clamp(Player:GetNetworkPing(), 0.02, 0.18)
+    end)
+
+    local leadTime = math.clamp((distance / 280) + ping * 0.7, 0.035, 0.28)
+    local velocity = targetRoot.AssemblyLinearVelocity
+    local lead = velocity * leadTime
+
+    lead = Vector3.new(
+        math.clamp(lead.X, -12, 12),
+        math.clamp(lead.Y, -6, 8),
+        math.clamp(lead.Z, -12, 12)
+    )
+
+    return targetRoot.Position + Vector3.new(0, 1.1, 0) + lead
+end
+
+local function AIShootVisibleMurderer(murderer)
+    if ActionBusy or os.clock() - AutoPlayLastShot < 0.75 then
+        return false
+    end
+
+    local gun = FindNamedTool({"gun", "revolver"})
+    local targetCharacter = murderer and murderer.Character
+    local targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
+    local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+
+    if not gun
+    or not targetHumanoid
+    or targetHumanoid.Health <= 0
+    or not targetRoot
+    or not AIHasLineOfSight(targetCharacter, targetRoot.Position + Vector3.new(0, 1.2, 0)) then
+        return false
+    end
+
+    ActionBusy = true
+    AutoPlayLastShot = os.clock()
+
+    local originalCamera = Camera.CFrame
+    local originalParent = gun.Parent
+
+    if not EquipTool(gun) then
+        ActionBusy = false
+        return false
+    end
+
+    task.wait(0.05)
+
+    if not targetRoot.Parent or targetHumanoid.Health <= 0 then
+        ActionBusy = false
+        return false
+    end
+
+    local aimPosition = GetAIShotPosition(targetRoot)
+
+    Camera.CFrame = Camera.CFrame:Lerp(
+        CFrame.lookAt(Camera.CFrame.Position, aimPosition),
+        0.78
+    )
+
+    RunService.RenderStepped:Wait()
+
+    pcall(function()
+        gun:Activate()
+    end)
+
+    NormalGunClick()
+    task.wait(0.055)
+
+    if Camera then
+        Camera.CFrame = originalCamera
+    end
+
+    local character = Player.Character
+
+    if originalParent
+    and originalParent:IsA("Backpack")
+    and gun
+    and character
+    and gun.Parent == character then
+        pcall(function()
+            gun.Parent = originalParent
+        end)
+    end
+
+    ActionBusy = false
+    return true
+end
+
+local function AIPickupGun(gunDrop)
+    local character, humanoid, root, alive = IsAliveCharacter()
+
+    if not alive or not gunDrop or not gunDrop.Parent then
+        return false
+    end
+
+    local reached = AIWalkTo(
+        gunDrop.Position,
+        1.8,
+        5,
+        function()
+            return Settings.MM2AutoPlay
+                and gunDrop.Parent ~= nil
+                and humanoid.Health > 0
+                and not FindNamedTool({"gun", "revolver"})
+        end
+    )
+
+    if reached or (root.Position - gunDrop.Position).Magnitude <= 4.5 then
+        if firetouchinterest then
+            pcall(function()
+                firetouchinterest(root, gunDrop, 0)
+                firetouchinterest(root, gunDrop, 1)
+            end)
+
+            local hand = character:FindFirstChild("RightHand")
+                or character:FindFirstChild("Right Arm")
+
+            if hand and hand:IsA("BasePart") then
+                pcall(function()
+                    firetouchinterest(hand, gunDrop, 0)
+                    firetouchinterest(hand, gunDrop, 1)
+                end)
+            end
+        end
+
+        task.wait(0.08)
+        return FindNamedTool({"gun", "revolver"}) ~= nil
+    end
+
+    return false
+end
+
+local function GetPatrolTarget()
+    local _, _, root, alive = IsAliveCharacter()
+
+    if not alive then
+        return nil
+    end
+
+    if AutoPlayPatrolTarget
+    and Vector3.new(
+        root.Position.X - AutoPlayPatrolTarget.X,
+        0,
+        root.Position.Z - AutoPlayPatrolTarget.Z
+    ).Magnitude > 5 then
+        return AutoPlayPatrolTarget
+    end
+
+    local forward = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z)
+
+    if forward.Magnitude < 0.1 then
+        forward = Vector3.new(0, 0, -1)
+    else
+        forward = forward.Unit
+    end
+
+    local directions = {
+        forward,
+        (CFrame.Angles(0, math.rad(45), 0):VectorToWorldSpace(forward)).Unit,
+        (CFrame.Angles(0, math.rad(-45), 0):VectorToWorldSpace(forward)).Unit,
+        (CFrame.Angles(0, math.rad(90), 0):VectorToWorldSpace(forward)).Unit,
+        (CFrame.Angles(0, math.rad(-90), 0):VectorToWorldSpace(forward)).Unit
+    }
+
+    for _, direction in ipairs(directions) do
+        local sample = root.Position + direction * 28
+        local ground = AIGroundPoint(sample)
+
+        if ground and AICorridorClear(root.Position, ground) then
+            AutoPlayPatrolTarget = ground
+            return ground
+        end
+    end
+
+    AutoPlayPatrolTarget = nil
+    return nil
+end
+
+local function AutoPlayStep()
+    local character, humanoid, root, alive = IsAliveCharacter()
+
+    if not alive or ActionBusy then
+        task.wait(0.08)
+        return
+    end
+
+    local knife = FindNamedTool({"knife"})
+    local gun = FindNamedTool({"gun", "revolver"})
+    local role = GetRole(Player)
+
+    if knife or role == "Murderer" then
+        local target, distance = GetClosestAliveTarget()
+
+        if target and target.Character then
+            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+            local targetHumanoid = target.Character:FindFirstChildOfClass("Humanoid")
+
+            if targetRoot and targetHumanoid and targetHumanoid.Health > 0 then
+                if distance <= 7.5 then
+                    if knife then
+                        EquipTool(knife)
+                        TouchKnifeTarget(knife, target)
+                        task.wait(0.12)
+                    end
+                else
+                    AIWalkTo(
+                        targetRoot.Position,
+                        5.5,
+                        3.2,
+                        function()
+                            return Settings.MM2AutoPlay
+                                and targetHumanoid.Health > 0
+                                and targetRoot.Parent ~= nil
+                        end
+                    )
+                end
+
+                return
+            end
+        end
+    end
+
+    local murderer = GetPlayerByRole("Murderer")
+
+    if gun and murderer and murderer.Character then
+        local murdererHumanoid = murderer.Character:FindFirstChildOfClass("Humanoid")
+        local murdererRoot = murderer.Character:FindFirstChild("HumanoidRootPart")
+
+        if murdererHumanoid and murdererHumanoid.Health > 0 and murdererRoot then
+            local distance = (root.Position - murdererRoot.Position).Magnitude
+            local visible = AIHasLineOfSight(
+                murderer.Character,
+                murdererRoot.Position + Vector3.new(0, 1.2, 0)
+            )
+
+            if visible and distance <= 100 then
+                AIShootVisibleMurderer(murderer)
+                task.wait(0.12)
+                return
+            elseif distance > 28 then
+                AIWalkTo(
+                    murdererRoot.Position,
+                    35,
+                    2.4,
+                    function()
+                        return Settings.MM2AutoPlay
+                            and murdererHumanoid.Health > 0
+                            and murdererRoot.Parent ~= nil
+                    end
+                )
+                return
+            end
+        end
+    end
+
+    if not gun and not knife and (role == "Innocent" or role == nil) then
+        local gunDrop = FindGunDrop()
+
+        if gunDrop and gunDrop.Parent then
+            AIPickupGun(gunDrop)
+            return
+        end
+    end
+
+    local coin = GetBestCoin(root.Position, true)
+
+    if coin then
+        local reached = AIWalkTo(
+            coin.Position,
+            1.5,
+            4.5,
+            function()
+                return Settings.MM2AutoPlay and IsCoinValid(coin)
+            end
+        )
+
+        if reached or (root.Position - coin.Position).Magnitude <= 4.5 then
+            TouchCoin(coin)
+            MM2CoinBlacklist[coin] = os.clock() + 0.6
+        else
+            MM2CoinBlacklist[coin] = os.clock() + 5
+        end
+
+        return
+    end
+
+    local patrol = GetPatrolTarget()
+
+    if patrol then
+        AIWalkTo(
+            patrol,
+            3,
+            4,
+            function()
+                return Settings.MM2AutoPlay and #GetMM2Coins(false) == 0
+            end
+        )
+    else
+        humanoid:Move(Vector3.zero, false)
+        task.wait(0.15)
+    end
+end
+
+task.spawn(function()
+    while not getgenv().Destroyed and game.PlaceId == 142823291 do
+        if Settings.MM2AutoFarm then
+            local _, humanoid, root, alive = IsAliveCharacter()
+
+            if alive and not ActionBusy then
+                local coin = GetBestCoin(root.Position, true)
+
+                if coin then
+                    AutoFarmCoin(coin)
+                else
+                    task.wait(0.08)
+                end
+            else
+                if AutoFarmPrepared and (not humanoid or humanoid.Health <= 0) then
+                    StopAutoFarm(false)
+                end
+
+                task.wait(0.08)
+            end
+        else
+            if AutoFarmPrepared then
+                StopAutoFarm(true)
+            end
+
+            task.wait(0.08)
+        end
+    end
+end)
+
+task.spawn(function()
+    while not getgenv().Destroyed and game.PlaceId == 142823291 do
+        if Settings.MM2AutoPlay and not Settings.MM2AutoFarm then
+            pcall(AutoPlayStep)
+            task.wait(0.05)
+        else
+            local _, humanoid = GetCharacterState()
+
+            if humanoid and humanoid.Health > 0 then
+                humanoid:Move(Vector3.zero, false)
+            end
+
+            AutoPlayPatrolTarget = nil
+            task.wait(0.1)
+        end
+    end
+end)
+
 local function ApplyRoleESP(enabled)
     Settings.MM2RoleESP = enabled == true
 
@@ -979,6 +2102,51 @@ local function FlingSelectedRole()
         end
     end)
 end
+
+CreateToggle("Auto Play", GamePage, Settings.MM2AutoPlay, function(v)
+    Settings.MM2AutoPlay = v == true
+
+    if v then
+        Settings.MM2AutoFarm = false
+
+        if SyncToggleVisuals then
+            SyncToggleVisuals("MM2AutoFarm", false)
+        end
+
+        if AutoFarmPrepared then
+            StopAutoFarm(true)
+        end
+    else
+        local _, humanoid = GetCharacterState()
+
+        if humanoid and humanoid.Health > 0 then
+            humanoid:Move(Vector3.zero, false)
+        end
+
+        AutoPlayPatrolTarget = nil
+    end
+
+    AutoSaveConfiguration()
+end, "MM2AutoPlay")
+
+CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarm, Settings.MM2AutoFarmSpeed, function(v)
+    Settings.MM2AutoFarm = v == true
+
+    if v then
+        Settings.MM2AutoPlay = false
+
+        if SyncToggleVisuals then
+            SyncToggleVisuals("MM2AutoPlay", false)
+        end
+    else
+        StopAutoFarm(true)
+    end
+
+    AutoSaveConfiguration()
+end, function(value)
+    Settings.MM2AutoFarmSpeed = math.clamp(tonumber(value) or 55, 15, 180)
+    AutoSaveConfiguration()
+end, "MM2AutoFarm")
 
 CreateToggle("ESP", GamePage, Settings.MM2RoleESP, function(v)
     ApplyRoleESP(v)
@@ -1040,7 +2208,7 @@ task.spawn(function()
         local alive = humanoid and humanoid.Health > 0
         local localRole = alive and GetRole(Player) or nil
 
-        if Settings.MM2KillAllAuto then
+        if Settings.MM2KillAllAuto and not Settings.MM2AutoPlay and not Settings.MM2AutoFarm then
             if knife and not AutoKnifeOwned and alive and not ActionBusy then
                 AutoKnifeOwned = true
                 task.spawn(KillAll)
@@ -1051,7 +2219,7 @@ task.spawn(function()
             AutoKnifeOwned = knife ~= nil
         end
 
-        if Settings.MM2ShootMurderAuto then
+        if Settings.MM2ShootMurderAuto and not Settings.MM2AutoPlay and not Settings.MM2AutoFarm then
             if gun and not AutoGunOwned and alive and not ActionBusy then
                 AutoGunOwned = true
                 task.spawn(ShootMurderer)
@@ -1063,6 +2231,8 @@ task.spawn(function()
         end
 
         if Settings.MM2GrabGunAuto
+        and not Settings.MM2AutoPlay
+        and not Settings.MM2AutoFarm
         and alive
         and localRole == "Innocent"
         and not gun
