@@ -998,6 +998,30 @@ RegisterSubGuiMinimize(WaypointsGui, -52)
 RegisterSubGuiMinimize(ToxChatGui, -52)
 RegisterSubGuiMinimize(JoinGamesGui, -52)
 
+getgenv().ToxLinkedSubGuis = getgenv().ToxLinkedSubGuis or {}
+
+getgenv().RegisterToxSubGuiMinimize = function(gui, buttonOffset)
+    if not gui then
+        return nil
+    end
+
+    local existing = SubGuiControls[gui]
+
+    if existing then
+        return existing
+    end
+
+    return RegisterSubGuiMinimize(gui, buttonOffset or -52)
+end
+
+getgenv().RegisterToxLinkedSubGui = function(key, gui)
+    if not key or not gui then
+        return
+    end
+
+    getgenv().ToxLinkedSubGuis[tostring(key)] = gui
+end
+
 for _, page in pairs(Pages) do
     for _, child in ipairs(page:GetChildren()) do
         if child:IsA("Frame") or child:IsA("TextButton") then
@@ -1302,6 +1326,16 @@ end
 local function JoinPublicGame(placeId)
     placeId = tonumber(placeId)
 
+    if getgenv().AutoSaveConfiguration then
+        pcall(getgenv().AutoSaveConfiguration)
+    end
+
+    if Settings.AutoExecute and getgenv().QueueToxAutoExecute then
+        pcall(getgenv().QueueToxAutoExecute)
+    end
+
+    task.wait(0.12)
+
     if not placeId or placeId <= 0 then
         CustomNotify("Invalid Place ID", Color3.fromRGB(255, 100, 100))
         return false
@@ -1343,6 +1377,16 @@ local function JoinTargetPlayer()
     if not JoinTargetBox then
         return
     end
+
+    if getgenv().AutoSaveConfiguration then
+        pcall(getgenv().AutoSaveConfiguration)
+    end
+
+    if Settings.AutoExecute and getgenv().QueueToxAutoExecute then
+        pcall(getgenv().QueueToxAutoExecute)
+    end
+
+    task.wait(0.12)
 
     local target = UpdateJoinStatus(JoinTargetBox.Text, true)
 
@@ -3207,6 +3251,13 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
             WaypointsGui.Visible = false
             ToxChatGui.Visible = false
             if JoinGamesGui then JoinGamesGui.Visible = false end
+
+            for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
+                if gui and gui.Parent then
+                    SubGuisPreKeyHiddenState["Extra_" .. tostring(key)] = gui.Visible
+                    gui.Visible = false
+                end
+            end
         else
             Main.Visible = true
 
@@ -3225,6 +3276,14 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 end
                 if JoinGamesGui and SubGuisPreKeyHiddenState.QuickJoin ~= nil then
                     JoinGamesGui.Visible = SubGuisPreKeyHiddenState.QuickJoin
+                end
+
+                for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
+                    local saved = SubGuisPreKeyHiddenState["Extra_" .. tostring(key)]
+
+                    if gui and gui.Parent and saved ~= nil then
+                        gui.Visible = saved
+                    end
                 end
             else
                 ChatLogGui.Visible = false
@@ -3888,12 +3947,20 @@ if Minimize then
             CollapseSubGuiWithMain("Waypoints", WaypointsGui)
             CollapseSubGuiWithMain("ToxChat", ToxChatGui)
             CollapseSubGuiWithMain("QuickJoin", JoinGamesGui)
+
+            for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
+                CollapseSubGuiWithMain("Extra_" .. tostring(key), gui)
+            end
         else
             RestoreSubGuiAfterMain("ChatLog", ChatLogGui)
             RestoreSubGuiAfterMain("Music", MusicGui)
             RestoreSubGuiAfterMain("Waypoints", WaypointsGui)
             RestoreSubGuiAfterMain("ToxChat", ToxChatGui)
             RestoreSubGuiAfterMain("QuickJoin", JoinGamesGui)
+
+            for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
+                RestoreSubGuiAfterMain("Extra_" .. tostring(key), gui)
+            end
         end
     end)
 end
