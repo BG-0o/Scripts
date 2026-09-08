@@ -108,6 +108,7 @@ getgenv().Settings = {
     CarFlySpeed = 80,
     LoopTPTarget = nil,
 
+    ESPEnabled = false,
     ESPNames = false,
     ESPNameMode = "Display",
     ESPDistance = false,
@@ -192,6 +193,7 @@ local SharedPersistentKeys = {
     CarFly = true,
     CarFlySpeed = true,
     Chams = true,
+    ESPEnabled = true,
     ESPNames = true,
     ESPTeamColors = true
 }
@@ -242,6 +244,7 @@ getgenv().AutoSaveConfiguration = function()
             CarSpeedValue = Settings.CarSpeedValue,
             CarFly = PersistentSetting("CarFly"),
             CarFlySpeed = PersistentSetting("CarFlySpeed"),
+            ESPEnabled = PersistentSetting("ESPEnabled"),
             ESPNames = PersistentSetting("ESPNames"),
             ESPNameMode = Settings.ESPNameMode,
             ESPDistance = Settings.ESPDistance,
@@ -743,6 +746,7 @@ local PlayerPage = CreatePage("PLAYER")
 local VisualsPage = CreatePage("VISUALS")
 local FlingPage = CreatePage("MISC")
 local ScriptsPage = CreatePage("SCRIPTS")
+local JoinPage = CreatePage("JOIN")
 local ConfigPage = CreatePage("CONFIG")
 
 getgenv().GamePage = GamePage
@@ -751,6 +755,7 @@ getgenv().PlayerPage = PlayerPage
 getgenv().VisualsPage = VisualsPage
 getgenv().FlingPage = FlingPage
 getgenv().ScriptsPage = ScriptsPage
+getgenv().JoinPage = JoinPage
 getgenv().ConfigPage = ConfigPage
 
 getgenv().CurrentPage = CombatPage
@@ -800,6 +805,7 @@ local PlayerTab = CreateTab("PLAYER", PlayerPage)
 local VisualsTab = CreateTab("VISUALS", VisualsPage)
 local FlingTab = CreateTab("MISC", FlingPage)
 local ScriptsTab = CreateTab("SCRIPTS", ScriptsPage)
+local JoinTab = CreateTab("JOIN", JoinPage)
 local ConfigTab = CreateTab("CONFIG", ConfigPage)
 
 getgenv().GameTab = GameTab
@@ -1743,17 +1749,97 @@ ToxChatCloseBtn.MouseButton1Click:Connect(function()
     ToxChatGui.Visible = false
 end)
 
+local JoinGamesGui = Instance.new("Frame")
+JoinGamesGui.Name = "ToxQuickJoinFrame"
+JoinGamesGui.Size = UDim2.new(0, 330, 0, 250)
+JoinGamesGui.Position = UDim2.new(0.5, -165, 0.5, -125)
+JoinGamesGui.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+JoinGamesGui.BorderSizePixel = 0
+JoinGamesGui.ClipsDescendants = true
+JoinGamesGui.Visible = false
+JoinGamesGui.Parent = Gui
+getgenv().JoinGamesGui = JoinGamesGui
+
+local JoinGamesCorner = Instance.new("UICorner")
+JoinGamesCorner.CornerRadius = UDim.new(0, 8)
+JoinGamesCorner.Parent = JoinGamesGui
+
+local JoinGamesStroke = Instance.new("UIStroke")
+JoinGamesStroke.Color = MAIN_COLOR
+JoinGamesStroke.Thickness = 2
+JoinGamesStroke.Parent = JoinGamesGui
+
+local JoinGamesTopBar = Instance.new("Frame")
+JoinGamesTopBar.Size = UDim2.new(1, 0, 0, 32)
+JoinGamesTopBar.BackgroundColor3 = MAIN_COLOR
+JoinGamesTopBar.BorderSizePixel = 0
+JoinGamesTopBar.Parent = JoinGamesGui
+
+MakeDraggable(JoinGamesGui, JoinGamesTopBar)
+
+local JoinGamesTitle = Instance.new("TextLabel")
+JoinGamesTitle.Size = UDim2.new(1, -70, 1, 0)
+JoinGamesTitle.Position = UDim2.new(0, 10, 0, 0)
+JoinGamesTitle.BackgroundTransparency = 1
+JoinGamesTitle.Text = "Quick Join"
+JoinGamesTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+JoinGamesTitle.Font = Enum.Font.GothamBold
+JoinGamesTitle.TextSize = 13
+JoinGamesTitle.TextXAlignment = Enum.TextXAlignment.Left
+JoinGamesTitle.Parent = JoinGamesTopBar
+
+local JoinGamesCloseBtn = Instance.new("TextButton")
+JoinGamesCloseBtn.Size = UDim2.new(0, 22, 0, 20)
+JoinGamesCloseBtn.Position = UDim2.new(1, -26, 0.5, -10)
+JoinGamesCloseBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
+JoinGamesCloseBtn.BorderSizePixel = 0
+JoinGamesCloseBtn.Text = "X"
+JoinGamesCloseBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+JoinGamesCloseBtn.Font = Enum.Font.GothamBold
+JoinGamesCloseBtn.TextSize = 11
+JoinGamesCloseBtn.Parent = JoinGamesTopBar
+
+local JoinGamesCloseCorner = Instance.new("UICorner")
+JoinGamesCloseCorner.CornerRadius = UDim.new(0, 4)
+JoinGamesCloseCorner.Parent = JoinGamesCloseBtn
+
+local JoinGamesScroll = Instance.new("ScrollingFrame")
+JoinGamesScroll.Size = UDim2.new(1, -16, 1, -44)
+JoinGamesScroll.Position = UDim2.new(0, 8, 0, 38)
+JoinGamesScroll.BackgroundTransparency = 1
+JoinGamesScroll.BorderSizePixel = 0
+JoinGamesScroll.ScrollBarThickness = 3
+JoinGamesScroll.ScrollBarImageColor3 = MAIN_COLOR
+JoinGamesScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+JoinGamesScroll.Parent = JoinGamesGui
+getgenv().JoinGamesScroll = JoinGamesScroll
+
+local JoinGamesLayout = Instance.new("UIListLayout")
+JoinGamesLayout.Padding = UDim.new(0, 6)
+JoinGamesLayout.SortOrder = Enum.SortOrder.LayoutOrder
+JoinGamesLayout.Parent = JoinGamesScroll
+
+JoinGamesLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    JoinGamesScroll.CanvasSize = UDim2.new(0, 0, 0, JoinGamesLayout.AbsoluteContentSize.Y + 8)
+end)
+
+JoinGamesCloseBtn.MouseButton1Click:Connect(function()
+    JoinGamesGui.Visible = false
+end)
+
 ApplySavedGuiPosition("Main", Main)
 ApplySavedGuiPosition("ChatLog", ChatLogGui)
 ApplySavedGuiPosition("Waypoints", WaypointsGui)
 ApplySavedGuiPosition("Music", MusicGui)
 ApplySavedGuiPosition("ToxChat", ToxChatGui)
+ApplySavedGuiPosition("QuickJoin", JoinGamesGui)
 
 TrackGuiPosition("Main", Main)
 TrackGuiPosition("ChatLog", ChatLogGui)
 TrackGuiPosition("Waypoints", WaypointsGui)
 TrackGuiPosition("Music", MusicGui)
 TrackGuiPosition("ToxChat", ToxChatGui)
+TrackGuiPosition("QuickJoin", JoinGamesGui)
 
 getgenv().SharedToggleControls = {}
 getgenv().SharedValueControls = {}
