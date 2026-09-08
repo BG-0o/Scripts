@@ -30,6 +30,8 @@ if game.PlaceId ~= NDSPlaceId then
     end
 end
 
+Settings.WalkFling = Settings.WalkFling == true
+
 local HumanoidDefaults = setmetatable({}, {__mode = "k"})
 local NoclipDefaults = setmetatable({}, {__mode = "k"})
 local AntiFlingDefaults = setmetatable({}, {__mode = "k"})
@@ -2224,12 +2226,178 @@ local function StartAntiVoid()
 	end))
 end
 
+local WalkFlingPreConnection = nil
+local WalkFlingPostConnection = nil
+local WalkFlingRoot = nil
+local WalkFlingSavedAngular = Vector3.zero
+local WalkFlingSavedRotation = nil
+local WalkFlingPulse = false
+
+local function StopWalkFling()
+    if WalkFlingPreConnection then
+        WalkFlingPreConnection:Disconnect()
+        WalkFlingPreConnection = nil
+    end
+
+    if WalkFlingPostConnection then
+        WalkFlingPostConnection:Disconnect()
+        WalkFlingPostConnection = nil
+    end
+
+    if WalkFlingRoot
+    and WalkFlingRoot.Parent then
+        WalkFlingRoot.AssemblyAngularVelocity =
+            WalkFlingSavedAngular or Vector3.zero
+
+        if WalkFlingSavedRotation then
+            WalkFlingRoot.CFrame =
+                CFrame.new(WalkFlingRoot.Position)
+                * WalkFlingSavedRotation
+        end
+    end
+
+    WalkFlingRoot = nil
+    WalkFlingSavedAngular = Vector3.zero
+    WalkFlingSavedRotation = nil
+    WalkFlingPulse = false
+end
+
+local function StartWalkFling()
+    StopWalkFling()
+
+    if not Settings.WalkFling
+    or Destroyed then
+        return
+    end
+
+    local preSignal =
+        RunService.PreSimulation
+        or RunService.Stepped
+
+    local postSignal =
+        RunService.PostSimulation
+        or RunService.RenderStepped
+
+    WalkFlingPreConnection =
+        AddConnection(
+            preSignal:Connect(function()
+                if Destroyed
+                or not ScriptLoaded
+                or not Settings.WalkFling then
+                    return
+                end
+
+                local character = Player.Character
+                local humanoid =
+                    character
+                    and character:
+                        FindFirstChildOfClass(
+                            "Humanoid"
+                        )
+                local root =
+                    character
+                    and character:
+                        FindFirstChild(
+                            "HumanoidRootPart"
+                        )
+
+                if not humanoid
+                or humanoid.Health <= 0
+                or not root
+                or humanoid.SeatPart then
+                    WalkFlingPulse = false
+                    return
+                end
+
+                WalkFlingRoot = root
+                WalkFlingSavedAngular =
+                    root.AssemblyAngularVelocity
+                WalkFlingSavedRotation =
+                    root.CFrame.Rotation
+                WalkFlingPulse = true
+
+                root.AssemblyAngularVelocity =
+                    Vector3.new(
+                        0,
+                        90000000,
+                        0
+                    )
+            end)
+        )
+
+    WalkFlingPostConnection =
+        AddConnection(
+            postSignal:Connect(function()
+                if not WalkFlingPulse then
+                    return
+                end
+
+                WalkFlingPulse = false
+
+                local root = WalkFlingRoot
+
+                if not root
+                or not root.Parent then
+                    return
+                end
+
+                root.AssemblyAngularVelocity =
+                    WalkFlingSavedAngular
+
+                if WalkFlingSavedRotation then
+                    root.CFrame =
+                        CFrame.new(root.Position)
+                        * WalkFlingSavedRotation
+                end
+            end)
+        )
+end
+
+getgenv().SetWalkFling = function(
+    Value,
+    Silent
+)
+    local enabled = Value == true
+    Settings.WalkFling = enabled
+
+    if enabled then
+        if Settings.AntiFling then
+            Settings.AntiFling = false
+            RestoreAntiFlingDefaults()
+
+            if getgenv().SyncToggleVisuals then
+                getgenv().SyncToggleVisuals(
+                    "AntiFling",
+                    false
+                )
+            end
+        end
+
+        StartWalkFling()
+    else
+        StopWalkFling()
+    end
+
+    if getgenv().SyncToggleVisuals then
+        getgenv().SyncToggleVisuals(
+            "WalkFling",
+            enabled
+        )
+    end
+
+    if not Silent
+    and getgenv().AutoSaveConfiguration then
+        getgenv().AutoSaveConfiguration()
+    end
+end
+
 local SharedToggleSettingMap = {
     Speed = "Speed",
     Noclip = "Noclip",
     NoFallDamage = "NoFallDamage",
     AntiVoid = "AntiVoid",
     AntiFling = "AntiFling",
+    WalkFling = "WalkFling",
     CtrlClickTP = "CtrlClickTP",
     CarFly = "CarFly",
     ESPEnabled = "ESPEnabled",
@@ -2396,6 +2564,11 @@ getgenv().ToxSetSharedOption = function(Key, Value)
         if not enabled then
             RestoreAntiFlingDefaults()
         end
+    elseif Key == "WalkFling" then
+        getgenv().SetWalkFling(
+            enabled,
+            true
+        )
     elseif Key == "CtrlClickTP" then
         Settings.CtrlClickTP = enabled
     elseif Key == "CarFly" then
@@ -3200,6 +3373,14 @@ CreateToggle("Force Shift Lock", FlingPage, Settings.ForceShiftLock, function(v)
     end
 end)
 CreateDropdown("Shift Lock Key", {"Shift", "Ctrl"}, FlingPage, Settings.ShiftLockKey, function(v) Settings.ShiftLockKey = v end)
+CreateToggle("Walk Fling", FlingPage, Settings.WalkFling, function(v)
+    if getgenv().ToxSetSharedOption then
+        getgenv().ToxSetSharedOption(
+            "WalkFling",
+            v
+        )
+    end
+end, "WalkFling")
 CreateInputWithButton("Fling", FlingPage, "", "Fling", function(text) ExecuteFling(text) end)
 CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
 CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
@@ -3342,6 +3523,8 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     Settings.Jump = false
     Settings.Noclip = false
     Settings.AntiFling = false
+    Settings.WalkFling = false
+    StopWalkFling()
     Settings.HitboxExpander = false
     Settings.FOVEnabled = false
     Settings.ForceShiftLock = false
@@ -3541,6 +3724,10 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
         end
     end
 end))
+
+if Settings.WalkFling then
+    StartWalkFling()
+end
 
 AddConnection(Player.Idled:Connect(function()
     if ScriptLoaded and Settings.AntiAFK then
