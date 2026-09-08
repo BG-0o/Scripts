@@ -230,34 +230,68 @@ end
 
 local function FindShootRemote(gun)
     if not gun then
-        return nil
+        return nil, nil
     end
 
-    local knifeServer = gun:FindFirstChild("KnifeServer")
-        or gun:FindFirstChild("KnifeServer", true)
+    local knifeLocal = gun:FindFirstChild("KnifeLocal")
+        or gun:FindFirstChild("KnifeLocal", true)
 
-    if knifeServer then
-        local remote = knifeServer:FindFirstChild("ShootGun")
-            or knifeServer:FindFirstChild("ShootGun", true)
+    if knifeLocal then
+        local createBeam = knifeLocal:FindFirstChild("CreateBeam")
+            or knifeLocal:FindFirstChild("CreateBeam", true)
 
-        if remote and (remote:IsA("RemoteFunction") or remote:IsA("RemoteEvent")) then
-            return remote
+        if createBeam then
+            local remoteFunction = createBeam:FindFirstChild("RemoteFunction")
+                or createBeam:FindFirstChildWhichIsA("RemoteFunction")
+
+            if remoteFunction then
+                return remoteFunction, "AH2"
+            end
         end
     end
 
-    local direct = gun:FindFirstChild("ShootGun", true)
+    local shootGun = gun:FindFirstChild("ShootGun", true)
 
-    if direct and (direct:IsA("RemoteFunction") or direct:IsA("RemoteEvent")) then
-        return direct
+    if shootGun and (shootGun:IsA("RemoteFunction") or shootGun:IsA("RemoteEvent")) then
+        return shootGun, "AH2"
+    end
+
+    for _, obj in ipairs(gun:GetDescendants()) do
+        if obj:IsA("RemoteFunction") then
+            local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
+            local objectName = string.lower(obj.Name)
+
+            if objectName == "remotefunction"
+            or objectName == "shootgun"
+            or string.find(parentName, "createbeam", 1, true) then
+                return obj, "AH2"
+            end
+        end
     end
 
     local replicated = ReplicatedStorage:FindFirstChild("ShootGun", true)
 
     if replicated and (replicated:IsA("RemoteFunction") or replicated:IsA("RemoteEvent")) then
-        return replicated
+        return replicated, "AH2"
     end
 
-    return nil
+    return nil, nil
+end
+
+local function FireMM2Gun(remote, mode, targetPosition)
+    if not remote then
+        return false
+    end
+
+    local ok = pcall(function()
+        if remote:IsA("RemoteFunction") then
+            remote:InvokeServer(1, targetPosition, mode or "AH2")
+        else
+            remote:FireServer(1, targetPosition, mode or "AH2")
+        end
+    end)
+
+    return ok
 end
 
 local function ShootMurderer()
@@ -309,17 +343,16 @@ local function ShootMurderer()
             return
         end
 
-        local shootRemote = FindShootRemote(gun)
+        local shootRemote, shootMode = nil, nil
 
-        if not shootRemote then
-            for _ = 1, 8 do
-                task.wait(0.025)
-                shootRemote = FindShootRemote(gun)
+        for _ = 1, 20 do
+            shootRemote, shootMode = FindShootRemote(gun)
 
-                if shootRemote then
-                    break
-                end
+            if shootRemote then
+                break
             end
+
+            task.wait(0.025)
         end
 
         if not shootRemote then
@@ -340,31 +373,32 @@ local function ShootMurderer()
         SetSharedTemporary("Noclip", true)
 
         if allow then
-            allow(0.8)
+            allow(1)
         end
 
-        local abovePosition = targetRoot.Position + Vector3.new(0, 7.5, 0)
+        local abovePosition = targetRoot.Position + Vector3.new(0, 5.5, 0)
+
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
-        root.CFrame = CFrame.new(abovePosition, targetRoot.Position)
+        root.CFrame = CFrame.lookAt(abovePosition, targetRoot.Position)
 
         RunService.Heartbeat:Wait()
 
         local targetPosition = targetRoot.Position
+        FireMM2Gun(shootRemote, shootMode, targetPosition)
 
-        pcall(function()
-            if shootRemote:IsA("RemoteFunction") then
-                shootRemote:InvokeServer(0, targetPosition, "AH")
-            else
-                shootRemote:FireServer(0, targetPosition, "AH")
-            end
-        end)
+        task.wait(0.025)
 
-        task.wait(0.035)
+        if targetHumanoid.Health > 0 and targetRoot.Parent then
+            targetPosition = targetRoot.Position
+            FireMM2Gun(shootRemote, shootMode, targetPosition)
+        end
+
+        task.wait(0.025)
 
         if root and root.Parent then
             if allow then
-                allow(0.5)
+                allow(0.6)
             end
 
             root.AssemblyLinearVelocity = Vector3.zero
@@ -472,6 +506,7 @@ local function ApplyRoleESP(enabled)
             }
         end
 
+        SetShared("ESPEnabled", true)
         SetSharedTemporary("ESPNames", true)
         SetSharedTemporary("Chams", true)
         SetSharedTemporary("ESPTeamColors", true)
@@ -480,6 +515,8 @@ local function ApplyRoleESP(enabled)
             getgenv().ToxRefreshMM2Roles(true)
         end
     else
+        SetShared("ESPEnabled", false)
+
         if MM2ESPPrevious then
             SetSharedTemporary("ESPNames", MM2ESPPrevious.ESPNames)
             SetSharedTemporary("Chams", MM2ESPPrevious.Chams)
@@ -522,9 +559,9 @@ local function FlingSelectedRole()
     end)
 end
 
-CreateToggle("ESP", GamePage, Settings.MM2RoleESP, function(v)
+CreateToggle("ESP", GamePage, Settings.ESPEnabled, function(v)
     ApplyRoleESP(v)
-end, "MM2RoleESP")
+end, "ESPEnabled")
 
 CreateToggleWithValue("Speed", GamePage, Settings.Speed, Settings.SpeedValue, function(v)
     SetShared("Speed", v)
@@ -586,6 +623,6 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end))
 
-if Settings.MM2RoleESP then
+if Settings.ESPEnabled then
     ApplyRoleESP(true)
 end
