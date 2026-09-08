@@ -5,6 +5,7 @@ end
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -105,18 +106,35 @@ local function TeleportTo(cframe, name)
     CustomNotify("Teleported to " .. name, Color3.fromRGB(100, 255, 100))
 end
 
-local function GetTools(container)
-    local tools = {}
+local function PressHotbarTwo()
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Two, false, game)
+        task.wait(0.03)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Two, false, game)
+    end)
+end
 
-    if container then
-        for _, child in ipairs(container:GetChildren()) do
-            if child:IsA("Tool") then
-                table.insert(tools, child)
+local function FindAppleByName()
+    local character = Player.Character
+    local backpack = Player:FindFirstChildOfClass("Backpack")
+
+    for _, container in ipairs({character, backpack}) do
+        if container then
+            for _, child in ipairs(container:GetChildren()) do
+                if child:IsA("Tool") then
+                    local lowerName = string.lower(child.Name)
+
+                    if string.find(lowerName, "apple", 1, true)
+                    or string.find(lowerName, "maca", 1, true)
+                    or string.find(lowerName, "maç", 1, true) then
+                        return child
+                    end
+                end
             end
         end
     end
 
-    return tools
+    return nil
 end
 
 local function FindAutoWinTool()
@@ -127,63 +145,55 @@ local function FindAutoWinTool()
         return AutoWinTool
     end
 
+    local namedApple = FindAppleByName()
+
+    if namedApple then
+        AutoWinTool = namedApple
+        AutoWinToolName = namedApple.Name
+        return namedApple
+    end
+
     if AutoWinToolName then
-        if character then
-            local found = character:FindFirstChild(AutoWinToolName)
+        local cached = (character and character:FindFirstChild(AutoWinToolName))
+            or (backpack and backpack:FindFirstChild(AutoWinToolName))
 
-            if found and found:IsA("Tool") then
-                AutoWinTool = found
-                return found
-            end
-        end
-
-        if backpack then
-            local found = backpack:FindFirstChild(AutoWinToolName)
-
-            if found and found:IsA("Tool") then
-                AutoWinTool = found
-                return found
-            end
+        if cached and cached:IsA("Tool") then
+            AutoWinTool = cached
+            return cached
         end
     end
 
-    local backpackTools = GetTools(backpack)
-
-    if #backpackTools >= 2 then
-        AutoWinTool = backpackTools[2]
-        AutoWinToolName = AutoWinTool.Name
-        return AutoWinTool
-    end
+    PressHotbarTwo()
+    task.wait(0.06)
 
     if character then
-        for _, tool in ipairs(GetTools(character)) do
-            local lowerName = string.lower(tool.Name)
+        local equipped = character:FindFirstChildOfClass("Tool")
 
-            if string.find(lowerName, "apple", 1, true)
-            or string.find(lowerName, "maca", 1, true)
-            or string.find(lowerName, "maç", 1, true)
-            or string.find(lowerName, "heal", 1, true) then
-                AutoWinTool = tool
-                AutoWinToolName = tool.Name
-                return tool
-            end
-        end
-    end
-
-    for _, tool in ipairs(backpackTools) do
-        local lowerName = string.lower(tool.Name)
-
-        if string.find(lowerName, "apple", 1, true)
-        or string.find(lowerName, "maca", 1, true)
-        or string.find(lowerName, "maç", 1, true)
-        or string.find(lowerName, "heal", 1, true) then
-            AutoWinTool = tool
-            AutoWinToolName = tool.Name
-            return tool
+        if equipped then
+            AutoWinTool = equipped
+            AutoWinToolName = equipped.Name
+            return equipped
         end
     end
 
     return nil
+end
+
+local function ClickAutoWinTool(tool)
+    if not tool or not tool.Parent then
+        return
+    end
+
+    pcall(function()
+        tool:Activate()
+    end)
+
+    pcall(function()
+        local mousePosition = UserInputService:GetMouseLocation()
+        VirtualInputManager:SendMouseButtonEvent(mousePosition.X, mousePosition.Y, 0, true, game, 0)
+        task.wait(0.03)
+        VirtualInputManager:SendMouseButtonEvent(mousePosition.X, mousePosition.Y, 0, false, game, 0)
+    end)
 end
 
 local function StopAutoWin()
@@ -261,19 +271,22 @@ local function StartAutoWin()
         end
 
         if tool.Parent ~= character then
-            pcall(function()
-                currentHumanoid:EquipTool(tool)
-            end)
+            PressHotbarTwo()
+            task.wait(0.05)
+            tool = FindAutoWinTool() or tool
+
+            if tool.Parent ~= character then
+                pcall(function()
+                    currentHumanoid:EquipTool(tool)
+                end)
+            end
         end
 
         if tool.Parent == character
         and currentHumanoid.Health < currentHumanoid.MaxHealth
-        and tick() - AutoWinLastActivate >= 0.28 then
+        and tick() - AutoWinLastActivate >= 5.05 then
             AutoWinLastActivate = tick()
-
-            pcall(function()
-                tool:Activate()
-            end)
+            ClickAutoWinTool(tool)
         end
     end))
 end
@@ -426,8 +439,8 @@ local function StartNDSNoFall()
             if character and humanoid and humanoid.Health > 0 and root then
                 local velocity = root.AssemblyLinearVelocity
 
-                if velocity.Y < -38 then
-                    root.AssemblyLinearVelocity = Vector3.new(velocity.X, -8, velocity.Z)
+                if velocity.Y < -60 then
+                    root.AssemblyLinearVelocity = Vector3.new(velocity.X, -45, velocity.Z)
                 end
             end
         end
