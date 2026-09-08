@@ -73,6 +73,7 @@ getgenv().Settings = {
 	AntiAFK = true,
 	ChatLogs = false,
 	Render3D = true,
+	AutoExecute = false,
 	GUIKeybind = Enum.KeyCode.LeftAlt,
 
 	SpeedValue = 16,
@@ -138,7 +139,8 @@ getgenv().Settings = {
 
     MM2RoleESP = false,
     MM2AutoFarm = false,
-    MM2AutoFarmSpeed = 55,
+    MM2AutoFarmSpeed = 50,
+    MM2Whitelist = {},
     MM2KillAllKey = Enum.KeyCode.K,
     MM2KillAllAuto = false,
     MM2ShootMurderKey = Enum.KeyCode.C,
@@ -240,6 +242,7 @@ getgenv().AutoSaveConfiguration = function()
             AntiAFK = Settings.AntiAFK,
             ChatLogs = Settings.ChatLogs,
             Render3D = Settings.Render3D,
+            AutoExecute = Settings.AutoExecute,
             FOVEnabled = Settings.FOVEnabled,
             FOVValue = Settings.FOVValue,
             ForceShiftLock = Settings.ForceShiftLock,
@@ -291,6 +294,7 @@ getgenv().AutoSaveConfiguration = function()
             MM2RoleESP = Settings.MM2RoleESP,
             MM2AutoFarm = Settings.MM2AutoFarm,
             MM2AutoFarmSpeed = Settings.MM2AutoFarmSpeed,
+            MM2Whitelist = Settings.MM2Whitelist,
             MM2KillAllKey = Settings.MM2KillAllKey and Settings.MM2KillAllKey.Name or "K",
             MM2KillAllAuto = Settings.MM2KillAllAuto,
             MM2ShootMurderKey = Settings.MM2ShootMurderKey and Settings.MM2ShootMurderKey.Name or "C",
@@ -349,6 +353,91 @@ local function LoadConfiguration()
 end
 
 LoadConfiguration()
+
+local function ResolveQueueOnTeleport()
+    local env = getgenv()
+
+    if env and type(env.queue_on_teleport) == "function" then
+        return env.queue_on_teleport
+    end
+
+    if type(queue_on_teleport) == "function" then
+        return queue_on_teleport
+    end
+
+    if syn and type(syn.queue_on_teleport) == "function" then
+        return syn.queue_on_teleport
+    end
+
+    if fluxus and type(fluxus.queue_on_teleport) == "function" then
+        return fluxus.queue_on_teleport
+    end
+
+    return nil
+end
+
+local AutoExecutePayload = [[
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+
+task.wait(0.75)
+
+local shouldExecute = false
+
+pcall(function()
+    if isfile
+    and readfile
+    and isfile("ToxV1_Data/config.json") then
+        local HttpService = game:GetService("HttpService")
+        local data = HttpService:JSONDecode(
+            readfile("ToxV1_Data/config.json")
+        )
+
+        shouldExecute = data
+            and data.Settings
+            and data.Settings.AutoExecute == true
+    end
+end)
+
+if shouldExecute then
+    pcall(function()
+        loadstring(
+            game:HttpGet(
+                "https://raw.githubusercontent.com/BG-0o/Scripts/main/ToxHud.lua"
+            )
+        )()
+    end)
+end
+]]
+
+getgenv().ToxAutoExecuteQueued = false
+
+getgenv().QueueToxAutoExecute = function()
+    if getgenv().ToxAutoExecuteQueued then
+        return true
+    end
+
+    local queueFunction = ResolveQueueOnTeleport()
+
+    if not queueFunction then
+        return false
+    end
+
+    local ok = pcall(function()
+        queueFunction(AutoExecutePayload)
+    end)
+
+    if ok then
+        getgenv().ToxAutoExecuteQueued = true
+    end
+
+    return ok
+end
+
+if Settings.AutoExecute then
+    getgenv().QueueToxAutoExecute()
+end
 
 for Key in pairs(SharedPersistentKeys) do
     getgenv().BaseSharedSettings[Key] = Settings[Key]
