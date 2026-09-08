@@ -16,6 +16,7 @@ local CreateToggleWithValue = getgenv().CreateToggleWithValue
 local CreateButton = getgenv().CreateButton
 local CreateDropdown = getgenv().CreateDropdown
 local CreateKeybindButton = getgenv().CreateKeybindButton
+local CreateKeybindToggle = getgenv().CreateKeybindToggle
 local AddConnection = getgenv().AddConnection
 local CustomNotify = getgenv().CustomNotify
 local AutoSaveConfiguration = getgenv().AutoSaveConfiguration
@@ -28,13 +29,17 @@ or not CreateToggle
 or not CreateToggleWithValue
 or not CreateButton
 or not CreateDropdown
-or not CreateKeybindButton then
+or not CreateKeybindButton
+or not CreateKeybindToggle then
     return
 end
 
 Settings.MM2KillAllKey = Settings.MM2KillAllKey or Enum.KeyCode.K
+Settings.MM2KillAllAuto = Settings.MM2KillAllAuto == true
 Settings.MM2ShootMurderKey = Settings.MM2ShootMurderKey or Enum.KeyCode.C
+Settings.MM2ShootMurderAuto = Settings.MM2ShootMurderAuto == true
 Settings.MM2GrabGunKey = Settings.MM2GrabGunKey or Enum.KeyCode.G
+Settings.MM2GrabGunAuto = Settings.MM2GrabGunAuto == true
 Settings.MM2FlingTarget = Settings.MM2FlingTarget or "Murderer"
 
 local ActionBusy = false
@@ -516,16 +521,22 @@ CreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
     SetShared("AntiFling", v)
 end, "AntiFling")
 
-CreateKeybindButton("Kill All", GamePage, Settings.MM2KillAllKey, function(key)
+CreateKeybindToggle("Kill All", GamePage, Settings.MM2KillAllKey, Settings.MM2KillAllAuto, function(key)
     Settings.MM2KillAllKey = key
+end, function(enabled)
+    Settings.MM2KillAllAuto = enabled
 end)
 
-CreateKeybindButton("Shoot Murderer", GamePage, Settings.MM2ShootMurderKey, function(key)
+CreateKeybindToggle("Shoot Murderer", GamePage, Settings.MM2ShootMurderKey, Settings.MM2ShootMurderAuto, function(key)
     Settings.MM2ShootMurderKey = key
+end, function(enabled)
+    Settings.MM2ShootMurderAuto = enabled
 end)
 
-CreateKeybindButton("Grab Gun", GamePage, Settings.MM2GrabGunKey, function(key)
+CreateKeybindToggle("Grab Gun", GamePage, Settings.MM2GrabGunKey, Settings.MM2GrabGunAuto, function(key)
     Settings.MM2GrabGunKey = key
+end, function(enabled)
+    Settings.MM2GrabGunAuto = enabled
 end)
 
 CreateDropdown("Fling Target", {"Murderer", "Sheriff"}, GamePage, Settings.MM2FlingTarget, function(value)
@@ -534,6 +545,60 @@ CreateDropdown("Fling Target", {"Murderer", "Sheriff"}, GamePage, Settings.MM2Fl
 end)
 
 CreateButton("Fling", GamePage, FlingSelectedRole)
+
+local AutoKnifeOwned = false
+local AutoGunOwned = false
+local AutoGrabDrop = nil
+local AutoGrabLastAttempt = 0
+
+task.spawn(function()
+    while not getgenv().Destroyed and game.PlaceId == 142823291 do
+        local knife = FindNamedTool({"knife"})
+        local gun = FindNamedTool({"gun", "revolver"})
+
+        if Settings.MM2KillAllAuto then
+            if knife and not AutoKnifeOwned and not ActionBusy then
+                AutoKnifeOwned = true
+                task.spawn(KillAll)
+            elseif not knife then
+                AutoKnifeOwned = false
+            end
+        else
+            AutoKnifeOwned = knife ~= nil
+        end
+
+        if Settings.MM2ShootMurderAuto then
+            if gun and not AutoGunOwned and not ActionBusy then
+                AutoGunOwned = true
+                task.spawn(ShootMurderer)
+            elseif not gun then
+                AutoGunOwned = false
+            end
+        else
+            AutoGunOwned = gun ~= nil
+        end
+
+        if Settings.MM2GrabGunAuto and not gun and not ActionBusy then
+            local drop = FindGunDrop()
+
+            if drop then
+                local now = tick()
+
+                if drop ~= AutoGrabDrop or now - AutoGrabLastAttempt >= 0.8 then
+                    AutoGrabDrop = drop
+                    AutoGrabLastAttempt = now
+                    task.spawn(GrabGun)
+                end
+            else
+                AutoGrabDrop = nil
+            end
+        else
+            AutoGrabDrop = nil
+        end
+
+        task.wait(0.1)
+    end
+end)
 
 AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed
