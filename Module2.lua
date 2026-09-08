@@ -2949,6 +2949,30 @@ CreateToggle("3D Rendering", ConfigPage, Settings.Render3D, function(v)
     Settings.Render3D = v 
     pcall(function() RunService:Set3dRenderingEnabled(v) end)
 end)
+CreateToggle("Auto Execute", ConfigPage, Settings.AutoExecute, function(v)
+    Settings.AutoExecute = v == true
+
+    if Settings.AutoExecute then
+        local queueFunction = getgenv().QueueToxAutoExecute
+
+        if queueFunction and queueFunction() then
+            CustomNotify(
+                "Auto Execute Enabled",
+                Color3.fromRGB(100, 255, 100)
+            )
+        else
+            CustomNotify(
+                "Auto Execute is not supported by this executor",
+                Color3.fromRGB(255, 180, 70)
+            )
+        end
+    else
+        CustomNotify(
+            "Auto Execute Disabled",
+            Color3.fromRGB(255, 180, 70)
+        )
+    end
+end)
 CreateKeybindButton("GUI Keybind", ConfigPage, Settings.GUIKeybind, function(key) Settings.GUIKeybind = key end)
 CreateConfirmButton("FPS Booster", ConfigPage, function() BoostFPS() end)
 CreateConfirmButton("Server Hop", ConfigPage, function() ServerHop() end)
@@ -2958,12 +2982,61 @@ CreateConfirmButton("Rejoin Server", ConfigPage, function()
 end)
 
 CreateConfirmButton("DESTROY", ConfigPage, function()
-    Destroyed = true
-    pcall(function() RunService:Set3dRenderingEnabled(true) end)
-    
+    if getgenv().ToxMM2Cleanup then
+        pcall(getgenv().ToxMM2Cleanup)
+    end
+
+    if getgenv().SetNDSWaterFly then
+        pcall(function()
+            getgenv().SetNDSWaterFly(false, true)
+        end)
+    end
+
+    for key, value in pairs(Settings) do
+        if typeof(value) == "boolean" then
+            Settings[key] = false
+        end
+    end
+
+    Settings.Render3D = true
+    Settings.LoopTPTarget = nil
+    Settings.NDSAutoWin = false
+    Settings.NDSWaterFly = false
+    Settings.NDSNoTP = false
+    Settings.MM2AutoFarm = false
+    Settings.MM2RoleESP = false
+    Settings.MM2KillAllAuto = false
+    Settings.MM2ShootMurderAuto = false
+    Settings.MM2GrabGunAuto = false
+
+    local sharedKeys = getgenv().SharedPersistentKeys or {}
+    local baseShared = getgenv().BaseSharedSettings or {}
+    local gameShared = getgenv().GameSharedSettings or {}
+
+    for key in pairs(sharedKeys) do
+        if typeof(Settings[key]) == "boolean" then
+            Settings[key] = false
+        end
+
+        if typeof(baseShared[key]) == "boolean" then
+            baseShared[key] = false
+        end
+
+        for _, state in pairs(gameShared) do
+            if typeof(state) == "table"
+            and typeof(state[key]) == "boolean" then
+                state[key] = false
+            end
+        end
+    end
+
+    pcall(function()
+        RunService:Set3dRenderingEnabled(true)
+    end)
+
     Settings.Fullbright = false
     UpdateFullbright()
-    
+
     Settings.AirWalk = false
     UpdateAirWalk()
 
@@ -2974,6 +3047,13 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     Settings.HitboxExpander = false
     Settings.FOVEnabled = false
     Settings.ForceShiftLock = false
+    Settings.SmoothFly = false
+    Settings.NormalFly = false
+    Settings.CarFly = false
+    Settings.ChatLogs = false
+    Settings.MusicAutoPlay = false
+    Settings.MusicLoop = false
+    Settings.AutoExecute = false
 
     RestoreSpeed()
     RestoreJump()
@@ -2983,28 +3063,97 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     RestoreFOVDefault()
     RestoreShiftLockDefaults()
 
-    local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-    if Hum then
-        Hum.PlatformStand = false
+    isShiftLockActive = false
+    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+
+    if ChatLogGui then
+        ChatLogGui.Visible = false
     end
 
-    for _, hl in pairs(Highlights) do pcall(function() hl:Destroy() end) end
+    local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
+    local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+
+    if Hum then
+        Hum.PlatformStand = false
+        Hum.Sit = false
+        Hum.AutoRotate = true
+    end
+
+    if Root then
+        Root.AssemblyLinearVelocity = Vector3.zero
+        Root.AssemblyAngularVelocity = Vector3.zero
+    end
+
+    RunService.Heartbeat:Wait()
+    RunService.Heartbeat:Wait()
+
+    if getgenv().ActiveSound then
+        pcall(function()
+            getgenv().ActiveSound:Stop()
+            getgenv().ActiveSound:Destroy()
+        end)
+
+        getgenv().ActiveSound = nil
+    end
+
+    if AutoSaveConfiguration then
+        pcall(AutoSaveConfiguration)
+    end
+
+    Destroyed = true
+    getgenv().Destroyed = true
+    ScriptLoaded = false
+    getgenv().ScriptLoaded = false
+
+    for _, hl in pairs(Highlights) do
+        pcall(function()
+            hl:Destroy()
+        end)
+    end
+
     Highlights = {}
 
     for _, esp in pairs(ESPDrawings) do
-        for _, d in pairs(esp) do pcall(function() d:Remove() end) end
+        for _, drawing in pairs(esp) do
+            pcall(function()
+                drawing:Remove()
+            end)
+        end
     end
+
     ESPDrawings = {}
 
-    if FOVCircle then pcall(function() FOVCircle:Remove() end) end
-    if CrosshairH then pcall(function() CrosshairH:Remove() end) end
-    if CrosshairV then pcall(function() CrosshairV:Remove() end) end
-    if getgenv().ActiveSound then getgenv().ActiveSound:Destroy() getgenv().ActiveSound = nil end
+    if FOVCircle then
+        pcall(function()
+            FOVCircle:Remove()
+        end)
+    end
 
-    for _, conn in ipairs(ScriptConnections) do pcall(function() conn:Disconnect() end) end
+    if CrosshairH then
+        pcall(function()
+            CrosshairH:Remove()
+        end)
+    end
 
-    pcall(function() NotifGui:Destroy() end)
-    pcall(function() Gui:Destroy() end)
+    if CrosshairV then
+        pcall(function()
+            CrosshairV:Remove()
+        end)
+    end
+
+    for _, conn in ipairs(ScriptConnections) do
+        pcall(function()
+            conn:Disconnect()
+        end)
+    end
+
+    pcall(function()
+        NotifGui:Destroy()
+    end)
+
+    pcall(function()
+        Gui:Destroy()
+    end)
 end)
 
 AddConnection(UserInputService.InputBegan:Connect(function(input, gpe)
