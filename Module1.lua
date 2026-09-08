@@ -138,8 +138,11 @@ getgenv().Settings = {
 
     MM2RoleESP = false,
     MM2KillAllKey = Enum.KeyCode.K,
+    MM2KillAllAuto = false,
     MM2ShootMurderKey = Enum.KeyCode.C,
+    MM2ShootMurderAuto = false,
     MM2GrabGunKey = Enum.KeyCode.G,
+    MM2GrabGunAuto = false,
     MM2FlingTarget = "Murderer"
 }
 
@@ -284,8 +287,11 @@ getgenv().AutoSaveConfiguration = function()
             NDSNoTP = Settings.NDSNoTP,
             MM2RoleESP = Settings.MM2RoleESP,
             MM2KillAllKey = Settings.MM2KillAllKey and Settings.MM2KillAllKey.Name or "K",
+            MM2KillAllAuto = Settings.MM2KillAllAuto,
             MM2ShootMurderKey = Settings.MM2ShootMurderKey and Settings.MM2ShootMurderKey.Name or "C",
+            MM2ShootMurderAuto = Settings.MM2ShootMurderAuto,
             MM2GrabGunKey = Settings.MM2GrabGunKey and Settings.MM2GrabGunKey.Name or "G",
+            MM2GrabGunAuto = Settings.MM2GrabGunAuto,
             MM2FlingTarget = Settings.MM2FlingTarget
         },
         SavedIDs = getgenv().SavedIDs,
@@ -2380,5 +2386,130 @@ getgenv().CreateKeybindButton = function(Name, Page, DefaultKey, Callback)
         end)
     end)
 
+    return Box
+end
+
+
+getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, KeyCallback, ToggleCallback)
+    local Box = Instance.new("Frame")
+    Box.Size = UDim2.new(1, -5, 0, 48)
+    Box.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    Box.BorderSizePixel = 0
+    Box.Parent = Page
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -178, 1, 0)
+    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = Name
+    Label.TextColor3 = Color3.fromRGB(240, 240, 240)
+    Label.TextSize = 13
+    Label.Font = Enum.Font.GothamMedium
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = Box
+
+    local KeyButton = Instance.new("TextButton")
+    KeyButton.Size = UDim2.new(0, 62, 0, 27)
+    KeyButton.Position = UDim2.new(1, -150, 0.5, -13)
+    KeyButton.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    KeyButton.BorderSizePixel = 0
+    KeyButton.Text = DefaultKey and DefaultKey.Name or "NONE"
+    KeyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    KeyButton.TextSize = 11
+    KeyButton.Font = Enum.Font.Gotham
+    KeyButton.Parent = Box
+
+    local AutoLabel = Instance.new("TextLabel")
+    AutoLabel.Size = UDim2.new(0, 38, 1, 0)
+    AutoLabel.Position = UDim2.new(1, -84, 0, 0)
+    AutoLabel.BackgroundTransparency = 1
+    AutoLabel.Text = "AUTO"
+    AutoLabel.TextColor3 = Color3.fromRGB(175, 175, 190)
+    AutoLabel.TextSize = 9
+    AutoLabel.Font = Enum.Font.GothamBold
+    AutoLabel.Parent = Box
+
+    local Toggle = Instance.new("TextButton")
+    Toggle.Size = UDim2.new(0, 38, 0, 20)
+    Toggle.Position = UDim2.new(1, -42, 0.5, -10)
+    Toggle.BorderSizePixel = 0
+    Toggle.Text = ""
+    Toggle.AutoButtonColor = false
+    Toggle.Parent = Box
+
+    local ToggleCorner = Instance.new("UICorner")
+    ToggleCorner.CornerRadius = UDim.new(0, 4)
+    ToggleCorner.Parent = Toggle
+
+    local Indicator = Instance.new("Frame")
+    Indicator.Size = UDim2.new(0, 14, 0, 14)
+    Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Indicator.BorderSizePixel = 0
+    Indicator.Parent = Toggle
+
+    local IndicatorCorner = Instance.new("UICorner")
+    IndicatorCorner.CornerRadius = UDim.new(0, 3)
+    IndicatorCorner.Parent = Indicator
+
+    local Binding = false
+    local CurrentKey = DefaultKey
+    local Enabled = DefaultToggle == true
+
+    local function UpdateToggle()
+        if Enabled then
+            Toggle.BackgroundColor3 = Color3.fromRGB(50, 180, 70)
+            Indicator.Position = UDim2.new(1, -17, 0.5, -7)
+        else
+            Toggle.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+            Indicator.Position = UDim2.new(0, 3, 0.5, -7)
+        end
+    end
+
+    KeyButton.MouseButton1Click:Connect(function()
+        if Binding then return end
+
+        Binding = true
+        KeyButton.Text = "..."
+
+        local conn
+        conn = UserInputService.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                conn:Disconnect()
+                Binding = false
+
+                if input.KeyCode == Enum.KeyCode.Escape then
+                    CurrentKey = nil
+                    KeyButton.Text = "NONE"
+                else
+                    CurrentKey = input.KeyCode
+                    KeyButton.Text = input.KeyCode.Name
+                end
+
+                KeyCallback(CurrentKey)
+                AutoSaveConfiguration()
+            elseif input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.MouseButton2 then
+                conn:Disconnect()
+                Binding = false
+                CurrentKey = nil
+                KeyButton.Text = "NONE"
+                KeyCallback(nil)
+                AutoSaveConfiguration()
+            end
+        end)
+    end)
+
+    Toggle.MouseButton1Click:Connect(function()
+        Enabled = not Enabled
+        UpdateToggle()
+        ToggleCallback(Enabled)
+        AutoSaveConfiguration()
+
+        if ScriptLoaded then
+            CustomNotify(Name .. " Auto " .. (Enabled and "Enabled" or "Disabled"), Enabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100))
+        end
+    end)
+
+    UpdateToggle()
     return Box
 end
