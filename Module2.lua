@@ -4138,7 +4138,7 @@ local function ShowCenterLoadSequence()
     PercentLabel.TextXAlignment = Enum.TextXAlignment.Right
     PercentLabel.Parent = SplashFrame
 
-    local duration = 5.0
+    local duration = 4.0
     local steps = 50
     for i = 1, steps do
         local p = i / steps
