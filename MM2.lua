@@ -491,7 +491,7 @@ local function GetRole(target)
         end
     end
 
-    return "Innocent"
+    return nil
 end
 
 local function GetPlayerByRole(role)
@@ -628,6 +628,29 @@ local function NormalGunClick()
     end)
 end
 
+local function GetPredictedMurderPosition(targetRoot)
+    local velocity = targetRoot.AssemblyLinearVelocity
+    local ping = 0.08
+
+    pcall(function()
+        ping = math.clamp(Player:GetNetworkPing() + 0.055, 0.065, 0.16)
+    end)
+
+    local horizontal = Vector3.new(velocity.X, 0, velocity.Z) * ping
+    local vertical = Vector3.new(0, velocity.Y * math.min(ping, 0.11), 0)
+
+    if horizontal.Magnitude > 7 then
+        horizontal = horizontal.Unit * 7
+    end
+
+    vertical = Vector3.new(0, math.clamp(vertical.Y, -4, 5), 0)
+
+    return targetRoot.Position
+        + Vector3.new(0, 1.15, 0)
+        + horizontal
+        + vertical
+end
+
 local function ShootMurderer()
     if ActionBusy then
         return
@@ -676,7 +699,7 @@ local function ShootMurderer()
             return
         end
 
-        task.wait(0.08)
+        task.wait(0.07)
 
         if not targetRoot.Parent or targetHumanoid.Health <= 0 then
             ActionBusy = false
@@ -715,27 +738,49 @@ local function ShootMurderer()
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
 
-        local targetPosition = targetRoot.Position + Vector3.new(0, 1.1, 0)
-        local shootPosition = targetRoot.Position + Vector3.new(0, 6.5, 0)
-
-        root.CFrame = CFrame.lookAt(shootPosition, targetPosition)
-
         Camera.CameraType = Enum.CameraType.Scriptable
-        Camera.CFrame = CFrame.lookAt(
-            shootPosition + Vector3.new(0, 1.5, 0),
-            targetPosition
-        )
 
-        RunService.RenderStepped:Wait()
-        RunService.RenderStepped:Wait()
+        for _ = 1, 4 do
+            if not targetRoot.Parent or targetHumanoid.Health <= 0 then
+                break
+            end
 
-        pcall(function()
-            gun:Activate()
-        end)
+            local aimPosition = GetPredictedMurderPosition(targetRoot)
+            local targetVelocity = targetRoot.AssemblyLinearVelocity
+            local followOffset = Vector3.new(
+                targetVelocity.X * 0.035,
+                0,
+                targetVelocity.Z * 0.035
+            )
+            local shootPosition = targetRoot.Position + followOffset + Vector3.new(0, 5.2, 0)
 
-        NormalGunClick()
+            root.CFrame = CFrame.lookAt(shootPosition, aimPosition)
+            Camera.CFrame = CFrame.lookAt(
+                shootPosition + Vector3.new(0, 1.35, 0),
+                aimPosition
+            )
 
-        task.wait(0.06)
+            RunService.RenderStepped:Wait()
+        end
+
+        if targetRoot.Parent and targetHumanoid.Health > 0 then
+            local aimPosition = GetPredictedMurderPosition(targetRoot)
+            local shootPosition = targetRoot.Position + Vector3.new(0, 5.2, 0)
+
+            root.CFrame = CFrame.lookAt(shootPosition, aimPosition)
+            Camera.CFrame = CFrame.lookAt(
+                shootPosition + Vector3.new(0, 1.35, 0),
+                aimPosition
+            )
+
+            pcall(function()
+                gun:Activate()
+            end)
+
+            NormalGunClick()
+        end
+
+        task.wait(0.055)
 
         pcall(function()
             VirtualInputManager:SendMouseMoveEvent(oldMousePosition.X, oldMousePosition.Y, game)
@@ -816,22 +861,37 @@ local function FindGunDrop()
     return gunDrop:FindFirstChildWhichIsA("BasePart", true)
 end
 
-local function GrabGun()
+local function GrabGun(silent, requestedDrop)
     if ActionBusy then
-        return
-    end
-
-    local gunDrop = FindGunDrop()
-
-    if not gunDrop then
-        CustomNotify("Dropped Gun not found", Color3.fromRGB(255, 180, 70))
-        return
+        return false
     end
 
     local _, humanoid, root = GetCharacterState()
 
     if not humanoid or humanoid.Health <= 0 or not root then
-        return
+        return false
+    end
+
+    if GetRole(Player) ~= "Innocent" then
+        if not silent then
+            CustomNotify("Grab Gun is only for Innocent", Color3.fromRGB(255, 180, 70))
+        end
+
+        return false
+    end
+
+    local gunDrop = requestedDrop
+
+    if not gunDrop or not gunDrop.Parent then
+        gunDrop = FindGunDrop()
+    end
+
+    if not gunDrop then
+        if not silent then
+            CustomNotify("Dropped Gun not found", Color3.fromRGB(255, 180, 70))
+        end
+
+        return false
     end
 
     ActionBusy = true
@@ -840,16 +900,14 @@ local function GrabGun()
         local oldCFrame = root.CFrame
         local allow = getgenv().AllowToxTeleport
 
-        if allow then allow(0.5) end
+        if allow then
+            allow(0.5)
+        end
 
-        for _ = 1, 3 do
-            if not gunDrop.Parent or not root.Parent then
-                break
-            end
-
+        if gunDrop.Parent and root.Parent and humanoid.Health > 0 then
             root.AssemblyLinearVelocity = Vector3.zero
             root.AssemblyAngularVelocity = Vector3.zero
-            root.CFrame = gunDrop.CFrame * CFrame.new(0, 1.2, 0)
+            root.CFrame = gunDrop.CFrame * CFrame.new(0, 1.15, 0)
 
             if firetouchinterest then
                 pcall(function()
@@ -858,11 +916,14 @@ local function GrabGun()
                 end)
             end
 
-            task.wait(0.035)
+            task.wait(0.07)
         end
 
-        if root and root.Parent then
-            if allow then allow(0.4) end
+        if root and root.Parent and humanoid and humanoid.Health > 0 then
+            if allow then
+                allow(0.4)
+            end
+
             root.AssemblyLinearVelocity = Vector3.zero
             root.AssemblyAngularVelocity = Vector3.zero
             root.CFrame = oldCFrame
@@ -870,6 +931,8 @@ local function GrabGun()
 
         ActionBusy = false
     end)
+
+    return true
 end
 
 local function ApplyRoleESP(enabled)
@@ -966,16 +1029,19 @@ CreateButton("Fling", GamePage, FlingSelectedRole)
 
 local AutoKnifeOwned = false
 local AutoGunOwned = false
-local AutoGrabDrop = nil
-local AutoGrabLastAttempt = 0
+local AutoGrabAttemptedDrops = setmetatable({}, {__mode = "k"})
 
 task.spawn(function()
     while not getgenv().Destroyed and game.PlaceId == 142823291 do
         local knife = FindNamedTool({"knife"})
         local gun = FindNamedTool({"gun", "revolver"})
+        local character = Player.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local alive = humanoid and humanoid.Health > 0
+        local localRole = alive and GetRole(Player) or nil
 
         if Settings.MM2KillAllAuto then
-            if knife and not AutoKnifeOwned and not ActionBusy then
+            if knife and not AutoKnifeOwned and alive and not ActionBusy then
                 AutoKnifeOwned = true
                 task.spawn(KillAll)
             elseif not knife then
@@ -986,7 +1052,7 @@ task.spawn(function()
         end
 
         if Settings.MM2ShootMurderAuto then
-            if gun and not AutoGunOwned and not ActionBusy then
+            if gun and not AutoGunOwned and alive and not ActionBusy then
                 AutoGunOwned = true
                 task.spawn(ShootMurderer)
             elseif not gun then
@@ -996,27 +1062,25 @@ task.spawn(function()
             AutoGunOwned = gun ~= nil
         end
 
-        if Settings.MM2GrabGunAuto and not gun and not ActionBusy then
+        if Settings.MM2GrabGunAuto
+        and alive
+        and localRole == "Innocent"
+        and not gun
+        and not ActionBusy then
             local drop = FindGunDrop()
 
-            if drop then
-                local now = tick()
-
-                if drop ~= AutoGrabDrop or now - AutoGrabLastAttempt >= 0.8 then
-                    AutoGrabDrop = drop
-                    AutoGrabLastAttempt = now
-                    task.spawn(GrabGun)
-                end
-            else
-                AutoGrabDrop = nil
+            if drop and not AutoGrabAttemptedDrops[drop] then
+                AutoGrabAttemptedDrops[drop] = true
+                task.spawn(function()
+                    GrabGun(true, drop)
+                end)
             end
-        else
-            AutoGrabDrop = nil
         end
 
         task.wait(0.1)
     end
 end)
+
 
 AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed
