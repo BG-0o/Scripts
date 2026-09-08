@@ -381,33 +381,59 @@ if not game:IsLoaded() then
     game.Loaded:Wait()
 end
 
-task.wait(0.75)
+local env = getgenv()
 
-local shouldExecute = false
+if env.__ToxAutoExecuteDestinationStarted then
+    return
+end
 
-pcall(function()
-    if isfile
-    and readfile
-    and isfile("ToxV1_Data/config.json") then
-        local HttpService = game:GetService("HttpService")
-        local data = HttpService:JSONDecode(
-            readfile("ToxV1_Data/config.json")
-        )
+env.__ToxAutoExecuteDestinationStarted = true
 
-        shouldExecute = data
-            and data.Settings
-            and data.Settings.AutoExecute == true
+task.wait(0.55)
+
+local shouldExecute = true
+local configWasRead = false
+
+for _ = 1, 20 do
+    local success = pcall(function()
+        if isfile
+        and readfile
+        and isfile("ToxV1_Data/config.json") then
+            local HttpService = game:GetService("HttpService")
+            local raw = readfile("ToxV1_Data/config.json")
+
+            if raw and raw ~= "" then
+                local data = HttpService:JSONDecode(raw)
+
+                if data and data.Settings then
+                    shouldExecute = data.Settings.AutoExecute == true
+                    configWasRead = true
+                end
+            end
+        end
+    end)
+
+    if success and configWasRead then
+        break
     end
-end)
+
+    task.wait(0.25)
+end
 
 if shouldExecute then
-    pcall(function()
+    local ok = pcall(function()
         loadstring(
             game:HttpGet(
                 "https://raw.githubusercontent.com/BG-0o/Scripts/main/ToxHud.lua"
             )
         )()
     end)
+
+    if not ok then
+        env.__ToxAutoExecuteDestinationStarted = nil
+    end
+else
+    env.__ToxAutoExecuteDestinationStarted = nil
 end
 ]]
 
@@ -496,7 +522,20 @@ NotifLayout.SortOrder = Enum.SortOrder.LayoutOrder
 NotifLayout.Padding = UDim.new(0, 6)
 NotifLayout.Parent = NotifContainer
 
+getgenv().ToxLastNotificationText = getgenv().ToxLastNotificationText or nil
+getgenv().ToxLastNotificationTime = getgenv().ToxLastNotificationTime or 0
+
 getgenv().CustomNotify = function(text, color, customTime)
+    local now = os.clock()
+    local message = tostring(text or "")
+
+    if getgenv().ToxLastNotificationText == message
+    and now - getgenv().ToxLastNotificationTime < 1.5 then
+        return
+    end
+
+    getgenv().ToxLastNotificationText = message
+    getgenv().ToxLastNotificationTime = now
     local Frame = Instance.new("Frame")
     Frame.Size = UDim2.new(1, 0, 0, 38)
     Frame.BackgroundColor3 = Color3.fromRGB(12, 12, 20)
