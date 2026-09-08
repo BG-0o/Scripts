@@ -37,7 +37,7 @@ local SavedJoinGames = getgenv().SavedJoinGames or {}
 local CheckMusicIDsBtn = getgenv().CheckMusicIDsBtn
 local SetMusicIDStatus = getgenv().SetMusicIDStatus
 
-getgenv().MusicIDStatus = getgenv().MusicIDStatus or {}
+getgenv().MusicIDStatus = {}
 local MusicIDStatus = getgenv().MusicIDStatus
 local MusicCheckRunning = false
 local MusicCheckGeneration = 0
@@ -171,8 +171,14 @@ local function CheckSavedMusicIDs(force)
         if not MusicInitialNoticeShown then
             MusicInitialNoticeShown = true
             CustomNotify(
-                tostring(activeCount) .. " active | " .. tostring(unavailableCount) .. " unavailable",
-                unavailableCount > 0 and Color3.fromRGB(255, 180, 70) or Color3.fromRGB(100, 255, 100)
+                "Music IDs: "
+                    .. tostring(activeCount)
+                    .. " active | "
+                    .. tostring(unavailableCount)
+                    .. " unavailable",
+                unavailableCount > 0
+                    and Color3.fromRGB(255, 180, 70)
+                    or Color3.fromRGB(100, 255, 100)
             )
         end
     end)
@@ -195,7 +201,7 @@ if MusicGui then
 end
 
 task.delay(1, function()
-    CheckSavedMusicIDs(false)
+    CheckSavedMusicIDs(true)
 end)
 
 local ToxChatTopic = "toxhub-global-9f4d1c7a8e2b6f305a71"
@@ -2176,6 +2182,71 @@ getgenv().ToxOnSharedValueChanged = function(Key, Value)
     end
 end
 
+local CarFlyVelocity = nil
+local CarFlyGyro = nil
+local CarFlySeat = nil
+
+local function DestroyCarFlyMovers()
+    if CarFlyVelocity then
+        pcall(function()
+            CarFlyVelocity:Destroy()
+        end)
+
+        CarFlyVelocity = nil
+    end
+
+    if CarFlyGyro then
+        pcall(function()
+            CarFlyGyro:Destroy()
+        end)
+
+        CarFlyGyro = nil
+    end
+
+    CarFlySeat = nil
+end
+
+local function EnsureCarFlyMovers(seat)
+    if not seat then
+        DestroyCarFlyMovers()
+        return false
+    end
+
+    if CarFlySeat ~= seat then
+        DestroyCarFlyMovers()
+        CarFlySeat = seat
+    end
+
+    if not CarFlyVelocity or CarFlyVelocity.Parent ~= seat then
+        if CarFlyVelocity then
+            CarFlyVelocity:Destroy()
+        end
+
+        CarFlyVelocity = Instance.new("BodyVelocity")
+        CarFlyVelocity.Name = "ToxCarFlyVelocity"
+        CarFlyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        CarFlyVelocity.P = 2500
+        CarFlyVelocity.Velocity = Vector3.zero
+        CarFlyVelocity.Parent = seat
+    end
+
+    if not CarFlyGyro or CarFlyGyro.Parent ~= seat then
+        if CarFlyGyro then
+            CarFlyGyro:Destroy()
+        end
+
+        CarFlyGyro = Instance.new("BodyGyro")
+        CarFlyGyro.Name = "ToxCarFlyGyro"
+        CarFlyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+        CarFlyGyro.P = 5000
+        CarFlyGyro.D = 450
+        CarFlyGyro.CFrame = seat.CFrame
+        CarFlyGyro.Parent = seat
+    end
+
+    return true
+end
+
 getgenv().ToxSetSharedOption = function(Key, Value)
     local enabled = Value == true
 
@@ -2224,6 +2295,10 @@ getgenv().ToxSetSharedOption = function(Key, Value)
         Settings.CtrlClickTP = enabled
     elseif Key == "CarFly" then
         Settings.CarFly = enabled
+
+        if not enabled then
+            DestroyCarFlyMovers()
+        end
     elseif Key == "SmoothFly" then
         Settings.SmoothFly = enabled
 
@@ -3152,6 +3227,7 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     Settings.SmoothFly = false
     Settings.NormalFly = false
     Settings.CarFly = false
+    DestroyCarFlyMovers()
     Settings.ChatLogs = false
     Settings.MusicAutoPlay = false
     Settings.MusicLoop = false
@@ -3460,22 +3536,79 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
     end
 
     local seat = Hum and Hum.SeatPart
-    if seat then
-        if Settings.CarSpeed then
-            seat.AssemblyLinearVelocity = seat.CFrame.LookVector * (Settings.CarSpeedValue or 100)
+
+    if seat and Settings.CarSpeed and not Settings.CarFly then
+        seat.AssemblyLinearVelocity =
+            seat.CFrame.LookVector * (Settings.CarSpeedValue or 100)
+    end
+
+    if Settings.CarFly and seat then
+        if EnsureCarFlyMovers(seat) then
+            local flySpeed = math.clamp(
+                tonumber(Settings.CarFlySpeed) or 80,
+                5,
+                300
+            )
+
+            local look = Camera.CFrame.LookVector
+            local right = Camera.CFrame.RightVector
+            local flatLook = Vector3.new(look.X, 0, look.Z)
+            local flatRight = Vector3.new(right.X, 0, right.Z)
+            local direction = Vector3.zero
+
+            if flatLook.Magnitude > 0.01 then
+                flatLook = flatLook.Unit
+            end
+
+            if flatRight.Magnitude > 0.01 then
+                flatRight = flatRight.Unit
+            end
+
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                direction = direction + flatLook
+            end
+
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                direction = direction - flatLook
+            end
+
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                direction = direction - flatRight
+            end
+
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                direction = direction + flatRight
+            end
+
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space)
+            or UserInputService:IsKeyDown(Enum.KeyCode.E) then
+                direction = direction + Vector3.new(0, 1, 0)
+            end
+
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
+            or UserInputService:IsKeyDown(Enum.KeyCode.Q) then
+                direction = direction - Vector3.new(0, 1, 0)
+            end
+
+            if direction.Magnitude > 0 then
+                CarFlyVelocity.Velocity = direction.Unit * flySpeed
+            else
+                CarFlyVelocity.Velocity = Vector3.zero
+            end
+
+            seat.AssemblyAngularVelocity = Vector3.zero
+
+            if flatLook.Magnitude > 0.01 then
+                CarFlyGyro.CFrame = CFrame.lookAt(
+                    seat.Position,
+                    seat.Position + flatLook
+                )
+            else
+                CarFlyGyro.CFrame = seat.CFrame
+            end
         end
-        if Settings.CarFly then
-            local flySpeed = (Settings.CarFlySpeed or 80)
-            local dir = Vector3.zero
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + Camera.CFrame.LookVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - Camera.CFrame.LookVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - Camera.CFrame.RightVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + Camera.CFrame.RightVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then dir = dir + Vector3.new(0, 1, 0) end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then dir = dir - Vector3.new(0, 1, 0) end
-            
-            seat.AssemblyLinearVelocity = dir * flySpeed
-        end
+    else
+        DestroyCarFlyMovers()
     end
 
     if Settings.Spinbot and Root then
