@@ -109,6 +109,7 @@ getgenv().Settings = {
     LoopTPTarget = nil,
 
     ESPNames = false,
+    ESPNameMode = "Display",
     ESPDistance = false,
     ESPTracers = false,
     ESPBox = false,
@@ -144,6 +145,8 @@ getgenv().Settings = {
 getgenv().SavedIDs = {}
 getgenv().SavedWaypoints = {}
 getgenv().UIPositions = {}
+getgenv().GameSharedSettings = {}
+getgenv().BaseSharedSettings = {}
 getgenv().Destroyed = false
 getgenv().ScriptLoaded = false
 
@@ -178,6 +181,34 @@ local function EnsureFolder()
     end
 end
 
+local SharedPersistentKeys = {
+    Speed = true,
+    SpeedValue = true,
+    Noclip = true,
+    CtrlClickTP = true,
+    NoFallDamage = true,
+    AntiVoid = true,
+    AntiFling = true,
+    CarFly = true,
+    CarFlySpeed = true,
+    Chams = true,
+    ESPNames = true,
+    ESPTeamColors = true
+}
+
+getgenv().SharedPersistentKeys = SharedPersistentKeys
+
+local function PersistentSetting(Key)
+    if getgenv().CurrentGameModule
+    and SharedPersistentKeys[Key]
+    and getgenv().BaseSharedSettings
+    and getgenv().BaseSharedSettings[Key] ~= nil then
+        return getgenv().BaseSharedSettings[Key]
+    end
+
+    return Settings[Key]
+end
+
 getgenv().AutoSaveConfiguration = function()
     if getgenv().Destroyed then return end
     EnsureFolder()
@@ -185,19 +216,19 @@ getgenv().AutoSaveConfiguration = function()
 
     local data = {
         Settings = {
-            Speed = Settings.Speed,
-            SpeedValue = Settings.SpeedValue,
+            Speed = PersistentSetting("Speed"),
+            SpeedValue = PersistentSetting("SpeedValue"),
             Jump = Settings.Jump,
             JumpValue = Settings.JumpValue,
             SmoothFly = Settings.SmoothFly,
             NormalFly = Settings.NormalFly,
             FlySpeed = Settings.FlySpeed,
-            Noclip = Settings.Noclip,
+            Noclip = PersistentSetting("Noclip"),
             InfiniteJump = Settings.InfiniteJump,
-            CtrlClickTP = Settings.CtrlClickTP,
-            NoFallDamage = Settings.NoFallDamage,
-            AntiVoid = Settings.AntiVoid,
-            AntiFling = Settings.AntiFling,
+            CtrlClickTP = PersistentSetting("CtrlClickTP"),
+            NoFallDamage = PersistentSetting("NoFallDamage"),
+            AntiVoid = PersistentSetting("AntiVoid"),
+            AntiFling = PersistentSetting("AntiFling"),
             AntiAFK = Settings.AntiAFK,
             ChatLogs = Settings.ChatLogs,
             Render3D = Settings.Render3D,
@@ -209,9 +240,10 @@ getgenv().AutoSaveConfiguration = function()
             AirWalk = Settings.AirWalk,
             CarSpeed = Settings.CarSpeed,
             CarSpeedValue = Settings.CarSpeedValue,
-            CarFly = Settings.CarFly,
-            CarFlySpeed = Settings.CarFlySpeed,
-            ESPNames = Settings.ESPNames,
+            CarFly = PersistentSetting("CarFly"),
+            CarFlySpeed = PersistentSetting("CarFlySpeed"),
+            ESPNames = PersistentSetting("ESPNames"),
+            ESPNameMode = Settings.ESPNameMode,
             ESPDistance = Settings.ESPDistance,
             ESPTracers = Settings.ESPTracers,
             ESPBox = Settings.ESPBox,
@@ -222,9 +254,9 @@ getgenv().AutoSaveConfiguration = function()
             Fullbright = Settings.Fullbright,
             TracerOrigin = Settings.TracerOrigin,
             EspMaxDistance = Settings.EspMaxDistance,
-            Chams = Settings.Chams,
+            Chams = PersistentSetting("Chams"),
             EspColorName = Settings.EspColorName,
-            ESPTeamColors = Settings.ESPTeamColors,
+            ESPTeamColors = PersistentSetting("ESPTeamColors"),
             Aimbot = Settings.Aimbot,
             AimbotSmoothness = Settings.AimbotSmoothness,
             AimPart = Settings.AimPart,
@@ -255,7 +287,8 @@ getgenv().AutoSaveConfiguration = function()
         },
         SavedIDs = getgenv().SavedIDs,
         SavedWaypoints = getgenv().SavedWaypoints,
-        UIPositions = getgenv().UIPositions
+        UIPositions = getgenv().UIPositions,
+        GameSharedSettings = getgenv().GameSharedSettings
     }
 
     pcall(function()
@@ -292,11 +325,18 @@ local function LoadConfiguration()
             if data.UIPositions and typeof(data.UIPositions) == "table" then
                 getgenv().UIPositions = data.UIPositions
             end
+            if data.GameSharedSettings and typeof(data.GameSharedSettings) == "table" then
+                getgenv().GameSharedSettings = data.GameSharedSettings
+            end
         end
     end)
 end
 
 LoadConfiguration()
+
+for Key in pairs(SharedPersistentKeys) do
+    getgenv().BaseSharedSettings[Key] = Settings[Key]
+end
 
 pcall(function()
     if cleardrawcache then
@@ -1745,12 +1785,17 @@ getgenv().SyncValueVisuals = function(Key, Value)
     if not Key then return end
 
     local controls = getgenv().SharedValueControls[Key]
-    if not controls then return end
 
-    for _, controller in ipairs(controls) do
-        if controller and controller.SetValue then
-            controller.SetValue(Value)
+    if controls then
+        for _, controller in ipairs(controls) do
+            if controller and controller.SetValue then
+                controller.SetValue(Value)
+            end
         end
+    end
+
+    if getgenv().ToxOnSharedValueChanged then
+        getgenv().ToxOnSharedValueChanged(Key, Value)
     end
 end
 
