@@ -9,6 +9,7 @@ local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
 local MarketplaceService = game:GetService("MarketplaceService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -1275,8 +1276,88 @@ local function StartAntiVoid()
 	end))
 end
 
+local SharedToggleSettingMap = {
+    Speed = "Speed",
+    Noclip = "Noclip",
+    NoFallDamage = "NoFallDamage",
+    AntiVoid = "AntiVoid",
+    AntiFling = "AntiFling",
+    CtrlClickTP = "CtrlClickTP",
+    CarFly = "CarFly",
+    Chams = "Chams",
+    ESPNames = "ESPNames",
+    ESPTeamColors = "ESPTeamColors",
+    SmoothFly = "SmoothFly",
+    NormalFly = "NormalFly"
+}
+
+local SharedValueSettingMap = {
+    Speed = "SpeedValue",
+    CarFly = "CarFlySpeed",
+    SmoothFly = "FlySpeed",
+    NormalFly = "FlySpeed"
+}
+
+local function GetCurrentGameSharedState()
+    if not getgenv().CurrentGameModule then
+        return nil
+    end
+
+    local placeKey = tostring(game.PlaceId)
+    getgenv().GameSharedSettings = getgenv().GameSharedSettings or {}
+
+    if typeof(getgenv().GameSharedSettings[placeKey]) ~= "table" then
+        getgenv().GameSharedSettings[placeKey] = {}
+    end
+
+    return getgenv().GameSharedSettings[placeKey]
+end
+
+local function RecordSharedToggle(Key, Value)
+    if getgenv().ToxApplyingGameState then
+        return
+    end
+
+    local settingKey = SharedToggleSettingMap[Key]
+
+    if not settingKey then
+        return
+    end
+
+    local gameState = GetCurrentGameSharedState()
+
+    if gameState then
+        gameState[settingKey] = Value == true
+    elseif getgenv().BaseSharedSettings then
+        getgenv().BaseSharedSettings[settingKey] = Value == true
+    end
+end
+
+getgenv().ToxOnSharedValueChanged = function(Key, Value)
+    if getgenv().ToxApplyingGameState then
+        return
+    end
+
+    local settingKey = SharedValueSettingMap[Key]
+    local number = tonumber(Value)
+
+    if not settingKey or not number then
+        return
+    end
+
+    local gameState = GetCurrentGameSharedState()
+
+    if gameState then
+        gameState[settingKey] = number
+    elseif getgenv().BaseSharedSettings then
+        getgenv().BaseSharedSettings[settingKey] = number
+    end
+end
+
 getgenv().ToxSetSharedOption = function(Key, Value)
     local enabled = Value == true
+
+    RecordSharedToggle(Key, enabled)
 
     if Key == "Speed" then
         if enabled then
@@ -1356,6 +1437,42 @@ getgenv().ToxSetSharedOption = function(Key, Value)
     if getgenv().SyncToggleVisuals then
         getgenv().SyncToggleVisuals(Key, enabled)
     end
+end
+
+getgenv().ApplyCurrentGameSharedSettings = function()
+    local gameState = GetCurrentGameSharedState()
+
+    if not gameState then
+        return
+    end
+
+    if game.PlaceId == 142823291 and gameState.NoFallDamage == nil then
+        gameState.NoFallDamage = false
+    end
+
+    getgenv().ToxApplyingGameState = true
+
+    for Key, settingKey in pairs(SharedValueSettingMap) do
+        local value = gameState[settingKey]
+
+        if value ~= nil then
+            Settings[settingKey] = value
+
+            if getgenv().SyncValueVisuals then
+                getgenv().SyncValueVisuals(Key, value)
+            end
+        end
+    end
+
+    for Key, settingKey in pairs(SharedToggleSettingMap) do
+        local value = gameState[settingKey]
+
+        if value ~= nil then
+            getgenv().ToxSetSharedOption(Key, value)
+        end
+    end
+
+    getgenv().ToxApplyingGameState = false
 end
 
 local function IsPartVisible(part)
@@ -1459,14 +1576,33 @@ CreateToggleWithValue("Car Fly", PlayerPage, Settings.CarFly, Settings.CarFlySpe
     end
 end, function(val) Settings.CarFlySpeed = val end, "CarFly")
 
-CreateToggle("Chams (Wallhack)", VisualsPage, Settings.Chams, function(v) Settings.Chams = v end, "Chams")
-CreateToggle("Names / Display", VisualsPage, Settings.ESPNames, function(v) Settings.ESPNames = v end, "ESPNames")
+CreateToggle("Chams (Wallhack)", VisualsPage, Settings.Chams, function(v)
+    if getgenv().ToxSetSharedOption then
+        getgenv().ToxSetSharedOption("Chams", v)
+    else
+        Settings.Chams = v
+    end
+end, "Chams")
+CreateToggle("Names", VisualsPage, Settings.ESPNames, function(v)
+    if getgenv().ToxSetSharedOption then
+        getgenv().ToxSetSharedOption("ESPNames", v)
+    else
+        Settings.ESPNames = v
+    end
+end, "ESPNames")
+CreateDropdown("Name Type", {"Name", "Display", "Name + Display"}, VisualsPage, Settings.ESPNameMode or "Display", function(v)
+    Settings.ESPNameMode = v
+end)
 CreateToggle("Distance", VisualsPage, Settings.ESPDistance, function(v) Settings.ESPDistance = v end)
 CreateToggle("2D Box ESP", VisualsPage, Settings.ESPBox, function(v) Settings.ESPBox = v end)
 CreateToggle("Head Dot ESP", VisualsPage, Settings.ESPHeadDot, function(v) Settings.ESPHeadDot = v end)
 CreateToggle("Tracers", VisualsPage, Settings.ESPTracers, function(v) Settings.ESPTracers = v end)
 CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
-    Settings.ESPTeamColors = v
+    if getgenv().ToxSetSharedOption then
+        getgenv().ToxSetSharedOption("ESPTeamColors", v)
+    else
+        Settings.ESPTeamColors = v
+    end
 end, "ESPTeamColors")
 CreateDropdown("Tracer Mode", {"DOWN", "UP", "MOUSE"}, VisualsPage, Settings.TracerOrigin, function(v) Settings.TracerOrigin = v end)
 CreateToggleWithValue("Camera FOV", VisualsPage, Settings.FOVEnabled, Settings.FOVValue, function(v)
@@ -1502,18 +1638,27 @@ if getgenv().ToxESPHighlights then
     end
 end
 
+if getgenv().ToxESPLabels then
+    for _, label in pairs(getgenv().ToxESPLabels) do
+        pcall(function() label:Destroy() end)
+    end
+end
+
 local ESPDrawings = {}
 local Highlights = {}
+local ESPLabels = {}
 local ESPCharacterRefs = {}
 local LastESPSafetyRefresh = tick()
 
 getgenv().ToxESPDrawings = ESPDrawings
 getgenv().ToxESPHighlights = Highlights
+getgenv().ToxESPLabels = ESPLabels
 
 local MM2GameId = 66654135
 local MM2PlaceId = 142823291
 local MM2RoleCache = {}
 local MM2RoleCacheTime = 0
+local MM2PlayerDataRemote = nil
 
 local RoleColors = {
     Murderer = Color3.fromRGB(255, 50, 50),
@@ -1521,74 +1666,6 @@ local RoleColors = {
     Innocent = Color3.fromRGB(50, 255, 50),
     Hero = Color3.fromRGB(50, 255, 255)
 }
-
-local function HasNamedTool(p, names)
-    if not p then
-        return false
-    end
-
-    local containers = {
-        p:FindFirstChildOfClass("Backpack"),
-        p.Character
-    }
-
-    for _, container in ipairs(containers) do
-        if container then
-            for _, child in ipairs(container:GetChildren()) do
-                local childName = string.lower(child.Name)
-
-                for _, wantedName in ipairs(names) do
-                    if childName == wantedName then
-                        return true
-                    end
-                end
-            end
-        end
-    end
-
-    return false
-end
-
-local function RefreshMM2Roles()
-    if game.GameId ~= MM2GameId and game.PlaceId ~= MM2PlaceId then
-        return
-    end
-
-    local now = tick()
-    if now - MM2RoleCacheTime < 0.15 then
-        return
-    end
-
-    MM2RoleCacheTime = now
-
-    local newCache = {}
-    local roundDetected = false
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if HasNamedTool(p, {"knife"}) then
-            newCache[p] = "Murderer"
-            roundDetected = true
-        elseif HasNamedTool(p, {"gun", "revolver"}) then
-            newCache[p] = "Sheriff"
-            roundDetected = true
-        end
-    end
-
-    if roundDetected then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if not newCache[p] then
-                local char = p.Character
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-
-                if hum and hum.Health > 0 then
-                    newCache[p] = "Innocent"
-                end
-            end
-        end
-    end
-
-    MM2RoleCache = newCache
-end
 
 local function NormalizeRoleName(value)
     if typeof(value) ~= "string" or value == "" then
@@ -1624,6 +1701,61 @@ local function NormalizeRoleName(value)
     end
 
     return nil
+end
+
+local function ApplyMM2PlayerData(data)
+    if typeof(data) ~= "table" then
+        return false
+    end
+
+    local changed = false
+    local newCache = {}
+
+    for playerName, info in pairs(data) do
+        local roleValue = typeof(info) == "table" and info.Role or info
+        local role = NormalizeRoleName(roleValue)
+        local target = typeof(playerName) == "string" and Players:FindFirstChild(playerName) or nil
+
+        if target and role then
+            newCache[target] = role
+            changed = true
+        end
+    end
+
+    if changed then
+        MM2RoleCache = newCache
+        MM2RoleCacheTime = tick()
+        return true
+    end
+
+    return false
+end
+
+local function HasNamedTool(p, names)
+    if not p then
+        return false
+    end
+
+    local containers = {
+        p:FindFirstChildOfClass("Backpack"),
+        p.Character
+    }
+
+    for _, container in ipairs(containers) do
+        if container then
+            for _, child in ipairs(container:GetChildren()) do
+                local childName = string.lower(child.Name)
+
+                for _, wantedName in ipairs(names) do
+                    if childName == wantedName then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+
+    return false
 end
 
 local function GetAttributeRole(p)
@@ -1674,13 +1806,76 @@ local function GetAttributeRole(p)
     return nil
 end
 
+local function RefreshMM2Roles(force)
+    if game.GameId ~= MM2GameId and game.PlaceId ~= MM2PlaceId then
+        return
+    end
+
+    local now = tick()
+
+    if not force and now - MM2RoleCacheTime < 0.3 then
+        return
+    end
+
+    MM2RoleCacheTime = now
+
+    if not MM2PlayerDataRemote or not MM2PlayerDataRemote.Parent then
+        MM2PlayerDataRemote = ReplicatedStorage:FindFirstChild("GetPlayerData", true)
+    end
+
+    if MM2PlayerDataRemote and MM2PlayerDataRemote:IsA("RemoteFunction") then
+        local ok, data = pcall(function()
+            return MM2PlayerDataRemote:InvokeServer()
+        end)
+
+        if ok and ApplyMM2PlayerData(data) then
+            return
+        end
+    end
+
+    local newCache = {}
+    local roundDetected = false
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        local attributeRole = GetAttributeRole(p)
+
+        if attributeRole then
+            newCache[p] = attributeRole
+            roundDetected = true
+        elseif HasNamedTool(p, {"knife"}) then
+            newCache[p] = "Murderer"
+            roundDetected = true
+        elseif HasNamedTool(p, {"gun", "revolver"}) then
+            newCache[p] = "Sheriff"
+            roundDetected = true
+        end
+    end
+
+    if roundDetected then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if not newCache[p] then
+                local char = p.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+                if hum and hum.Health > 0 then
+                    newCache[p] = "Innocent"
+                end
+            end
+        end
+
+        MM2RoleCache = newCache
+    end
+end
+
+getgenv().ToxRefreshMM2Roles = RefreshMM2Roles
+
 getgenv().ToxGetMM2Role = function(p)
     if not p then
         return nil
     end
 
     if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
-        RefreshMM2Roles()
+        RefreshMM2Roles(false)
 
         if MM2RoleCache[p] then
             return MM2RoleCache[p]
@@ -1688,6 +1883,36 @@ getgenv().ToxGetMM2Role = function(p)
     end
 
     return GetAttributeRole(p)
+end
+
+if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
+    local updatePlayerData = ReplicatedStorage:FindFirstChild("UpdatePlayerData", true)
+
+    if updatePlayerData and updatePlayerData:IsA("RemoteEvent") then
+        AddConnection(updatePlayerData.OnClientEvent:Connect(function(data)
+            ApplyMM2PlayerData(data)
+        end))
+    end
+
+    local roleSelect = ReplicatedStorage:FindFirstChild("RoleSelect", true)
+
+    if roleSelect and roleSelect:IsA("RemoteEvent") then
+        AddConnection(roleSelect.OnClientEvent:Connect(function(role)
+            local normalized = NormalizeRoleName(role)
+
+            if normalized then
+                MM2RoleCache[Player] = normalized
+                MM2RoleCacheTime = tick()
+            end
+        end))
+    end
+
+    task.spawn(function()
+        while not getgenv().Destroyed and game.PlaceId == MM2PlaceId do
+            RefreshMM2Roles(true)
+            task.wait(0.5)
+        end
+    end)
 end
 
 local function GetESPVisualInfo(p)
@@ -1725,6 +1950,11 @@ local function ClearESPForPlayer(p)
     if Highlights[p] then
         pcall(function() Highlights[p]:Destroy() end)
         Highlights[p] = nil
+    end
+
+    if ESPLabels[p] then
+        pcall(function() ESPLabels[p]:Destroy() end)
+        ESPLabels[p] = nil
     end
 
     ESPCharacterRefs[p] = nil
@@ -2155,6 +2385,12 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
             end
         end
 
+        for p in pairs(ESPLabels) do
+            if not ESPDrawings[p] and not Highlights[p] then
+                table.insert(refreshPlayers, p)
+            end
+        end
+
         for _, p in ipairs(refreshPlayers) do
             ClearESPForPlayer(p)
         end
@@ -2199,54 +2435,100 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                     if Highlights[p] then Highlights[p]:Destroy() Highlights[p] = nil end
                 end
 
-                local hasAnyESP = Settings.ESPNames or Settings.ESPDistance or Settings.ESPTracers or Settings.ESPBox or Settings.ESPHeadDot
                 local distFromMe = Root and (Root.Position - hrp.Position).Magnitude or 0
                 local withinDist = (Settings.EspMaxDistance <= 0) or (distFromMe <= Settings.EspMaxDistance)
 
-                if hasAnyESP and Drawing and hum.Health > 0 and withinDist then
+                if (Settings.ESPNames or Settings.ESPDistance) and hum.Health > 0 and withinDist then
+                    local billboard = ESPLabels[p]
+
+                    if not billboard or billboard.Parent ~= char then
+                        if billboard then billboard:Destroy() end
+
+                        billboard = Instance.new("BillboardGui")
+                        billboard.Name = "ToxESPName"
+                        billboard.Adornee = char:FindFirstChild("Head") or hrp
+                        billboard.AlwaysOnTop = true
+                        billboard.Size = UDim2.fromOffset(320, 44)
+                        billboard.StudsOffset = Vector3.new(0, 3.2, 0)
+                        billboard.MaxDistance = Settings.EspMaxDistance > 0 and Settings.EspMaxDistance or 100000
+                        billboard.Parent = char
+
+                        local label = Instance.new("TextLabel")
+                        label.Name = "Label"
+                        label.Size = UDim2.fromScale(1, 1)
+                        label.BackgroundTransparency = 1
+                        label.TextColor3 = espColor
+                        label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+                        label.TextStrokeTransparency = 0
+                        label.TextSize = 13
+                        label.Font = Enum.Font.Gotham
+                        label.TextWrapped = true
+                        label.TextXAlignment = Enum.TextXAlignment.Center
+                        label.TextYAlignment = Enum.TextYAlignment.Center
+                        label.Parent = billboard
+
+                        ESPLabels[p] = billboard
+                    end
+
+                    local label = billboard:FindFirstChild("Label")
+                    local lines = {}
+
+                    if Settings.ESPNames then
+                        local mode = Settings.ESPNameMode or "Display"
+                        local nameText
+
+                        if mode == "Name" then
+                            nameText = "@" .. p.Name
+                        elseif mode == "Name + Display" then
+                            nameText = p.DisplayName .. " (@" .. p.Name .. ")"
+                        else
+                            nameText = p.DisplayName
+                        end
+
+                        if Settings.ESPTeamColors and espRole then
+                            nameText = nameText .. " [" .. espRole .. "]"
+                        end
+
+                        table.insert(lines, nameText)
+                    end
+
+                    if Settings.ESPDistance then
+                        table.insert(lines, "Dist: " .. math.floor(distFromMe) .. "m")
+                    end
+
+                    if label then
+                        label.Text = table.concat(lines, "\n")
+                        label.TextColor3 = espColor
+                    end
+
+                    billboard.Enabled = #lines > 0
+                    billboard.MaxDistance = Settings.EspMaxDistance > 0 and Settings.EspMaxDistance or 100000
+                elseif ESPLabels[p] then
+                    ESPLabels[p]:Destroy()
+                    ESPLabels[p] = nil
+                end
+
+                local hasDrawingESP = Settings.ESPTracers or Settings.ESPBox or Settings.ESPHeadDot
+
+                if hasDrawingESP and Drawing and hum.Health > 0 and withinDist then
                     local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+
                     if not ESPDrawings[p] then
                         ESPDrawings[p] = {
-                            Text = Drawing.new("Text"),
                             Line = Drawing.new("Line"),
                             Box = Drawing.new("Square"),
                             HeadDot = Drawing.new("Circle")
                         }
                     end
 
-                    local textDraw = ESPDrawings[p].Text
                     local lineDraw = ESPDrawings[p].Line
                     local boxDraw = ESPDrawings[p].Box
                     local headDraw = ESPDrawings[p].HeadDot
 
                     if onScreen then
-                        local textStr = ""
-                        if Settings.ESPNames then
-                            textStr = textStr .. p.DisplayName .. " (@" .. p.Name .. ")"
-
-                            if Settings.ESPTeamColors and espRole then
-                                textStr = textStr .. " [" .. espRole .. "]"
-                            end
-
-                            textStr = textStr .. "\n"
-                        end
-
-                        if Settings.ESPDistance then
-                            textStr = textStr .. "Dist: " .. math.floor(distFromMe) .. "m"
-                        end
-
-                        textDraw.Text = textStr
-                        textDraw.Font = Drawing.Fonts.Plex
-                        textDraw.Size = 13
-                        textDraw.Center = true
-                        textDraw.Outline = true
-                        textDraw.OutlineColor = Color3.fromRGB(0, 0, 0)
-                        textDraw.Color = espColor
-                        textDraw.Position = Vector2.new(pos.X, pos.Y - 38)
-                        textDraw.Visible = (textStr ~= "")
-
                         if Settings.ESPTracers then
                             local startVector = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+
                             if Settings.TracerOrigin == "UP" then
                                 startVector = Vector2.new(Camera.ViewportSize.X / 2, 0)
                             elseif Settings.TracerOrigin == "MOUSE" then
@@ -2275,15 +2557,16 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                             boxDraw.Visible = false
                         end
 
-                        local head = char:FindFirstChild("Head")
-                        if Settings.ESPHeadDot and head then
-                            local headPos, headOnScreen = Camera:WorldToViewportPoint(head.Position)
-                            if headOnScreen then
-                                headDraw.Position = Vector2.new(headPos.X, headPos.Y)
-                                headDraw.Radius = math.clamp(300 / pos.Z, 2, 10)
-                                headDraw.Color = espColor
+                        if Settings.ESPHeadDot then
+                            local head = char:FindFirstChild("Head")
+
+                            if head then
+                                local hp, hon = Camera:WorldToViewportPoint(head.Position)
+                                headDraw.Position = Vector2.new(hp.X, hp.Y)
+                                headDraw.Radius = 4
                                 headDraw.Filled = true
-                                headDraw.Visible = true
+                                headDraw.Color = espColor
+                                headDraw.Visible = hon
                             else
                                 headDraw.Visible = false
                             end
@@ -2291,13 +2574,14 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                             headDraw.Visible = false
                         end
                     else
-                        textDraw.Visible = false
                         lineDraw.Visible = false
                         boxDraw.Visible = false
                         headDraw.Visible = false
                     end
-                else
-                    ClearESPForPlayer(p)
+                elseif ESPDrawings[p] then
+                    for _, drawing in pairs(ESPDrawings[p]) do
+                        drawing.Visible = false
+                    end
                 end
             else
                 ClearESPForPlayer(p)
@@ -2515,6 +2799,10 @@ end
 if Settings.AntiVoid then StartAntiVoid() end
 
 local DetectedGameModule = getgenv().CurrentGameModule
+
+if DetectedGameModule and getgenv().ApplyCurrentGameSharedSettings then
+    getgenv().ApplyCurrentGameSharedSettings()
+end
 
 if DetectedGameModule and DetectedGameModule.Ready and DetectedGameModule.Url and getgenv().GamePage then
     task.spawn(function()
