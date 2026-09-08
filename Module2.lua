@@ -142,72 +142,307 @@ end
 LoadUIState()
 Settings.ESPTeamColors = UIState.TeamColors == true
 
+local ToxChatGui = Instance.new("Frame")
+ToxChatGui.Name = "ToxChatFrame"
+ToxChatGui.Size = UDim2.new(0, 370, 0, 310)
+ToxChatGui.Position = UDim2.new(0.5, -185, 0.5, -155)
+ToxChatGui.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+ToxChatGui.BorderSizePixel = 0
+ToxChatGui.ClipsDescendants = true
+ToxChatGui.Visible = false
+ToxChatGui.Parent = Gui
+
+local ToxChatCorner = Instance.new("UICorner")
+ToxChatCorner.CornerRadius = UDim.new(0, 8)
+ToxChatCorner.Parent = ToxChatGui
+
+local ToxChatStroke = Instance.new("UIStroke")
+ToxChatStroke.Color = MAIN_COLOR
+ToxChatStroke.Thickness = 2
+ToxChatStroke.Parent = ToxChatGui
+
+local ToxChatTopBar = Instance.new("Frame")
+ToxChatTopBar.Size = UDim2.new(1, 0, 0, 32)
+ToxChatTopBar.BackgroundColor3 = MAIN_COLOR
+ToxChatTopBar.BorderSizePixel = 0
+ToxChatTopBar.Parent = ToxChatGui
+
+MakeDraggable(ToxChatGui, ToxChatTopBar)
+
+local ToxChatTitle = Instance.new("TextLabel")
+ToxChatTitle.Size = UDim2.new(1, -70, 1, 0)
+ToxChatTitle.Position = UDim2.new(0, 10, 0, 0)
+ToxChatTitle.BackgroundTransparency = 1
+ToxChatTitle.Text = "Tox Chat"
+ToxChatTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToxChatTitle.Font = Enum.Font.GothamBold
+ToxChatTitle.TextSize = 13
+ToxChatTitle.TextXAlignment = Enum.TextXAlignment.Left
+ToxChatTitle.Parent = ToxChatTopBar
+
+local ToxChatClose = Instance.new("TextButton")
+ToxChatClose.Size = UDim2.new(0, 22, 0, 20)
+ToxChatClose.Position = UDim2.new(1, -26, 0.5, -10)
+ToxChatClose.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
+ToxChatClose.BorderSizePixel = 0
+ToxChatClose.Text = "X"
+ToxChatClose.TextColor3 = Color3.fromRGB(200, 200, 200)
+ToxChatClose.Font = Enum.Font.GothamBold
+ToxChatClose.TextSize = 11
+ToxChatClose.Parent = ToxChatTopBar
+
+local ToxChatCloseCorner = Instance.new("UICorner")
+ToxChatCloseCorner.CornerRadius = UDim.new(0, 4)
+ToxChatCloseCorner.Parent = ToxChatClose
+
+local ToxChatScroll = Instance.new("ScrollingFrame")
+ToxChatScroll.Size = UDim2.new(1, -16, 1, -88)
+ToxChatScroll.Position = UDim2.new(0, 8, 0, 40)
+ToxChatScroll.BackgroundTransparency = 1
+ToxChatScroll.BorderSizePixel = 0
+ToxChatScroll.ScrollBarThickness = 4
+ToxChatScroll.ScrollBarImageColor3 = MAIN_COLOR
+ToxChatScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+ToxChatScroll.Parent = ToxChatGui
+
+local ToxChatLayout = Instance.new("UIListLayout")
+ToxChatLayout.Padding = UDim.new(0, 5)
+ToxChatLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ToxChatLayout.Parent = ToxChatScroll
+
+ToxChatLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ToxChatScroll.CanvasSize = UDim2.new(0, 0, 0, ToxChatLayout.AbsoluteContentSize.Y + 8)
+    ToxChatScroll.CanvasPosition = Vector2.new(0, math.max(0, ToxChatLayout.AbsoluteContentSize.Y))
+end)
+
+local ToxChatInput = Instance.new("TextBox")
+ToxChatInput.Size = UDim2.new(1, -88, 0, 32)
+ToxChatInput.Position = UDim2.new(0, 8, 1, -40)
+ToxChatInput.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+ToxChatInput.BorderSizePixel = 0
+ToxChatInput.PlaceholderText = "Message..."
+ToxChatInput.PlaceholderColor3 = Color3.fromRGB(130, 130, 150)
+ToxChatInput.Text = ""
+ToxChatInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToxChatInput.Font = Enum.Font.Gotham
+ToxChatInput.TextSize = 12
+ToxChatInput.ClearTextOnFocus = false
+ToxChatInput.Parent = ToxChatGui
+
+local ToxChatInputCorner = Instance.new("UICorner")
+ToxChatInputCorner.CornerRadius = UDim.new(0, 4)
+ToxChatInputCorner.Parent = ToxChatInput
+
+local ToxChatSend = Instance.new("TextButton")
+ToxChatSend.Size = UDim2.new(0, 68, 0, 32)
+ToxChatSend.Position = UDim2.new(1, -76, 1, -40)
+ToxChatSend.BackgroundColor3 = MAIN_COLOR
+ToxChatSend.BorderSizePixel = 0
+ToxChatSend.Text = "Send"
+ToxChatSend.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToxChatSend.Font = Enum.Font.GothamBold
+ToxChatSend.TextSize = 12
+ToxChatSend.Parent = ToxChatGui
+
+local ToxChatSendCorner = Instance.new("UICorner")
+ToxChatSendCorner.CornerRadius = UDim.new(0, 4)
+ToxChatSendCorner.Parent = ToxChatSend
+
+local ToxChatTopic = "toxhub-bg0o-4f8c2d7a91e63b0c"
+local ToxChatToken = "toxhub-v1-6d82a17e"
+local ToxChatLastID = nil
+local ToxChatSeen = {}
+local ToxChatLastSend = 0
+
+local function AddToxChatMessage(displayName, message)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -6, 0, 0)
+    label.AutomaticSize = Enum.AutomaticSize.Y
+    label.BackgroundColor3 = Color3.fromRGB(16, 16, 24)
+    label.BackgroundTransparency = 0.15
+    label.BorderSizePixel = 0
+    label.Text = tostring(displayName) .. ": " .. tostring(message)
+    label.TextColor3 = Color3.fromRGB(235, 235, 245)
+    label.TextWrapped = true
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextYAlignment = Enum.TextYAlignment.Top
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 12
+    label.Parent = ToxChatScroll
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = label
+
+    local padding = Instance.new("UIPadding")
+    padding.PaddingLeft = UDim.new(0, 8)
+    padding.PaddingRight = UDim.new(0, 8)
+    padding.PaddingTop = UDim.new(0, 6)
+    padding.PaddingBottom = UDim.new(0, 6)
+    padding.Parent = label
+end
+
+local function DecodeToxChatResponse(response)
+    if typeof(response) ~= "string" or response == "" then
+        return
+    end
+
+    for line in response:gmatch("[^\r\n]+") do
+        local okOuter, outer = pcall(function()
+            return HttpService:JSONDecode(line)
+        end)
+
+        if okOuter and typeof(outer) == "table" and outer.event == "message" and outer.id then
+            if not ToxChatSeen[outer.id] then
+                local okInner, payload = pcall(function()
+                    return HttpService:JSONDecode(tostring(outer.message or ""))
+                end)
+
+                if okInner
+                and typeof(payload) == "table"
+                and payload.token == ToxChatToken
+                and typeof(payload.message) == "string"
+                and typeof(payload.displayName) == "string" then
+                    ToxChatSeen[outer.id] = true
+                    ToxChatLastID = outer.id
+                    AddToxChatMessage(payload.displayName, payload.message)
+                end
+            end
+        end
+    end
+end
+
+local function PollToxChat()
+    local since = ToxChatLastID and HttpService:UrlEncode(ToxChatLastID) or "10m"
+    local url = "https://ntfy.sh/" .. ToxChatTopic .. "/json?poll=1&since=" .. since
+
+    local ok, response = pcall(function()
+        return game:HttpGet(url)
+    end)
+
+    if ok then
+        DecodeToxChatResponse(response)
+    end
+end
+
+local function SendToxChatMessage()
+    if tick() - ToxChatLastSend < 0.8 then
+        return
+    end
+
+    local message = tostring(ToxChatInput.Text or "")
+    message = message:gsub("[\r\n]+", " ")
+    message = message:match("^%s*(.-)%s*$") or ""
+
+    if message == "" then
+        return
+    end
+
+    if #message > 160 then
+        message = string.sub(message, 1, 160)
+    end
+
+    ToxChatLastSend = tick()
+
+    local payload = HttpService:JSONEncode({
+        token = ToxChatToken,
+        displayName = Player.DisplayName,
+        username = Player.Name,
+        userId = Player.UserId,
+        message = message,
+        placeId = game.PlaceId
+    })
+
+    local url = "https://ntfy.sh/" .. ToxChatTopic .. "/publish?title=ToxChat&message=" .. HttpService:UrlEncode(payload)
+
+    ToxChatInput.Text = ""
+
+    task.spawn(function()
+        local ok = pcall(function()
+            game:HttpGet(url)
+        end)
+
+        if not ok then
+            CustomNotify("Tox Chat connection failed", Color3.fromRGB(255, 100, 100))
+        end
+    end)
+end
+
+ToxChatSend.MouseButton1Click:Connect(SendToxChatMessage)
+
+ToxChatInput.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        SendToxChatMessage()
+    end
+end)
+
+ToxChatClose.MouseButton1Click:Connect(function()
+    ToxChatGui.Visible = false
+end)
+
+task.spawn(function()
+    while not Destroyed do
+        PollToxChat()
+        task.wait(3)
+    end
+end)
+
 local DefaultMainPosition = UDim2.new(0.5, -165, 0.5, -197)
 local SavedMainPosition = DecodePosition(UIState.Positions.Main) or DefaultMainPosition
 
 ApplySavedGuiPosition("ChatLog", ChatLogGui)
 ApplySavedGuiPosition("Music", MusicGui)
 ApplySavedGuiPosition("Waypoints", WaypointsGui)
+ApplySavedGuiPosition("ToxChat", ToxChatGui)
 
 TrackGuiPosition("Main", Main)
 TrackGuiPosition("ChatLog", ChatLogGui)
 TrackGuiPosition("Music", MusicGui)
 TrackGuiPosition("Waypoints", WaypointsGui)
+TrackGuiPosition("ToxChat", ToxChatGui)
 
 local MusicIDStatus = {}
 local MusicCheckRunning = false
+local MusicCheckGeneration = 0
 
-local function FindMusicPlaylistScroll()
-    if not MusicGui then
-        return nil
-    end
+local function GetSavedMusicIDs()
+    local ids = {}
+    local seen = {}
 
-    for _, obj in ipairs(MusicGui:GetDescendants()) do
-        if obj:IsA("ScrollingFrame") then
-            return obj
+    for _, item in ipairs(SavedIDs or {}) do
+        local id = tonumber(item.id)
+
+        if id and not seen[id] then
+            seen[id] = true
+            table.insert(ids, id)
         end
     end
 
-    return nil
+    return ids
 end
-
-local function FindMusicVolumeArea()
-    if not MusicGui then
-        return nil
-    end
-
-    for _, obj in ipairs(MusicGui:GetDescendants()) do
-        if obj:IsA("TextLabel") and string.sub(obj.Text or "", 1, 7) == "Volume:" then
-            return obj.Parent
-        end
-    end
-
-    return nil
-end
-
-local MusicPlaylistScroll = FindMusicPlaylistScroll()
-local MusicVolumeArea = FindMusicVolumeArea()
 
 local function GetMusicIDLabels()
     local result = {}
+    local saved = {}
 
-    if not MusicPlaylistScroll then
+    for _, id in ipairs(GetSavedMusicIDs()) do
+        saved[tostring(id)] = true
+    end
+
+    if not MusicGui then
         return result
     end
 
-    for _, row in ipairs(MusicPlaylistScroll:GetChildren()) do
-        if row:IsA("Frame") then
-            for _, obj in ipairs(row:GetChildren()) do
-                if obj:IsA("TextLabel") then
-                    local id = tonumber(obj.Text)
-                    if id then
-                        table.insert(result, {
-                            ID = id,
-                            Label = obj
-                        })
-                        break
-                    end
-                end
+    for _, obj in ipairs(MusicGui:GetDescendants()) do
+        if obj:IsA("TextLabel") then
+            local raw = tostring(obj.Text or "")
+            local id = tonumber(raw)
+
+            if id and saved[tostring(id)] then
+                table.insert(result, {
+                    ID = id,
+                    Label = obj
+                })
             end
         end
     end
@@ -249,113 +484,81 @@ local function IsMusicIDActive(id)
     if name == ""
     or string.find(name, "content deleted", 1, true)
     or string.find(name, "[deleted]", 1, true)
-    or string.find(name, "[ content deleted ]", 1, true) then
+    or string.find(name, "[ content deleted ]", 1, true)
+    or string.find(name, "deleted", 1, true) == 1 then
         return false
     end
 
     return true
 end
 
-local function CheckAllMusicIDs(button)
-    if MusicCheckRunning then
+local function CheckSavedMusicIDs(force)
+    if MusicCheckRunning and not force then
         return
     end
 
-    local entries = GetMusicIDLabels()
+    MusicCheckGeneration = MusicCheckGeneration + 1
+    local generation = MusicCheckGeneration
+    local ids = GetSavedMusicIDs()
 
-    if #entries == 0 then
-        CustomNotify("No music IDs to check", Color3.fromRGB(255, 180, 70))
+    if #ids == 0 then
         return
     end
 
     MusicCheckRunning = true
 
-    if button then
-        button.Text = "Checking..."
-        button.TextColor3 = Color3.fromRGB(255, 215, 70)
-        button.Active = false
-    end
-
-    local uniqueIDs = {}
-    local ids = {}
-
-    for _, entry in ipairs(entries) do
-        local key = tostring(entry.ID)
-
-        if not uniqueIDs[key] then
-            uniqueIDs[key] = true
-            MusicIDStatus[key] = "checking"
-            table.insert(ids, entry.ID)
+    for _, id in ipairs(ids) do
+        if force or MusicIDStatus[tostring(id)] == nil then
+            MusicIDStatus[tostring(id)] = "checking"
         end
     end
 
     ApplyMusicIDColors()
 
     task.spawn(function()
-        local activeCount = 0
-        local unavailableCount = 0
-
         for _, id in ipairs(ids) do
-            local active = IsMusicIDActive(id)
-            MusicIDStatus[tostring(id)] = active
-
-            if active then
-                activeCount = activeCount + 1
-            else
-                unavailableCount = unavailableCount + 1
+            if generation ~= MusicCheckGeneration then
+                return
             end
 
+            local key = tostring(id)
+
+            if force or MusicIDStatus[key] == nil or MusicIDStatus[key] == "checking" then
+                MusicIDStatus[key] = IsMusicIDActive(id)
+                ApplyMusicIDColors()
+                task.wait(0.12)
+            end
+        end
+
+        if generation == MusicCheckGeneration then
+            MusicCheckRunning = false
             ApplyMusicIDColors()
-            task.wait(0.12)
         end
-
-        MusicCheckRunning = false
-
-        if button and button.Parent then
-            button.Text = "Check IDs"
-            button.TextColor3 = Color3.fromRGB(100, 255, 100)
-            button.Active = true
-
-            task.delay(1.2, function()
-                if button and button.Parent then
-                    button.TextColor3 = Color3.fromRGB(255, 255, 255)
-                end
-            end)
-        end
-
-        CustomNotify(
-            tostring(activeCount) .. " active | " .. tostring(unavailableCount) .. " unavailable",
-            unavailableCount > 0 and Color3.fromRGB(255, 180, 70) or Color3.fromRGB(100, 255, 100)
-        )
     end)
 end
 
-if MusicVolumeArea and CreateDarkBtn then
-    local oldCheck = MusicVolumeArea:FindFirstChild("ToxCheckMusicIDs")
-
-    if oldCheck then
-        oldCheck:Destroy()
+AddConnection(MusicGui.DescendantAdded:Connect(function(obj)
+    if obj:IsA("TextLabel") then
+        task.defer(function()
+            ApplyMusicIDColors()
+            CheckSavedMusicIDs(false)
+        end)
     end
+end))
 
-    local CheckMusicIDsBtn = CreateDarkBtn(
-        "Check IDs",
-        UDim2.new(0.52, 0, 0, 0),
-        UDim2.new(0.22, 0, 1, 0),
-        MusicVolumeArea
-    )
+AddConnection(MusicGui:GetPropertyChangedSignal("Visible"):Connect(function()
+    if MusicGui.Visible then
+        task.defer(function()
+            ApplyMusicIDColors()
+            CheckSavedMusicIDs(true)
+        end)
+    end
+end))
 
-    CheckMusicIDsBtn.Name = "ToxCheckMusicIDs"
-
-    CheckMusicIDsBtn.MouseButton1Click:Connect(function()
-        CheckAllMusicIDs(CheckMusicIDsBtn)
-    end)
-end
-
-if MusicPlaylistScroll then
-    AddConnection(MusicPlaylistScroll.ChildAdded:Connect(function()
-        task.defer(ApplyMusicIDColors)
-    end))
-end
+task.delay(1, function()
+    ApplyMusicIDColors()
+    CheckSavedMusicIDs(true)
+end)
 
 local function GetHumanoidDefaults(hum)
     if not hum then return nil end
@@ -590,6 +793,7 @@ end
 RegisterSubGuiMinimize(ChatLogGui, -88)
 RegisterSubGuiMinimize(MusicGui, -52)
 RegisterSubGuiMinimize(WaypointsGui, -52)
+RegisterSubGuiMinimize(ToxChatGui, -52)
 
 for _, page in pairs(Pages) do
     for _, child in ipairs(page:GetChildren()) do
@@ -986,8 +1190,6 @@ CreateToggleWithValue("Camera FOV", VisualsPage, Settings.FOVEnabled, Settings.F
     end
 end, function(val) Settings.FOVValue = val end)
 
-CreateDropdown("Shift Lock Key", {"Shift", "Ctrl"}, VisualsPage, Settings.ShiftLockKey, function(v) Settings.ShiftLockKey = v end)
-
 CreateToggleWithValue("ESP Max Dist", VisualsPage, true, Settings.EspMaxDistance, function(v) end, function(val) Settings.EspMaxDistance = val end)
 CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", "Magenta", "Orange", "Purple", "Lime", "Pink", "Gold"}, VisualsPage, Settings.EspColorName, function(v)
     Settings.EspColorName = v
@@ -1228,10 +1430,12 @@ CreateToggle("Force Shift Lock", FlingPage, Settings.ForceShiftLock, function(v)
         RestoreShiftLockDefaults()
     end
 end)
+CreateDropdown("Shift Lock Key", {"Shift", "Ctrl"}, FlingPage, Settings.ShiftLockKey, function(v) Settings.ShiftLockKey = v end)
 CreateInputWithButton("Fling", FlingPage, "", "Fling", function(text) ExecuteFling(text) end)
 CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
 CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
 CreateButton("Tox Waypoints", FlingPage, function() WaypointsGui.Visible = not WaypointsGui.Visible end)
+CreateButton("Tox Chat", FlingPage, function() ToxChatGui.Visible = not ToxChatGui.Visible end)
 
 CreateButton("BigFroot", ScriptsPage, function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BigFroot.lua"))()
@@ -1358,11 +1562,13 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
             SubGuisPreKeyHiddenState.ChatLog = ChatLogGui.Visible
             SubGuisPreKeyHiddenState.Music = MusicGui.Visible
             SubGuisPreKeyHiddenState.Waypoints = WaypointsGui.Visible
+            SubGuisPreKeyHiddenState.ToxChat = ToxChatGui.Visible
 
             Main.Visible = false
             ChatLogGui.Visible = false
             MusicGui.Visible = false
             WaypointsGui.Visible = false
+            ToxChatGui.Visible = false
         else
             Main.Visible = true
 
@@ -1376,10 +1582,14 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 if SubGuisPreKeyHiddenState.Waypoints ~= nil then
                     WaypointsGui.Visible = SubGuisPreKeyHiddenState.Waypoints
                 end
+                if SubGuisPreKeyHiddenState.ToxChat ~= nil then
+                    ToxChatGui.Visible = SubGuisPreKeyHiddenState.ToxChat
+                end
             else
                 ChatLogGui.Visible = false
                 MusicGui.Visible = false
                 WaypointsGui.Visible = false
+                ToxChatGui.Visible = false
             end
         end
     end
@@ -1938,10 +2148,12 @@ if Minimize then
             CollapseSubGuiWithMain("ChatLog", ChatLogGui)
             CollapseSubGuiWithMain("Music", MusicGui)
             CollapseSubGuiWithMain("Waypoints", WaypointsGui)
+            CollapseSubGuiWithMain("ToxChat", ToxChatGui)
         else
             RestoreSubGuiAfterMain("ChatLog", ChatLogGui)
             RestoreSubGuiAfterMain("Music", MusicGui)
             RestoreSubGuiAfterMain("Waypoints", WaypointsGui)
+            RestoreSubGuiAfterMain("ToxChat", ToxChatGui)
         end
     end)
 end
