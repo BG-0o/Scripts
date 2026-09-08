@@ -2,12 +2,21 @@ if game.PlaceId ~= 142823291 then
     return
 end
 
+local MM2ModuleVersion = "2026-09-08-autofarm-unfreeze-2"
+
 if getgenv().ToxMM2ModuleLoadedJobId == game.JobId
+and getgenv().ToxMM2ModuleVersion == MM2ModuleVersion
 and not getgenv().Destroyed then
     return
 end
 
+if getgenv().ToxMM2ModuleLoadedJobId == game.JobId
+and getgenv().ToxMM2Cleanup then
+    pcall(getgenv().ToxMM2Cleanup)
+end
+
 getgenv().ToxMM2ModuleLoadedJobId = game.JobId
+getgenv().ToxMM2ModuleVersion = MM2ModuleVersion
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -1574,20 +1583,13 @@ local function ReadCoinBagFromGui()
 end
 
 local function RefreshFarmBagState()
-    local current, maximum = ReadCoinBagFromGui()
-
-    if current and maximum and maximum > 0 then
-        AutoFarmBagCoins = current
-        AutoFarmBagMax = maximum
-        AutoFarmBagKnown = true
-    end
-
     return AutoFarmBagCoins, AutoFarmBagMax, AutoFarmBagKnown
 end
 
 local function IsFarmBagFull()
-    local current, maximum, known = RefreshFarmBagState()
-    return known and maximum > 0 and current >= maximum
+    return AutoFarmBagKnown
+        and AutoFarmBagMax > 0
+        and AutoFarmBagCoins >= AutoFarmBagMax
 end
 
 local gameplayRemotes = ReplicatedStorage:FindFirstChild("Remotes")
@@ -1867,20 +1869,37 @@ local function SetFarmCollision(enabled)
     end
 end
 
-local function SetFarmPosition(position)
-    local character = Player.Character
+local function EnableLocalControls()
+    pcall(function()
+        local playerScripts = Player:FindFirstChild("PlayerScripts")
+        local playerModule = playerScripts and playerScripts:FindFirstChild("PlayerModule")
 
-    if not character
-    or not AutoFarmRoot
+        if playerModule then
+            local module = require(playerModule)
+            local controls = module and module.GetControls and module:GetControls()
+
+            if controls and controls.Enable then
+                controls:Enable()
+            end
+        end
+    end)
+end
+
+local function SetFarmPosition(position)
+    if not AutoFarmRoot
     or not AutoFarmRoot.Parent
     or not AutoFarmRotation then
         return false
     end
 
-    character:PivotTo(
-        CFrame.new(position) * AutoFarmRotation
-    )
+    local allow = getgenv().AllowToxTeleport
 
+    if allow then
+        allow(0.18)
+    end
+
+    AutoFarmRoot.Anchored = false
+    AutoFarmRoot.CFrame = CFrame.new(position) * AutoFarmRotation
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
 
@@ -1888,25 +1907,27 @@ local function SetFarmPosition(position)
 end
 
 local function RestoreAutoFarmPosition()
-    local character = Player.Character
+    if not AutoFarmReturnCFrame then
+        return
+    end
 
-    if not character
-    or not character.Parent
-    or not AutoFarmReturnCFrame
-    or not AutoFarmRoot
-    or not AutoFarmRoot.Parent then
+    local character = Player.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+
+    if not character or not root then
         return
     end
 
     local allow = getgenv().AllowToxTeleport
 
     if allow then
-        allow(1)
+        allow(0.8)
     end
 
+    root.Anchored = false
     character:PivotTo(AutoFarmReturnCFrame)
-    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
-    AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
 end
 
 local function StopAutoFarm(restore)
@@ -1921,10 +1942,14 @@ local function StopAutoFarm(restore)
 
     AutoFarmTween = nil
 
-    if AutoFarmRoot and AutoFarmRoot.Parent then
-        AutoFarmRoot.Anchored = true
-        AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
-        AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+    local character = Player.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+
+    if root then
+        root.Anchored = false
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
     end
 
     if restore then
@@ -1934,45 +1959,35 @@ local function StopAutoFarm(restore)
 
     SetFarmCollision(true)
 
-    if AutoFarmHumanoid and AutoFarmHumanoid.Parent and AutoFarmHumanoid.Health > 0 then
-        AutoFarmHumanoid.PlatformStand = AutoFarmOriginalPlatformStand
-        AutoFarmHumanoid.Sit = AutoFarmOriginalSit
-        AutoFarmHumanoid.AutoRotate = AutoFarmOriginalAutoRotate
+    character = Player.Character
+    humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    root = character and character:FindFirstChild("HumanoidRootPart")
+
+    if humanoid and humanoid.Health > 0 then
+        humanoid.PlatformStand = false
+        humanoid.Sit = false
+        humanoid.AutoRotate = true
 
         pcall(function()
-            AutoFarmHumanoid:SetStateEnabled(
-                Enum.HumanoidStateType.Ragdoll,
-                AutoFarmOriginalRagdoll
-            )
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+            humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end)
 
-            AutoFarmHumanoid:SetStateEnabled(
-                Enum.HumanoidStateType.FallingDown,
-                AutoFarmOriginalFallingDown
-            )
+        RunService.Heartbeat:Wait()
+
+        pcall(function()
+            humanoid:ChangeState(Enum.HumanoidStateType.Running)
         end)
     end
 
-    if AutoFarmRoot and AutoFarmRoot.Parent then
-        AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
-        AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
-        AutoFarmRoot.Anchored = AutoFarmOriginalAnchored
+    if root then
+        root.Anchored = false
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
     end
 
-    if AutoFarmHumanoid
-    and AutoFarmHumanoid.Parent
-    and AutoFarmHumanoid.Health > 0
-    and not AutoFarmOriginalPlatformStand
-    and not AutoFarmOriginalSit then
-        pcall(function()
-            AutoFarmHumanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-        end)
-
-        task.wait()
-
-        pcall(function()
-            AutoFarmHumanoid:ChangeState(Enum.HumanoidStateType.Running)
-        end)
-    end
+    EnableLocalControls()
 
     AutoFarmRoot = nil
     AutoFarmHumanoid = nil
@@ -1997,10 +2012,8 @@ local function CompleteAutoFarm()
 
     AutoSaveConfiguration()
 
-    local current, maximum = RefreshFarmBagState()
-
     CustomNotify(
-        "Auto Farm complete: " .. tostring(current) .. "/" .. tostring(maximum),
+        "Auto Farm complete",
         Color3.fromRGB(100, 255, 100)
     )
 
@@ -2015,6 +2028,7 @@ local function PrepareAutoFarm()
     end
 
     if AutoFarmPrepared and AutoFarmRoot == root then
+        root.Anchored = false
         return true
     end
 
@@ -2037,7 +2051,7 @@ local function PrepareAutoFarm()
     AutoFarmAtCoin = false
     AutoFarmSessionCollected = 0
 
-    humanoid.PlatformStand = false
+    humanoid.PlatformStand = true
     humanoid.Sit = false
     humanoid.AutoRotate = false
 
@@ -2048,7 +2062,7 @@ local function PrepareAutoFarm()
 
     SetFarmCollision(false)
 
-    root.Anchored = true
+    root.Anchored = false
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
@@ -2073,7 +2087,7 @@ local function TweenFarmRoot(targetPosition, duration, coin)
     local startPosition = AutoFarmRoot.Position
     local delta = targetPosition - startPosition
     local startTime = os.clock()
-    duration = math.max(duration, 0.035)
+    duration = math.max(duration, 0.025)
 
     while Settings.MM2AutoFarm
     and AutoFarmPrepared
@@ -2096,9 +2110,9 @@ local function TweenFarmRoot(targetPosition, duration, coin)
             1
         )
 
-        SetFarmPosition(
-            startPosition + delta * alpha
-        )
+        if not SetFarmPosition(startPosition + delta * alpha) then
+            return false
+        end
 
         if alpha >= 1 then
             return true
@@ -2275,9 +2289,17 @@ AddConnection(RunService.Heartbeat:Connect(function()
         return
     end
 
-    AutoFarmRoot.Anchored = true
+    AutoFarmRoot.Anchored = false
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+
+    if AutoFarmHumanoid
+    and AutoFarmHumanoid.Parent
+    and AutoFarmHumanoid.Health > 0 then
+        AutoFarmHumanoid.PlatformStand = true
+        AutoFarmHumanoid.Sit = false
+        AutoFarmHumanoid.AutoRotate = false
+    end
 end))
 
 task.spawn(function()
@@ -2296,18 +2318,15 @@ task.spawn(function()
                 CompleteAutoFarm()
                 task.wait(0.15)
             elseif not ActionBusy then
-                if PrepareAutoFarm() then
-                    local coin = GetBestCoin(
-                        root.Position,
-                        false
-                    )
+                local coin = GetBestCoin(root.Position, false)
 
-                    if coin then
-                        AutoFarmCoin(coin)
-                    else
-                        task.wait(0.12)
-                    end
+                if coin then
+                    AutoFarmCoin(coin)
                 else
+                    if AutoFarmPrepared then
+                        StopAutoFarm(false)
+                    end
+
                     task.wait(0.12)
                 end
             else
@@ -2316,6 +2335,20 @@ task.spawn(function()
         else
             if AutoFarmPrepared then
                 StopAutoFarm(true)
+            else
+                local character = Player.Character
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                local root = character and character:FindFirstChild("HumanoidRootPart")
+
+                if humanoid and humanoid.Health > 0 then
+                    humanoid.PlatformStand = false
+                    humanoid.Sit = false
+                    humanoid.AutoRotate = true
+                end
+
+                if root then
+                    root.Anchored = false
+                end
             end
 
             task.wait(0.1)
@@ -2378,6 +2411,24 @@ CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarm, Settings.MM2A
     else
         Settings.MM2AutoFarm = false
         StopAutoFarm(true)
+
+        local character = Player.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+
+        if humanoid and humanoid.Health > 0 then
+            humanoid.PlatformStand = false
+            humanoid.Sit = false
+            humanoid.AutoRotate = true
+        end
+
+        if root then
+            root.Anchored = false
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+        end
+
+        EnableLocalControls()
     end
 
     AutoSaveConfiguration()
