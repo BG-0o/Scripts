@@ -589,7 +589,10 @@ local function StartNDSNoFall()
     task.spawn(function()
         while game.PlaceId == 189707
         and generation == NoFallGeneration
-        and Settings.NoFallDamage
+        and (
+            Settings.NoFallDamage
+            or Settings.WalkFling
+        )
         and not getgenv().Destroyed do
             RunService.Heartbeat:Wait()
 
@@ -602,8 +605,50 @@ local function StartNDSNoFall()
             if character and humanoid and humanoid.Health > 0 and root then
                 local velocity = root.AssemblyLinearVelocity
 
-                if velocity.Y < -60 then
-                    root.AssemblyLinearVelocity = Vector3.new(velocity.X, -45, velocity.Z)
+                local walkPulse =
+                    getgenv().ToxWalkFlingImpulseActive
+                    == true
+
+                if not walkPulse then
+                    local minY =
+                        Settings.WalkFling
+                        and -24
+                        or -45
+
+                    local triggerY =
+                        Settings.WalkFling
+                        and -32
+                        or -60
+
+                    if velocity.Y < triggerY then
+                        root.AssemblyLinearVelocity =
+                            Vector3.new(
+                                velocity.X,
+                                minY,
+                                velocity.Z
+                            )
+                    end
+
+                    if Settings.WalkFling then
+                        local horizontal =
+                            Vector3.new(
+                                velocity.X,
+                                0,
+                                velocity.Z
+                            )
+
+                        if horizontal.Magnitude > 110 then
+                            horizontal =
+                                horizontal.Unit * 110
+
+                            root.AssemblyLinearVelocity =
+                                Vector3.new(
+                                    horizontal.X,
+                                    root.AssemblyLinearVelocity.Y,
+                                    horizontal.Z
+                                )
+                        end
+                    end
                 end
             end
         end
@@ -807,6 +852,12 @@ local function StartNoTP()
             return
         end
 
+        if Settings.WalkFling
+        and getgenv().ToxWalkFlingImpulseActive
+        == true then
+            return
+        end
+
         local bypassUntil = tonumber(getgenv().ToxTeleportBypassUntil) or 0
 
         if tick() < bypassUntil then
@@ -945,6 +996,12 @@ end, "AntiFling")
 
 CreateToggle("Walk Fling", GamePage, Settings.WalkFling, function(v)
     SetShared("WalkFling", v)
+
+    if v then
+        StartNDSNoFall()
+    elseif not Settings.NoFallDamage then
+        StopNDSNoFall()
+    end
 end, "WalkFling")
 
 CreateButton("SPAWN", GamePage, function()
@@ -959,7 +1016,8 @@ if Settings.NDSAutoWin then
     StartAutoWin()
 end
 
-if Settings.NoFallDamage then
+if Settings.NoFallDamage
+or Settings.WalkFling then
     StartNDSNoFall()
 end
 
