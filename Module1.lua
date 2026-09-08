@@ -926,7 +926,7 @@ getgenv().CreateDarkBtn = CreateDarkBtn
 
 local function CreateWayCoordInput(placeholder, position)
     local box = Instance.new("TextBox")
-    box.Size = UDim2.new(0.21, 0, 1, 0)
+    box.Size = UDim2.new(0.21, 0, 0, 26)
     box.Position = position
     box.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
     box.BorderSizePixel = 0
