@@ -945,8 +945,14 @@ local AutoFarmTween = nil
 local AutoFarmRoot = nil
 local AutoFarmHumanoid = nil
 local AutoFarmReturnCFrame = nil
+local AutoFarmRotation = nil
 local AutoFarmOriginalAnchored = false
 local AutoFarmOriginalAutoRotate = true
+local AutoFarmOriginalPlatformStand = false
+local AutoFarmOriginalSit = false
+local AutoFarmOriginalRagdoll = true
+local AutoFarmOriginalFallingDown = true
+local AutoFarmCollisionCache = {}
 local AutoFarmPrepared = false
 local AutoFarmUndergroundY = nil
 local AutoFarmOldFallenHeight = nil
@@ -955,6 +961,9 @@ local AutoFarmBagMax = 40
 local AutoFarmBagKnown = false
 local AutoFarmCoinSerial = 0
 local AutoFarmCompleting = false
+local AutoFarmAtCoin = false
+local AutoFarmGeneration = 0
+local AutoFarmSessionCollected = 0
 
 local function IsAliveCharacter()
     local character, humanoid, root = GetCharacterState()
@@ -1067,72 +1076,73 @@ local function GetMM2Coins(force)
 
     local coins = {}
     local seen = {}
+    local scanRoot = workspace:FindFirstChild("Normal") or workspace
+    local containers = {}
 
-    local function addCandidate(obj)
-        if not obj or not obj.Parent then
-            return
-        end
+    for _, obj in ipairs(scanRoot:GetDescendants()) do
+        local lower = string.lower(obj.Name)
 
-        local candidates = {}
-
-        if obj:IsA("BasePart") then
-            table.insert(candidates, obj)
-
-            if obj.Parent and obj.Parent:IsA("Model") then
-                local preferred = obj.Parent:FindFirstChild("Coin_Server")
-                    or obj.Parent:FindFirstChild("Coin")
-                    or obj.Parent:FindFirstChild("Handle")
-
-                if preferred and preferred:IsA("BasePart") then
-                    table.insert(candidates, 1, preferred)
-                end
-            end
-        elseif obj:IsA("Model") then
-            local preferred = obj:FindFirstChild("Coin_Server", true)
-                or obj:FindFirstChild("Coin", true)
-                or obj:FindFirstChild("Handle", true)
-                or obj:FindFirstChildWhichIsA("BasePart", true)
-
-            if preferred and preferred:IsA("BasePart") then
-                table.insert(candidates, preferred)
-            end
-        end
-
-        for _, coin in ipairs(candidates) do
-            if IsCoinValid(coin) and not seen[coin] then
-                local lower = string.lower(coin.Name)
-                local parentLower = coin.Parent and string.lower(coin.Parent.Name) or ""
-
-                if string.find(lower, "coin", 1, true)
-                or string.find(parentLower, "coin", 1, true)
-                or lower == "handle" then
-                    seen[coin] = true
-                    table.insert(coins, coin)
-                    return
-                end
-            end
+        if lower == "coincontainer"
+        or lower == "coins"
+        or lower == "coinarea" then
+            table.insert(containers, obj)
         end
     end
 
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        local lower = string.lower(obj.Name)
+    local function hasCoinAncestor(obj)
+        local current = obj
+
+        for _ = 1, 4 do
+            if not current or current == scanRoot then
+                break
+            end
+
+            if string.find(string.lower(current.Name), "coin", 1, true) then
+                return true
+            end
+
+            current = current.Parent
+        end
+
+        return false
+    end
+
+    local function addPart(part)
+        if not part
+        or not part:IsA("BasePart")
+        or not IsCoinValid(part)
+        or seen[part] then
+            return
+        end
+
+        local model = part:FindFirstAncestorOfClass("Model")
+
+        if model and model:FindFirstChildOfClass("Humanoid") then
+            return
+        end
+
+        local lower = string.lower(part.Name)
 
         if string.find(lower, "coin", 1, true)
-        or lower == "coincontainer"
-        or lower == "coinarea" then
-            if obj:IsA("BasePart") or obj:IsA("Model") then
-                addCandidate(obj)
-            else
-                for _, child in ipairs(obj:GetDescendants()) do
-                    if child:IsA("BasePart") or child:IsA("Model") then
-                        local childLower = string.lower(child.Name)
+        or hasCoinAncestor(part) then
+            seen[part] = true
+            table.insert(coins, part)
+        end
+    end
 
-                        if string.find(childLower, "coin", 1, true)
-                        or childLower == "handle" then
-                            addCandidate(child)
-                        end
-                    end
+    if #containers > 0 then
+        for _, container in ipairs(containers) do
+            for _, obj in ipairs(container:GetDescendants()) do
+                if obj:IsA("BasePart") then
+                    addPart(obj)
                 end
+            end
+        end
+    else
+        for _, obj in ipairs(scanRoot:GetDescendants()) do
+            if obj:IsA("BasePart")
+            and string.find(string.lower(obj.Name), "coin", 1, true) then
+                addPart(obj)
             end
         end
     end
@@ -1265,90 +1275,102 @@ local function TouchCoin(coin)
     return touched
 end
 
-local function GetFarmMapBottomY(coins, fallbackY)
-    local mapCandidate = workspace:FindFirstChild("Normal")
+local function GetStableUndergroundY(root)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {Player.Character}
+    params.IgnoreWater = true
 
-    if not mapCandidate and coins and coins[1] then
-        local current = coins[1]
+    local hit = workspace:Raycast(
+        root.Position + Vector3.new(0, 3, 0),
+        Vector3.new(0, -35, 0),
+        params
+    )
 
-        while current and current.Parent and current.Parent ~= workspace do
-            current = current.Parent
-        end
-
-        if current and current.Parent == workspace then
-            mapCandidate = current
-        end
+    if hit and hit.Position then
+        return hit.Position.Y - 5.25
     end
 
-    if mapCandidate then
-        local ok, mapCFrame, mapSize = pcall(function()
-            if mapCandidate:IsA("Model") then
-                return mapCandidate:GetBoundingBox()
+    return root.Position.Y - 7
+end
+
+local function SetFarmCollision(enabled)
+    local character = Player.Character
+
+    if not character then
+        return
+    end
+
+    if not enabled then
+        table.clear(AutoFarmCollisionCache)
+
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                AutoFarmCollisionCache[part] = part.CanCollide
+                part.CanCollide = false
             end
-
-            local parts = {}
-
-            for _, obj in ipairs(mapCandidate:GetDescendants()) do
-                if obj:IsA("BasePart") then
-                    table.insert(parts, obj)
-                end
-            end
-
-            if #parts == 0 then
-                return nil, nil
-            end
-
-            local minY = math.huge
-            local maxY = -math.huge
-
-            for _, part in ipairs(parts) do
-                minY = math.min(minY, part.Position.Y - part.Size.Y * 0.5)
-                maxY = math.max(maxY, part.Position.Y + part.Size.Y * 0.5)
-            end
-
-            return CFrame.new(0, (minY + maxY) * 0.5, 0), Vector3.new(1, maxY - minY, 1)
-        end)
-
-        if ok and mapCFrame and mapSize then
-            return mapCFrame.Position.Y - mapSize.Y * 0.5 - 8
         end
-    end
-
-    local minCoinY = math.huge
-
-    for _, coin in ipairs(coins or {}) do
-        if IsCoinValid(coin) then
-            minCoinY = math.min(minCoinY, coin.Position.Y)
+    else
+        for part, oldValue in pairs(AutoFarmCollisionCache) do
+            if part and part.Parent then
+                part.CanCollide = oldValue
+            end
         end
+
+        table.clear(AutoFarmCollisionCache)
+    end
+end
+
+local function SetFarmCFrame(x, z, y)
+    local character = Player.Character
+
+    if not character
+    or not AutoFarmRoot
+    or not AutoFarmRoot.Parent
+    or not AutoFarmRotation then
+        return false
     end
 
-    if minCoinY < math.huge then
-        return minCoinY - 18
-    end
+    local target = CFrame.new(
+        x,
+        y or AutoFarmUndergroundY,
+        z
+    ) * AutoFarmRotation
 
-    return fallbackY - 20
+    character:PivotTo(target)
+
+    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+    AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+
+    return true
 end
 
 local function RestoreAutoFarmPosition()
     local character = Player.Character
 
-    if character
-    and character.Parent
-    and AutoFarmReturnCFrame
-    and AutoFarmHumanoid
-    and AutoFarmHumanoid.Parent
-    and AutoFarmHumanoid.Health > 0 then
-        local allow = getgenv().AllowToxTeleport
-
-        if allow then
-            allow(1)
-        end
-
-        character:PivotTo(AutoFarmReturnCFrame)
+    if not character
+    or not character.Parent
+    or not AutoFarmReturnCFrame
+    or not AutoFarmRoot
+    or not AutoFarmRoot.Parent then
+        return
     end
+
+    local allow = getgenv().AllowToxTeleport
+
+    if allow then
+        allow(1)
+    end
+
+    character:PivotTo(AutoFarmReturnCFrame)
+    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+    AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
 end
 
 local function StopAutoFarm(restore)
+    AutoFarmGeneration = AutoFarmGeneration + 1
+    AutoFarmAtCoin = false
+
     if AutoFarmTween then
         pcall(function()
             AutoFarmTween:Cancel()
@@ -1357,8 +1379,35 @@ local function StopAutoFarm(restore)
 
     AutoFarmTween = nil
 
+    if AutoFarmRoot and AutoFarmRoot.Parent then
+        AutoFarmRoot.Anchored = true
+        AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+        AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+    end
+
     if restore then
         RestoreAutoFarmPosition()
+        RunService.Heartbeat:Wait()
+    end
+
+    SetFarmCollision(true)
+
+    if AutoFarmHumanoid and AutoFarmHumanoid.Parent and AutoFarmHumanoid.Health > 0 then
+        AutoFarmHumanoid.PlatformStand = AutoFarmOriginalPlatformStand
+        AutoFarmHumanoid.Sit = AutoFarmOriginalSit
+        AutoFarmHumanoid.AutoRotate = AutoFarmOriginalAutoRotate
+
+        pcall(function()
+            AutoFarmHumanoid:SetStateEnabled(
+                Enum.HumanoidStateType.Ragdoll,
+                AutoFarmOriginalRagdoll
+            )
+
+            AutoFarmHumanoid:SetStateEnabled(
+                Enum.HumanoidStateType.FallingDown,
+                AutoFarmOriginalFallingDown
+            )
+        end)
     end
 
     if AutoFarmRoot and AutoFarmRoot.Parent then
@@ -1367,10 +1416,20 @@ local function StopAutoFarm(restore)
         AutoFarmRoot.Anchored = AutoFarmOriginalAnchored
     end
 
-    if AutoFarmHumanoid and AutoFarmHumanoid.Parent and AutoFarmHumanoid.Health > 0 then
-        AutoFarmHumanoid.PlatformStand = false
-        AutoFarmHumanoid.Sit = false
-        AutoFarmHumanoid.AutoRotate = AutoFarmOriginalAutoRotate
+    if AutoFarmHumanoid
+    and AutoFarmHumanoid.Parent
+    and AutoFarmHumanoid.Health > 0
+    and not AutoFarmOriginalPlatformStand
+    and not AutoFarmOriginalSit then
+        pcall(function()
+            AutoFarmHumanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end)
+
+        task.wait()
+
+        pcall(function()
+            AutoFarmHumanoid:ChangeState(Enum.HumanoidStateType.Running)
+        end)
     end
 
     if AutoFarmOldFallenHeight ~= nil then
@@ -1382,9 +1441,11 @@ local function StopAutoFarm(restore)
     AutoFarmRoot = nil
     AutoFarmHumanoid = nil
     AutoFarmReturnCFrame = nil
+    AutoFarmRotation = nil
     AutoFarmPrepared = false
     AutoFarmUndergroundY = nil
     AutoFarmOldFallenHeight = nil
+    AutoFarmSessionCollected = 0
 end
 
 local function CompleteAutoFarm()
@@ -1393,9 +1454,8 @@ local function CompleteAutoFarm()
     end
 
     AutoFarmCompleting = true
-    StopAutoFarm(true)
-
     Settings.MM2AutoFarm = false
+    StopAutoFarm(true)
 
     if SyncToggleVisuals then
         SyncToggleVisuals("MM2AutoFarm", false)
@@ -1424,23 +1484,31 @@ local function PrepareAutoFarm()
         return true
     end
 
-    StopAutoFarm(false)
+    if AutoFarmPrepared then
+        StopAutoFarm(false)
+    end
 
+    AutoFarmGeneration = AutoFarmGeneration + 1
     AutoFarmRoot = root
     AutoFarmHumanoid = humanoid
     AutoFarmReturnCFrame = character:GetPivot()
+    AutoFarmRotation = root.CFrame.Rotation
     AutoFarmOriginalAnchored = root.Anchored
     AutoFarmOriginalAutoRotate = humanoid.AutoRotate
+    AutoFarmOriginalPlatformStand = humanoid.PlatformStand
+    AutoFarmOriginalSit = humanoid.Sit
+    AutoFarmOriginalRagdoll = humanoid:GetStateEnabled(Enum.HumanoidStateType.Ragdoll)
+    AutoFarmOriginalFallingDown = humanoid:GetStateEnabled(Enum.HumanoidStateType.FallingDown)
     AutoFarmPrepared = true
-
-    local coins = GetMM2Coins(true)
-    AutoFarmUndergroundY = GetFarmMapBottomY(coins, root.Position.Y)
+    AutoFarmAtCoin = false
+    AutoFarmSessionCollected = 0
+    AutoFarmUndergroundY = GetStableUndergroundY(root)
 
     pcall(function()
         AutoFarmOldFallenHeight = workspace.FallenPartsDestroyHeight
         workspace.FallenPartsDestroyHeight = math.min(
             AutoFarmOldFallenHeight,
-            AutoFarmUndergroundY - 100
+            AutoFarmUndergroundY - 80
         )
     end)
 
@@ -1448,71 +1516,77 @@ local function PrepareAutoFarm()
     humanoid.Sit = false
     humanoid.AutoRotate = false
 
+    pcall(function()
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+    end)
+
+    SetFarmCollision(false)
+
+    root.Anchored = true
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
-    root.Anchored = true
 
-    local rotation = root.CFrame.Rotation
-
-    root.CFrame = CFrame.new(
+    SetFarmCFrame(
         root.Position.X,
-        AutoFarmUndergroundY,
-        root.Position.Z
-    ) * rotation
+        root.Position.Z,
+        AutoFarmUndergroundY
+    )
 
     return true
 end
 
 local function TweenFarmRoot(targetPosition, duration, coin)
-    if not AutoFarmRoot or not AutoFarmRoot.Parent then
+    if not AutoFarmRoot
+    or not AutoFarmRoot.Parent
+    or not AutoFarmUndergroundY then
         return false
     end
 
-    duration = math.max(duration, 0.025)
+    local generation = AutoFarmGeneration
+    local startPosition = AutoFarmRoot.Position
+    local startX = startPosition.X
+    local startZ = startPosition.Z
+    local deltaX = targetPosition.X - startX
+    local deltaZ = targetPosition.Z - startZ
+    local startTime = os.clock()
+    duration = math.max(duration, 0.035)
 
-    local rotation = AutoFarmRoot.CFrame.Rotation
-    local tween = TweenService:Create(
-        AutoFarmRoot,
-        TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
-        {
-            CFrame = CFrame.new(
-                targetPosition.X,
-                AutoFarmUndergroundY,
-                targetPosition.Z
-            ) * rotation
-        }
-    )
-
-    AutoFarmTween = tween
-    tween:Play()
-
-    while tween.PlaybackState == Enum.PlaybackState.Playing do
-        if not Settings.MM2AutoFarm
-        or not AutoFarmRoot
-        or not AutoFarmRoot.Parent
-        or not AutoFarmHumanoid
-        or AutoFarmHumanoid.Health <= 0 then
-            tween:Cancel()
-            break
-        end
-
+    while Settings.MM2AutoFarm
+    and AutoFarmPrepared
+    and generation == AutoFarmGeneration
+    and AutoFarmRoot
+    and AutoFarmRoot.Parent
+    and AutoFarmHumanoid
+    and AutoFarmHumanoid.Health > 0 do
         if coin and not IsCoinValid(coin) then
-            tween:Cancel()
-            break
+            return false
         end
 
         if IsFarmBagFull() then
-            tween:Cancel()
-            break
+            return false
         end
 
-        task.wait(0.02)
+        local alpha = math.clamp(
+            (os.clock() - startTime) / duration,
+            0,
+            1
+        )
+
+        SetFarmCFrame(
+            startX + deltaX * alpha,
+            startZ + deltaZ * alpha,
+            AutoFarmUndergroundY
+        )
+
+        if alpha >= 1 then
+            return true
+        end
+
+        RunService.Heartbeat:Wait()
     end
 
-    local completed = tween.PlaybackState == Enum.PlaybackState.Completed
-    AutoFarmTween = nil
-
-    return completed
+    return false
 end
 
 local function TouchCoin(coin)
@@ -1527,21 +1601,17 @@ local function TouchCoin(coin)
     end
 
     if firetouchinterest then
-        local preferredParts = {
+        local parts = {
             root,
+            character:FindFirstChild("UpperTorso"),
+            character:FindFirstChild("Torso"),
             character:FindFirstChild("RightFoot"),
             character:FindFirstChild("LeftFoot"),
             character:FindFirstChild("Right Leg"),
-            character:FindFirstChild("Left Leg"),
-            character:FindFirstChild("RightHand"),
-            character:FindFirstChild("LeftHand"),
-            character:FindFirstChild("Right Arm"),
-            character:FindFirstChild("Left Arm"),
-            character:FindFirstChild("UpperTorso"),
-            character:FindFirstChild("Torso")
+            character:FindFirstChild("Left Leg")
         }
 
-        for _, part in ipairs(preferredParts) do
+        for _, part in ipairs(parts) do
             if part and part:IsA("BasePart") then
                 pcall(function()
                     firetouchinterest(part, coin, 0)
@@ -1562,59 +1632,73 @@ local function CollectFarmCoin(coin)
         return false
     end
 
-    local rotation = AutoFarmRoot.CFrame.Rotation
-    local undergroundCFrame = CFrame.new(
-        coin.Position.X,
-        AutoFarmUndergroundY,
-        coin.Position.Z
-    ) * rotation
-
+    local generation = AutoFarmGeneration
     local serialBefore = AutoFarmCoinSerial
     local bagBefore = AutoFarmBagCoins
+    local pickupY = coin.Position.Y - math.clamp(
+        coin.Size.Y * 0.5 + 1.45,
+        1.55,
+        2.35
+    )
 
-    for attempt = 1, 4 do
-        if not Settings.MM2AutoFarm or IsFarmBagFull() then
+    AutoFarmAtCoin = true
+
+    for _ = 1, 3 do
+        if not Settings.MM2AutoFarm
+        or generation ~= AutoFarmGeneration
+        or IsFarmBagFull()
+        or not IsCoinValid(coin) then
             break
         end
 
-        if not IsCoinValid(coin) then
-            break
-        end
-
-        local yOffset = attempt == 1 and 0.5
-            or attempt == 2 and 1.5
-            or attempt == 3 and -0.25
-            or 0.9
-
-        AutoFarmRoot.CFrame = CFrame.new(
+        SetFarmCFrame(
             coin.Position.X,
-            coin.Position.Y + yOffset,
-            coin.Position.Z
-        ) * rotation
-
-        AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
-        AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+            coin.Position.Z,
+            pickupY
+        )
 
         TouchCoin(coin)
         RunService.Heartbeat:Wait()
         TouchCoin(coin)
-        task.wait(0.045)
+        task.wait(0.035)
 
-        AutoFarmRoot.CFrame = undergroundCFrame
+        SetFarmCFrame(
+            coin.Position.X,
+            coin.Position.Z,
+            AutoFarmUndergroundY
+        )
+
         RunService.Heartbeat:Wait()
 
         if not IsCoinValid(coin)
         or AutoFarmCoinSerial ~= serialBefore
         or AutoFarmBagCoins > bagBefore then
+            AutoFarmAtCoin = false
+            AutoFarmSessionCollected = AutoFarmSessionCollected + 1
+
+            if AutoFarmCoinSerial == serialBefore
+            and AutoFarmBagCoins <= bagBefore
+            and not AutoFarmBagKnown then
+                AutoFarmBagCoins = math.min(
+                    AutoFarmBagCoins + 1,
+                    AutoFarmBagMax
+                )
+            end
+
             return true
         end
     end
 
-    AutoFarmRoot.CFrame = undergroundCFrame
+    if AutoFarmRoot and AutoFarmRoot.Parent then
+        SetFarmCFrame(
+            coin.Position.X,
+            coin.Position.Z,
+            AutoFarmUndergroundY
+        )
+    end
 
-    return not IsCoinValid(coin)
-        or AutoFarmCoinSerial ~= serialBefore
-        or AutoFarmBagCoins > bagBefore
+    AutoFarmAtCoin = false
+    return false
 end
 
 local function AutoFarmCoin(coin)
@@ -1622,7 +1706,8 @@ local function AutoFarmCoin(coin)
         return false
     end
 
-    if IsFarmBagFull() then
+    if IsFarmBagFull()
+    or (not AutoFarmBagKnown and AutoFarmSessionCollected >= AutoFarmBagMax) then
         CompleteAutoFarm()
         return true
     end
@@ -1645,38 +1730,63 @@ local function AutoFarmCoin(coin)
         coin
     )
 
-    if IsFarmBagFull() then
-        CompleteAutoFarm()
-        return true
-    end
-
     if not Settings.MM2AutoFarm then
         return false
     end
 
+    if IsFarmBagFull()
+    or (not AutoFarmBagKnown and AutoFarmSessionCollected >= AutoFarmBagMax) then
+        CompleteAutoFarm()
+        return true
+    end
+
     if not arrived then
-        if not IsCoinValid(coin) then
-            return true
+        if IsCoinValid(coin) then
+            MM2CoinBlacklist[coin] = os.clock() + 0.7
         end
 
-        MM2CoinBlacklist[coin] = os.clock() + 0.7
         return false
     end
 
     local collected = CollectFarmCoin(coin)
 
     if collected then
-        MM2CoinBlacklist[coin] = os.clock() + 0.25
+        MM2CoinBlacklist[coin] = os.clock() + 0.2
     else
-        MM2CoinBlacklist[coin] = os.clock() + 1.2
+        MM2CoinBlacklist[coin] = os.clock() + 1.1
     end
 
-    if IsFarmBagFull() then
+    if IsFarmBagFull()
+    or (not AutoFarmBagKnown and AutoFarmSessionCollected >= AutoFarmBagMax) then
         CompleteAutoFarm()
     end
 
     return collected
 end
+
+AddConnection(RunService.Heartbeat:Connect(function()
+    if not Settings.MM2AutoFarm
+    or not AutoFarmPrepared
+    or AutoFarmAtCoin
+    or not AutoFarmRoot
+    or not AutoFarmRoot.Parent
+    or not AutoFarmUndergroundY then
+        return
+    end
+
+    local position = AutoFarmRoot.Position
+
+    if math.abs(position.Y - AutoFarmUndergroundY) > 0.05 then
+        SetFarmCFrame(
+            position.X,
+            position.Z,
+            AutoFarmUndergroundY
+        )
+    else
+        AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+        AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+    end
+end))
 
 task.spawn(function()
     while not getgenv().Destroyed and game.PlaceId == 142823291 do
@@ -1689,7 +1799,8 @@ task.spawn(function()
                 end
 
                 task.wait(0.15)
-            elseif IsFarmBagFull() then
+            elseif IsFarmBagFull()
+            or (not AutoFarmBagKnown and AutoFarmSessionCollected >= AutoFarmBagMax) then
                 CompleteAutoFarm()
                 task.wait(0.15)
             elseif not ActionBusy then
@@ -1771,13 +1882,14 @@ local function FlingSelectedRole()
 end
 
 CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarm, Settings.MM2AutoFarmSpeed, function(v)
-    Settings.MM2AutoFarm = v == true
-
-    if not v then
-        StopAutoFarm(true)
-    else
+    if v then
+        Settings.MM2AutoFarm = true
         AutoFarmBagKnown = false
+        AutoFarmSessionCollected = 0
         RefreshFarmBagState()
+    else
+        Settings.MM2AutoFarm = false
+        StopAutoFarm(true)
     end
 
     AutoSaveConfiguration()
