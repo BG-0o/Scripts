@@ -458,26 +458,6 @@ local function KillAll()
     end)
 end
 
-local function SetCharacterCollision(character, value, cache)
-    for _, obj in ipairs(character:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            if cache and cache[obj] == nil then
-                cache[obj] = obj.CanCollide
-            end
-
-            obj.CanCollide = value
-        end
-    end
-end
-
-local function RestoreCharacterCollision(cache)
-    for part, oldValue in pairs(cache) do
-        if part and part.Parent then
-            part.CanCollide = oldValue
-        end
-    end
-end
-
 local function NormalGunClick()
     local viewport = Camera.ViewportSize
     local inset = GuiService:GetGuiInset()
@@ -553,24 +533,38 @@ local function ShootMurderer()
         local oldCFrame = root.CFrame
         local oldLinearVelocity = root.AssemblyLinearVelocity
         local oldAngularVelocity = root.AssemblyAngularVelocity
+        local oldAnchored = root.Anchored
+        local oldAutoRotate = humanoid.AutoRotate
+        local oldPlatformStand = humanoid.PlatformStand
+        local oldSit = humanoid.Sit
         local oldCameraType = Camera.CameraType
         local oldCameraSubject = Camera.CameraSubject
         local oldCameraCFrame = Camera.CFrame
         local oldMousePosition = UserInputService:GetMouseLocation()
-        local collisionCache = {}
+        local oldRagdollEnabled = humanoid:GetStateEnabled(Enum.HumanoidStateType.Ragdoll)
+        local oldFallingDownEnabled = humanoid:GetStateEnabled(Enum.HumanoidStateType.FallingDown)
         local allow = getgenv().AllowToxTeleport
 
         if allow then
             allow(1)
         end
 
-        SetCharacterCollision(character, false, collisionCache)
+        pcall(function()
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        end)
+
+        humanoid.PlatformStand = false
+        humanoid.Sit = false
+        humanoid.AutoRotate = false
+
+        root.Anchored = true
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
 
         local targetPosition = targetRoot.Position + Vector3.new(0, 1.1, 0)
         local shootPosition = targetRoot.Position + Vector3.new(0, 6.5, 0)
 
-        root.AssemblyLinearVelocity = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
         root.CFrame = CFrame.lookAt(shootPosition, targetPosition)
 
         Camera.CameraType = Enum.CameraType.Scriptable
@@ -604,11 +598,42 @@ local function ShootMurderer()
             end
 
             root.CFrame = oldCFrame
-            root.AssemblyLinearVelocity = oldLinearVelocity
-            root.AssemblyAngularVelocity = oldAngularVelocity
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+            root.Anchored = oldAnchored
         end
 
-        RestoreCharacterCollision(collisionCache)
+        if humanoid and humanoid.Parent and humanoid.Health > 0 then
+            humanoid.PlatformStand = oldPlatformStand
+            humanoid.Sit = oldSit
+            humanoid.AutoRotate = oldAutoRotate
+
+            pcall(function()
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, oldRagdollEnabled)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, oldFallingDownEnabled)
+            end)
+
+            if not oldPlatformStand and not oldSit then
+                pcall(function()
+                    humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end)
+
+                task.wait()
+
+                pcall(function()
+                    humanoid:ChangeState(Enum.HumanoidStateType.Running)
+                end)
+            end
+        end
+
+        if root and root.Parent and not oldAnchored then
+            root.AssemblyLinearVelocity = Vector3.new(
+                oldLinearVelocity.X,
+                math.max(oldLinearVelocity.Y, 0),
+                oldLinearVelocity.Z
+            )
+            root.AssemblyAngularVelocity = oldAngularVelocity
+        end
 
         if originalParent and originalParent:IsA("Backpack") and gun and gun.Parent == character then
             pcall(function()
