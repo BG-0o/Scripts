@@ -25,44 +25,80 @@ local function LoadRemote(
     name,
     url
 )
-    local ok, err =
+    local fetchOk, source =
         pcall(function()
-            local source =
-                game:HttpGet(url)
-
-            local chunk =
-                loadstring(source)
-
-            if not chunk then
-                error(
-                    "invalid "
-                    .. name
-                    .. " source"
-                )
-            end
-
-            chunk()
+            return game:HttpGet(url)
         end)
 
-    if not ok then
+    if not fetchOk then
         Notify(
-            name
-            .. " failed to load",
-            Color3.fromRGB(
-                255,
-                100,
-                100
-            ),
+            name .. " download failed",
+            Color3.fromRGB(255, 100, 100),
             5
         )
-
         warn(
             "[ToxHub "
             .. name
-            .. " Error]: "
-            .. tostring(err)
+            .. " Download Error]: "
+            .. tostring(source)
         )
+        return false
+    end
 
+    local chunk, compileErr =
+        loadstring(source)
+
+    if not chunk then
+        local detail =
+            tostring(
+                compileErr
+                or "compile error"
+            )
+
+        Notify(
+            name
+            .. " compile: "
+            .. string.sub(
+                detail,
+                1,
+                75
+            ),
+            Color3.fromRGB(255, 100, 100),
+            7
+        )
+        warn(
+            "[ToxHub "
+            .. name
+            .. " Compile Error]: "
+            .. detail
+        )
+        return false
+    end
+
+    local runOk, runErr =
+        pcall(chunk)
+
+    if not runOk then
+        local detail =
+            tostring(runErr)
+
+        Notify(
+            name
+            .. " runtime: "
+            .. string.sub(
+                detail,
+                1,
+                75
+            ),
+            Color3.fromRGB(255, 100, 100),
+            7
+        )
+        warn(
+            "[ToxHub "
+            .. name
+            .. " Runtime Error]: "
+            .. detail
+        )
         return false
     end
 
