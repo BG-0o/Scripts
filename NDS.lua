@@ -12,19 +12,23 @@ local Camera = workspace.CurrentCamera
 local Settings = getgenv().Settings
 local GamePage = getgenv().GamePage
 local CreateToggle = getgenv().CreateToggle
+local CreateToggleWithValue = getgenv().CreateToggleWithValue
+local CreateButton = getgenv().CreateButton
 local AddConnection = getgenv().AddConnection
 local CustomNotify = getgenv().CustomNotify
 local AutoSaveConfiguration = getgenv().AutoSaveConfiguration
 local SyncToggleVisuals = getgenv().SyncToggleVisuals
+local SyncValueVisuals = getgenv().SyncValueVisuals
 
-if not Settings or not GamePage or not CreateToggle then
+if not Settings or not GamePage or not CreateToggle or not CreateToggleWithValue or not CreateButton then
     return
 end
 
+Settings.NDSWaterFlySpeed = tonumber(Settings.NDSWaterFlySpeed) or 12
+
 local AutoWinConnection = nil
-local AutoWinPlatform = nil
-local AutoWinReturnCFrame = nil
-local AutoWinSafeCFrame = nil
+local AutoWinLastActivate = 0
+local AutoWinTool = nil
 
 local WaterFlyConnection = nil
 local WaterFlyVelocity = nil
@@ -33,8 +37,12 @@ local WaterFlyGyro = nil
 local NoFallGeneration = 0
 
 local NoTPConnection = nil
-local NoTPLastCharacter = nil
-local NoTPLastCFrame = nil
+local NoTPCharacterConnection = nil
+local NoTPAnchorCFrame = nil
+local NoTPCurrentCharacter = nil
+
+local SpawnCFrame = CFrame.new(-278.442841, 179.499985, 344.097626)
+local IslandCFrame = CFrame.new(-133.347427, 47.399998, 4.539609)
 
 local function GetCharacterState()
     local character = Player.Character
@@ -74,81 +82,118 @@ local function SetShared(Key, Value)
     end
 end
 
-local function DestroyAutoWinPlatform()
-    if AutoWinPlatform then
-        AutoWinPlatform:Destroy()
-        AutoWinPlatform = nil
+local function TeleportTo(cframe, name)
+    local _, humanoid, root = GetCharacterState()
+
+    if not humanoid or humanoid.Health <= 0 or not root then
+        CustomNotify("Character unavailable", Color3.fromRGB(255, 100, 100))
+        return
     end
+
+    AllowToxTeleport(1.5)
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
+    root.CFrame = cframe
+
+    if Settings.NDSNoTP then
+        NoTPAnchorCFrame = cframe
+    end
+
+    CustomNotify("Teleported to " .. name, Color3.fromRGB(100, 255, 100))
 end
 
-local function StopAutoWin(RestorePosition)
+local function FindAppleTool()
+    local character = Player.Character
+    local backpack = Player:FindFirstChildOfClass("Backpack")
+    local candidates = {}
+    local seen = {}
+
+    local function scan(container)
+        if not container then
+            return
+        end
+
+        for _, child in ipairs(container:GetChildren()) do
+            if child:IsA("Tool") and not seen[child] then
+                seen[child] = true
+                table.insert(candidates, child)
+
+                local lowerName = string.lower(child.Name)
+
+                if string.find(lowerName, "apple", 1, true)
+                or string.find(lowerName, "maca", 1, true)
+                or string.find(lowerName, "maç", 1, true)
+                or string.find(lowerName, "heal", 1, true) then
+                    return child
+                end
+            end
+        end
+    end
+
+    local direct = scan(character)
+    if direct then return direct end
+
+    direct = scan(backpack)
+    if direct then return direct end
+
+    if AutoWinTool and AutoWinTool.Parent and AutoWinTool:IsA("Tool") then
+        return AutoWinTool
+    end
+
+    if #candidates >= 2 then
+        return candidates[2]
+    end
+
+    return candidates[1]
+end
+
+local function StopAutoWin()
     if AutoWinConnection then
         AutoWinConnection:Disconnect()
         AutoWinConnection = nil
     end
 
-    DestroyAutoWinPlatform()
-
-    if RestorePosition and AutoWinReturnCFrame then
-        local _, humanoid, root = GetCharacterState()
-
-        if humanoid and humanoid.Health > 0 and root then
-            AllowToxTeleport(1.5)
-            root.CFrame = AutoWinReturnCFrame
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.AssemblyAngularVelocity = Vector3.zero
-        end
-    end
-
-    AutoWinSafeCFrame = nil
-    AutoWinReturnCFrame = nil
+    AutoWinTool = nil
+    AutoWinLastActivate = 0
 end
 
 local function StartAutoWin()
-    StopAutoWin(false)
-
-    local _, humanoid, root = GetCharacterState()
-
-    if root then
-        AutoWinReturnCFrame = root.CFrame
-        AutoWinSafeCFrame = CFrame.new(root.Position.X, 2500, root.Position.Z)
-    end
-
-    AutoWinPlatform = Instance.new("Part")
-    AutoWinPlatform.Name = "ToxNDSAutoWinPlatform"
-    AutoWinPlatform.Size = Vector3.new(24, 1, 24)
-    AutoWinPlatform.Anchored = true
-    AutoWinPlatform.CanCollide = true
-    AutoWinPlatform.Transparency = 1
-    AutoWinPlatform.Parent = workspace
+    StopAutoWin()
 
     AutoWinConnection = AddConnection(RunService.Heartbeat:Connect(function()
         if not Settings.NDSAutoWin then
             return
         end
 
-        local _, currentHumanoid, currentRoot = GetCharacterState()
+        local character, humanoid = GetCharacterState()
 
-        if not currentHumanoid or currentHumanoid.Health <= 0 or not currentRoot then
+        if not character or not humanoid or humanoid.Health <= 0 then
             return
         end
 
-        if not AutoWinSafeCFrame then
-            AutoWinReturnCFrame = currentRoot.CFrame
-            AutoWinSafeCFrame = CFrame.new(currentRoot.Position.X, 2500, currentRoot.Position.Z)
+        local tool = FindAppleTool()
+
+        if not tool then
+            return
         end
 
-        if AutoWinPlatform then
-            AutoWinPlatform.CFrame = AutoWinSafeCFrame * CFrame.new(0, -3.5, 0)
+        AutoWinTool = tool
+
+        if tool.Parent ~= character then
+            pcall(function()
+                humanoid:EquipTool(tool)
+            end)
         end
 
-        if (currentRoot.Position - AutoWinSafeCFrame.Position).Magnitude > 8 then
-            AllowToxTeleport(0.25)
-            currentRoot.CFrame = AutoWinSafeCFrame
-        end
+        if tool.Parent == character
+        and humanoid.Health < humanoid.MaxHealth
+        and tick() - AutoWinLastActivate >= 0.28 then
+            AutoWinLastActivate = tick()
 
-        currentRoot.AssemblyLinearVelocity = Vector3.zero
-        currentRoot.AssemblyAngularVelocity = Vector3.zero
+            pcall(function()
+                tool:Activate()
+            end)
+        end
     end))
 end
 
@@ -187,8 +232,8 @@ local function EnsureWaterFlyMovers(root)
 
         WaterFlyVelocity = Instance.new("BodyVelocity")
         WaterFlyVelocity.Name = "ToxNDSWaterFlyVelocity"
-        WaterFlyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-        WaterFlyVelocity.P = 1250
+        WaterFlyVelocity.MaxForce = Vector3.new(65000, 65000, 65000)
+        WaterFlyVelocity.P = 650
         WaterFlyVelocity.Velocity = Vector3.zero
         WaterFlyVelocity.Parent = root
     end
@@ -198,8 +243,9 @@ local function EnsureWaterFlyMovers(root)
 
         WaterFlyGyro = Instance.new("BodyGyro")
         WaterFlyGyro.Name = "ToxNDSWaterFlyGyro"
-        WaterFlyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-        WaterFlyGyro.P = 4000
+        WaterFlyGyro.MaxTorque = Vector3.new(50000, 50000, 50000)
+        WaterFlyGyro.P = 1500
+        WaterFlyGyro.D = 250
         WaterFlyGyro.CFrame = root.CFrame
         WaterFlyGyro.Parent = root
     end
@@ -230,18 +276,23 @@ local function StartWaterFly()
             humanoid:ChangeState(Enum.HumanoidStateType.Swimming)
         end)
 
-        local direction = Vector3.zero
         local look = Camera.CFrame.LookVector
         local right = Camera.CFrame.RightVector
+        local flatLook = Vector3.new(look.X, 0, look.Z)
+        local flatRight = Vector3.new(right.X, 0, right.Z)
+        local direction = Vector3.zero
 
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then direction += look end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then direction -= look end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then direction += right end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then direction -= right end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then direction += Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then direction -= Vector3.new(0, 1, 0) end
+        if flatLook.Magnitude > 0 then flatLook = flatLook.Unit end
+        if flatRight.Magnitude > 0 then flatRight = flatRight.Unit end
 
-        local speed = math.max(45, (tonumber(Settings.FlySpeed) or 10) * 5)
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then direction += flatLook end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then direction -= flatLook end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then direction += flatRight end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then direction -= flatRight end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then direction += Vector3.new(0, 0.65, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then direction -= Vector3.new(0, 0.65, 0) end
+
+        local speed = math.clamp(tonumber(Settings.NDSWaterFlySpeed) or 12, 3, 60)
 
         if direction.Magnitude > 0 then
             WaterFlyVelocity.Velocity = direction.Unit * speed
@@ -249,10 +300,8 @@ local function StartWaterFly()
             WaterFlyVelocity.Velocity = Vector3.zero
         end
 
-        local flatLook = Vector3.new(look.X, 0, look.Z)
-
         if flatLook.Magnitude > 0.01 then
-            WaterFlyGyro.CFrame = CFrame.lookAt(root.Position, root.Position + flatLook.Unit)
+            WaterFlyGyro.CFrame = CFrame.lookAt(root.Position, root.Position + flatLook)
         end
     end))
 end
@@ -287,7 +336,7 @@ local function StartNDSNoFall()
         and not getgenv().Destroyed do
             RunService.Heartbeat:Wait()
 
-            if Settings.NDSWaterFly or Settings.NDSAutoWin then
+            if Settings.NDSWaterFly then
                 continue
             end
 
@@ -295,15 +344,9 @@ local function StartNDSNoFall()
 
             if character and humanoid and humanoid.Health > 0 and root then
                 local velocity = root.AssemblyLinearVelocity
-                root.AssemblyLinearVelocity = Vector3.zero
-                RunService.RenderStepped:Wait()
 
-                if generation == NoFallGeneration
-                and Settings.NoFallDamage
-                and root
-                and root.Parent
-                and root:IsDescendantOf(character) then
-                    root.AssemblyLinearVelocity = velocity
+                if velocity.Y < -38 then
+                    root.AssemblyLinearVelocity = Vector3.new(velocity.X, -8, velocity.Z)
                 end
             end
         end
@@ -333,63 +376,119 @@ getgenv().SetNDSNoFall = function(Value, Silent)
     end
 end
 
+local function RestoreNoTPCharacter(character)
+    if not Settings.NDSNoTP or not NoTPAnchorCFrame then
+        return
+    end
+
+    task.spawn(function()
+        local root = character:WaitForChild("HumanoidRootPart", 8)
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+
+        if not root or not humanoid then
+            return
+        end
+
+        for _ = 1, 6 do
+            if not Settings.NDSNoTP or not character.Parent or humanoid.Health <= 0 then
+                return
+            end
+
+            local bypassUntil = tonumber(getgenv().ToxTeleportBypassUntil) or 0
+
+            if tick() >= bypassUntil and NoTPAnchorCFrame then
+                local distance = (root.Position - NoTPAnchorCFrame.Position).Magnitude
+
+                if distance > 20 then
+                    root.AssemblyLinearVelocity = Vector3.zero
+                    root.AssemblyAngularVelocity = Vector3.zero
+                    root.CFrame = NoTPAnchorCFrame
+                end
+            end
+
+            task.wait(0.25)
+        end
+    end)
+end
+
 local function StopNoTP()
     if NoTPConnection then
         NoTPConnection:Disconnect()
         NoTPConnection = nil
     end
 
-    NoTPLastCharacter = nil
-    NoTPLastCFrame = nil
+    if NoTPCharacterConnection then
+        NoTPCharacterConnection:Disconnect()
+        NoTPCharacterConnection = nil
+    end
+
+    NoTPAnchorCFrame = nil
+    NoTPCurrentCharacter = nil
 end
 
 local function StartNoTP()
-    StopNoTP()
+    if NoTPConnection then
+        NoTPConnection:Disconnect()
+        NoTPConnection = nil
+    end
+
+    if NoTPCharacterConnection then
+        NoTPCharacterConnection:Disconnect()
+        NoTPCharacterConnection = nil
+    end
+
+    local character, humanoid, root = GetCharacterState()
+
+    if root and humanoid and humanoid.Health > 0 and not NoTPAnchorCFrame then
+        NoTPAnchorCFrame = root.CFrame
+        NoTPCurrentCharacter = character
+    end
+
+    NoTPCharacterConnection = AddConnection(Player.CharacterAdded:Connect(function(newCharacter)
+        NoTPCurrentCharacter = newCharacter
+        RestoreNoTPCharacter(newCharacter)
+    end))
 
     NoTPConnection = AddConnection(RunService.Heartbeat:Connect(function()
         if not Settings.NDSNoTP then
             return
         end
 
-        local character, humanoid, root = GetCharacterState()
+        local currentCharacter, currentHumanoid, currentRoot = GetCharacterState()
 
-        if not character or not humanoid or humanoid.Health <= 0 or not root then
-            NoTPLastCharacter = character
-            NoTPLastCFrame = nil
+        if not currentCharacter or not currentRoot then
             return
         end
 
-        if NoTPLastCharacter ~= character then
-            NoTPLastCharacter = character
-            NoTPLastCFrame = root.CFrame
+        if NoTPCurrentCharacter ~= currentCharacter then
+            NoTPCurrentCharacter = currentCharacter
+            RestoreNoTPCharacter(currentCharacter)
+        end
+
+        if not currentHumanoid or currentHumanoid.Health <= 0 then
             return
         end
 
         local bypassUntil = tonumber(getgenv().ToxTeleportBypassUntil) or 0
 
         if tick() < bypassUntil then
-            NoTPLastCFrame = root.CFrame
+            NoTPAnchorCFrame = currentRoot.CFrame
             return
         end
 
-        if Settings.NDSAutoWin then
-            NoTPLastCFrame = root.CFrame
+        if not NoTPAnchorCFrame then
+            NoTPAnchorCFrame = currentRoot.CFrame
             return
         end
 
-        if not NoTPLastCFrame then
-            NoTPLastCFrame = root.CFrame
-            return
-        end
+        local distance = (currentRoot.Position - NoTPAnchorCFrame.Position).Magnitude
 
-        local distance = (root.Position - NoTPLastCFrame.Position).Magnitude
-
-        if distance > 70 then
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.AssemblyAngularVelocity = Vector3.zero
-            root.CFrame = NoTPLastCFrame
+        if distance > 28 then
+            currentRoot.AssemblyLinearVelocity = Vector3.zero
+            currentRoot.AssemblyAngularVelocity = Vector3.zero
+            currentRoot.CFrame = NoTPAnchorCFrame
         else
-            NoTPLastCFrame = root.CFrame
+            NoTPAnchorCFrame = currentRoot.CFrame
         end
     end))
 end
@@ -400,33 +499,17 @@ CreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
     if v then
         StartAutoWin()
     else
-        StopAutoWin(true)
+        StopAutoWin()
     end
 end, "NDSAutoWin")
 
-CreateToggle("No Fall Damage", GamePage, Settings.NoFallDamage, function(v)
-    SetShared("NoFallDamage", v)
-end, "NoFallDamage")
+CreateButton("SPAWN", GamePage, function()
+    TeleportTo(SpawnCFrame, "SPAWN")
+end)
 
-CreateToggle("Water Fly", GamePage, Settings.NDSWaterFly, function(v)
-    getgenv().SetNDSWaterFly(v, true)
-end, "NDSWaterFly")
-
-CreateToggle("Noclip", GamePage, Settings.Noclip, function(v)
-    SetShared("Noclip", v)
-end, "Noclip")
-
-CreateToggle("Car Fly", GamePage, Settings.CarFly, function(v)
-    SetShared("CarFly", v)
-end, "CarFly")
-
-CreateToggle("Anti Void", GamePage, Settings.AntiVoid, function(v)
-    SetShared("AntiVoid", v)
-end, "AntiVoid")
-
-CreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
-    SetShared("AntiFling", v)
-end, "AntiFling")
+CreateButton("ISLAND", GamePage, function()
+    TeleportTo(IslandCFrame, "ISLAND")
+end)
 
 CreateToggle("Ctrl Click TP", GamePage, Settings.CtrlClickTP, function(v)
     SetShared("CtrlClickTP", v)
@@ -441,6 +524,42 @@ CreateToggle("No TP", GamePage, Settings.NDSNoTP, function(v)
         StopNoTP()
     end
 end, "NDSNoTP")
+
+CreateToggle("Noclip", GamePage, Settings.Noclip, function(v)
+    SetShared("Noclip", v)
+end, "Noclip")
+
+CreateToggleWithValue("Water Fly", GamePage, Settings.NDSWaterFly, Settings.NDSWaterFlySpeed, function(v)
+    getgenv().SetNDSWaterFly(v, true)
+end, function(value)
+    Settings.NDSWaterFlySpeed = math.clamp(tonumber(value) or 12, 3, 60)
+
+    if SyncValueVisuals then
+        SyncValueVisuals("NDSWaterFly", Settings.NDSWaterFlySpeed)
+    end
+end, "NDSWaterFly")
+
+CreateToggleWithValue("Car Fly", GamePage, Settings.CarFly, Settings.CarFlySpeed, function(v)
+    SetShared("CarFly", v)
+end, function(value)
+    Settings.CarFlySpeed = math.clamp(tonumber(value) or 80, 5, 300)
+
+    if SyncValueVisuals then
+        SyncValueVisuals("CarFly", Settings.CarFlySpeed)
+    end
+end, "CarFly")
+
+CreateToggle("No Fall Damage", GamePage, Settings.NoFallDamage, function(v)
+    SetShared("NoFallDamage", v)
+end, "NoFallDamage")
+
+CreateToggle("Anti Void", GamePage, Settings.AntiVoid, function(v)
+    SetShared("AntiVoid", v)
+end, "AntiVoid")
+
+CreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
+    SetShared("AntiFling", v)
+end, "AntiFling")
 
 if Settings.NDSAutoWin then
     StartAutoWin()
