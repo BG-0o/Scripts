@@ -161,7 +161,10 @@ getgenv().Settings = {
 
     ADMINPrefix = ".",
     ADMINKillTarget = "",
-    ADMINKillAll = false
+    ADMINKillAll = false,
+    ADMINRocketTarget = "",
+    ADMINRocketAll = false,
+    ADMINKickTarget = ""
 }
 
 local PersistedSettingKeys = {}
