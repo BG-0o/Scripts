@@ -3,6 +3,7 @@ if game.PlaceId ~= 4522347649 then
 end
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui = game:GetService("CoreGui")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 
@@ -466,6 +467,77 @@ local function ExecuteOnBar(candidate, command)
     return fired
 end
 
+local CachedRequestCommand = nil
+
+local function FindRequestCommandRemote()
+    if CachedRequestCommand
+    and CachedRequestCommand.Parent
+    and CachedRequestCommand:IsA("RemoteFunction") then
+        return CachedRequestCommand
+    end
+
+    local best = nil
+    local bestScore = -1
+
+    for _, obj in ipairs(
+        ReplicatedStorage:GetDescendants()
+    ) do
+        if obj:IsA("RemoteFunction")
+        and obj.Name == "RequestCommand" then
+            local score = 100
+            local current = obj.Parent
+
+            for _ = 1, 6 do
+                if not current then
+                    break
+                end
+
+                local name =
+                    string.lower(
+                        tostring(current.Name or "")
+                    )
+
+                if string.find(
+                    name,
+                    "hdadmin",
+                    1,
+                    true
+                ) then
+                    score = score + 100
+                end
+
+                if string.find(
+                    name,
+                    "signal",
+                    1,
+                    true
+                ) then
+                    score = score + 50
+                end
+
+                if string.find(
+                    name,
+                    "main",
+                    1,
+                    true
+                ) then
+                    score = score + 25
+                end
+
+                current = current.Parent
+            end
+
+            if score > bestScore then
+                bestScore = score
+                best = obj
+            end
+        end
+    end
+
+    CachedRequestCommand = best
+    return best
+end
+
 local function RunHDAdminCommand(
     commandName,
     target
@@ -483,42 +555,61 @@ local function RunHDAdminCommand(
         return false
     end
 
-    local command =
-        commandName .. " " .. target
-
-    local bars =
-        CollectCommandBars()
-
-    for _, candidate in ipairs(bars) do
-        if ExecuteOnBar(
-            candidate,
-            command
-        ) then
-            return true
-        end
-    end
-
     local prefix =
         tostring(
             Settings.ADMINPrefix or "."
         )
 
-    local prefixedCommand =
+    local command =
         prefix
         .. commandName
         .. " "
         .. target
 
-    for _, candidate in ipairs(bars) do
-        if ExecuteOnBar(
-            candidate,
-            prefixedCommand
-        ) then
+    local requestCommand =
+        FindRequestCommandRemote()
+
+    if requestCommand then
+        local ok = pcall(function()
+            requestCommand:InvokeServer(
+                command
+            )
+        end)
+
+        if ok then
             return true
         end
+
+        CachedRequestCommand = nil
     end
 
-    return false
+    local box, execute =
+        FindAnyCommandBar()
+
+    if not box or not execute then
+        return false
+    end
+
+    local oldText = box.Text
+
+    box.Text =
+        commandName
+        .. " "
+        .. target
+
+    task.wait(0.03)
+
+    local fired =
+        ClickExecute(execute)
+
+    task.delay(0.12, function()
+        if box
+        and box.Parent then
+            box.Text = oldText
+        end
+    end)
+
+    return fired
 end
 
 local function MakeCorner(parent, radius)
