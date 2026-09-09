@@ -210,8 +210,19 @@ local ConfigFilePath =
     .. tostring(Player.UserId)
     .. ".json"
 
+local MusicIDsFilePath =
+    FolderName
+    .. "/music_ids.json"
+
+local LegacyConfigFilePath =
+    FolderName
+    .. "/config.json"
+
 getgenv().ToxConfigFilePath =
     ConfigFilePath
+
+getgenv().ToxMusicIDsFilePath =
+    MusicIDsFilePath
 
 local function EnsureFolder()
     if makefolder and isfolder then
@@ -489,6 +500,152 @@ local function DeserializeConfigValue(value)
     return result
 end
 
+local function DecodeSavedIDsFromFile(
+    path
+)
+    if not isfile
+    or not readfile
+    or not path
+    or not isfile(path) then
+        return nil
+    end
+
+    local ok, value =
+        pcall(function()
+            local raw =
+                readfile(path)
+
+            if not raw
+            or raw == "" then
+                return nil
+            end
+
+            local data =
+                HttpService:
+                    JSONDecode(raw)
+
+            if typeof(data)
+                ~= "table" then
+                return nil
+            end
+
+            local source =
+                data.SavedIDs
+                or data.IDs
+                or data
+
+            local decoded =
+                DeserializeConfigValue(
+                    source
+                )
+
+            if typeof(decoded)
+                == "table"
+            and next(decoded)
+                ~= nil then
+                return decoded
+            end
+
+            return nil
+        end)
+
+    if ok then
+        return value
+    end
+
+    return nil
+end
+
+local function SaveSharedMusicIDs()
+    EnsureFolder()
+
+    if not writefile then
+        return false
+    end
+
+    local data = {
+        Version = 1,
+        SavedIDs =
+            SerializeConfigValue(
+                getgenv().SavedIDs
+                or {}
+            )
+    }
+
+    return pcall(function()
+        writefile(
+            MusicIDsFilePath,
+            HttpService:
+                JSONEncode(data)
+        )
+    end)
+end
+
+local function LoadSharedMusicIDs()
+    local saved =
+        DecodeSavedIDsFromFile(
+            MusicIDsFilePath
+        )
+
+    if not saved then
+        saved =
+            DecodeSavedIDsFromFile(
+                LegacyConfigFilePath
+            )
+    end
+
+    if not saved then
+        saved =
+            DecodeSavedIDsFromFile(
+                ConfigFilePath
+            )
+    end
+
+    if not saved
+    and listfiles then
+        pcall(function()
+            local files =
+                listfiles(
+                    FolderName
+                )
+
+            for _, path in ipairs(
+                files
+            ) do
+                local normalized =
+                    tostring(path)
+                        :gsub("\\", "/")
+
+                if string.match(
+                    normalized,
+                    "/config_%d+%.json$"
+                ) then
+                    local candidate =
+                        DecodeSavedIDsFromFile(
+                            path
+                        )
+
+                    if candidate then
+                        saved = candidate
+                        break
+                    end
+                end
+            end
+        end)
+    end
+
+    if typeof(saved)
+        == "table" then
+        getgenv().SavedIDs =
+            saved
+
+        SaveSharedMusicIDs()
+    end
+end
+
+getgenv().SaveToxMusicIDs =
+    SaveSharedMusicIDs
+
 local function BuildGlobalSettingsSnapshot()
     local snapshot = {}
     local keys = {}
@@ -663,9 +820,6 @@ getgenv().AutoSaveConfiguration = function()
         GameSpecificSettings = SerializeConfigValue(
             getgenv().GameSpecificSettings
         ),
-        SavedIDs = SerializeConfigValue(
-            getgenv().SavedIDs
-        ),
         SavedJoinGames = SerializeConfigValue(
             getgenv().SavedJoinGames
         ),
@@ -683,6 +837,8 @@ getgenv().AutoSaveConfiguration = function()
             HttpService:JSONEncode(data)
         )
     end)
+
+    SaveSharedMusicIDs()
 end
 
 local function LoadConfiguration()
@@ -771,15 +927,6 @@ local function LoadConfiguration()
             end
         end
 
-        if data.SavedIDs ~= nil then
-            local value = DeserializeConfigValue(
-                data.SavedIDs
-            )
-
-            if typeof(value) == "table" then
-                getgenv().SavedIDs = value
-            end
-        end
 
         if data.SavedJoinGames ~= nil then
             local value = DeserializeConfigValue(
@@ -814,6 +961,7 @@ local function LoadConfiguration()
 end
 
 LoadConfiguration()
+LoadSharedMusicIDs()
 
 local function ResolveQueueOnTeleport()
     local env = getgenv()
@@ -857,11 +1005,26 @@ local configWasRead = false
 
 for _ = 1, 20 do
     local success = pcall(function()
+        local Players =
+            game:GetService("Players")
+
+        local localPlayer =
+            Players.LocalPlayer
+
+        local configPath =
+            "ToxV1_Data/config_"
+            .. tostring(
+                localPlayer
+                and localPlayer.UserId
+                or 0
+            )
+            .. ".json"
+
         if isfile
         and readfile
-        and isfile("ToxV1_Data/config.json") then
+        and isfile(configPath) then
             local HttpService = game:GetService("HttpService")
-            local raw = readfile("ToxV1_Data/config.json")
+            local raw = readfile(configPath)
 
             if raw and raw ~= "" then
                 local data = HttpService:JSONDecode(raw)
