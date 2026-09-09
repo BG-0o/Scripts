@@ -2,21 +2,8 @@ if game.PlaceId ~= 142823291 then
     return
 end
 
-local MM2ModuleVersion = "2026-09-08-silent-normal-shot-6"
-
-if getgenv().ToxMM2ModuleLoadedJobId == game.JobId
-and getgenv().ToxMM2ModuleVersion == MM2ModuleVersion
-and not getgenv().Destroyed then
-    return
-end
-
-if getgenv().ToxMM2ModuleLoadedJobId == game.JobId
-and getgenv().ToxMM2Cleanup then
-    pcall(getgenv().ToxMM2Cleanup)
-end
-
-getgenv().ToxMM2ModuleLoadedJobId = game.JobId
-getgenv().ToxMM2ModuleVersion = MM2ModuleVersion
+local MM2ModuleVersion =
+    "2026-09-09-ui-once-1"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -53,6 +40,34 @@ or not CreateDropdown
 or not CreateKeybindButton
 or not CreateKeybindToggle then
     return
+end
+
+if getgenv().ToxMM2ModuleLoadedJobId
+    == game.JobId
+and getgenv().ToxMM2ModuleVersion
+    == MM2ModuleVersion
+and getgenv().ToxMM2ModulePage
+    == GamePage
+and not getgenv().Destroyed then
+    return
+end
+
+if getgenv().ToxMM2Cleanup then
+    pcall(
+        getgenv().ToxMM2Cleanup
+    )
+end
+
+for _, child in ipairs(
+    GamePage:
+        GetChildren()
+) do
+    if child:IsA(
+        "GuiObject"
+    ) then
+        child:
+            Destroy()
+    end
 end
 
 Settings.MM2SilentAimKey = Settings.MM2SilentAimKey or Enum.KeyCode.E
@@ -3270,5 +3285,16 @@ getgenv().ToxMM2Cleanup = function()
 end
 
 if Settings.MM2RoleESP then
-    ApplyRoleESP(true)
+    ApplyRoleESP(
+        true
+    )
 end
+
+getgenv().ToxMM2ModuleLoadedJobId =
+    game.JobId
+
+getgenv().ToxMM2ModuleVersion =
+    MM2ModuleVersion
+
+getgenv().ToxMM2ModulePage =
+    GamePage
