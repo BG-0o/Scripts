@@ -1448,6 +1448,14 @@ local function SkidFling(TargetPlayer)
 
     getgenv().FPDH = workspace.FallenPartsDestroyHeight
 
+    getgenv().ToxFlingBypassUntil =
+        math.max(
+            tonumber(
+                getgenv().ToxFlingBypassUntil
+            ) or 0,
+            tick() + 4
+        )
+
     local FPos = function(BasePart, Pos, Ang)
         if not RootPart or not BasePart or not BasePart.Parent then return end
         RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
@@ -1563,7 +1571,29 @@ local function SkidFling(TargetPlayer)
     pcall(function()
         workspace.FallenPartsDestroyHeight = getgenv().FPDH
     end)
+
+    getgenv().ToxFlingBypassUntil =
+        math.max(
+            tonumber(
+                getgenv().ToxFlingBypassUntil
+            ) or 0,
+            tick() + 0.25
+        )
+
+    if getgenv().SetNDSNoTPAnchor then
+        pcall(function()
+            getgenv().SetNDSNoTPAnchor(
+                OldPos,
+                true
+            )
+        end)
+    end
 end
+
+getgenv().ToxFlingBypassUntil =
+    tonumber(
+        getgenv().ToxFlingBypassUntil
+    ) or 0
 
 getgenv().ToxFlingPlayer = SkidFling
 
