@@ -486,12 +486,12 @@ RegisterSubGuiMinimize(ToxChatGui, -52)
 RegisterSubGuiMinimize(JoinGamesGui, -52)
 
 if getgenv().MakeResizable then
-    getgenv().MakeResizable(Main, "Main", 0.80, 1.32)
-    getgenv().MakeResizable(ChatLogGui, "ChatLogs", 0.78, 1.35)
-    getgenv().MakeResizable(MusicGui, "Music", 0.78, 1.35)
-    getgenv().MakeResizable(WaypointsGui, "Waypoints", 0.78, 1.35)
-    getgenv().MakeResizable(ToxChatGui, "ToxChat", 0.78, 1.35)
-    getgenv().MakeResizable(JoinGamesGui, "QuickJoin", 0.78, 1.35)
+    getgenv().MakeResizable(Main, "Main", 0.88, 1.50)
+    getgenv().MakeResizable(ChatLogGui, "ChatLogs", 0.85, 1.50)
+    getgenv().MakeResizable(MusicGui, "Music", 0.85, 1.50)
+    getgenv().MakeResizable(WaypointsGui, "Waypoints", 0.85, 1.50)
+    getgenv().MakeResizable(ToxChatGui, "ToxChat", 0.85, 1.50)
+    getgenv().MakeResizable(JoinGamesGui, "QuickJoin", 0.85, 1.50)
 end
 
 getgenv().ToxLinkedSubGuis = getgenv().ToxLinkedSubGuis or {}
@@ -527,8 +527,8 @@ getgenv().RegisterToxLinkedSubGui = function(key, gui)
             gui,
             "Linked_"
             .. normalizedKey,
-            0.78,
-            1.35
+            0.90,
+            1.45
         )
     end
 end
@@ -4634,12 +4634,41 @@ local function ShowCenterLoadSequence()
         if not Destroyed then
             local finalPosition = (getgenv().GetSavedGuiPosition and getgenv().GetSavedGuiPosition("Main")) or UDim2.new(0.5, -165, 0.5, -197)
 
-            Main.Size = UDim2.new(0, 0, 0, 0)
-            Main.Position = finalPosition
+            local finalSize =
+                (
+                    getgenv().GetSavedGuiSize
+                    and getgenv().GetSavedGuiSize(
+                        "Main",
+                        UDim2.new(
+                            0,
+                            330,
+                            0,
+                            395
+                        )
+                    )
+                )
+                or UDim2.new(
+                    0,
+                    330,
+                    0,
+                    395
+                )
+
+            Main.Size =
+                UDim2.new(
+                    0,
+                    0,
+                    0,
+                    0
+                )
+
+            Main.Position =
+                finalPosition
+
             Main.Visible = true
 
             Main:TweenSizeAndPosition(
-                UDim2.new(0, 330, 0, 395),
+                finalSize,
                 finalPosition,
                 Enum.EasingDirection.Out,
                 Enum.EasingStyle.Back,
@@ -4657,6 +4686,25 @@ task.spawn(ShowCenterLoadSequence)
 local SubGuisPreMinimizedState = {}
 local Minimize = getgenv().Minimize
 local Minimized = false
+local MainExpandedSize =
+    (
+        getgenv().GetSavedGuiSize
+        and getgenv().GetSavedGuiSize(
+            "Main",
+            UDim2.new(
+                0,
+                330,
+                0,
+                395
+            )
+        )
+    )
+    or UDim2.new(
+        0,
+        330,
+        0,
+        395
+    )
 
 local function CollapseSubGuiWithMain(key, gui)
     if not gui then return end
@@ -4690,7 +4738,38 @@ end
 if Minimize then
     Minimize.MouseButton1Click:Connect(function()
         Minimized = not Minimized
-        Main.Size = Minimized and UDim2.new(0, 330, 0, 38) or UDim2.new(0, 330, 0, 395)
+
+        if Minimized then
+            if Main.Size.Y.Offset > 38 then
+                MainExpandedSize =
+                    Main.Size
+            end
+
+            Main.Size =
+                UDim2.new(
+                    MainExpandedSize.X.Scale,
+                    MainExpandedSize.X.Offset,
+                    0,
+                    38
+                )
+        else
+            local savedSize =
+                (
+                    getgenv().GetSavedGuiSize
+                    and getgenv().GetSavedGuiSize(
+                        "Main",
+                        MainExpandedSize
+                    )
+                )
+                or MainExpandedSize
+
+            MainExpandedSize =
+                savedSize
+
+            Main.Size =
+                MainExpandedSize
+        end
+
         Tabs.Visible = not Minimized
         if getgenv().CurrentPage then getgenv().CurrentPage.Visible = not Minimized end
         Minimize.Text = Minimized and "+" or "-"
