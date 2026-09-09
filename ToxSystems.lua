@@ -53,6 +53,8 @@ local Settings =
     getgenv().Settings or {}
 local AutoSaveConfiguration =
     getgenv().AutoSaveConfiguration
+local RequestFunction =
+    getgenv().ToxRequestFunction
 
 if not Player
 or not Gui
@@ -856,20 +858,422 @@ AddConnection(
         end)
 )
 
+local ToxControlRelayHost =
+    "https://tox-control-relay.1kobg-0o.workers.dev"
+
+local HiddenLastID = 0
+local HiddenPendingAcks = {}
+local HiddenSeenNonces = {}
+local HiddenConnected = false
+local HiddenFailureCount = 0
+
+local function ReadControlRelayResponse(
+    response
+)
+    if typeof(response)
+        ~= "table" then
+        return nil, false
+    end
+
+    local status =
+        tonumber(
+            response.StatusCode
+            or response.Status
+            or 0
+        ) or 0
+
+    local success =
+        response.Success
+
+    if success == nil then
+        success =
+            response.success
+    end
+
+    local body =
+        response.Body
+        or response.body
+
+    local ok =
+        (
+            status >= 200
+            and status < 300
+        )
+        or success == true
+
+    return body, ok
+end
+
+local function ControlRelayRequest(
+    method,
+    path,
+    body
+)
+    if not RequestFunction then
+        return nil, false
+    end
+
+    local headers = {
+        ["Accept"] =
+            "application/json",
+        ["Cache-Control"] =
+            "no-cache"
+    }
+
+    if body ~= nil then
+        headers["Content-Type"] =
+            "application/json"
+    end
+
+    local ok, response =
+        pcall(function()
+            return RequestFunction({
+                Url =
+                    ToxControlRelayHost
+                    .. path,
+                Method = method,
+                Headers = headers,
+                Body = body
+            })
+        end)
+
+    if not ok then
+        return nil, false
+    end
+
+    return ReadControlRelayResponse(
+        response
+    )
+end
+
+local function DecodeRelayJson(
+    body
+)
+    if typeof(body)
+        ~= "string"
+    or body == "" then
+        return nil
+    end
+
+    local ok, decoded =
+        pcall(function()
+            return HttpService:
+                JSONDecode(body)
+        end)
+
+    if ok
+    and typeof(decoded)
+        == "table" then
+        return decoded
+    end
+
+    return nil
+end
+
+local function SendControlAck(
+    payload,
+    success
+)
+    local body =
+        HttpService:
+            JSONEncode({
+                nonce =
+                    tostring(
+                        payload.nonce
+                        or ""
+                    ),
+                actorUserId =
+                    tonumber(
+                        payload.actorUserId
+                    ) or 0,
+                targetUserId =
+                    Player.UserId,
+                success =
+                    success == true
+            })
+
+    task.spawn(function()
+        ControlRelayRequest(
+            "POST",
+            "/control/ack",
+            body
+        )
+    end)
+end
+
+local function HandleHiddenCommand(
+    payload
+)
+    if typeof(payload)
+        ~= "table"
+    or tonumber(
+        payload.targetUserId
+    ) ~= Player.UserId
+    or tonumber(
+        payload.placeId
+    ) ~= game.PlaceId
+    or tostring(
+        payload.jobId or ""
+    ) ~= tostring(
+        game.JobId
+    ) then
+        return false
+    end
+
+    local nonce =
+        tostring(
+            payload.nonce
+            or ""
+        )
+
+    if nonce == "" then
+        return true
+    end
+
+    if HiddenSeenNonces[
+        nonce
+    ] then
+        return true
+    end
+
+    HiddenSeenNonces[
+        nonce
+    ] = true
+
+    local actor =
+        Players:
+            GetPlayerByUserId(
+                tonumber(
+                    payload.actorUserId
+                ) or 0
+            )
+
+    if not actor
+    or not CanUseControl(actor)
+    or not CanControlTarget(
+        actor,
+        Player
+    ) then
+        SendControlAck(
+            payload,
+            false
+        )
+
+        return true
+    end
+
+    local success =
+        ExecuteCommand(
+            actor,
+            payload.command,
+            payload.argument
+        ) == true
+
+    SendControlAck(
+        payload,
+        success
+    )
+
+    return true
+end
+
+local function PollHiddenControl()
+    local path =
+        "/control/poll?targetUserId="
+        .. tostring(
+            Player.UserId
+        )
+        .. "&after="
+        .. tostring(
+            HiddenLastID
+        )
+        .. "&placeId="
+        .. tostring(
+            game.PlaceId
+        )
+        .. "&jobId="
+        .. HttpService:
+            UrlEncode(
+                tostring(
+                    game.JobId
+                )
+            )
+        .. "&_="
+        .. tostring(
+            math.floor(
+                os.clock() * 1000
+            )
+        )
+
+    local response, ok =
+        ControlRelayRequest(
+            "GET",
+            path
+        )
+
+    local decoded =
+        ok
+        and DecodeRelayJson(
+            response
+        )
+        or nil
+
+    if not decoded
+    or decoded.ok ~= true
+    or typeof(decoded.commands)
+        ~= "table" then
+        HiddenFailureCount += 1
+
+        if HiddenFailureCount == 3 then
+            CustomNotify(
+                "Tox Control hidden reconnecting...",
+                Color3.fromRGB(
+                    255,
+                    180,
+                    70
+                ),
+                4
+            )
+        end
+
+        return false
+    end
+
+    HiddenFailureCount = 0
+
+    if not HiddenConnected then
+        HiddenConnected = true
+
+        CustomNotify(
+            "Tox Control hidden connected",
+            Color3.fromRGB(
+                100,
+                255,
+                130
+            ),
+            3
+        )
+    end
+
+    for _, payload in ipairs(
+        decoded.commands
+    ) do
+        local id =
+            tonumber(
+                payload.id
+            ) or 0
+
+        if id > HiddenLastID then
+            HiddenLastID = id
+        end
+
+        HandleHiddenCommand(
+            payload
+        )
+    end
+
+    return true
+end
+
+task.spawn(function()
+    while not getgenv().Destroyed do
+        PollHiddenControl()
+        task.wait(0.75)
+    end
+end)
+
 local function SendHiddenControl(
     target,
     command,
     argument
 )
-    CustomNotify(
-        "HIDDEN needs a separate relay host",
-        Color3.fromRGB(
-            255,
-            180,
-            70
-        ),
-        4
-    )
+    if not target then
+        return false
+    end
+
+    local nonce =
+        HttpService:
+            GenerateGUID(false)
+
+    local body =
+        HttpService:
+            JSONEncode({
+                nonce = nonce,
+                actorUserId =
+                    Player.UserId,
+                targetUserId =
+                    target.UserId,
+                command =
+                    tostring(
+                        command or ""
+                    ),
+                argument =
+                    tostring(
+                        argument or ""
+                    ),
+                placeId =
+                    game.PlaceId,
+                jobId =
+                    game.JobId,
+                sentAt =
+                    os.time()
+            })
+
+    local response, ok =
+        ControlRelayRequest(
+            "POST",
+            "/control/send",
+            body
+        )
+
+    local decoded =
+        ok
+        and DecodeRelayJson(
+            response
+        )
+        or nil
+
+    if not decoded
+    or decoded.ok ~= true then
+        return false
+    end
+
+    local started = tick()
+
+    while tick() - started < 8 do
+        local ackBody, ackOk =
+            ControlRelayRequest(
+                "GET",
+                "/control/ack?nonce="
+                .. HttpService:
+                    UrlEncode(nonce)
+                .. "&_="
+                .. tostring(
+                    math.floor(
+                        os.clock() * 1000
+                    )
+                )
+            )
+
+        local ackDecoded =
+            ackOk
+            and DecodeRelayJson(
+                ackBody
+            )
+            or nil
+
+        if ackDecoded
+        and ackDecoded.ok == true
+        and typeof(
+            ackDecoded.ack
+        ) == "table" then
+            return
+                ackDecoded.ack.success
+                == true
+        end
+
+        task.wait(0.25)
+    end
 
     return false
 end
