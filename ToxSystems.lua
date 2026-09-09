@@ -982,6 +982,43 @@ local function ControlRelayRequest(
     )
 end
 
+local ToxActiveUsers =
+    getgenv().ToxActiveUsers
+    or {}
+
+getgenv().ToxActiveUsers =
+    ToxActiveUsers
+
+ToxActiveUsers[
+    Player.UserId
+] = tick()
+
+local function IsToxUser(
+    player
+)
+    if not player then
+        return false
+    end
+
+    if player == Player then
+        return true
+    end
+
+    local lastSeen =
+        tonumber(
+            ToxActiveUsers[
+                player.UserId
+            ]
+        )
+
+    return lastSeen ~= nil
+        and tick() - lastSeen
+            <= 40
+end
+
+getgenv().IsToxUser =
+    IsToxUser
+
 local function DecodeRelayJson(
     body
 )
@@ -1005,6 +1042,114 @@ local function DecodeRelayJson(
 
     return nil
 end
+
+local function UpdateToxActiveUsers()
+    local heartbeatBody =
+        HttpService:
+            JSONEncode({
+                userId =
+                    Player.UserId,
+                placeId =
+                    game.PlaceId,
+                jobId =
+                    game.JobId
+            })
+
+    ControlRelayRequest(
+        "POST",
+        "/tox/heartbeat",
+        heartbeatBody
+    )
+
+    local activeBody, activeOk =
+        ControlRelayRequest(
+            "GET",
+            "/tox/active?placeId="
+            .. tostring(
+                game.PlaceId
+            )
+            .. "&jobId="
+            .. HttpService:
+                UrlEncode(
+                    tostring(
+                        game.JobId
+                    )
+                )
+            .. "&_="
+            .. tostring(
+                math.floor(
+                    os.clock() * 1000
+                )
+            )
+        )
+
+    if not activeOk then
+        ToxActiveUsers[
+            Player.UserId
+        ] = tick()
+
+        return
+    end
+
+    local decoded =
+        DecodeRelayJson(
+            activeBody
+        )
+
+    if not decoded
+    or decoded.ok ~= true
+    or typeof(decoded.users)
+        ~= "table" then
+        return
+    end
+
+    local now = tick()
+    local fresh = {
+        [Player.UserId] = now
+    }
+
+    for _, entry in ipairs(
+        decoded.users
+    ) do
+        local userId =
+            tonumber(
+                entry.userId
+            )
+
+        if userId then
+            fresh[userId] =
+                now
+        end
+    end
+
+    for userId in pairs(
+        ToxActiveUsers
+    ) do
+        if not fresh[userId] then
+            ToxActiveUsers[
+                userId
+            ] = nil
+        end
+    end
+
+    for userId, seenAt in pairs(
+        fresh
+    ) do
+        ToxActiveUsers[
+            userId
+        ] = seenAt
+    end
+end
+
+task.spawn(function()
+    while not getgenv().Destroyed do
+        pcall(
+            UpdateToxActiveUsers
+        )
+
+        task.wait(10)
+    end
+end)
 
 local function SendControlAck(
     payload,
@@ -1497,17 +1642,17 @@ local function InitToxControlGui()
     controlGui.Size =
         UDim2.new(
             0,
-            380,
+            430,
             0,
-            430
+            410
         )
 
     controlGui.Position =
         UDim2.new(
             0.5,
-            -190,
+            -215,
             0.5,
-            -215
+            -205
         )
 
     controlGui.BackgroundColor3 =
@@ -1640,7 +1785,7 @@ local function InitToxControlGui()
     roleLabel.Size =
         UDim2.new(
             1,
-            -20,
+            -180,
             0,
             20
         )
@@ -1791,7 +1936,7 @@ local function InitToxControlGui()
     modeChat.Position =
         UDim2.new(
             1,
-            -150,
+            -160,
             0,
             38
         )
@@ -1799,7 +1944,7 @@ local function InitToxControlGui()
     modeHidden.Position =
         UDim2.new(
             1,
-            -76,
+            -84,
             0,
             38
         )
@@ -1888,19 +2033,32 @@ local function InitToxControlGui()
             )
 
         if selectedTarget then
-            local role =
-                select(
-                    1,
-                    GetToxRole(
-                        selectedTarget
+            local suffix =
+                ""
+
+            if IsToxUser(
+                selectedTarget
+            ) then
+                local role =
+                    select(
+                        1,
+                        GetToxRole(
+                            selectedTarget
+                        )
                     )
-                )
+
+                suffix =
+                    " • "
+                    .. role
+            else
+                suffix =
+                    " • No ToxHub"
+            end
 
             targetInfo.Text =
                 "Target: @"
                 .. selectedTarget.Name
-                .. " • "
-                .. role
+                .. suffix
         else
             targetInfo.Text =
                 "Target: none"
@@ -2140,11 +2298,51 @@ local function InitToxControlGui()
     local rejoinLoopButton = nil
     local flingLoopButton = nil
 
+    local actionsTitle =
+        Instance.new(
+            "TextLabel"
+        )
+
+    actionsTitle.Size =
+        UDim2.new(
+            1,
+            -20,
+            0,
+            18
+        )
+
+    actionsTitle.Position =
+        UDim2.new(
+            0,
+            10,
+            0,
+            122
+        )
+
+    actionsTitle.BackgroundTransparency = 1
+    actionsTitle.Text = "ACTIONS"
+    actionsTitle.TextColor3 =
+        Color3.fromRGB(
+            145,
+            145,
+            160
+        )
+
+    actionsTitle.Font =
+        Enum.Font.GothamBold
+
+    actionsTitle.TextSize = 9
+    actionsTitle.TextXAlignment =
+        Enum.TextXAlignment.Left
+
+    actionsTitle.Parent =
+        controlGui
+
     MakeButton(
         "RESET",
         10,
-        124,
-        55,
+        144,
+        128,
         function()
             Remote(
                 "reset"
@@ -2155,9 +2353,9 @@ local function InitToxControlGui()
     resetLoopButton =
         MakeButton(
             "LOOP",
-            68,
-            124,
-            45,
+            142,
+            144,
+            62,
             function()
                 local target =
                     RefreshTarget()
@@ -2191,9 +2389,9 @@ local function InitToxControlGui()
 
     MakeButton(
         "FREEZE / UNFREEZE",
-        118,
-        124,
-        114,
+        216,
+        144,
+        204,
         function()
             Remote(
                 "freeze"
@@ -2203,9 +2401,9 @@ local function InitToxControlGui()
 
     MakeButton(
         "BRING",
-        237,
-        124,
-        55,
+        10,
+        182,
+        128,
         function()
             Remote(
                 "bring"
@@ -2216,9 +2414,9 @@ local function InitToxControlGui()
     bringLoopButton =
         MakeButton(
             "LOOP",
-            295,
-            124,
-            75,
+            142,
+            182,
+            62,
             function()
                 local target =
                     RefreshTarget()
@@ -2252,9 +2450,9 @@ local function InitToxControlGui()
 
     MakeButton(
         "GOTO",
-        10,
-        162,
-        55,
+        216,
+        182,
+        128,
         function()
             local target =
                 RefreshTarget()
@@ -2270,9 +2468,9 @@ local function InitToxControlGui()
     gotoLoopButton =
         MakeButton(
             "LOOP",
-            68,
-            162,
-            45,
+            348,
+            182,
+            72,
             function()
                 local target =
                     RefreshTarget()
@@ -2302,9 +2500,9 @@ local function InitToxControlGui()
 
     MakeButton(
         "REJOIN",
-        118,
-        162,
-        55,
+        10,
+        220,
+        128,
         function()
             Remote(
                 "rejoin"
@@ -2315,9 +2513,9 @@ local function InitToxControlGui()
     rejoinLoopButton =
         MakeButton(
             "LOOP",
-            176,
-            162,
-            45,
+            142,
+            220,
+            62,
             function()
                 local target =
                     RefreshTarget()
@@ -2351,9 +2549,9 @@ local function InitToxControlGui()
 
     MakeButton(
         "KICK",
-        226,
-        162,
-        144,
+        216,
+        220,
+        204,
         function()
             Remote(
                 "kick"
@@ -2361,13 +2559,53 @@ local function InitToxControlGui()
         end
     )
 
+    local messageTitle =
+        Instance.new(
+            "TextLabel"
+        )
+
+    messageTitle.Size =
+        UDim2.new(
+            1,
+            -20,
+            0,
+            18
+        )
+
+    messageTitle.Position =
+        UDim2.new(
+            0,
+            10,
+            0,
+            248
+        )
+
+    messageTitle.BackgroundTransparency = 1
+    messageTitle.Text = "MESSAGE"
+    messageTitle.TextColor3 =
+        Color3.fromRGB(
+            145,
+            145,
+            160
+        )
+
+    messageTitle.Font =
+        Enum.Font.GothamBold
+
+    messageTitle.TextSize = 9
+    messageTitle.TextXAlignment =
+        Enum.TextXAlignment.Left
+
+    messageTitle.Parent =
+        controlGui
+
     local chatBox =
         Instance.new("TextBox")
 
     chatBox.Size =
         UDim2.new(
             1,
-            -92,
+            -102,
             0,
             32
         )
@@ -2377,7 +2615,7 @@ local function InitToxControlGui()
             0,
             10,
             0,
-            204
+            270
         )
 
     chatBox.BackgroundColor3 =
@@ -2420,9 +2658,9 @@ local function InitToxControlGui()
 
     MakeButton(
         "SEND",
-        292,
-        204,
-        78,
+        338,
+        270,
+        82,
         function()
             local message =
                 Trim(
@@ -2438,13 +2676,53 @@ local function InitToxControlGui()
         end
     )
 
+    local flingTitle =
+        Instance.new(
+            "TextLabel"
+        )
+
+    flingTitle.Size =
+        UDim2.new(
+            1,
+            -20,
+            0,
+            18
+        )
+
+    flingTitle.Position =
+        UDim2.new(
+            0,
+            10,
+            0,
+            286
+        )
+
+    flingTitle.BackgroundTransparency = 1
+    flingTitle.Text = "FLING TARGET"
+    flingTitle.TextColor3 =
+        Color3.fromRGB(
+            145,
+            145,
+            160
+        )
+
+    flingTitle.Font =
+        Enum.Font.GothamBold
+
+    flingTitle.TextSize = 9
+    flingTitle.TextXAlignment =
+        Enum.TextXAlignment.Left
+
+    flingTitle.Parent =
+        controlGui
+
     local flingBox =
         Instance.new("TextBox")
 
     flingBox.Size =
         UDim2.new(
             0,
-            210,
+            234,
             0,
             32
         )
@@ -2454,7 +2732,7 @@ local function InitToxControlGui()
             0,
             10,
             0,
-            242
+            308
         )
 
     flingBox.BackgroundColor3 =
@@ -2497,9 +2775,9 @@ local function InitToxControlGui()
 
     MakeButton(
         "FLING",
-        224,
-        242,
-        70,
+        248,
+        308,
+        82,
         function()
             local flingTarget =
                 ResolvePlayer(
@@ -2524,9 +2802,9 @@ local function InitToxControlGui()
     flingLoopButton =
         MakeButton(
             "LOOP",
-            298,
-            242,
-            72,
+            334,
+            308,
+            86,
             function()
                 local controllerTarget =
                     RefreshTarget()
@@ -2577,7 +2855,7 @@ local function InitToxControlGui()
             1,
             -20,
             0,
-            60
+            48
         )
 
     examples.Position =
@@ -2585,14 +2863,13 @@ local function InitToxControlGui()
             0,
             10,
             0,
-            284
+            350
         )
 
     examples.BackgroundTransparency = 1
     examples.Text =
-        ".c NICK reset / freeze / bring / rejoin / kick\n"
-        .. ".c NICK fling TARGET / chat TEXT\n"
-        .. "GOTO is local. LOOP repeats selected actions."
+        "CHAT: .c NICK command  •  HIDDEN: private relay\n"
+        .. "LOOP: reset / bring / goto / rejoin / fling"
 
     examples.TextColor3 =
         Color3.fromRGB(
