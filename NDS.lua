@@ -910,8 +910,6 @@ local function StopNoTP()
     NoTPCurrentCharacter = nil
 end
 
-local NoTPReplicatePulse = 1
-
 local function ApplyNoTPCorrection(
     humanoid,
     root
@@ -922,12 +920,11 @@ local function ApplyNoTPCorrection(
         return
     end
 
-    NoTPReplicatePulse =
-        -NoTPReplicatePulse
+    local linearVelocity =
+        root.AssemblyLinearVelocity
 
-    local pulse =
-        NoTPReplicatePulse
-        * 0.0015
+    local angularVelocity =
+        root.AssemblyAngularVelocity
 
     pcall(function()
         if sethiddenproperty then
@@ -939,50 +936,14 @@ local function ApplyNoTPCorrection(
         end
     end)
 
-    root.AssemblyAngularVelocity =
-        Vector3.zero
-
-    root.AssemblyLinearVelocity =
-        Vector3.new(
-            pulse * 12,
-            0,
-            0
-        )
-
     root.CFrame =
         NoTPCorrectionCFrame
-        * CFrame.new(
-            pulse,
-            0,
-            0
-        )
 
-    if humanoid then
-        pcall(function()
-            humanoid:
-                Move(
-                    Vector3.new(
-                        pulse,
-                        0,
-                        0
-                    ),
-                    false
-                )
-        end)
-    end
+    root.AssemblyLinearVelocity =
+        linearVelocity
 
-    task.defer(function()
-        if root
-        and root.Parent
-        and tick()
-            < NoTPCorrectionUntil
-        and typeof(
-            NoTPCorrectionCFrame
-        ) == "CFrame" then
-            root.CFrame =
-                NoTPCorrectionCFrame
-        end
-    end)
+    root.AssemblyAngularVelocity =
+        angularVelocity
 end
 
 local function StartNoTP()
@@ -1145,15 +1106,26 @@ local function StartNoTP()
 
         if tick() < NoTPCorrectionUntil
         and typeof(NoTPCorrectionCFrame) == "CFrame" then
-            ApplyNoTPCorrection(
-                currentHumanoid,
-                currentRoot
-            )
+            local correctionDistance =
+                (
+                    currentRoot.Position
+                    - NoTPCorrectionCFrame.Position
+                ).Magnitude
 
-            NoTPLastObservedCFrame =
-                NoTPCorrectionCFrame
+            if correctionDistance > 5 then
+                ApplyNoTPCorrection(
+                    currentHumanoid,
+                    currentRoot
+                )
 
-            return
+                NoTPLastObservedCFrame =
+                    NoTPCorrectionCFrame
+
+                return
+            end
+
+            NoTPCorrectionCFrame = nil
+            NoTPCorrectionUntil = 0
         end
 
         if not NoTPAnchorCFrame then
@@ -1183,7 +1155,7 @@ local function StartNoTP()
             NoTPCorrectionCFrame =
                 NoTPAnchorCFrame
             NoTPCorrectionUntil =
-                tick() + 3
+                tick() + 0.45
 
             ApplyNoTPCorrection(
                 currentHumanoid,
