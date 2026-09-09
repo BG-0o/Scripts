@@ -3,12 +3,17 @@ if getgenv().ToxSystemsLoaded then
 end
 
 if not getgenv().ToxUniversalLoaded then
-    local notify = getgenv().CustomNotify
+    local notify =
+        getgenv().CustomNotify
 
     if notify then
         notify(
             "Universal.lua must load before ToxSystems.lua",
-            Color3.fromRGB(255, 100, 100),
+            Color3.fromRGB(
+                255,
+                100,
+                100
+            ),
             5
         )
     end
@@ -16,21 +21,40 @@ if not getgenv().ToxUniversalLoaded then
     return
 end
 
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local TextChatService = game:GetService("TextChatService")
-local HttpService = game:GetService("HttpService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TeleportService = game:GetService("TeleportService")
+local Players =
+    game:GetService("Players")
+local UserInputService =
+    game:GetService("UserInputService")
+local RunService =
+    game:GetService("RunService")
+local TextChatService =
+    game:GetService("TextChatService")
+local HttpService =
+    game:GetService("HttpService")
+local ReplicatedStorage =
+    game:GetService("ReplicatedStorage")
+local TeleportService =
+    game:GetService("TeleportService")
+local MarketplaceService =
+    game:GetService("MarketplaceService")
 
 local Player = Players.LocalPlayer
 local Gui = getgenv().Gui
 local FlingPage = getgenv().FlingPage
-local MAIN_COLOR = getgenv().MAIN_COLOR
-local CustomNotify = getgenv().CustomNotify
-local AddConnection = getgenv().AddConnection
-local CreateButton = getgenv().CreateButton
+local MAIN_COLOR =
+    getgenv().MAIN_COLOR
+local CustomNotify =
+    getgenv().CustomNotify
+local AddConnection =
+    getgenv().AddConnection
+local CreateButton =
+    getgenv().CreateButton
+local Settings =
+    getgenv().Settings or {}
+local AutoSaveConfiguration =
+    getgenv().AutoSaveConfiguration
+local ChatAPI =
+    getgenv().ToxChatAPI or {}
 
 if not Player
 or not Gui
@@ -41,24 +65,18 @@ or not CreateButton then
     return
 end
 
-local API =
-    getgenv().ToxChatAPI
-    or {}
-
-getgenv().ToxChatAPI = API
-getgenv().ToxSystemsAPI = API
-getgenv().ToxSystemsCleanup =
-    getgenv().ToxSystemsCleanup
-    or function()
-    end
-
-local function InitToxControl()
 local TOX_OWNER_ID = 2245662672
+
 local TOX_FRIEND_IDS = {
 }
 
 local TOX_PREMIUM_IDS = {
 }
+
+local TOX_PREMIUM_GAMEPASS_ID =
+    tonumber(
+        getgenv().ToxPremiumGamepassId
+    ) or 0
 
 local TOX_ROLE_LEVELS = {
     Member = 1,
@@ -67,7 +85,7 @@ local TOX_ROLE_LEVELS = {
     Owner = 4
 }
 
-local function BuildToxRoleSet(list)
+local function BuildRoleSet(list)
     local set = {}
 
     for _, id in ipairs(list) do
@@ -85,15 +103,63 @@ local function BuildToxRoleSet(list)
     return set
 end
 
-local ToxFriendSet =
-    BuildToxRoleSet(
+local FriendSet =
+    BuildRoleSet(
         TOX_FRIEND_IDS
     )
 
-local ToxPremiumSet =
-    BuildToxRoleSet(
+local PremiumSet =
+    BuildRoleSet(
         TOX_PREMIUM_IDS
     )
+
+local PremiumPassCache = {}
+
+local function OwnsToxPremium(
+    player
+)
+    if not player then
+        return false
+    end
+
+    local userId =
+        tonumber(player.UserId)
+        or 0
+
+    if PremiumSet[userId] then
+        return true
+    end
+
+    if TOX_PREMIUM_GAMEPASS_ID
+    <= 0 then
+        return false
+    end
+
+    if PremiumPassCache[userId]
+    ~= nil then
+        return PremiumPassCache[
+            userId
+        ]
+    end
+
+    local owns = false
+
+    pcall(function()
+        owns =
+            MarketplaceService:
+                UserOwnsGamePassAsync(
+                    userId,
+                    TOX_PREMIUM_GAMEPASS_ID
+                )
+    end)
+
+    PremiumPassCache[userId] =
+        owns == true
+
+    return PremiumPassCache[
+        userId
+    ]
+end
 
 local function GetToxRole(player)
     if not player then
@@ -108,65 +174,49 @@ local function GetToxRole(player)
         return "Owner", 4
     end
 
-    if ToxPremiumSet[userId] then
+    if OwnsToxPremium(player) then
         return "Premium", 3
     end
 
-    if ToxFriendSet[userId] then
+    if FriendSet[userId] then
         return "Friend", 2
     end
 
     return "Member", 1
 end
 
-local function GetToxRoleByUserId(userId)
-    local player =
-        Players:GetPlayerByUserId(
-            tonumber(userId) or 0
-        )
-
-    if not player then
-        return "Member", 1, nil
-    end
-
-    local role, level =
+local function CanUseControl(player)
+    local _, level =
         GetToxRole(player)
 
-    return role, level, player
-end
-
-local function CanUseToxControl(player)
-    local _, level = GetToxRole(player)
-
-    return level
-        >= TOX_ROLE_LEVELS.Friend
+    return level >=
+        TOX_ROLE_LEVELS.Friend
 end
 
 local function CanControlTarget(
     actor,
     target
 )
-    if not actor or not target then
+    if not actor
+    or not target then
         return false
     end
 
-    local actorRole, actorLevel =
+    local _, actorLevel =
         GetToxRole(actor)
-    local targetRole, targetLevel =
+
+    local _, targetLevel =
         GetToxRole(target)
 
-    if target.UserId == TOX_OWNER_ID
-    and actor.UserId ~= TOX_OWNER_ID then
+    if target.UserId
+        == TOX_OWNER_ID
+    and actor.UserId
+        ~= TOX_OWNER_ID then
         return false
     end
 
-    if actorLevel < targetLevel then
-        return false
-    end
-
-    return true, nil,
-        actorRole,
-        targetRole
+    return actorLevel
+        >= targetLevel
 end
 
 getgenv().ToxRole =
@@ -175,92 +225,115 @@ getgenv().ToxRole =
         GetToxRole(Player)
     )
 
-local ToxControlFrozen = false
-local ToxControlBhop = false
-local ToxControlBhopConnection = nil
+Settings.ToxControlMode =
+    tostring(
+        Settings.ToxControlMode
+        or "HIDDEN"
+    )
 
-local function SetToxControlBhop(enabled)
-    ToxControlBhop =
-        enabled == true
-
-    if ToxControlBhopConnection then
-        ToxControlBhopConnection:
-            Disconnect()
-
-        ToxControlBhopConnection = nil
-    end
-
-    if not ToxControlBhop then
-        return
-    end
-
-    ToxControlBhopConnection =
-        AddConnection(
-            RunService.Heartbeat:
-                Connect(function()
-                    if not ToxControlBhop
-                    or getgenv().Destroyed
-                    or not getgenv().ScriptLoaded then
-                        return
-                    end
-
-                    local character =
-                        Player.Character
-                    local humanoid =
-                        character
-                        and character:
-                            FindFirstChildOfClass(
-                                "Humanoid"
-                            )
-
-                    if not humanoid
-                    or humanoid.Health <= 0 then
-                        return
-                    end
-
-                    if humanoid.FloorMaterial
-                    ~= Enum.Material.Air then
-                        humanoid.Jump = true
-                    end
-                end)
-        )
+if Settings.ToxControlMode
+~= "CHAT"
+and Settings.ToxControlMode
+~= "HIDDEN" then
+    Settings.ToxControlMode =
+        "HIDDEN"
 end
 
-local function SendLocalChatMessage(message)
-    message =
-        tostring(message or "")
-            :gsub("[\r\n]+", " ")
-            :match("^%s*(.-)%s*$")
+local function Save()
+    if AutoSaveConfiguration then
+        pcall(
+            AutoSaveConfiguration
+        )
+    end
+end
+
+local function Trim(text)
+    return tostring(text or "")
+        :gsub("[\r\n]+", " ")
+        :match("^%s*(.-)%s*$")
         or ""
+end
+
+local function ResolvePlayer(text)
+    local input =
+        Trim(text)
+            :gsub("^@", "")
+
+    if input == "" then
+        return nil
+    end
+
+    local lower =
+        string.lower(input)
+    local partial = nil
+
+    for _, candidate in ipairs(
+        Players:GetPlayers()
+    ) do
+        local name =
+            string.lower(
+                candidate.Name
+            )
+
+        local display =
+            string.lower(
+                candidate.DisplayName
+            )
+
+        if name == lower
+        or display == lower then
+            return candidate
+        end
+
+        if not partial
+        and (
+            string.find(
+                name,
+                lower,
+                1,
+                true
+            ) == 1
+            or string.find(
+                display,
+                lower,
+                1,
+                true
+            ) == 1
+        ) then
+            partial = candidate
+        end
+    end
+
+    return partial
+end
+
+local function SendRobloxChat(
+    message
+)
+    message = Trim(message)
 
     if message == "" then
         return false
     end
 
-    if #message > 180 then
-        message =
-            string.sub(
-                message,
-                1,
-                180
-            )
-    end
-
     local sent = false
 
     pcall(function()
-        local inputConfig =
+        local config =
             TextChatService:
                 FindFirstChild(
                     "ChatInputBarConfiguration"
                 )
 
         local channel =
-            inputConfig
-            and inputConfig.TargetTextChannel
+            config
+            and config.TargetTextChannel
 
         if channel then
-            channel:SendAsync(message)
+            channel:SendAsync(
+                message
+            )
+
             sent = true
         end
     end)
@@ -295,29 +368,105 @@ local function SendLocalChatMessage(message)
     return sent
 end
 
-local function ExecuteToxControlCommand(
+local AutoJumpEnabled = false
+local AutoJumpConnection = nil
+local FrozenByControl = false
+local RecentCommands = {}
+
+local function SetAutoJump(enabled)
+    AutoJumpEnabled =
+        enabled == true
+
+    if AutoJumpConnection then
+        AutoJumpConnection:
+            Disconnect()
+
+        AutoJumpConnection = nil
+    end
+
+    if not AutoJumpEnabled then
+        return
+    end
+
+    AutoJumpConnection =
+        AddConnection(
+            RunService.Heartbeat:
+                Connect(function()
+                    if not AutoJumpEnabled
+                    or getgenv().Destroyed
+                    or not getgenv().ScriptLoaded then
+                        return
+                    end
+
+                    local character =
+                        Player.Character
+
+                    local humanoid =
+                        character
+                        and character:
+                            FindFirstChildOfClass(
+                                "Humanoid"
+                            )
+
+                    if humanoid
+                    and humanoid.Health > 0
+                    and humanoid.FloorMaterial
+                        ~= Enum.Material.Air then
+                        humanoid.Jump = true
+                    end
+                end)
+        )
+end
+
+local function NotifyReceived(
+    actor,
+    text
+)
+    CustomNotify(
+        "Tox Control • @"
+        .. actor.Name
+        .. " "
+        .. text,
+        Color3.fromRGB(
+            120,
+            210,
+            255
+        ),
+        4
+    )
+end
+
+local function ExecuteCommand(
     actor,
     command,
     argument
 )
-    local allowed =
-        CanControlTarget(
-            actor,
-            Player
-        )
-
-    if not allowed then
+    if not actor
+    or not CanControlTarget(
+        actor,
+        Player
+    ) then
         return false
     end
 
+    command =
+        string.lower(
+            Trim(command)
+        )
+
+    argument =
+        Trim(argument)
+
     local character =
         Player.Character
+
     local humanoid =
         character
         and character:
             FindFirstChildOfClass(
                 "Humanoid"
             )
+
     local root =
         character
         and character:
@@ -325,57 +474,73 @@ local function ExecuteToxControlCommand(
                 "HumanoidRootPart"
             )
 
-    command =
-        string.lower(
-            tostring(command or "")
+    if command == "reset" then
+        NotifyReceived(
+            actor,
+            "used RESET"
         )
 
-    if command == "reset" then
-        if humanoid then
-            pcall(function()
+        task.delay(0.12, function()
+            if humanoid then
                 humanoid.Health = 0
-            end)
+            end
 
-            pcall(function()
-                humanoid:
-                    ChangeState(
-                        Enum.HumanoidStateType.Dead
-                    )
-            end)
-        end
-
-        if character then
-            pcall(function()
-                character:BreakJoints()
-            end)
-        end
+            if character
+            and character.Parent then
+                pcall(function()
+                    character:
+                        BreakJoints()
+                end)
+            end
+        end)
 
         return true
     end
 
     if command == "freeze" then
         if root then
-            ToxControlFrozen =
-                not ToxControlFrozen
+            FrozenByControl =
+                not FrozenByControl
 
             root.Anchored =
-                ToxControlFrozen
+                FrozenByControl
+
+            NotifyReceived(
+                actor,
+                FrozenByControl
+                and "enabled FREEZE"
+                or "disabled FREEZE"
+            )
         end
 
         return true
     end
 
+    if command == "unfreeze" then
+        FrozenByControl = false
+
+        if root then
+            root.Anchored = false
+        end
+
+        NotifyReceived(
+            actor,
+            "disabled FREEZE"
+        )
+
+        return true
+    end
+
     if command == "bring" then
-        local actorCharacter =
-            actor.Character
         local actorRoot =
-            actorCharacter
-            and actorCharacter:
+            actor.Character
+            and actor.Character:
                 FindFirstChild(
                     "HumanoidRootPart"
                 )
 
-        if root and actorRoot then
+        if root
+        and actorRoot then
             if getgenv().AllowToxTeleport then
                 getgenv().AllowToxTeleport(
                     1.5
@@ -398,27 +563,64 @@ local function ExecuteToxControlCommand(
                     )
                 end)
             end
+
+            NotifyReceived(
+                actor,
+                "used BRING"
+            )
         end
 
         return true
     end
 
-    if command == "bhop" then
-        SetToxControlBhop(
-            not ToxControlBhop
+    if command == "jump" then
+        SetAutoJump(
+            not AutoJumpEnabled
+        )
+
+        NotifyReceived(
+            actor,
+            AutoJumpEnabled
+            and "enabled JUMP"
+            or "disabled JUMP"
+        )
+
+        return true
+    end
+
+    if command == "unjump" then
+        SetAutoJump(false)
+
+        NotifyReceived(
+            actor,
+            "disabled JUMP"
         )
 
         return true
     end
 
     if command == "chat" then
-        return SendLocalChatMessage(
-            argument
-        )
+        if argument ~= "" then
+            NotifyReceived(
+                actor,
+                "used CHAT"
+            )
+
+            return SendRobloxChat(
+                argument
+            )
+        end
+
+        return false
     end
 
     if command == "kick" then
-        pcall(function()
+        NotifyReceived(
+            actor,
+            "used KICK"
+        )
+
+        task.delay(0.15, function()
             Player:Kick(
                 "Tox Control"
             )
@@ -428,22 +630,29 @@ local function ExecuteToxControlCommand(
     end
 
     if command == "rejoin" then
-        task.spawn(function()
-            local ok = pcall(function()
-                TeleportService:
-                    TeleportToPlaceInstance(
-                        game.PlaceId,
-                        game.JobId,
-                        Player
-                    )
-            end)
+        NotifyReceived(
+            actor,
+            "used REJOIN"
+        )
+
+        task.delay(0.15, function()
+            local ok =
+                pcall(function()
+                    TeleportService:
+                        TeleportToPlaceInstance(
+                            game.PlaceId,
+                            game.JobId,
+                            Player
+                        )
+                end)
 
             if not ok then
                 pcall(function()
-                    TeleportService:Teleport(
-                        game.PlaceId,
-                        Player
-                    )
+                    TeleportService:
+                        Teleport(
+                            game.PlaceId,
+                            Player
+                        )
                 end)
             end
         end)
@@ -451,189 +660,432 @@ local function ExecuteToxControlCommand(
         return true
     end
 
-    if command == "jump" then
-        if humanoid
-        and humanoid.Health > 0 then
-            humanoid.Jump = true
-
-            pcall(function()
-                humanoid:ChangeState(
-                    Enum.HumanoidStateType.Jumping
-                )
-            end)
-        end
-
-        return true
-    end
-
     if command == "sit" then
-        if humanoid
-        and humanoid.Health > 0 then
+        if humanoid then
             humanoid.Sit =
                 not humanoid.Sit
+
+            NotifyReceived(
+                actor,
+                humanoid.Sit
+                and "enabled SIT"
+                or "disabled SIT"
+            )
         end
 
         return true
     end
 
-    if command == "unfreeze" then
-        ToxControlFrozen = false
+    if command == "fling" then
+        local target =
+            ResolvePlayer(argument)
 
-        if root then
-            root.Anchored = false
+        if not target
+        or not CanControlTarget(
+            actor,
+            target
+        ) then
+            return false
         end
 
-        return true
-    end
+        local fling =
+            getgenv().ToxExecuteFling
 
-    if command == "unbhop" then
-        SetToxControlBhop(false)
+        if not fling then
+            return false
+        end
+
+        NotifyReceived(
+            actor,
+            "used FLING on @"
+            .. target.Name
+        )
+
+        task.spawn(function()
+            fling(
+                target.Name
+            )
+        end)
+
         return true
     end
 
     return false
 end
 
-local ToxControlRecentMessages = {}
-
-local function ResolveToxControlPlayer(textValue)
-    local input =
-        tostring(textValue or "")
-            :gsub("^%s+", "")
-            :gsub("%s+$", "")
-            :gsub("^@", "")
-
-    if input == "" then
-        return nil
-    end
-
-    local lower =
-        string.lower(input)
-    local exact = nil
-    local partial = nil
-
-    for _, candidate in ipairs(
-        Players:GetPlayers()
-    ) do
-        local name =
-            string.lower(
-                candidate.Name
-            )
-        local display =
-            string.lower(
-                candidate.DisplayName
-            )
-
-        if name == lower
-        or display == lower then
-            exact = candidate
-            break
-        end
-
-        if not partial
-        and (
-            string.find(
-                name,
-                lower,
-                1,
-                true
-            ) == 1
-            or string.find(
-                display,
-                lower,
-                1,
-                true
-            ) == 1
-        ) then
-            partial = candidate
-        end
-    end
-
-    return exact or partial
-end
-
-local function SendToxControlChatCommand(
-    target,
-    command,
-    argument
-)
-    if not target then
-        return false
-    end
-
-    local targetText =
-        target.Name
-
-    local message =
-        ".c "
-        .. targetText
-        .. " "
-        .. tostring(command or "")
-
-    local extra =
-        tostring(argument or "")
-            :gsub("[\r\n]+", " ")
-            :match("^%s*(.-)%s*$")
-        or ""
-
-    if extra ~= "" then
-        message =
-            message
-            .. " "
-            .. extra
-    end
-
-    return SendLocalChatMessage(
-        message
-    )
-end
-
-local function IsDuplicateToxControlMessage(
+local function IsDuplicate(
     actor,
     message
 )
     local key =
-        tostring(
-            actor.UserId
-        )
+        tostring(actor.UserId)
         .. "|"
         .. string.lower(
             tostring(message or "")
         )
 
     local now = tick()
-    local previous =
-        ToxControlRecentMessages[key]
+    local old =
+        RecentCommands[key]
 
-    ToxControlRecentMessages[key] = now
+    RecentCommands[key] = now
 
     for oldKey, timeValue in pairs(
-        ToxControlRecentMessages
+        RecentCommands
     ) do
         if now - timeValue > 3 then
-            ToxControlRecentMessages[oldKey] =
-                nil
+            RecentCommands[
+                oldKey
+            ] = nil
         end
     end
 
-    return previous
-        and now - previous < 0.75
+    return old
+        and now - old < 0.75
 end
 
-local function ExecuteLocalGoto(
-    target
+local function HandleChatCommand(
+    actor,
+    message
 )
-    local targetRoot =
+    if not actor
+    or typeof(message)
+        ~= "string"
+    or IsDuplicate(
+        actor,
+        message
+    ) then
+        return false
+    end
+
+    local targetText,
+        command,
+        argument =
+        message:match(
+            "^%s*%.c%s+(%S+)%s+(%S+)%s*(.-)%s*$"
+        )
+
+    if not targetText
+    or not command
+    or not CanUseControl(actor) then
+        return false
+    end
+
+    local target =
+        ResolvePlayer(
+            targetText
+        )
+
+    if not target then
+        return true
+    end
+
+    command =
+        string.lower(command)
+
+    if target ~= Player then
+        if actor == Player
+        and CanControlTarget(
+            actor,
+            target
+        ) then
+            CustomNotify(
+                "Tox Control • "
+                .. string.upper(command)
+                .. " -> @"
+                .. target.Name,
+                Color3.fromRGB(
+                    100,
+                    255,
+                    130
+                ),
+                3
+            )
+        end
+
+        return true
+    end
+
+    ExecuteCommand(
+        actor,
+        command,
+        argument
+    )
+
+    return true
+end
+
+local function HookChatPlayer(player)
+    AddConnection(
+        player.Chatted:
+            Connect(function(message)
+                HandleChatCommand(
+                    player,
+                    message
+                )
+            end)
+    )
+end
+
+for _, player in ipairs(
+    Players:GetPlayers()
+) do
+    HookChatPlayer(player)
+end
+
+AddConnection(
+    Players.PlayerAdded:
+        Connect(
+            HookChatPlayer
+        )
+)
+
+AddConnection(
+    TextChatService.MessageReceived:
+        Connect(function(message)
+            local source =
+                message
+                and message.TextSource
+
+            if not source then
+                return
+            end
+
+            local actor =
+                Players:GetPlayerByUserId(
+                    source.UserId
+                )
+
+            if actor then
+                HandleChatCommand(
+                    actor,
+                    message.Text
+                )
+            end
+        end)
+)
+
+local function HandleHiddenPayload(
+    payload
+)
+    if typeof(payload)
+        ~= "table"
+    or payload.kind
+        ~= "toxcontrol"
+    or tonumber(
+        payload.targetUserId
+    ) ~= Player.UserId
+    or tonumber(
+        payload.placeId
+    ) ~= game.PlaceId
+    or tostring(
+        payload.jobId or ""
+    ) ~= tostring(
+        game.JobId
+    ) then
+        return false
+    end
+
+    local actor =
+        Players:GetPlayerByUserId(
+            tonumber(
+                payload.actorUserId
+            ) or 0
+        )
+
+    if not actor
+    or not CanUseControl(actor)
+    or not CanControlTarget(
+        actor,
+        Player
+    ) then
+        return true
+    end
+
+    local nonce =
+        tostring(
+            payload.nonce or ""
+        )
+
+    ChatAPI.SeenNonces =
+        ChatAPI.SeenNonces
+        or {}
+
+    if nonce ~= "" then
+        if ChatAPI.SeenNonces[
+            nonce
+        ] then
+            return true
+        end
+
+        ChatAPI.SeenNonces[
+            nonce
+        ] = true
+    end
+
+    ExecuteCommand(
+        actor,
+        payload.command,
+        payload.argument
+    )
+
+    return true
+end
+
+if ChatAPI.RegisterHandler then
+    ChatAPI.RegisterHandler(
+        "toxcontrol",
+        HandleHiddenPayload
+    )
+end
+
+local function SendHiddenControl(
+    target,
+    command,
+    argument
+)
+    if not ChatAPI.PublishPayload
+    or not ChatAPI.Token then
+        return false
+    end
+
+    local payload =
+        HttpService:JSONEncode({
+            token =
+                ChatAPI.Token,
+            version = 2,
+            kind =
+                "toxcontrol",
+            nonce =
+                HttpService:
+                    GenerateGUID(false),
+            actorUserId =
+                Player.UserId,
+            actorName =
+                Player.Name,
+            targetUserId =
+                target.UserId,
+            command =
+                command,
+            argument =
+                argument or "",
+            placeId =
+                game.PlaceId,
+            jobId =
+                game.JobId,
+            sentAt =
+                os.time()
+        })
+
+    return ChatAPI.PublishPayload(
+        payload
+    ) == true
+end
+
+local function BuildChatCommand(
+    target,
+    command,
+    argument
+)
+    local message =
+        ".c "
+        .. target.Name
+        .. " "
+        .. command
+
+    argument =
+        Trim(argument)
+
+    if argument ~= "" then
+        message =
+            message
+            .. " "
+            .. argument
+    end
+
+    return message
+end
+
+local function SendControl(
+    target,
+    command,
+    argument
+)
+    if not target
+    or not CanControlTarget(
+        Player,
         target
-        and target.Character
-        and target.Character:
+    ) then
+        return false
+    end
+
+    local mode =
+        Settings.ToxControlMode
+
+    local success = false
+
+    if mode == "CHAT" then
+        success =
+            SendRobloxChat(
+                BuildChatCommand(
+                    target,
+                    command,
+                    argument
+                )
+            )
+    else
+        success =
+            SendHiddenControl(
+                target,
+                command,
+                argument
+            )
+    end
+
+    if success then
+        CustomNotify(
+            "Tox Control • "
+            .. string.upper(
+                command
+            )
+            .. " -> @"
+            .. target.Name,
+            Color3.fromRGB(
+                100,
+                255,
+                130
+            ),
+            3
+        )
+    else
+        CustomNotify(
+            mode == "HIDDEN"
+            and "Tox Control hidden connection unavailable"
+            or "Tox Control chat command failed",
+            Color3.fromRGB(
+                255,
+                180,
+                70
+            ),
+            4
+        )
+    end
+
+    return success
+end
+
+local function GotoPlayer(target)
+    local root =
+        Player.Character
+        and Player.Character:
             FindFirstChild(
                 "HumanoidRootPart"
             )
 
-    local root =
-        Player.Character
-        and Player.Character:
+    local targetRoot =
+        target
+        and target.Character
+        and target.Character:
             FindFirstChild(
                 "HumanoidRootPart"
             )
@@ -666,910 +1118,1234 @@ local function ExecuteLocalGoto(
         end)
     end
 
-    return true
-end
-
-local function HandleToxControlChatCommand(
-    actor,
-    message
-)
-    if not actor
-    or typeof(message) ~= "string"
-    or IsDuplicateToxControlMessage(
-        actor,
-        message
-    ) then
-        return false
-    end
-
-    local targetText,
-        command,
-        argument =
-        message:match(
-            "^%s*%.c%s+(%S+)%s+(%S+)%s*(.-)%s*$"
-        )
-
-    if not targetText
-    or not command then
-        return false
-    end
-
-    if not CanUseToxControl(actor) then
-        return true
-    end
-
-    local target =
-        ResolveToxControlPlayer(
-            targetText
-        )
-
-    if not target then
-        return true
-    end
-
-    command =
-        string.lower(command)
-
-    if command == "goto" then
-        if actor == Player then
-            ExecuteLocalGoto(target)
-        end
-
-        return true
-    end
-
-    if target ~= Player then
-        return true
-    end
-
-    if not CanControlTarget(
-        actor,
-        Player
-    ) then
-        return true
-    end
-
-    if command == "fling" then
-        local flingTarget =
-            ResolveToxControlPlayer(
-                argument
-            )
-
-        if not flingTarget
-        or not CanControlTarget(
-            actor,
-            flingTarget
-        ) then
-            return true
-        end
-
-        local executeFling =
-            getgenv().ToxExecuteFling
-
-        if executeFling then
-            task.spawn(function()
-                executeFling(
-                    flingTarget.Name
-                )
-            end)
-        end
-
-        return true
-    end
-
-    ExecuteToxControlCommand(
-        actor,
-        command,
-        argument
+    CustomNotify(
+        "Tox Control • GOTO -> @"
+        .. target.Name,
+        Color3.fromRGB(
+            100,
+            255,
+            130
+        ),
+        3
     )
 
     return true
 end
 
-local function HookToxControlPlayer(
-    player
+local function MakeCorner(
+    object,
+    radius
 )
-    if not player then
-        return
-    end
+    local corner =
+        Instance.new("UICorner")
 
-    AddConnection(
-        player.Chatted:
-            Connect(function(message)
-                HandleToxControlChatCommand(
-                    player,
-                    message
-                )
-            end)
-    )
-end
-
-for _, player in ipairs(
-    Players:GetPlayers()
-) do
-    HookToxControlPlayer(player)
-end
-
-AddConnection(
-    Players.PlayerAdded:
-        Connect(
-            HookToxControlPlayer
+    corner.CornerRadius =
+        UDim.new(
+            0,
+            radius or 5
         )
-)
 
-AddConnection(
-    TextChatService.MessageReceived:
-        Connect(function(message)
-            local source =
-                message
-                and message.TextSource
-
-            if not source then
-                return
-            end
-
-            local actor =
-                Players:GetPlayerByUserId(
-                    source.UserId
-                )
-
-            if actor then
-                HandleToxControlChatCommand(
-                    actor,
-                    message.Text
-                )
-            end
-        end)
-)
+    corner.Parent = object
+end
 
 local function InitToxControlGui()
-local ToxControlGui =
-    Instance.new("Frame")
-ToxControlGui.Name =
-    "ToxControlFrame"
-ToxControlGui.Size =
-    UDim2.new(0, 360, 0, 390)
-ToxControlGui.Position =
-    UDim2.new(0.5, -180, 0.5, -195)
-ToxControlGui.BackgroundColor3 =
-    Color3.fromRGB(10, 10, 16)
-ToxControlGui.BorderSizePixel = 0
-ToxControlGui.ClipsDescendants = true
-ToxControlGui.Visible = false
-ToxControlGui.Parent = Gui
+    local controlGui =
+        Instance.new("Frame")
 
-local ToxControlCorner =
-    Instance.new("UICorner")
-ToxControlCorner.CornerRadius =
-    UDim.new(0, 8)
-ToxControlCorner.Parent =
-    ToxControlGui
+    controlGui.Name =
+        "ToxControlFrame"
 
-local ToxControlStroke =
-    Instance.new("UIStroke")
-ToxControlStroke.Color = MAIN_COLOR
-ToxControlStroke.Thickness = 2
-ToxControlStroke.Parent =
-    ToxControlGui
-
-local ToxControlTopBar =
-    Instance.new("Frame")
-ToxControlTopBar.Size =
-    UDim2.new(1, 0, 0, 32)
-ToxControlTopBar.BackgroundColor3 =
-    MAIN_COLOR
-ToxControlTopBar.BorderSizePixel = 0
-ToxControlTopBar.Parent =
-    ToxControlGui
-
-local ToxControlTitle =
-    Instance.new("TextLabel")
-ToxControlTitle.Size =
-    UDim2.new(1, -80, 1, 0)
-ToxControlTitle.Position =
-    UDim2.new(0, 10, 0, 0)
-ToxControlTitle.BackgroundTransparency = 1
-ToxControlTitle.Text =
-    "Tox Control"
-ToxControlTitle.TextColor3 =
-    Color3.fromRGB(255, 255, 255)
-ToxControlTitle.Font =
-    Enum.Font.GothamBold
-ToxControlTitle.TextSize = 13
-ToxControlTitle.TextXAlignment =
-    Enum.TextXAlignment.Left
-ToxControlTitle.Parent =
-    ToxControlTopBar
-
-local ToxControlClose =
-    Instance.new("TextButton")
-ToxControlClose.Size =
-    UDim2.new(0, 28, 0, 24)
-ToxControlClose.Position =
-    UDim2.new(1, -34, 0, 4)
-ToxControlClose.BackgroundColor3 =
-    Color3.fromRGB(30, 30, 42)
-ToxControlClose.BorderSizePixel = 0
-ToxControlClose.Text = "X"
-ToxControlClose.TextColor3 =
-    Color3.fromRGB(255, 255, 255)
-ToxControlClose.Font =
-    Enum.Font.GothamBold
-ToxControlClose.TextSize = 11
-ToxControlClose.Parent =
-    ToxControlTopBar
-
-local ToxControlCloseCorner =
-    Instance.new("UICorner")
-ToxControlCloseCorner.CornerRadius =
-    UDim.new(0, 4)
-ToxControlCloseCorner.Parent =
-    ToxControlClose
-
-local ToxRoleName, ToxRoleLevel =
-    GetToxRole(Player)
-
-local ToxControlIdentity =
-    Instance.new("TextLabel")
-ToxControlIdentity.Size =
-    UDim2.new(1, -20, 0, 24)
-ToxControlIdentity.Position =
-    UDim2.new(0, 10, 0, 40)
-ToxControlIdentity.BackgroundTransparency = 1
-ToxControlIdentity.Text =
-    "@"
-    .. Player.Name
-    .. " • "
-    .. ToxRoleName
-ToxControlIdentity.TextColor3 =
-    Color3.fromRGB(210, 210, 225)
-ToxControlIdentity.Font =
-    Enum.Font.GothamMedium
-ToxControlIdentity.TextSize = 11
-ToxControlIdentity.TextXAlignment =
-    Enum.TextXAlignment.Left
-ToxControlIdentity.Parent =
-    ToxControlGui
-
-local ToxControlTarget =
-    Instance.new("TextBox")
-ToxControlTarget.Size =
-    UDim2.new(1, -20, 0, 30)
-ToxControlTarget.Position =
-    UDim2.new(0, 10, 0, 68)
-ToxControlTarget.BackgroundColor3 =
-    Color3.fromRGB(20, 20, 30)
-ToxControlTarget.BorderSizePixel = 0
-ToxControlTarget.Text = ""
-ToxControlTarget.PlaceholderText =
-    "Nick"
-ToxControlTarget.TextColor3 =
-    Color3.fromRGB(255, 255, 255)
-ToxControlTarget.PlaceholderColor3 =
-    Color3.fromRGB(130, 130, 145)
-ToxControlTarget.Font =
-    Enum.Font.Gotham
-ToxControlTarget.TextSize = 11
-ToxControlTarget.ClearTextOnFocus = false
-ToxControlTarget.Parent =
-    ToxControlGui
-
-local ToxControlTargetCorner =
-    Instance.new("UICorner")
-ToxControlTargetCorner.CornerRadius =
-    UDim.new(0, 5)
-ToxControlTargetCorner.Parent =
-    ToxControlTarget
-
-local ToxControlTargetInfo =
-    Instance.new("TextLabel")
-ToxControlTargetInfo.Size =
-    UDim2.new(1, -20, 0, 20)
-ToxControlTargetInfo.Position =
-    UDim2.new(0, 10, 0, 101)
-ToxControlTargetInfo.BackgroundTransparency = 1
-ToxControlTargetInfo.Text =
-    "Target: none"
-ToxControlTargetInfo.TextColor3 =
-    Color3.fromRGB(160, 160, 175)
-ToxControlTargetInfo.Font =
-    Enum.Font.Gotham
-ToxControlTargetInfo.TextSize = 10
-ToxControlTargetInfo.TextXAlignment =
-    Enum.TextXAlignment.Left
-ToxControlTargetInfo.Parent =
-    ToxControlGui
-
-local ToxControlSelectedTarget = nil
-
-local function ResolveToxControlTarget()
-    local input =
-        tostring(
-            ToxControlTarget.Text or ""
-        )
-        :gsub("^%s+", "")
-        :gsub("%s+$", "")
-        :gsub("^@", "")
-
-    if input == "" then
-        ToxControlSelectedTarget = nil
-        ToxControlTargetInfo.Text =
-            "Target: none"
-
-        return nil
-    end
-
-    local lower =
-        string.lower(input)
-    local found = nil
-
-    for _, candidate in ipairs(
-        Players:GetPlayers()
-    ) do
-        if candidate ~= Player then
-            local name =
-                string.lower(candidate.Name)
-            local display =
-                string.lower(
-                    candidate.DisplayName
-                )
-
-            if name == lower
-            or display == lower
-            or string.find(
-                name,
-                lower,
-                1,
-                true
-            ) == 1
-            or string.find(
-                display,
-                lower,
-                1,
-                true
-            ) == 1 then
-                found = candidate
-                break
-            end
-        end
-    end
-
-    ToxControlSelectedTarget = found
-
-    if found then
-        local role =
-            select(
-                1,
-                GetToxRole(found)
-            )
-
-        ToxControlTargetInfo.Text =
-            "Target: @"
-            .. found.Name
-            .. " • "
-            .. role
-    else
-        ToxControlTargetInfo.Text =
-            "Target: not found"
-    end
-
-    return found
-end
-
-ToxControlTarget.FocusLost:
-    Connect(function()
-        ResolveToxControlTarget()
-    end)
-
-local function MakeToxControlButton(
-    textValue,
-    x,
-    y,
-    width,
-    callback
-)
-    local button =
-        Instance.new("TextButton")
-
-    button.Size =
+    controlGui.Size =
         UDim2.new(
             0,
-            width,
+            380,
+            0,
+            430
+        )
+
+    controlGui.Position =
+        UDim2.new(
+            0.5,
+            -190,
+            0.5,
+            -215
+        )
+
+    controlGui.BackgroundColor3 =
+        Color3.fromRGB(
+            10,
+            10,
+            16
+        )
+
+    controlGui.BorderSizePixel = 0
+    controlGui.ClipsDescendants = true
+    controlGui.Visible = false
+    controlGui.Parent = Gui
+
+    MakeCorner(
+        controlGui,
+        8
+    )
+
+    local stroke =
+        Instance.new("UIStroke")
+
+    stroke.Color = MAIN_COLOR
+    stroke.Thickness = 2
+    stroke.Parent = controlGui
+
+    local topBar =
+        Instance.new("Frame")
+
+    topBar.Size =
+        UDim2.new(
+            1,
+            0,
             0,
             32
         )
-    button.Position =
+
+    topBar.BackgroundColor3 =
+        MAIN_COLOR
+
+    topBar.BorderSizePixel = 0
+    topBar.Parent = controlGui
+
+    local title =
+        Instance.new("TextLabel")
+
+    title.Size =
+        UDim2.new(
+            1,
+            -80,
+            1,
+            0
+        )
+
+    title.Position =
         UDim2.new(
             0,
-            x,
+            10,
             0,
-            y
+            0
         )
-    button.BackgroundColor3 =
+
+    title.BackgroundTransparency = 1
+    title.Text = "Tox Control"
+    title.TextColor3 =
+        Color3.fromRGB(
+            255,
+            255,
+            255
+        )
+
+    title.Font =
+        Enum.Font.GothamBold
+
+    title.TextSize = 13
+    title.TextXAlignment =
+        Enum.TextXAlignment.Left
+
+    title.Parent = topBar
+
+    local close =
+        Instance.new("TextButton")
+
+    close.Size =
+        UDim2.new(
+            0,
+            28,
+            0,
+            24
+        )
+
+    close.Position =
+        UDim2.new(
+            1,
+            -34,
+            0,
+            4
+        )
+
+    close.BackgroundColor3 =
+        Color3.fromRGB(
+            30,
+            30,
+            42
+        )
+
+    close.BorderSizePixel = 0
+    close.Text = "X"
+    close.TextColor3 =
+        Color3.fromRGB(
+            255,
+            255,
+            255
+        )
+
+    close.Font =
+        Enum.Font.GothamBold
+
+    close.TextSize = 11
+    close.Parent = topBar
+
+    MakeCorner(
+        close,
+        4
+    )
+
+    local roleLabel =
+        Instance.new("TextLabel")
+
+    roleLabel.Size =
+        UDim2.new(
+            1,
+            -20,
+            0,
+            20
+        )
+
+    roleLabel.Position =
+        UDim2.new(
+            0,
+            10,
+            0,
+            40
+        )
+
+    roleLabel.BackgroundTransparency = 1
+    roleLabel.TextColor3 =
+        Color3.fromRGB(
+            210,
+            210,
+            225
+        )
+
+    roleLabel.Font =
+        Enum.Font.GothamMedium
+
+    roleLabel.TextSize = 10
+    roleLabel.TextXAlignment =
+        Enum.TextXAlignment.Left
+
+    roleLabel.Parent = controlGui
+
+    local targetBox =
+        Instance.new("TextBox")
+
+    targetBox.Size =
+        UDim2.new(
+            1,
+            -20,
+            0,
+            30
+        )
+
+    targetBox.Position =
+        UDim2.new(
+            0,
+            10,
+            0,
+            66
+        )
+
+    targetBox.BackgroundColor3 =
         Color3.fromRGB(
             20,
             20,
             30
         )
-    button.BorderSizePixel = 0
-    button.Text = textValue
-    button.TextColor3 =
-        Color3.fromRGB(
-            245,
-            245,
-            245
-        )
-    button.Font =
-        Enum.Font.GothamMedium
-    button.TextSize = 10
-    button.Parent =
-        ToxControlGui
 
-    local corner =
-        Instance.new("UICorner")
-    corner.CornerRadius =
-        UDim.new(0, 5)
-    corner.Parent = button
+    targetBox.BorderSizePixel = 0
+    targetBox.Text = ""
+    targetBox.PlaceholderText =
+        "Nick"
 
-    button.MouseButton1Click:
-        Connect(callback)
-
-    return button
-end
-
-local function GetControlTargetOrNotify()
-    local target =
-        ResolveToxControlTarget()
-
-    if not target then
-        CustomNotify(
-            "Player not found",
-            Color3.fromRGB(
-                255,
-                110,
-                110
-            )
-        )
-
-        return nil
-    end
-
-    local allowed =
-        CanControlTarget(
-            Player,
-            target
-        )
-
-    if not allowed then
-        return nil
-    end
-
-    return target
-end
-
-local function SendTargetControl(
-    command,
-    argument
-)
-    local target =
-        GetControlTargetOrNotify()
-
-    if not target then
-        return
-    end
-
-    SendToxControlChatCommand(
-        target,
-        command,
-        argument or ""
-    )
-end
-
-MakeToxControlButton(
-    "RESET",
-    10,
-    128,
-    64,
-    function()
-        SendTargetControl(
-            "reset"
-        )
-    end
-)
-
-MakeToxControlButton(
-    "FREEZE",
-    78,
-    128,
-    64,
-    function()
-        SendTargetControl(
-            "freeze"
-        )
-    end
-)
-
-MakeToxControlButton(
-    "BRING",
-    146,
-    128,
-    64,
-    function()
-        SendTargetControl(
-            "bring"
-        )
-    end
-)
-
-MakeToxControlButton(
-    "GOTO",
-    214,
-    128,
-    64,
-    function()
-        SendTargetControl(
-            "goto"
-        )
-    end
-)
-
-MakeToxControlButton(
-    "BHOP",
-    282,
-    128,
-    68,
-    function()
-        SendTargetControl(
-            "bhop"
-        )
-    end
-)
-
-MakeToxControlButton(
-    "KICK",
-    10,
-    166,
-    82,
-    function()
-        SendTargetControl(
-            "kick"
-        )
-    end
-)
-
-MakeToxControlButton(
-    "REJOIN",
-    96,
-    166,
-    82,
-    function()
-        SendTargetControl(
-            "rejoin"
-        )
-    end
-)
-
-MakeToxControlButton(
-    "JUMP",
-    182,
-    166,
-    82,
-    function()
-        SendTargetControl(
-            "jump"
-        )
-    end
-)
-
-MakeToxControlButton(
-    "SIT",
-    268,
-    166,
-    82,
-    function()
-        SendTargetControl(
-            "sit"
-        )
-    end
-)
-
-local ToxControlChat =
-    Instance.new("TextBox")
-ToxControlChat.Size =
-    UDim2.new(1, -88, 0, 32)
-ToxControlChat.Position =
-    UDim2.new(0, 10, 0, 208)
-ToxControlChat.BackgroundColor3 =
-    Color3.fromRGB(20, 20, 30)
-ToxControlChat.BorderSizePixel = 0
-ToxControlChat.Text = ""
-ToxControlChat.PlaceholderText =
-    "Chat text"
-ToxControlChat.TextColor3 =
-    Color3.fromRGB(255, 255, 255)
-ToxControlChat.PlaceholderColor3 =
-    Color3.fromRGB(130, 130, 145)
-ToxControlChat.Font =
-    Enum.Font.Gotham
-ToxControlChat.TextSize = 10
-ToxControlChat.ClearTextOnFocus = false
-ToxControlChat.Parent =
-    ToxControlGui
-
-local ToxControlChatCorner =
-    Instance.new("UICorner")
-ToxControlChatCorner.CornerRadius =
-    UDim.new(0, 5)
-ToxControlChatCorner.Parent =
-    ToxControlChat
-
-MakeToxControlButton(
-    "SEND",
-    286,
-    208,
-    64,
-    function()
-        local message =
-            tostring(
-                ToxControlChat.Text or ""
-            )
-            :gsub("[\r\n]+", " ")
-            :match("^%s*(.-)%s*$")
-            or ""
-
-        if message == "" then
-            CustomNotify(
-                "Enter chat text",
-                Color3.fromRGB(
-                    255,
-                    180,
-                    70
-                )
-            )
-
-            return
-        end
-
-        SendTargetControl(
-            "chat",
-            message
-        )
-    end
-)
-
-local ToxControlFlingTarget =
-    Instance.new("TextBox")
-ToxControlFlingTarget.Size =
-    UDim2.new(1, -88, 0, 32)
-ToxControlFlingTarget.Position =
-    UDim2.new(0, 10, 0, 246)
-ToxControlFlingTarget.BackgroundColor3 =
-    Color3.fromRGB(20, 20, 30)
-ToxControlFlingTarget.BorderSizePixel = 0
-ToxControlFlingTarget.Text = ""
-ToxControlFlingTarget.PlaceholderText =
-    "Fling target"
-ToxControlFlingTarget.TextColor3 =
-    Color3.fromRGB(255, 255, 255)
-ToxControlFlingTarget.PlaceholderColor3 =
-    Color3.fromRGB(130, 130, 145)
-ToxControlFlingTarget.Font =
-    Enum.Font.Gotham
-ToxControlFlingTarget.TextSize = 10
-ToxControlFlingTarget.ClearTextOnFocus = false
-ToxControlFlingTarget.Parent =
-    ToxControlGui
-
-local ToxControlFlingCorner =
-    Instance.new("UICorner")
-ToxControlFlingCorner.CornerRadius =
-    UDim.new(0, 5)
-ToxControlFlingCorner.Parent =
-    ToxControlFlingTarget
-
-MakeToxControlButton(
-    "FLING",
-    286,
-    246,
-    64,
-    function()
-        local targetText =
-            tostring(
-                ToxControlFlingTarget.Text
-                or ""
-            )
-            :gsub("^%s+", "")
-            :gsub("%s+$", "")
-
-        if targetText == "" then
-            return
-        end
-
-        SendTargetControl(
-            "fling",
-            targetText
-        )
-    end
-)
-
-local ToxControlHint =
-    Instance.new("TextLabel")
-ToxControlHint.Size =
-    UDim2.new(1, -20, 0, 72)
-ToxControlHint.Position =
-    UDim2.new(0, 10, 0, 290)
-ToxControlHint.BackgroundTransparency = 1
-ToxControlHint.Text =
-    ".c NICK reset / freeze / bring / goto / bhop\n"
-    .. ".c NICK kick / rejoin / jump / sit\n"
-    .. ".c NICK fling TARGET / chat TEXT"
-ToxControlHint.TextColor3 =
-    Color3.fromRGB(145, 145, 160)
-ToxControlHint.Font =
-    Enum.Font.Gotham
-ToxControlHint.TextSize = 9
-ToxControlHint.TextWrapped = true
-ToxControlHint.TextXAlignment =
-    Enum.TextXAlignment.Left
-ToxControlHint.TextYAlignment =
-    Enum.TextYAlignment.Top
-ToxControlHint.Parent =
-    ToxControlGui
-
-local ToxControlDragging = false
-local ToxControlDragStart = nil
-local ToxControlStartPos = nil
-
-ToxControlTopBar.InputBegan:
-    Connect(function(input)
-        if input.UserInputType
-        == Enum.UserInputType.MouseButton1
-        or input.UserInputType
-        == Enum.UserInputType.Touch then
-            ToxControlDragging = true
-            ToxControlDragStart =
-                input.Position
-            ToxControlStartPos =
-                ToxControlGui.Position
-        end
-    end)
-
-UserInputService.InputChanged:
-    Connect(function(input)
-        if not ToxControlDragging
-        or not ToxControlDragStart
-        or not ToxControlStartPos then
-            return
-        end
-
-        if input.UserInputType
-        ~= Enum.UserInputType.MouseMovement
-        and input.UserInputType
-        ~= Enum.UserInputType.Touch then
-            return
-        end
-
-        local delta =
-            input.Position
-            - ToxControlDragStart
-
-        ToxControlGui.Position =
-            UDim2.new(
-                ToxControlStartPos.X.Scale,
-                ToxControlStartPos.X.Offset
-                    + delta.X,
-                ToxControlStartPos.Y.Scale,
-                ToxControlStartPos.Y.Offset
-                    + delta.Y
-            )
-    end)
-
-UserInputService.InputEnded:
-    Connect(function(input)
-        if input.UserInputType
-        == Enum.UserInputType.MouseButton1
-        or input.UserInputType
-        == Enum.UserInputType.Touch then
-            ToxControlDragging = false
-        end
-    end)
-
-ToxControlClose.MouseButton1Click:
-    Connect(function()
-        ToxControlGui.Visible = false
-    end)
-
-if getgenv().RegisterToxLinkedSubGui then
-    getgenv().RegisterToxLinkedSubGui(
-        "ToxControl",
-        ToxControlGui
-    )
-end
-
-if getgenv().RegisterToxSubGuiMinimize then
-    getgenv().RegisterToxSubGuiMinimize(
-        ToxControlGui,
-        -70
-    )
-end
-
-CreateButton("Tox Control", FlingPage, function()
-    if not CanUseToxControl(Player) then
-        return
-    end
-
-    ToxControlGui.Visible =
-        not ToxControlGui.Visible
-end)
-
-end
-
-InitToxControlGui()
-
-AddConnection(Player.CharacterAdded:Connect(function(character)
-    ToxControlFrozen = false
-
-    task.defer(function()
-        local root =
-            character:
-                WaitForChild(
-                    "HumanoidRootPart",
-                    8
-                )
-
-        if root then
-            root.Anchored = false
-        end
-    end)
-end))
-
-
-
-getgenv().ToxSystemsCleanup = function()
-    SetToxControlBhop(false)
-
-    if Player.Character then
-        local root =
-            Player.Character:
-                FindFirstChild(
-                    "HumanoidRootPart"
-                )
-
-        if root then
-            root.Anchored = false
-        end
-    end
-
-    ToxControlFrozen = false
-end
-
-API.ControlLoaded = true
-end
-
-local controlOk, controlErr =
-    pcall(InitToxControl)
-
-if not controlOk then
-    CustomNotify(
-        "Tox Control failed: "
-        .. string.sub(
-            tostring(controlErr),
-            1,
-            90
-        ),
+    targetBox.TextColor3 =
         Color3.fromRGB(
             255,
-            100,
-            100
-        ),
-        6
+            255,
+            255
+        )
+
+    targetBox.PlaceholderColor3 =
+        Color3.fromRGB(
+            130,
+            130,
+            145
+        )
+
+    targetBox.Font =
+        Enum.Font.Gotham
+
+    targetBox.TextSize = 11
+    targetBox.ClearTextOnFocus = false
+    targetBox.Parent = controlGui
+
+    MakeCorner(
+        targetBox,
+        5
     )
 
-    warn(
-        "[ToxHub ToxControl Error]: "
-        .. tostring(controlErr)
+    local targetInfo =
+        Instance.new("TextLabel")
+
+    targetInfo.Size =
+        UDim2.new(
+            1,
+            -20,
+            0,
+            18
+        )
+
+    targetInfo.Position =
+        UDim2.new(
+            0,
+            10,
+            0,
+            99
+        )
+
+    targetInfo.BackgroundTransparency = 1
+    targetInfo.Text =
+        "Target: none"
+
+    targetInfo.TextColor3 =
+        Color3.fromRGB(
+            155,
+            155,
+            170
+        )
+
+    targetInfo.Font =
+        Enum.Font.Gotham
+
+    targetInfo.TextSize = 9
+    targetInfo.TextXAlignment =
+        Enum.TextXAlignment.Left
+
+    targetInfo.Parent = controlGui
+
+    local modeChat =
+        Instance.new("TextButton")
+
+    local modeHidden =
+        Instance.new("TextButton")
+
+    modeChat.Size =
+        UDim2.new(
+            0,
+            70,
+            0,
+            25
+        )
+
+    modeHidden.Size =
+        UDim2.new(
+            0,
+            70,
+            0,
+            25
+        )
+
+    modeChat.Position =
+        UDim2.new(
+            1,
+            -150,
+            0,
+            38
+        )
+
+    modeHidden.Position =
+        UDim2.new(
+            1,
+            -76,
+            0,
+            38
+        )
+
+    for _, button in ipairs({
+        modeChat,
+        modeHidden
+    }) do
+        button.BorderSizePixel = 0
+        button.TextColor3 =
+            Color3.fromRGB(
+                255,
+                255,
+                255
+            )
+
+        button.Font =
+            Enum.Font.GothamBold
+
+        button.TextSize = 9
+        button.AutoButtonColor = false
+        button.Parent = controlGui
+
+        MakeCorner(
+            button,
+            4
+        )
+    end
+
+    modeChat.Text = "CHAT"
+    modeHidden.Text = "HIDDEN"
+
+    local selectedTarget = nil
+
+    local function RefreshRole()
+        local role =
+            select(
+                1,
+                GetToxRole(Player)
+            )
+
+        getgenv().ToxRole = role
+
+        roleLabel.Text =
+            "@"
+            .. Player.Name
+            .. " • "
+            .. role
+    end
+
+    local function RefreshMode()
+        local mode =
+            Settings.ToxControlMode
+
+        modeChat.BackgroundColor3 =
+            mode == "CHAT"
+            and Color3.fromRGB(
+                50,
+                180,
+                70
+            )
+            or Color3.fromRGB(
+                28,
+                28,
+                42
+            )
+
+        modeHidden.BackgroundColor3 =
+            mode == "HIDDEN"
+            and Color3.fromRGB(
+                50,
+                180,
+                70
+            )
+            or Color3.fromRGB(
+                28,
+                28,
+                42
+            )
+    end
+
+    local function RefreshTarget()
+        selectedTarget =
+            ResolvePlayer(
+                targetBox.Text
+            )
+
+        if selectedTarget then
+            local role =
+                select(
+                    1,
+                    GetToxRole(
+                        selectedTarget
+                    )
+                )
+
+            targetInfo.Text =
+                "Target: @"
+                .. selectedTarget.Name
+                .. " • "
+                .. role
+        else
+            targetInfo.Text =
+                "Target: none"
+        end
+
+        return selectedTarget
+    end
+
+    targetBox.FocusLost:
+        Connect(
+            RefreshTarget
+        )
+
+    modeChat.MouseButton1Click:
+        Connect(function()
+            Settings.ToxControlMode =
+                "CHAT"
+
+            RefreshMode()
+            Save()
+        end)
+
+    modeHidden.MouseButton1Click:
+        Connect(function()
+            Settings.ToxControlMode =
+                "HIDDEN"
+
+            RefreshMode()
+            Save()
+        end)
+
+    local function MakeButton(
+        text,
+        x,
+        y,
+        width,
+        callback
     )
+        local button =
+            Instance.new(
+                "TextButton"
+            )
+
+        button.Size =
+            UDim2.new(
+                0,
+                width,
+                0,
+                32
+            )
+
+        button.Position =
+            UDim2.new(
+                0,
+                x,
+                0,
+                y
+            )
+
+        button.BackgroundColor3 =
+            Color3.fromRGB(
+                20,
+                20,
+                30
+            )
+
+        button.BorderSizePixel = 0
+        button.Text = text
+        button.TextColor3 =
+            Color3.fromRGB(
+                245,
+                245,
+                245
+            )
+
+        button.Font =
+            Enum.Font.GothamMedium
+
+        button.TextSize = 9
+        button.Parent = controlGui
+
+        MakeCorner(
+            button,
+            5
+        )
+
+        button.MouseButton1Click:
+            Connect(callback)
+
+        return button
+    end
+
+    local function Remote(
+        command,
+        argument
+    )
+        local target =
+            RefreshTarget()
+
+        if not target
+        or not CanControlTarget(
+            Player,
+            target
+        ) then
+            return
+        end
+
+        SendControl(
+            target,
+            command,
+            argument
+        )
+    end
+
+    MakeButton(
+        "RESET",
+        10,
+        124,
+        66,
+        function()
+            Remote(
+                "reset"
+            )
+        end
+    )
+
+    MakeButton(
+        "FREEZE",
+        80,
+        124,
+        66,
+        function()
+            Remote(
+                "freeze"
+            )
+        end
+    )
+
+    MakeButton(
+        "BRING",
+        150,
+        124,
+        66,
+        function()
+            Remote(
+                "bring"
+            )
+        end
+    )
+
+    MakeButton(
+        "GOTO",
+        220,
+        124,
+        66,
+        function()
+            local target =
+                RefreshTarget()
+
+            if target then
+                GotoPlayer(
+                    target
+                )
+            end
+        end
+    )
+
+    MakeButton(
+        "JUMP",
+        290,
+        124,
+        80,
+        function()
+            Remote(
+                "jump"
+            )
+        end
+    )
+
+    MakeButton(
+        "KICK",
+        10,
+        162,
+        85,
+        function()
+            Remote(
+                "kick"
+            )
+        end
+    )
+
+    MakeButton(
+        "REJOIN",
+        100,
+        162,
+        85,
+        function()
+            Remote(
+                "rejoin"
+            )
+        end
+    )
+
+    MakeButton(
+        "SIT",
+        190,
+        162,
+        85,
+        function()
+            Remote(
+                "sit"
+            )
+        end
+    )
+
+    MakeButton(
+        "UNFREEZE",
+        280,
+        162,
+        90,
+        function()
+            Remote(
+                "unfreeze"
+            )
+        end
+    )
+
+    local chatBox =
+        Instance.new("TextBox")
+
+    chatBox.Size =
+        UDim2.new(
+            1,
+            -92,
+            0,
+            32
+        )
+
+    chatBox.Position =
+        UDim2.new(
+            0,
+            10,
+            0,
+            204
+        )
+
+    chatBox.BackgroundColor3 =
+        Color3.fromRGB(
+            20,
+            20,
+            30
+        )
+
+    chatBox.BorderSizePixel = 0
+    chatBox.Text = ""
+    chatBox.PlaceholderText =
+        "Chat text"
+
+    chatBox.TextColor3 =
+        Color3.fromRGB(
+            255,
+            255,
+            255
+        )
+
+    chatBox.PlaceholderColor3 =
+        Color3.fromRGB(
+            130,
+            130,
+            145
+        )
+
+    chatBox.Font =
+        Enum.Font.Gotham
+
+    chatBox.TextSize = 10
+    chatBox.ClearTextOnFocus = false
+    chatBox.Parent = controlGui
+
+    MakeCorner(
+        chatBox,
+        5
+    )
+
+    MakeButton(
+        "SEND",
+        292,
+        204,
+        78,
+        function()
+            local message =
+                Trim(
+                    chatBox.Text
+                )
+
+            if message ~= "" then
+                Remote(
+                    "chat",
+                    message
+                )
+            end
+        end
+    )
+
+    local flingBox =
+        Instance.new("TextBox")
+
+    flingBox.Size =
+        UDim2.new(
+            1,
+            -92,
+            0,
+            32
+        )
+
+    flingBox.Position =
+        UDim2.new(
+            0,
+            10,
+            0,
+            242
+        )
+
+    flingBox.BackgroundColor3 =
+        Color3.fromRGB(
+            20,
+            20,
+            30
+        )
+
+    flingBox.BorderSizePixel = 0
+    flingBox.Text = ""
+    flingBox.PlaceholderText =
+        "Fling target"
+
+    flingBox.TextColor3 =
+        Color3.fromRGB(
+            255,
+            255,
+            255
+        )
+
+    flingBox.PlaceholderColor3 =
+        Color3.fromRGB(
+            130,
+            130,
+            145
+        )
+
+    flingBox.Font =
+        Enum.Font.Gotham
+
+    flingBox.TextSize = 10
+    flingBox.ClearTextOnFocus = false
+    flingBox.Parent = controlGui
+
+    MakeCorner(
+        flingBox,
+        5
+    )
+
+    MakeButton(
+        "FLING",
+        292,
+        242,
+        78,
+        function()
+            local flingTarget =
+                ResolvePlayer(
+                    flingBox.Text
+                )
+
+            if not flingTarget
+            or not CanControlTarget(
+                Player,
+                flingTarget
+            ) then
+                return
+            end
+
+            Remote(
+                "fling",
+                flingTarget.Name
+            )
+        end
+    )
+
+    local examples =
+        Instance.new("TextLabel")
+
+    examples.Size =
+        UDim2.new(
+            1,
+            -20,
+            0,
+            60
+        )
+
+    examples.Position =
+        UDim2.new(
+            0,
+            10,
+            0,
+            284
+        )
+
+    examples.BackgroundTransparency = 1
+    examples.Text =
+        ".c FGIII reset  |  .c FGIII jump\n"
+        .. ".c FGIII fling batata\n"
+        .. ".c FGIII chat hello"
+
+    examples.TextColor3 =
+        Color3.fromRGB(
+            145,
+            145,
+            160
+        )
+
+    examples.Font =
+        Enum.Font.Gotham
+
+    examples.TextSize = 9
+    examples.TextWrapped = true
+    examples.TextXAlignment =
+        Enum.TextXAlignment.Left
+
+    examples.TextYAlignment =
+        Enum.TextYAlignment.Top
+
+    examples.Parent = controlGui
+
+    local locked =
+        Instance.new("Frame")
+
+    locked.Size =
+        UDim2.new(
+            1,
+            0,
+            1,
+            -32
+        )
+
+    locked.Position =
+        UDim2.new(
+            0,
+            0,
+            0,
+            32
+        )
+
+    locked.BackgroundColor3 =
+        Color3.fromRGB(
+            10,
+            10,
+            16
+        )
+
+    locked.BackgroundTransparency = 0.04
+    locked.BorderSizePixel = 0
+    locked.ZIndex = 20
+    locked.Parent = controlGui
+
+    local lockedTitle =
+        Instance.new("TextLabel")
+
+    lockedTitle.Size =
+        UDim2.new(
+            1,
+            -30,
+            0,
+            40
+        )
+
+    lockedTitle.Position =
+        UDim2.new(
+            0,
+            15,
+            0.5,
+            -65
+        )
+
+    lockedTitle.BackgroundTransparency = 1
+    lockedTitle.Text =
+        "Buy Premium to Use"
+
+    lockedTitle.TextColor3 =
+        Color3.fromRGB(
+            255,
+            255,
+            255
+        )
+
+    lockedTitle.Font =
+        Enum.Font.GothamBold
+
+    lockedTitle.TextSize = 20
+    lockedTitle.ZIndex = 21
+    lockedTitle.Parent = locked
+
+    local lockedInfo =
+        Instance.new("TextLabel")
+
+    lockedInfo.Size =
+        UDim2.new(
+            1,
+            -40,
+            0,
+            42
+        )
+
+    lockedInfo.Position =
+        UDim2.new(
+            0,
+            20,
+            0.5,
+            -20
+        )
+
+    lockedInfo.BackgroundTransparency = 1
+    lockedInfo.Text =
+        "Tox Control is available for Friend, Premium and Owner."
+
+    lockedInfo.TextColor3 =
+        Color3.fromRGB(
+            170,
+            170,
+            185
+        )
+
+    lockedInfo.Font =
+        Enum.Font.Gotham
+
+    lockedInfo.TextSize = 10
+    lockedInfo.TextWrapped = true
+    lockedInfo.ZIndex = 21
+    lockedInfo.Parent = locked
+
+    local buy =
+        Instance.new("TextButton")
+
+    buy.Size =
+        UDim2.new(
+            0,
+            180,
+            0,
+            34
+        )
+
+    buy.Position =
+        UDim2.new(
+            0.5,
+            -90,
+            0.5,
+            38
+        )
+
+    buy.BackgroundColor3 =
+        MAIN_COLOR
+
+    buy.BorderSizePixel = 0
+    buy.Text = "BUY PREMIUM"
+    buy.TextColor3 =
+        Color3.fromRGB(
+            255,
+            255,
+            255
+        )
+
+    buy.Font =
+        Enum.Font.GothamBold
+
+    buy.TextSize = 11
+    buy.ZIndex = 21
+    buy.Parent = locked
+
+    MakeCorner(
+        buy,
+        5
+    )
+
+    local function RefreshLock()
+        PremiumPassCache[
+            Player.UserId
+        ] = nil
+
+        RefreshRole()
+
+        locked.Visible =
+            not CanUseControl(
+                Player
+            )
+    end
+
+    buy.MouseButton1Click:
+        Connect(function()
+            if TOX_PREMIUM_GAMEPASS_ID
+            > 0 then
+                MarketplaceService:
+                    PromptGamePassPurchase(
+                        Player,
+                        TOX_PREMIUM_GAMEPASS_ID
+                    )
+            else
+                CustomNotify(
+                    "Premium purchase is not configured yet",
+                    Color3.fromRGB(
+                        255,
+                        180,
+                        70
+                    ),
+                    4
+                )
+            end
+        end)
+
+    AddConnection(
+        MarketplaceService.
+            PromptGamePassPurchaseFinished:
+            Connect(function(
+                player,
+                gamePassId,
+                purchased
+            )
+                if player == Player
+                and tonumber(gamePassId)
+                    == TOX_PREMIUM_GAMEPASS_ID
+                and purchased then
+                    PremiumPassCache[
+                        Player.UserId
+                    ] = true
+
+                    RefreshLock()
+                end
+            end)
+    )
+
+    close.MouseButton1Click:
+        Connect(function()
+            controlGui.Visible =
+                false
+        end)
+
+    local dragging = false
+    local dragStart = nil
+    local startPosition = nil
+
+    topBar.InputBegan:
+        Connect(function(input)
+            if input.UserInputType
+                == Enum.UserInputType.MouseButton1
+            or input.UserInputType
+                == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart =
+                    input.Position
+                startPosition =
+                    controlGui.Position
+            end
+        end)
+
+    AddConnection(
+        UserInputService.InputChanged:
+            Connect(function(input)
+                if not dragging
+                or not dragStart
+                or not startPosition then
+                    return
+                end
+
+                if input.UserInputType
+                    ~= Enum.UserInputType.MouseMovement
+                and input.UserInputType
+                    ~= Enum.UserInputType.Touch then
+                    return
+                end
+
+                local delta =
+                    input.Position
+                    - dragStart
+
+                controlGui.Position =
+                    UDim2.new(
+                        startPosition.X.Scale,
+                        startPosition.X.Offset
+                            + delta.X,
+                        startPosition.Y.Scale,
+                        startPosition.Y.Offset
+                            + delta.Y
+                    )
+            end)
+    )
+
+    AddConnection(
+        UserInputService.InputEnded:
+            Connect(function(input)
+                if input.UserInputType
+                    == Enum.UserInputType.MouseButton1
+                or input.UserInputType
+                    == Enum.UserInputType.Touch then
+                    dragging = false
+                end
+            end)
+    )
+
+    if getgenv().RegisterToxLinkedSubGui then
+        getgenv().RegisterToxLinkedSubGui(
+            "ToxControl",
+            controlGui
+        )
+    end
+
+    if getgenv().RegisterToxSubGuiMinimize then
+        getgenv().RegisterToxSubGuiMinimize(
+            controlGui,
+            -70
+        )
+    end
+
+    CreateButton(
+        "Tox Control",
+        FlingPage,
+        function()
+            RefreshLock()
+            RefreshMode()
+            RefreshTarget()
+
+            controlGui.Visible =
+                not controlGui.Visible
+        end
+    )
+
+    RefreshRole()
+    RefreshMode()
+    RefreshLock()
+
+    return controlGui
 end
 
-getgenv().ToxSystemsLoaded =
-    controlOk
+local ControlGui =
+    InitToxControlGui()
+
+AddConnection(
+    Player.CharacterAdded:
+        Connect(function(character)
+            FrozenByControl = false
+
+            task.defer(function()
+                local root =
+                    character:
+                        WaitForChild(
+                            "HumanoidRootPart",
+                            8
+                        )
+
+                if root then
+                    root.Anchored = false
+                end
+            end)
+        end)
+)
+
+getgenv().ToxSystemsCleanup =
+    function()
+        SetAutoJump(false)
+
+        if Player.Character then
+            local root =
+                Player.Character:
+                    FindFirstChild(
+                        "HumanoidRootPart"
+                    )
+
+            if root then
+                root.Anchored = false
+            end
+        end
+
+        FrozenByControl = false
+
+        if ControlGui
+        and ControlGui.Parent then
+            ControlGui.Visible = false
+        end
+    end
+
+getgenv().ToxSystemsLoaded = true
