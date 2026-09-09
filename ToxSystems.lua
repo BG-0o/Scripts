@@ -76,10 +76,8 @@ local TOX_FRIEND_IDS = {
 local TOX_PREMIUM_IDS = {
 }
 
-local TOX_PREMIUM_GAMEPASS_ID =
-    tonumber(
-        getgenv().ToxPremiumGamepassId
-    ) or 0
+local TOX_PREMIUM_ASSET_ID =
+    70855495297491
 
 local TOX_ROLE_LEVELS = {
     Member = 1,
@@ -116,7 +114,7 @@ local PremiumSet =
         TOX_PREMIUM_IDS
     )
 
-local PremiumPassCache = {}
+local PremiumAssetCache = {}
 
 local function OwnsToxPremium(
     player
@@ -133,14 +131,9 @@ local function OwnsToxPremium(
         return true
     end
 
-    if TOX_PREMIUM_GAMEPASS_ID
-    <= 0 then
-        return false
-    end
-
-    if PremiumPassCache[userId]
+    if PremiumAssetCache[userId]
     ~= nil then
-        return PremiumPassCache[
+        return PremiumAssetCache[
             userId
         ]
     end
@@ -150,16 +143,16 @@ local function OwnsToxPremium(
     pcall(function()
         owns =
             MarketplaceService:
-                UserOwnsGamePassAsync(
-                    userId,
-                    TOX_PREMIUM_GAMEPASS_ID
+                PlayerOwnsAsset(
+                    player,
+                    TOX_PREMIUM_ASSET_ID
                 )
     end)
 
-    PremiumPassCache[userId] =
+    PremiumAssetCache[userId] =
         owns == true
 
-    return PremiumPassCache[
+    return PremiumAssetCache[
         userId
     ]
 end
@@ -2378,7 +2371,7 @@ local function InitToxControlGui()
 
     lockedInfo.BackgroundTransparency = 1
     lockedInfo.Text =
-        "Tox Control is available for Friend, Premium and Owner."
+        "Own the Tox Premium shirt to unlock Tox Control."
 
     lockedInfo.TextColor3 =
         Color3.fromRGB(
@@ -2439,7 +2432,7 @@ local function InitToxControlGui()
     )
 
     local function RefreshLock()
-        PremiumPassCache[
+        PremiumAssetCache[
             Player.UserId
         ] = nil
 
@@ -2453,43 +2446,40 @@ local function InitToxControlGui()
 
     buy.MouseButton1Click:
         Connect(function()
-            if TOX_PREMIUM_GAMEPASS_ID
-            > 0 then
-                MarketplaceService:
-                    PromptGamePassPurchase(
-                        Player,
-                        TOX_PREMIUM_GAMEPASS_ID
-                    )
-            else
-                CustomNotify(
-                    "Premium purchase is not configured yet",
-                    Color3.fromRGB(
-                        255,
-                        180,
-                        70
-                    ),
-                    4
+            MarketplaceService:
+                PromptPurchase(
+                    Player,
+                    TOX_PREMIUM_ASSET_ID
                 )
-            end
         end)
 
     AddConnection(
         MarketplaceService.
-            PromptGamePassPurchaseFinished:
+            PromptPurchaseFinished:
             Connect(function(
                 player,
-                gamePassId,
+                assetId,
                 purchased
             )
                 if player == Player
-                and tonumber(gamePassId)
-                    == TOX_PREMIUM_GAMEPASS_ID
+                and tonumber(assetId)
+                    == TOX_PREMIUM_ASSET_ID
                 and purchased then
-                    PremiumPassCache[
+                    PremiumAssetCache[
                         Player.UserId
                     ] = true
 
                     RefreshLock()
+
+                    CustomNotify(
+                        "Tox Premium unlocked",
+                        Color3.fromRGB(
+                            100,
+                            255,
+                            130
+                        ),
+                        4
+                    )
                 end
             end)
     )
