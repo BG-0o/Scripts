@@ -409,10 +409,13 @@ local function DecodeToxChatResponse(response)
             end)
 
         if okOuter
-        and typeof(outer) == "table"
-        and outer.event == "message"
+        and typeof(outer)
+            == "table"
+        and outer.event
+            == "message"
         and outer.id then
-            ToxChatLastID = outer.id
+            ToxChatLastID =
+                outer.id
 
             if not ToxChatSeenIDs[
                 outer.id
@@ -499,224 +502,65 @@ local function DecodeToxChatResponse(response)
     end
 end
 
-local function GetToxChatResponse(
-    url
-)
-    if RequestFunction then
-        local ok, response =
-            pcall(function()
-                return RequestFunction({
-                    Url = url,
-                    Method = "GET",
-                    Headers = {
-                        ["Accept"] =
-                            "application/x-ndjson",
-                        ["Cache-Control"] =
-                            "no-cache"
-                    }
-                })
-            end)
+local function PollToxChat()
+    local since = ToxChatLastID and HttpService:UrlEncode(ToxChatLastID) or "5m"
+    local url = "https://ntfy.sh/" .. ToxChatTopic .. "/json?poll=1&since=" .. since
 
-        if ok
-        and response then
-            local statusCode =
-                tonumber(
-                    response.StatusCode
-                    or response.Status
-                    or 0
-                ) or 0
+    local ok, response = pcall(function()
+        return game:HttpGet(url)
+    end)
 
-            local body =
-                response.Body
-                or response.body
+    if ok then
+        DecodeToxChatResponse(response)
 
-            local success =
-                response.Success
-
-            if success == nil then
-                success =
-                    response.success
-            end
-
-            if typeof(body)
-                == "string"
-            and (
-                (
-                    statusCode >= 200
-                    and statusCode < 300
-                )
-                or success == true
-            ) then
-                return body
-            end
+        if ToxChatStatus and ToxChatStatus.Parent then
+            ToxChatStatus.Text = "Global chat • connected"
+            ToxChatStatus.TextColor3 = Color3.fromRGB(100, 255, 130)
+        end
+    else
+        if ToxChatStatus and ToxChatStatus.Parent then
+            ToxChatStatus.Text = "Global chat • reconnecting..."
+            ToxChatStatus.TextColor3 = Color3.fromRGB(255, 180, 70)
         end
     end
+end
 
-    local ok, response =
-        pcall(function()
-            return game:HttpGet(
-                url,
-                true
-            )
+local function PublishToxChatPayload(payload)
+    local body = HttpService:JSONEncode({
+        topic = ToxChatTopic,
+        title = "ToxChat",
+        message = payload
+    })
+
+    if RequestFunction then
+        local ok, response = pcall(function()
+            return RequestFunction({
+                Url = "https://ntfy.sh",
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                },
+                Body = body
+            })
         end)
 
-    if not ok then
-        ok, response =
-            pcall(function()
-                return game:HttpGet(
-                    url
-                )
-            end)
-    end
+        if ok and response then
+            local statusCode = tonumber(response.StatusCode or response.Status or 0)
 
-    if ok
-    and typeof(response)
-        == "string" then
-        return response
-    end
-
-    return nil
-end
-
-local function PollToxChat()
-    local since =
-        ToxChatLastID
-        and HttpService:
-            UrlEncode(
-                ToxChatLastID
-            )
-        or "30s"
-
-    local url =
-        "https://ntfy.sh/"
-        .. ToxChatTopic
-        .. "/json?poll=1&since="
-        .. since
-        .. "&_="
-        .. tostring(
-            math.floor(
-                os.clock() * 1000
-            )
-        )
-
-    local response =
-        GetToxChatResponse(
-            url
-        )
-
-    if response then
-        DecodeToxChatResponse(
-            response
-        )
-
-        if ToxChatStatus
-        and ToxChatStatus.Parent then
-            ToxChatStatus.Text =
-                "Global chat • connected"
-
-            ToxChatStatus.TextColor3 =
-                Color3.fromRGB(
-                    100,
-                    255,
-                    130
-                )
-        end
-
-        return true
-    end
-
-    if ToxChatStatus
-    and ToxChatStatus.Parent then
-        ToxChatStatus.Text =
-            "Global chat • reconnecting..."
-
-        ToxChatStatus.TextColor3 =
-            Color3.fromRGB(
-                255,
-                180,
-                70
-            )
-    end
-
-    return false
-end
-
-local function PublishToxChatPayload(
-    payload
-)
-    payload =
-        tostring(payload or "")
-
-    if payload == "" then
-        return false
-    end
-
-    if RequestFunction then
-        local ok, response =
-            pcall(function()
-                return RequestFunction({
-                    Url =
-                        "https://ntfy.sh/"
-                        .. ToxChatTopic,
-                    Method = "POST",
-                    Headers = {
-                        ["Content-Type"] =
-                            "text/plain; charset=utf-8",
-                        ["Cache"] =
-                            "yes"
-                    },
-                    Body = payload
-                })
-            end)
-
-        if ok
-        and response then
-            local statusCode =
-                tonumber(
-                    response.StatusCode
-                    or response.Status
-                    or 0
-                ) or 0
-
-            local success =
-                response.Success
-
-            if success == nil then
-                success =
-                    response.success
-            end
-
-            if (
-                statusCode >= 200
-                and statusCode < 300
-            )
-            or success == true then
+            if statusCode == 0 or (statusCode >= 200 and statusCode < 300) then
                 return true
             end
         end
     end
 
-    local body =
-        HttpService:
-            JSONEncode({
-                topic =
-                    ToxChatTopic,
-                title =
-                    "ToxChat",
-                message =
-                    payload
-            })
-
-    local ok =
-        pcall(function()
-            HttpService:
-                PostAsync(
-                    "https://ntfy.sh",
-                    body,
-                    Enum.HttpContentType.ApplicationJson,
-                    false
-                )
-        end)
+    local ok = pcall(function()
+        HttpService:PostAsync(
+            "https://ntfy.sh",
+            body,
+            Enum.HttpContentType.ApplicationJson,
+            false
+        )
+    end)
 
     return ok
 end
