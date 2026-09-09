@@ -67,8 +67,11 @@ local NoFallGeneration = 0
 
 local NoTPConnection = nil
 local NoTPCharacterConnection = nil
+local NoTPCorrectionConnection = nil
 local NoTPAnchorCFrame = nil
 local NoTPLastObservedCFrame = nil
+local NoTPCorrectionCFrame = nil
+local NoTPCorrectionUntil = 0
 local NoTPCurrentCharacter = nil
 
 local SpawnCFrame = CFrame.new(-278.442841, 179.499985, 344.097626)
@@ -763,6 +766,8 @@ local function RestoreNoTPCharacter(
 
             NoTPAnchorCFrame = safe
             NoTPLastObservedCFrame = safe
+            NoTPCorrectionCFrame = nil
+            NoTPCorrectionUntil = 0
 
             if getgenv().SetToxLastSafeCFrame then
                 getgenv().SetToxLastSafeCFrame(
@@ -774,6 +779,8 @@ local function RestoreNoTPCharacter(
                 root.CFrame
             NoTPLastObservedCFrame =
                 root.CFrame
+            NoTPCorrectionCFrame = nil
+            NoTPCorrectionUntil = 0
 
             if getgenv().SetToxLastSafeCFrame then
                 getgenv().SetToxLastSafeCFrame(
@@ -798,8 +805,15 @@ local function StopNoTP()
         NoTPCharacterConnection = nil
     end
 
+    if NoTPCorrectionConnection then
+        NoTPCorrectionConnection:Disconnect()
+        NoTPCorrectionConnection = nil
+    end
+
     NoTPAnchorCFrame = nil
     NoTPLastObservedCFrame = nil
+    NoTPCorrectionCFrame = nil
+    NoTPCorrectionUntil = 0
     NoTPCurrentCharacter = nil
 end
 
@@ -820,6 +834,14 @@ local function StartNoTP()
         NoTPCharacterConnection = nil
     end
 
+    if NoTPCorrectionConnection then
+        NoTPCorrectionConnection:Disconnect()
+        NoTPCorrectionConnection = nil
+    end
+
+    NoTPCorrectionCFrame = nil
+    NoTPCorrectionUntil = 0
+
     local character, humanoid, root = GetCharacterState()
 
     if root
@@ -836,7 +858,60 @@ local function StartNoTP()
 
     NoTPCharacterConnection = AddConnection(Player.CharacterAdded:Connect(function(newCharacter)
         NoTPCurrentCharacter = newCharacter
+        NoTPCorrectionCFrame = nil
+        NoTPCorrectionUntil = 0
         RestoreNoTPCharacter(newCharacter)
+    end))
+
+    NoTPCorrectionConnection = AddConnection(RunService.Stepped:Connect(function()
+        if game.PlaceId ~= NDSPlaceId
+        or not Settings.NDSNoTP
+        or tick() >= NoTPCorrectionUntil
+        or typeof(NoTPCorrectionCFrame) ~= "CFrame" then
+            return
+        end
+
+        local currentCharacter, currentHumanoid, currentRoot = GetCharacterState()
+
+        if not currentCharacter
+        or not currentHumanoid
+        or currentHumanoid.Health <= 0
+        or not currentRoot then
+            return
+        end
+
+        local flingBypassUntil =
+            tonumber(
+                getgenv().ToxFlingBypassUntil
+            ) or 0
+
+        local teleportBypassUntil =
+            tonumber(
+                getgenv().ToxTeleportBypassUntil
+            ) or 0
+
+        if tick() < flingBypassUntil
+        or tick() < teleportBypassUntil
+        or (
+            Settings.WalkFling
+            and getgenv().ToxWalkFlingImpulseActive
+                == true
+        ) then
+            NoTPCorrectionCFrame = nil
+            NoTPCorrectionUntil = 0
+            return
+        end
+
+        currentRoot.AssemblyLinearVelocity =
+            Vector3.zero
+        currentRoot.AssemblyAngularVelocity =
+            Vector3.zero
+
+        currentRoot.CFrame =
+            NoTPCorrectionCFrame
+
+        NoTPLastObservedCFrame =
+            NoTPCorrectionCFrame
     end))
 
     NoTPConnection = AddConnection(RunService.Heartbeat:Connect(function()
@@ -871,6 +946,8 @@ local function StartNoTP()
             ) or 0
 
         if tick() < flingBypassUntil then
+            NoTPCorrectionCFrame = nil
+            NoTPCorrectionUntil = 0
             return
         end
 
@@ -886,6 +963,9 @@ local function StartNoTP()
             ) or 0
 
         if tick() < bypassUntil then
+            NoTPCorrectionCFrame = nil
+            NoTPCorrectionUntil = 0
+
             if not IsNDSVoidPosition(
                 currentRoot.Position
             ) then
@@ -895,6 +975,19 @@ local function StartNoTP()
                     currentRoot.CFrame
             end
 
+            return
+        end
+
+        if tick() < NoTPCorrectionUntil
+        and typeof(NoTPCorrectionCFrame) == "CFrame" then
+            currentRoot.AssemblyLinearVelocity =
+                Vector3.zero
+            currentRoot.AssemblyAngularVelocity =
+                Vector3.zero
+            currentRoot.CFrame =
+                NoTPCorrectionCFrame
+            NoTPLastObservedCFrame =
+                NoTPCorrectionCFrame
             return
         end
 
@@ -922,14 +1015,19 @@ local function StartNoTP()
 
         if frameDistance > 8
         and protectedDistance > 8 then
+            NoTPCorrectionCFrame =
+                NoTPAnchorCFrame
+            NoTPCorrectionUntil =
+                tick() + 1.75
+
             currentRoot.AssemblyLinearVelocity =
                 Vector3.zero
             currentRoot.AssemblyAngularVelocity =
                 Vector3.zero
             currentRoot.CFrame =
-                NoTPAnchorCFrame
+                NoTPCorrectionCFrame
             NoTPLastObservedCFrame =
-                NoTPAnchorCFrame
+                NoTPCorrectionCFrame
             return
         end
 
@@ -955,6 +1053,8 @@ getgenv().SetNDSNoTPAnchor = function(
 
     NoTPAnchorCFrame = cframe
     NoTPLastObservedCFrame = cframe
+    NoTPCorrectionCFrame = nil
+    NoTPCorrectionUntil = 0
     NoTPCurrentCharacter =
         Player.Character
 
