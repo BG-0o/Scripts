@@ -53,8 +53,6 @@ local Settings =
     getgenv().Settings or {}
 local AutoSaveConfiguration =
     getgenv().AutoSaveConfiguration
-local RequestFunction =
-    getgenv().ToxRequestFunction
 
 if not Player
 or not Gui
@@ -858,575 +856,20 @@ AddConnection(
         end)
 )
 
-local HIDDEN_METADATA_PREFIX =
-    "ToxControlHiddenV7:"
-
-local HiddenPendingAcks = {}
-local HiddenSeenNonces = {}
-
-local function MakeHiddenMetadata(
-    payload
-)
-    local ok, encoded =
-        pcall(function()
-            return HttpService:
-                JSONEncode(payload)
-        end)
-
-    if not ok then
-        return nil
-    end
-
-    return
-        HIDDEN_METADATA_PREFIX
-        .. encoded
-end
-
-local function DecodeHiddenMetadata(
-    metadata
-)
-    metadata =
-        tostring(
-            metadata or ""
-        )
-
-    if string.sub(
-        metadata,
-        1,
-        #HIDDEN_METADATA_PREFIX
-    ) ~= HIDDEN_METADATA_PREFIX then
-        return nil
-    end
-
-    local raw =
-        string.sub(
-            metadata,
-            #HIDDEN_METADATA_PREFIX + 1
-        )
-
-    local ok, payload =
-        pcall(function()
-            return HttpService:
-                JSONDecode(raw)
-        end)
-
-    if ok
-    and typeof(payload)
-        == "table" then
-        return payload
-    end
-
-    return nil
-end
-
-local function InstallHiddenMessageMask()
-    pcall(function()
-        TextChatService.OnIncomingMessage =
-            function(message)
-                local metadata =
-                    tostring(
-                        message
-                        and message.Metadata
-                        or ""
-                    )
-
-                if string.sub(
-                    metadata,
-                    1,
-                    #HIDDEN_METADATA_PREFIX
-                ) == HIDDEN_METADATA_PREFIX then
-                    local properties =
-                        Instance.new(
-                            "TextChatMessageProperties"
-                        )
-
-                    properties.Text = ""
-                    properties.PrefixText = ""
-
-                    return properties
-                end
-
-                return nil
-            end
-    end)
-end
-
-InstallHiddenMessageMask()
-
-local function GetTextChannels()
-    return
-        TextChatService:
-            FindFirstChild(
-                "TextChannels"
-            )
-end
-
-local function FindWhisperChannel(
-    target
-)
-    local channels =
-        GetTextChannels()
-
-    if not channels
-    or not target then
-        return nil
-    end
-
-    local selfId =
-        tostring(
-            Player.UserId
-        )
-
-    local targetId =
-        tostring(
-            target.UserId
-        )
-
-    for _, channel in ipairs(
-        channels:GetChildren()
-    ) do
-        if channel:IsA(
-            "TextChannel"
-        )
-        and string.find(
-            channel.Name,
-            "RBXWhisper:",
-            1,
-            true
-        ) == 1
-        and string.find(
-            channel.Name,
-            selfId,
-            1,
-            true
-        )
-        and string.find(
-            channel.Name,
-            targetId,
-            1,
-            true
-        ) then
-            return channel
-        end
-    end
-
-    return nil
-end
-
-local function GetGeneralChannel()
-    local channels =
-        GetTextChannels()
-
-    if not channels then
-        return nil
-    end
-
-    return
-        channels:
-            FindFirstChild(
-                "RBXGeneral"
-            )
-end
-
-local function EnsureWhisperChannel(
-    target
-)
-    local existing =
-        FindWhisperChannel(
-            target
-        )
-
-    if existing then
-        return existing
-    end
-
-    local inputConfig =
-        TextChatService:
-            FindFirstChild(
-                "ChatInputBarConfiguration"
-            )
-
-    local previousChannel =
-        inputConfig
-        and inputConfig.TargetTextChannel
-
-    local sourceChannel =
-        previousChannel
-        or GetGeneralChannel()
-
-    if not sourceChannel then
-        return nil
-    end
-
-    pcall(function()
-        sourceChannel:
-            SendAsync(
-                "/w @"
-                .. target.Name
-            )
-    end)
-
-    local started = tick()
-
-    while tick() - started < 2.5 do
-        local channel =
-            FindWhisperChannel(
-                target
-            )
-
-        if channel then
-            if inputConfig
-            and previousChannel then
-                task.defer(function()
-                    pcall(function()
-                        inputConfig.TargetTextChannel =
-                            previousChannel
-                    end)
-                end)
-            end
-
-            return channel
-        end
-
-        task.wait(0.05)
-    end
-
-    if inputConfig
-    and previousChannel then
-        pcall(function()
-            inputConfig.TargetTextChannel =
-                previousChannel
-        end)
-    end
-
-    return nil
-end
-
-local function SendHiddenPacket(
-    target,
-    payload
-)
-    if not target then
-        return false
-    end
-
-    local metadata =
-        MakeHiddenMetadata(
-            payload
-        )
-
-    if not metadata then
-        return false
-    end
-
-    local whisper =
-        EnsureWhisperChannel(
-            target
-        )
-
-    if not whisper then
-        return false
-    end
-
-    local ok, message =
-        pcall(function()
-            return whisper:
-                SendAsync(
-                    ".",
-                    metadata
-                )
-        end)
-
-    if not ok
-    or not message then
-        return false
-    end
-
-    local statusOk =
-        pcall(function()
-            local status =
-                message.Status
-
-            if status
-            and Enum.TextChatMessageStatus
-            and status
-                ~= Enum.TextChatMessageStatus.Success then
-                error("send failed")
-            end
-        end)
-
-    return statusOk
-end
-
-local function SendHiddenAck(
-    actor,
-    nonce,
-    success
-)
-    if not actor then
-        return
-    end
-
-    task.spawn(function()
-        SendHiddenPacket(
-            actor,
-            {
-                version = 7,
-                kind =
-                    "toxcontrol_ack",
-                nonce =
-                    tostring(
-                        nonce or ""
-                    ),
-                actorUserId =
-                    actor.UserId,
-                targetUserId =
-                    Player.UserId,
-                success =
-                    success == true,
-                placeId =
-                    game.PlaceId,
-                jobId =
-                    game.JobId,
-                sentAt =
-                    os.time()
-            }
-        )
-    end)
-end
-
-local function HandleHiddenPayload(
-    sourcePlayer,
-    payload
-)
-    if not sourcePlayer
-    or typeof(payload)
-        ~= "table"
-    or tonumber(
-        payload.placeId
-    ) ~= game.PlaceId
-    or tostring(
-        payload.jobId or ""
-    ) ~= tostring(
-        game.JobId
-    ) then
-        return false
-    end
-
-    local kind =
-        tostring(
-            payload.kind or ""
-        )
-
-    if kind
-        == "toxcontrol_ack" then
-        if tonumber(
-            payload.actorUserId
-        ) ~= Player.UserId then
-            return true
-        end
-
-        local nonce =
-            tostring(
-                payload.nonce
-                or ""
-            )
-
-        if HiddenPendingAcks[
-            nonce
-        ] ~= nil then
-            HiddenPendingAcks[
-                nonce
-            ] =
-                payload.success == true
-        end
-
-        return true
-    end
-
-    if kind
-        ~= "toxcontrol"
-    or tonumber(
-        payload.actorUserId
-    ) ~= sourcePlayer.UserId
-    or tonumber(
-        payload.targetUserId
-    ) ~= Player.UserId then
-        return false
-    end
-
-    local nonce =
-        tostring(
-            payload.nonce
-            or ""
-        )
-
-    if nonce == "" then
-        return true
-    end
-
-    if HiddenSeenNonces[
-        nonce
-    ] then
-        return true
-    end
-
-    HiddenSeenNonces[
-        nonce
-    ] = true
-
-    if not CanUseControl(
-        sourcePlayer
-    )
-    or not CanControlTarget(
-        sourcePlayer,
-        Player
-    ) then
-        SendHiddenAck(
-            sourcePlayer,
-            nonce,
-            false
-        )
-
-        return true
-    end
-
-    local success =
-        ExecuteCommand(
-            sourcePlayer,
-            payload.command,
-            payload.argument
-        ) == true
-
-    SendHiddenAck(
-        sourcePlayer,
-        nonce,
-        success
-    )
-
-    return true
-end
-
-pcall(function()
-    AddConnection(
-        TextChatService.MessageReceived:
-            Connect(function(message)
-                if not message
-                or not message.TextSource then
-                    return
-                end
-
-                local payload =
-                    DecodeHiddenMetadata(
-                        message.Metadata
-                    )
-
-                if not payload then
-                    return
-                end
-
-                local sourcePlayer =
-                    Players:
-                        GetPlayerByUserId(
-                            message.TextSource.UserId
-                        )
-
-                if sourcePlayer then
-                    HandleHiddenPayload(
-                        sourcePlayer,
-                        payload
-                    )
-                end
-            end)
-    )
-end)
-
 local function SendHiddenControl(
     target,
     command,
     argument
 )
-    if not target then
-        return false
-    end
-
-    local nonce =
-        HttpService:
-            GenerateGUID(false)
-
-    HiddenPendingAcks[
-        nonce
-    ] = "waiting"
-
-    local sent =
-        SendHiddenPacket(
-            target,
-            {
-                version = 7,
-                kind =
-                    "toxcontrol",
-                nonce = nonce,
-                actorUserId =
-                    Player.UserId,
-                targetUserId =
-                    target.UserId,
-                command =
-                    tostring(
-                        command
-                        or ""
-                    ),
-                argument =
-                    tostring(
-                        argument
-                        or ""
-                    ),
-                placeId =
-                    game.PlaceId,
-                jobId =
-                    game.JobId,
-                sentAt =
-                    os.time()
-            }
-        )
-
-    if not sent then
-        HiddenPendingAcks[
-            nonce
-        ] = nil
-
-        return false
-    end
-
-    local started = tick()
-
-    while tick() - started < 6 do
-        local state =
-            HiddenPendingAcks[
-                nonce
-            ]
-
-        if state == true then
-            HiddenPendingAcks[
-                nonce
-            ] = nil
-
-            return true
-        end
-
-        if state == false then
-            HiddenPendingAcks[
-                nonce
-            ] = nil
-
-            return false
-        end
-
-        task.wait(0.08)
-    end
-
-    HiddenPendingAcks[
-        nonce
-    ] = nil
+    CustomNotify(
+        "HIDDEN needs a separate relay host",
+        Color3.fromRGB(
+            255,
+            180,
+            70
+        ),
+        4
+    )
 
     return false
 end
@@ -1506,11 +949,9 @@ local function SendControl(
             ),
             3
         )
-    else
+    elseif mode ~= "HIDDEN" then
         CustomNotify(
-            mode == "HIDDEN"
-            and "Tox Control hidden: target did not confirm"
-            or "Tox Control chat command failed",
+            "Tox Control chat command failed",
             Color3.fromRGB(
                 255,
                 180,
@@ -2747,8 +2188,37 @@ local function InitToxControlGui()
     return controlGui
 end
 
-local ControlGui =
-    InitToxControlGui()
+local ControlGui = nil
+
+local guiOk, guiResult =
+    pcall(
+        InitToxControlGui
+    )
+
+if guiOk then
+    ControlGui =
+        guiResult
+else
+    CustomNotify(
+        "Tox Control UI failed: "
+        .. string.sub(
+            tostring(guiResult),
+            1,
+            80
+        ),
+        Color3.fromRGB(
+            255,
+            100,
+            100
+        ),
+        6
+    )
+
+    warn(
+        "[ToxHub ToxControl UI Error]: "
+        .. tostring(guiResult)
+    )
+end
 
 AddConnection(
     Player.CharacterAdded:
