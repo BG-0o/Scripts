@@ -204,7 +204,14 @@ getgenv().AddConnection = function(conn)
 end
 
 local FolderName = "ToxV1_Data"
-local ConfigFilePath = FolderName .. "/config.json"
+local ConfigFilePath =
+    FolderName
+    .. "/config_"
+    .. tostring(Player.UserId)
+    .. ".json"
+
+getgenv().ToxConfigFilePath =
+    ConfigFilePath
 
 local function EnsureFolder()
     if makefolder and isfolder then
