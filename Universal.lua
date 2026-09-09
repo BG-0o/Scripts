@@ -248,7 +248,7 @@ end)
 
 getgenv().ToxRequestFunction = RequestFunction
 
-(function()
+local function InitToxChatRuntime()
 local ToxChatGui = getgenv().ToxChatGui
 local ToxChatInput = getgenv().ToxChatInput
 local ToxChatSendBtn = getgenv().ToxChatSendBtn
@@ -832,7 +832,9 @@ CreateButton("Tox Chat", FlingPage, function()
 end)
 
 ChatAPI.ChatLoaded = true
-end)()
+end
+
+InitToxChatRuntime()
 
 local function GetHumanoidDefaults(hum)
     if not hum then return nil end
