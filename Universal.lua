@@ -14,11 +14,14 @@ local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local GuiService = game:GetService("GuiService")
+local CoreGui = game:GetService("CoreGui")
 
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 local NDSPlaceId = 189707
+local MM2PlaceId = 142823291
 
 if game.PlaceId ~= NDSPlaceId then
     local env = getgenv()
@@ -1831,6 +1834,424 @@ local function ExecuteTeleport(TargetInput, mode)
     end
 end
 
+local Render3DColorMap = {
+    WHITE =
+        Color3.fromRGB(
+            190,
+            190,
+            200
+        ),
+    BLACK =
+        Color3.fromRGB(
+            5,
+            5,
+            8
+        ),
+    RED =
+        Color3.fromRGB(
+            95,
+            8,
+            12
+        ),
+    BLUE =
+        Color3.fromRGB(
+            9,
+            0,
+            110
+        )
+}
+
+Settings.Render3DColor =
+    string.upper(
+        tostring(
+            Settings.Render3DColor
+            or "BLACK"
+        )
+    )
+
+if not Render3DColorMap[
+    Settings.Render3DColor
+] then
+    Settings.Render3DColor =
+        "BLACK"
+end
+
+local oldRenderBackdrop =
+    getgenv().ToxRenderBackdropGui
+
+if oldRenderBackdrop then
+    pcall(function()
+        oldRenderBackdrop:
+            Destroy()
+    end)
+end
+
+local RenderBackdropGui =
+    Instance.new("ScreenGui")
+
+RenderBackdropGui.Name =
+    "ToxRenderBackdrop"
+
+RenderBackdropGui.IgnoreGuiInset = true
+RenderBackdropGui.ResetOnSpawn = false
+RenderBackdropGui.DisplayOrder = -100
+RenderBackdropGui.ZIndexBehavior =
+    Enum.ZIndexBehavior.Sibling
+
+RenderBackdropGui.Parent =
+    (gethui and gethui())
+    or CoreGui
+
+local RenderBackdrop =
+    Instance.new("Frame")
+
+RenderBackdrop.Size =
+    UDim2.new(
+        1,
+        0,
+        1,
+        0
+    )
+
+RenderBackdrop.Position =
+    UDim2.new(
+        0,
+        0,
+        0,
+        0
+    )
+
+RenderBackdrop.BorderSizePixel = 0
+RenderBackdrop.ZIndex = 1
+RenderBackdrop.Parent =
+    RenderBackdropGui
+
+getgenv().ToxRenderBackdropGui =
+    RenderBackdropGui
+
+local function RefreshRenderBackdrop()
+    RenderBackdrop.BackgroundColor3 =
+        Render3DColorMap[
+            Settings.Render3DColor
+        ]
+        or Render3DColorMap.BLACK
+
+    RenderBackdrop.Visible =
+        Settings.Render3D == false
+end
+
+RefreshRenderBackdrop()
+
+local function SetRender3DEnabled(
+    enabled
+)
+    Settings.Render3D =
+        enabled == true
+
+    pcall(function()
+        RunService:
+            Set3dRenderingEnabled(
+                Settings.Render3D
+            )
+    end)
+
+    RefreshRenderBackdrop()
+end
+
+local function SetRender3DColor(
+    colorName
+)
+    local normalized =
+        string.upper(
+            tostring(
+                colorName
+                or "BLACK"
+            )
+        )
+
+    if not Render3DColorMap[
+        normalized
+    ] then
+        return false
+    end
+
+    Settings.Render3DColor =
+        normalized
+
+    RefreshRenderBackdrop()
+
+    return true
+end
+
+local AntiKickRejoining = false
+
+local function ResolveAntiKickQueue()
+    local env =
+        getgenv()
+
+    if env
+    and type(
+        env.queue_on_teleport
+    ) == "function" then
+        return env.queue_on_teleport
+    end
+
+    if type(queue_on_teleport)
+        == "function" then
+        return queue_on_teleport
+    end
+
+    if syn
+    and type(
+        syn.queue_on_teleport
+    ) == "function" then
+        return syn.queue_on_teleport
+    end
+
+    if fluxus
+    and type(
+        fluxus.queue_on_teleport
+    ) == "function" then
+        return fluxus.queue_on_teleport
+    end
+
+    return nil
+end
+
+local function QueueAntiKickResume()
+    local queueFunction =
+        ResolveAntiKickQueue()
+
+    if not queueFunction then
+        return false
+    end
+
+    local resumeFarm =
+        game.PlaceId == MM2PlaceId
+        and Settings.MM2AutoFarmV2
+            == true
+
+    local payload =
+        "if not game:IsLoaded() then game.Loaded:Wait() end\n"
+        .. "getgenv().__ToxAntiKickResume = true\n"
+        .. "getgenv().__ToxAntiKickResumeFarm = "
+        .. tostring(
+            resumeFarm
+        )
+        .. "\n"
+        .. "task.wait(0.6)\n"
+        .. "pcall(function() loadstring(game:HttpGet("
+        .. string.format(
+            "%q",
+            "https://raw.githubusercontent.com/BG-0o/Scripts/main/ToxHud.lua"
+        )
+        .. "))() end)"
+
+    return pcall(
+        queueFunction,
+        payload
+    )
+end
+
+local function TryAntiKickRejoin(
+    reason
+)
+    if not Settings.AntiKick
+    or AntiKickRejoining
+    or getgenv().Destroyed then
+        return
+    end
+
+    local text =
+        string.lower(
+            tostring(
+                reason
+                or ""
+            )
+        )
+
+    if text ~= ""
+    and not (
+        string.find(
+            text,
+            "kick",
+            1,
+            true
+        )
+        or string.find(
+            text,
+            "disconnect",
+            1,
+            true
+        )
+        or string.find(
+            text,
+            "connection",
+            1,
+            true
+        )
+        or string.find(
+            text,
+            "error code",
+            1,
+            true
+        )
+        or string.find(
+            text,
+            "invalid",
+            1,
+            true
+        )
+        or string.find(
+            text,
+            "position",
+            1,
+            true
+        )
+    ) then
+        return
+    end
+
+    AntiKickRejoining = true
+
+    QueueAntiKickResume()
+
+    CustomNotify(
+        "Anti Kick • Rejoining server...",
+        Color3.fromRGB(
+            100,
+            190,
+            255
+        ),
+        5
+    )
+
+    if getgenv().AllowToxTeleport then
+        getgenv().AllowToxTeleport(
+            8
+        )
+    end
+
+    task.spawn(function()
+        task.wait(0.15)
+
+        local sameServer =
+            pcall(function()
+                if game.JobId
+                and game.JobId ~= "" then
+                    TeleportService:
+                        TeleportToPlaceInstance(
+                            game.PlaceId,
+                            game.JobId,
+                            Player
+                        )
+                else
+                    error(
+                        "no_job"
+                    )
+                end
+            end)
+
+        if not sameServer then
+            pcall(function()
+                TeleportService:
+                    Teleport(
+                        game.PlaceId,
+                        Player
+                    )
+            end)
+        else
+            task.delay(
+                2.5,
+                function()
+                    if AntiKickRejoining then
+                        pcall(function()
+                            TeleportService:
+                                Teleport(
+                                    game.PlaceId,
+                                    Player
+                                )
+                        end)
+                    end
+                end
+            )
+        end
+    end)
+end
+
+pcall(function()
+    AddConnection(
+        GuiService.
+            ErrorMessageChanged:
+            Connect(function(message)
+                TryAntiKickRejoin(
+                    message
+                )
+            end)
+    )
+end)
+
+pcall(function()
+    local promptGui =
+        CoreGui:
+            FindFirstChild(
+                "RobloxPromptGui"
+            )
+
+    local promptOverlay =
+        promptGui
+        and promptGui:
+            FindFirstChild(
+                "promptOverlay"
+            )
+
+    if promptOverlay then
+        AddConnection(
+            promptOverlay.ChildAdded:
+                Connect(function(child)
+                    task.delay(
+                        0.05,
+                        function()
+                            if not child
+                            or not child.Parent then
+                                return
+                            end
+
+                            local parts = {}
+
+                            for _, item in ipairs(
+                                child:
+                                    GetDescendants()
+                            ) do
+                                if item:IsA(
+                                    "TextLabel"
+                                )
+                                or item:IsA(
+                                    "TextButton"
+                                ) then
+                                    table.insert(
+                                        parts,
+                                        tostring(
+                                            item.Text
+                                            or ""
+                                        )
+                                    )
+                                end
+                            end
+
+                            TryAntiKickRejoin(
+                                table.concat(
+                                    parts,
+                                    " "
+                                )
+                            )
+                        end
+                    )
+                end)
+        )
+    end
+end)
+
 local function ServerHop()
     pcall(function()
         local sfUrl = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/0?sortOrder=Asc&limit=100"
@@ -3521,7 +3942,173 @@ CreateToggle("Walk Fling", FlingPage, Settings.WalkFling, function(v)
         )
     end
 end, "WalkFling")
-CreateInputWithButton("Fling", FlingPage, "", "Fling", function(text) ExecuteFling(text) end)
+local LoopFlingInput = nil
+local LoopFlingGeneration = 0
+
+local function ToggleLoopFling(
+    text
+)
+    local cleaned =
+        tostring(
+            text
+            or ""
+        ):
+            match(
+                "^%s*(.-)%s*$"
+            )
+        or ""
+
+    if cleaned == "" then
+        LoopFlingInput = nil
+        LoopFlingGeneration += 1
+
+        CustomNotify(
+            "Loop Fling Disabled",
+            Color3.fromRGB(
+                255,
+                120,
+                120
+            )
+        )
+
+        return
+    end
+
+    local normalized =
+        string.lower(
+            cleaned
+        )
+
+    if LoopFlingInput
+    and string.lower(
+        LoopFlingInput
+    ) == normalized then
+        LoopFlingInput = nil
+        LoopFlingGeneration += 1
+
+        CustomNotify(
+            "Loop Fling Disabled",
+            Color3.fromRGB(
+                255,
+                120,
+                120
+            )
+        )
+
+        return
+    end
+
+    LoopFlingInput =
+        cleaned
+
+    LoopFlingGeneration += 1
+
+    local generation =
+        LoopFlingGeneration
+
+    CustomNotify(
+        "Loop Fling Enabled • "
+        .. cleaned,
+        Color3.fromRGB(
+            100,
+            255,
+            130
+        )
+    )
+
+    task.spawn(function()
+        while LoopFlingInput
+        and generation
+            == LoopFlingGeneration
+        and not getgenv().Destroyed do
+            local activeInput =
+                LoopFlingInput
+
+            if not activeInput then
+                break
+            end
+
+            local lower =
+                string.lower(
+                    activeInput
+                )
+
+            if lower ~= "all"
+            and lower ~= "others" then
+                local found = false
+
+                for _, target in ipairs(
+                    Players:
+                        GetPlayers()
+                ) do
+                    if target ~= Player
+                    and (
+                        string.find(
+                            string.lower(
+                                target.Name
+                            ),
+                            lower,
+                            1,
+                            true
+                        )
+                        or string.find(
+                            string.lower(
+                                target.DisplayName
+                            ),
+                            lower,
+                            1,
+                            true
+                        )
+                    ) then
+                        found = true
+                        break
+                    end
+                end
+
+                if not found then
+                    LoopFlingInput = nil
+
+                    CustomNotify(
+                        "Loop Fling stopped • player left",
+                        Color3.fromRGB(
+                            255,
+                            180,
+                            70
+                        )
+                    )
+
+                    break
+                end
+            end
+
+            ExecuteFling(
+                activeInput
+            )
+
+            task.wait(1.25)
+        end
+    end)
+end
+
+CreateInputWithTwoButtons(
+    "Fling",
+    FlingPage,
+    "",
+    "Fling",
+    "Loop",
+    function(text, mode)
+        if mode == "LOOP" then
+            ToggleLoopFling(
+                text
+            )
+        else
+            ExecuteFling(
+                text
+            )
+        end
+    end
+)
+
 CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
 CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
 CreateButton("Tox Waypoints", FlingPage, function() WaypointsGui.Visible = not WaypointsGui.Visible end)
@@ -3548,10 +4135,64 @@ end)
 
 CreateToggle("Anti AFK", ConfigPage, Settings.AntiAFK, function(v) Settings.AntiAFK = v end)
 CreateToggle("Chat Logs", ConfigPage, Settings.ChatLogs, function(v) Settings.ChatLogs = v ChatLogGui.Visible = v end)
-CreateToggle("3D Rendering", ConfigPage, Settings.Render3D, function(v) 
-    Settings.Render3D = v 
-    pcall(function() RunService:Set3dRenderingEnabled(v) end)
-end)
+
+CreateDropdown(
+    "3D Background",
+    {
+        "WHITE",
+        "BLACK",
+        "RED",
+        "BLUE"
+    },
+    ConfigPage,
+    Settings.Render3DColor,
+    function(value)
+        SetRender3DColor(
+            value
+        )
+
+        AutoSaveConfiguration()
+    end
+)
+
+CreateToggle(
+    "3D Rendering",
+    ConfigPage,
+    Settings.Render3D,
+    function(v)
+        SetRender3DEnabled(
+            v
+        )
+
+        AutoSaveConfiguration()
+    end
+)
+
+CreateToggle(
+    "Anti Kick",
+    ConfigPage,
+    Settings.AntiKick,
+    function(v)
+        Settings.AntiKick =
+            v == true
+
+        AutoSaveConfiguration()
+
+        if Settings.AntiKick then
+            CustomNotify(
+                "Anti Kick Enabled • auto rejoin on disconnect",
+                Color3.fromRGB(
+                    100,
+                    255,
+                    130
+                ),
+                4
+            )
+        end
+    end,
+    "AntiKick"
+)
+
 CreateToggle("Auto Execute", ConfigPage, Settings.AutoExecute, function(v)
     Settings.AutoExecute = v == true
 
@@ -3623,6 +4264,17 @@ end)
 CreateConfirmButton("DESTROY", ConfigPage, function()
     if AutoSaveConfiguration then
         pcall(AutoSaveConfiguration)
+    end
+
+    LoopFlingInput = nil
+    LoopFlingGeneration += 1
+
+    if RenderBackdropGui
+    and RenderBackdropGui.Parent then
+        pcall(function()
+            RenderBackdropGui:
+                Destroy()
+        end)
     end
 
     Destroyed = true
