@@ -35,8 +35,43 @@ local AutoSaveConfiguration = getgenv().AutoSaveConfiguration
 local SyncToggleVisuals = getgenv().SyncToggleVisuals
 local SyncValueVisuals = getgenv().SyncValueVisuals
 
-if not Settings or not GamePage or not CreateToggle or not CreateToggleWithValue or not CreateButton then
+if not Settings
+or not GamePage
+or not CreateToggle
+or not CreateToggleWithValue
+or not CreateButton then
     return
+end
+
+local NDSModuleVersion =
+    "2026-09-09-ui-once-1"
+
+if getgenv().ToxNDSModuleLoadedJobId
+    == game.JobId
+and getgenv().ToxNDSModuleVersion
+    == NDSModuleVersion
+and getgenv().ToxNDSModulePage
+    == GamePage
+and not getgenv().Destroyed then
+    return
+end
+
+if getgenv().ToxNDSCleanup then
+    pcall(
+        getgenv().ToxNDSCleanup
+    )
+end
+
+for _, child in ipairs(
+    GamePage:
+        GetChildren()
+) do
+    if child:IsA(
+        "GuiObject"
+    ) then
+        child:
+            Destroy()
+    end
 end
 
 local configuredWaterFlySpeed = tonumber(Settings.NDSWaterFlySpeed)
@@ -1320,7 +1355,38 @@ if Settings.NDSWaterFly then
 end
 
 if Settings.NDSNoTP then
-    getgenv().SetNDSNoTP(true, true)
+    getgenv().SetNDSNoTP(
+        true,
+        true
+    )
 else
     StopNoTP()
 end
+
+getgenv().ToxNDSCleanup =
+    function()
+        pcall(
+            StopAutoWin
+        )
+
+        pcall(
+            StopNDSNoFall
+        )
+
+        pcall(
+            StopWaterFly
+        )
+
+        pcall(
+            StopNoTP
+        )
+    end
+
+getgenv().ToxNDSModuleLoadedJobId =
+    game.JobId
+
+getgenv().ToxNDSModuleVersion =
+    NDSModuleVersion
+
+getgenv().ToxNDSModulePage =
+    GamePage
