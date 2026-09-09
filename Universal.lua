@@ -2058,13 +2058,13 @@ local function StartWalkFling()
 
             local multiplier =
                 game.PlaceId == NDSPlaceId
-                and 3500
-                or 10000
+                and 900
+                or 2500
 
             local verticalBoost =
                 game.PlaceId == NDSPlaceId
-                and 2500
-                or 10000
+                and 600
+                or 1500
 
             root.Velocity =
                 velocity * multiplier
