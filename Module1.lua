@@ -95,6 +95,7 @@ getgenv().Settings = {
 	GUIKeybind = Enum.KeyCode.LeftAlt,
     GUIColorName = "Blue",
     GUIScales = {},
+    GUISizes = {},
 
 	SpeedValue = 16,
 	JumpValue = 50,
@@ -1127,6 +1128,10 @@ if typeof(Settings.GUIScales) ~= "table" then
     Settings.GUIScales = {}
 end
 
+if typeof(Settings.GUISizes) ~= "table" then
+    Settings.GUISizes = {}
+end
+
 local LoadedGUIColor =
     GUIColorMap[
         tostring(
@@ -1752,14 +1757,69 @@ getgenv().MakeDraggable = function(Frame, DragHandle)
     end))
 end
 
-local GuiScaleSaveTokens = {}
+local GuiSizeSaveTokens = {}
+
+getgenv().GetSavedGuiSize =
+    function(
+        key,
+        defaultSize
+    )
+        key =
+            tostring(
+                key
+                or ""
+            )
+
+        Settings.GUISizes =
+            typeof(Settings.GUISizes)
+                == "table"
+            and Settings.GUISizes
+            or {}
+
+        local saved =
+            Settings.GUISizes[
+                key
+            ]
+
+        if typeof(saved)
+            == "table" then
+            local width =
+                tonumber(
+                    saved.Width
+                )
+
+            local height =
+                tonumber(
+                    saved.Height
+                )
+
+            if width
+            and height
+            and width >= 200
+            and height >= 100 then
+                return
+                    UDim2.new(
+                        0,
+                        math.floor(
+                            width + 0.5
+                        ),
+                        0,
+                        math.floor(
+                            height + 0.5
+                        )
+                    )
+            end
+        end
+
+        return defaultSize
+    end
 
 getgenv().MakeResizable =
     function(
         frame,
         key,
-        minScale,
-        maxScale
+        minRatio,
+        maxRatio
     )
         if not frame
         or not frame:IsA("GuiObject") then
@@ -1773,61 +1833,129 @@ getgenv().MakeResizable =
                 or "GUI"
             )
 
-        minScale =
+        minRatio =
             math.clamp(
-                tonumber(minScale)
-                or 0.78,
-                0.65,
+                tonumber(minRatio)
+                or 0.85,
+                0.75,
                 1
             )
 
-        maxScale =
+        maxRatio =
             math.clamp(
-                tonumber(maxScale)
-                or 1.35,
+                tonumber(maxRatio)
+                or 1.45,
                 1,
-                1.6
+                1.7
             )
 
-        Settings.GUIScales =
-            typeof(Settings.GUIScales)
+        Settings.GUISizes =
+            typeof(Settings.GUISizes)
                 == "table"
-            and Settings.GUIScales
+            and Settings.GUISizes
             or {}
 
-        local scaleObject =
+        local oldScale =
             frame:
                 FindFirstChild(
                     "ToxGuiScale"
                 )
 
-        if not scaleObject then
-            scaleObject =
-                Instance.new(
-                    "UIScale"
-                )
-
-            scaleObject.Name =
-                "ToxGuiScale"
-
-            scaleObject.Parent =
-                frame
+        if oldScale then
+            oldScale:
+                Destroy()
         end
 
-        local savedScale =
-            tonumber(
-                Settings.GUIScales[
-                    key
-                ]
+        local initialWidth =
+            frame.Size.X.Offset
+
+        local initialHeight =
+            frame.Size.Y.Offset
+
+        if initialWidth <= 0 then
+            initialWidth = 330
+        end
+
+        if initialHeight <= 0 then
+            initialHeight = 395
+        end
+
+        local minWidth =
+            math.max(
+                260,
+                math.floor(
+                    initialWidth
+                    * minRatio
+                )
             )
 
-        scaleObject.Scale =
-            math.clamp(
-                savedScale
-                or 1,
-                minScale,
-                maxScale
+        local minHeight =
+            math.max(
+                220,
+                math.floor(
+                    initialHeight
+                    * minRatio
+                )
             )
+
+        local maxWidth =
+            math.max(
+                minWidth,
+                math.floor(
+                    initialWidth
+                    * maxRatio
+                )
+            )
+
+        local maxHeight =
+            math.max(
+                minHeight,
+                math.floor(
+                    initialHeight
+                    * maxRatio
+                )
+            )
+
+        local saved =
+            Settings.GUISizes[
+                key
+            ]
+
+        if typeof(saved)
+            == "table" then
+            local width =
+                tonumber(
+                    saved.Width
+                )
+
+            local height =
+                tonumber(
+                    saved.Height
+                )
+
+            if width
+            and height then
+                frame.Size =
+                    UDim2.new(
+                        0,
+                        math.clamp(
+                            math.floor(
+                                width + 0.5
+                            ),
+                            minWidth,
+                            maxWidth
+                        ),
+                        0,
+                        math.clamp(
+                            math.floor(
+                                height + 0.5
+                            ),
+                            minHeight,
+                            maxHeight
+                        )
+                    )
+            end
+        end
 
         local oldHandle =
             frame:
@@ -1851,22 +1979,23 @@ getgenv().MakeResizable =
         handle.Size =
             UDim2.new(
                 0,
-                18,
+                20,
                 0,
-                18
+                20
             )
 
         handle.Position =
             UDim2.new(
                 1,
-                -18,
+                -20,
                 1,
-                -18
+                -20
             )
 
         handle.BackgroundTransparency = 1
         handle.BorderSizePixel = 0
         handle.Text = "◢"
+
         handle.TextColor3 =
             Color3.fromRGB(
                 175,
@@ -1886,20 +2015,33 @@ getgenv().MakeResizable =
         local resizing = false
         local resizeInput = nil
         local dragStart = nil
-        local startScale = 1
-        local baseWidth = 300
-        local baseHeight = 300
+        local startWidth = 0
+        local startHeight = 0
 
-        local function saveScale()
-            Settings.GUIScales[
+        local function saveSize()
+            local currentSize =
+                frame.AbsoluteSize
+
+            Settings.GUISizes[
                 key
-            ] = scaleObject.Scale
+            ] = {
+                Width =
+                    math.floor(
+                        currentSize.X
+                        + 0.5
+                    ),
+                Height =
+                    math.floor(
+                        currentSize.Y
+                        + 0.5
+                    )
+            }
 
-            GuiScaleSaveTokens[
+            GuiSizeSaveTokens[
                 key
             ] =
                 (
-                    GuiScaleSaveTokens[
+                    GuiSizeSaveTokens[
                         key
                     ]
                     or 0
@@ -1907,14 +2049,14 @@ getgenv().MakeResizable =
                 + 1
 
             local token =
-                GuiScaleSaveTokens[
+                GuiSizeSaveTokens[
                     key
                 ]
 
             task.delay(
                 0.35,
                 function()
-                    if GuiScaleSaveTokens[
+                    if GuiSizeSaveTokens[
                         key
                     ] == token
                     and not Destroyed then
@@ -1937,27 +2079,21 @@ getgenv().MakeResizable =
                 dragStart =
                     input.Position
 
-                startScale =
-                    scaleObject.Scale
+                local currentSize =
+                    frame.AbsoluteSize
 
-                baseWidth =
-                    math.max(
-                        220,
-                        frame.Size.X.Offset
-                    )
+                startWidth =
+                    currentSize.X
 
-                baseHeight =
-                    math.max(
-                        180,
-                        frame.Size.Y.Offset
-                    )
+                startHeight =
+                    currentSize.Y
 
                 input.Changed:
                     Connect(function()
                         if input.UserInputState
                             == Enum.UserInputState.End then
                             resizing = false
-                            saveScale()
+                            saveSize()
                         end
                     end)
             end)
@@ -1987,51 +2123,57 @@ getgenv().MakeResizable =
                         input.Position
                         - dragStart
 
-                    local changeX =
-                        delta.X
-                        / baseWidth
-
-                    local changeY =
-                        delta.Y
-                        / baseHeight
-
-                    local change =
-                        (
-                            changeX
-                            + changeY
-                        )
-                        * 0.5
-
                     local viewport =
                         Camera.ViewportSize
 
-                    local viewportMax =
-                        math.min(
-                            maxScale,
-                            (
+                    local viewportMaxWidth =
+                        math.max(
+                            minWidth,
+                            math.min(
+                                maxWidth,
                                 viewport.X
                                 - 24
                             )
-                            / baseWidth,
-                            (
+                        )
+
+                    local viewportMaxHeight =
+                        math.max(
+                            minHeight,
+                            math.min(
+                                maxHeight,
                                 viewport.Y
                                 - 24
                             )
-                            / baseHeight
                         )
 
-                    viewportMax =
-                        math.max(
-                            minScale,
-                            viewportMax
-                        )
-
-                    scaleObject.Scale =
+                    local newWidth =
                         math.clamp(
-                            startScale
-                            + change,
-                            minScale,
-                            viewportMax
+                            math.floor(
+                                startWidth
+                                + delta.X
+                                + 0.5
+                            ),
+                            minWidth,
+                            viewportMaxWidth
+                        )
+
+                    local newHeight =
+                        math.clamp(
+                            math.floor(
+                                startHeight
+                                + delta.Y
+                                + 0.5
+                            ),
+                            minHeight,
+                            viewportMaxHeight
+                        )
+
+                    frame.Size =
+                        UDim2.new(
+                            0,
+                            newWidth,
+                            0,
+                            newHeight
                         )
                 end)
         )
