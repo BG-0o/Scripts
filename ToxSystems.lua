@@ -863,8 +863,6 @@ local HIDDEN_METADATA_PREFIX =
 
 local HiddenPendingAcks = {}
 local HiddenSeenNonces = {}
-local PreviousIncomingMessage =
-    TextChatService.OnIncomingMessage
 
 local function MakeHiddenMetadata(
     payload
@@ -921,45 +919,39 @@ local function DecodeHiddenMetadata(
     return nil
 end
 
-TextChatService.OnIncomingMessage =
-    function(message)
-        local metadata =
-            tostring(
-                message
-                and message.Metadata
-                or ""
-            )
+local function InstallHiddenMessageMask()
+    pcall(function()
+        TextChatService.OnIncomingMessage =
+            function(message)
+                local metadata =
+                    tostring(
+                        message
+                        and message.Metadata
+                        or ""
+                    )
 
-        if string.sub(
-            metadata,
-            1,
-            #HIDDEN_METADATA_PREFIX
-        ) == HIDDEN_METADATA_PREFIX then
-            local properties =
-                Instance.new(
-                    "TextChatMessageProperties"
-                )
+                if string.sub(
+                    metadata,
+                    1,
+                    #HIDDEN_METADATA_PREFIX
+                ) == HIDDEN_METADATA_PREFIX then
+                    local properties =
+                        Instance.new(
+                            "TextChatMessageProperties"
+                        )
 
-            properties.Text = ""
-            properties.PrefixText = ""
+                    properties.Text = ""
+                    properties.PrefixText = ""
 
-            return properties
-        end
+                    return properties
+                end
 
-        if PreviousIncomingMessage then
-            local ok, result =
-                pcall(
-                    PreviousIncomingMessage,
-                    message
-                )
-
-            if ok then
-                return result
+                return nil
             end
-        end
+    end)
+end
 
-        return nil
-    end
+InstallHiddenMessageMask()
 
 local function GetTextChannels()
     return
@@ -1150,16 +1142,20 @@ local function SendHiddenPacket(
         return false
     end
 
-    local status =
-        message.Status
+    local statusOk =
+        pcall(function()
+            local status =
+                message.Status
 
-    if status
-    and status
-        ~= Enum.TextChatMessageStatus.Success then
-        return false
-    end
+            if status
+            and Enum.TextChatMessageStatus
+            and status
+                ~= Enum.TextChatMessageStatus.Success then
+                error("send failed")
+            end
+        end)
 
-    return true
+    return statusOk
 end
 
 local function SendHiddenAck(
@@ -1311,37 +1307,39 @@ local function HandleHiddenPayload(
     return true
 end
 
-AddConnection(
-    TextChatService.MessageReceived:
-        Connect(function(message)
-            if not message
-            or not message.TextSource then
-                return
-            end
+pcall(function()
+    AddConnection(
+        TextChatService.MessageReceived:
+            Connect(function(message)
+                if not message
+                or not message.TextSource then
+                    return
+                end
 
-            local payload =
-                DecodeHiddenMetadata(
-                    message.Metadata
-                )
-
-            if not payload then
-                return
-            end
-
-            local sourcePlayer =
-                Players:
-                    GetPlayerByUserId(
-                        message.TextSource.UserId
+                local payload =
+                    DecodeHiddenMetadata(
+                        message.Metadata
                     )
 
-            if sourcePlayer then
-                HandleHiddenPayload(
-                    sourcePlayer,
-                    payload
-                )
-            end
-        end)
-)
+                if not payload then
+                    return
+                end
+
+                local sourcePlayer =
+                    Players:
+                        GetPlayerByUserId(
+                            message.TextSource.UserId
+                        )
+
+                if sourcePlayer then
+                    HandleHiddenPayload(
+                        sourcePlayer,
+                        payload
+                    )
+                end
+            end)
+    )
+end)
 
 local function SendHiddenControl(
     target,
