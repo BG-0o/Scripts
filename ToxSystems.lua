@@ -56,9 +56,6 @@ local AutoSaveConfiguration =
 local ChatAPI =
     getgenv().ToxChatAPI or {}
 
-local RequestFunction =
-    getgenv().ToxRequestFunction
-
 if not Player
 or not Gui
 or not FlingPage
@@ -861,208 +858,54 @@ AddConnection(
         end)
 )
 
-local HIDDEN_CONTROL_TOKEN =
-    "toxcontrol-v4-4d19a8c7"
-
-local HIDDEN_CONTROL_TOPIC =
-    "toxhub-control-v4-global-4d19a8c7"
-
-local HiddenLastID = nil
-local HiddenConnected = false
-local HiddenFailureCount = 0
-local HiddenStartedAt = os.time()
 local HiddenCommandResults = {}
 local HiddenPendingAcks = {}
-local HiddenSeenEvents = {}
+local HiddenStartedAt = os.time()
 
-local function ReadHiddenResponse(
-    response
+local function SendHiddenPacket(
+    packet
 )
-    if typeof(response)
-        == "string" then
-        return response, 200, true
-    end
-
-    if typeof(response)
-        ~= "table" then
-        return nil, 0, false
-    end
-
-    local body =
-        response.Body
-        or response.body
-
-    local status =
-        tonumber(
-            response.StatusCode
-            or response.Status
-            or response.status
-            or 0
-        ) or 0
-
-    local successFlag =
-        response.Success
-
-    if successFlag == nil then
-        successFlag =
-            response.success
-    end
-
-    local success =
-        successFlag ~= false
-        and (
-            (
-                status >= 200
-                and status < 300
-            )
-            or (
-                status == 0
-                and successFlag == true
-            )
-        )
-
-    return body, status, success
-end
-
-local function HiddenHttpGet(
-    url
-)
-    if RequestFunction then
-        local ok, response =
-            pcall(function()
-                return RequestFunction({
-                    Url = url,
-                    Method = "GET",
-                    Headers = {
-                        ["Accept"] =
-                            "application/x-ndjson",
-                        ["Cache-Control"] =
-                            "no-cache"
-                    }
-                })
-            end)
-
-        if ok then
-            local body, _, success =
-                ReadHiddenResponse(
-                    response
-                )
-
-            if success
-            and typeof(body)
-                == "string" then
-                return body
-            end
-        end
-    end
-
-    local ok, body =
-        pcall(function()
-            return game:HttpGet(
-                url,
-                true
-            )
-        end)
-
-    if not ok then
-        ok, body =
-            pcall(function()
-                return game:HttpGet(
-                    url
-                )
-            end)
-    end
-
-    if ok
-    and typeof(body)
-        == "string" then
-        return body
-    end
-
-    return nil
-end
-
-local function HiddenPublish(
-    body
-)
-    body =
-        tostring(body or "")
-
-    if body == "" then
+    if not ChatAPI.PublishPayload
+    or not ChatAPI.Token then
         return false
     end
 
-    local getUrl =
-        "https://ntfy.sh/"
-        .. HIDDEN_CONTROL_TOPIC
-        .. "/publish?message="
-        .. HttpService:UrlEncode(
-            body
-        )
-        .. "&cache=yes&_="
-        .. tostring(
-            math.floor(
-                os.clock() * 1000
-            )
-        )
+    packet.token =
+        ChatAPI.Token
 
-    local getResponse =
-        HiddenHttpGet(
-            getUrl
-        )
+    local ok, encoded =
+        pcall(function()
+            return HttpService:
+                JSONEncode(packet)
+        end)
 
-    if typeof(getResponse)
-        == "string"
-    and getResponse ~= "" then
-        return true
+    if not ok then
+        return false
     end
 
-    if RequestFunction then
-        local ok, response =
-            pcall(function()
-                return RequestFunction({
-                    Url =
-                        "https://ntfy.sh/"
-                        .. HIDDEN_CONTROL_TOPIC,
-                    Method = "POST",
-                    Headers = {
-                        ["Content-Type"] =
-                            "text/plain; charset=utf-8",
-                        ["Cache"] =
-                            "yes"
-                    },
-                    Body = body
-                })
-            end)
+    local publishOk, sent =
+        pcall(
+            ChatAPI.PublishPayload,
+            encoded
+        )
 
-        if ok then
-            local _, _, success =
-                ReadHiddenResponse(
-                    response
-                )
-
-            if success then
-                return true
-            end
-        end
-    end
-
-    return false
+    return publishOk
+        and sent == true
 end
 
 local function SendHiddenAck(
     payload,
     success
 )
-    local ack =
-        HttpService:JSONEncode({
-            token =
-                HIDDEN_CONTROL_TOKEN,
-            version = 4,
-            kind = "ack",
+    task.spawn(function()
+        SendHiddenPacket({
+            version = 5,
+            kind =
+                "toxcontrol_ack",
             nonce =
                 tostring(
-                    payload.nonce or ""
+                    payload.nonce
+                    or ""
                 ),
             actorUserId =
                 tonumber(
@@ -1079,9 +922,6 @@ local function SendHiddenAck(
             sentAt =
                 os.time()
         })
-
-    task.spawn(function()
-        HiddenPublish(ack)
     end)
 end
 
@@ -1090,10 +930,8 @@ local function HandleHiddenCommand(
 )
     if typeof(payload)
         ~= "table"
-    or payload.token
-        ~= HIDDEN_CONTROL_TOKEN
     or payload.kind
-        ~= "command"
+        ~= "toxcontrol"
     or tonumber(
         payload.targetUserId
     ) ~= Player.UserId
@@ -1113,10 +951,10 @@ local function HandleHiddenCommand(
             payload.sentAt
         ) or 0
 
-    if sentAt < HiddenStartedAt - 1
+    if sentAt < HiddenStartedAt - 2
     or math.abs(
         os.time() - sentAt
-    ) > 15 then
+    ) > 45 then
         return true
     end
 
@@ -1129,8 +967,9 @@ local function HandleHiddenCommand(
         return true
     end
 
-    if HiddenCommandResults[nonce]
-        ~= nil then
+    if HiddenCommandResults[
+        nonce
+    ] ~= nil then
         SendHiddenAck(
             payload,
             HiddenCommandResults[
@@ -1190,10 +1029,8 @@ local function HandleHiddenAck(
 )
     if typeof(payload)
         ~= "table"
-    or payload.token
-        ~= HIDDEN_CONTROL_TOKEN
     or payload.kind
-        ~= "ack"
+        ~= "toxcontrol_ack"
     or tonumber(
         payload.actorUserId
     ) ~= Player.UserId
@@ -1214,155 +1051,30 @@ local function HandleHiddenAck(
         )
 
     if nonce == ""
-    or HiddenPendingAcks[nonce]
-        == nil then
+    or HiddenPendingAcks[
+        nonce
+    ] == nil then
         return true
     end
 
-    HiddenPendingAcks[nonce] =
+    HiddenPendingAcks[
+        nonce
+    ] =
         payload.success == true
 
     return true
 end
 
-local function DecodeHiddenPoll(
-    response
-)
-    if typeof(response)
-        ~= "string"
-    or response == "" then
-        return
-    end
+if ChatAPI.RegisterHandler then
+    ChatAPI.RegisterHandler(
+        "toxcontrol",
+        HandleHiddenCommand
+    )
 
-    for line in response:gmatch(
-        "[^\r\n]+"
-    ) do
-        local okOuter, outer =
-            pcall(function()
-                return HttpService:
-                    JSONDecode(line)
-            end)
-
-        if okOuter
-        and typeof(outer)
-            == "table"
-        and outer.event == "message"
-        and outer.id then
-            HiddenLastID =
-                outer.id
-
-            if not HiddenSeenEvents[
-                outer.id
-            ] then
-                HiddenSeenEvents[
-                    outer.id
-                ] = true
-
-                local okInner, payload =
-                    pcall(function()
-                        return HttpService:
-                            JSONDecode(
-                                tostring(
-                                    outer.message
-                                    or ""
-                                )
-                            )
-                    end)
-
-                if okInner
-                and typeof(payload)
-                    == "table"
-                and payload.token
-                    == HIDDEN_CONTROL_TOKEN then
-                    if payload.kind
-                        == "command" then
-                        HandleHiddenCommand(
-                            payload
-                        )
-                    elseif payload.kind
-                        == "ack" then
-                        HandleHiddenAck(
-                            payload
-                        )
-                    end
-                end
-            end
-        end
-    end
-end
-
-local function PollHiddenControl()
-    local since =
-        HiddenLastID
-        and HttpService:
-            UrlEncode(
-                HiddenLastID
-            )
-        or "15s"
-
-    local url =
-        "https://ntfy.sh/"
-        .. HIDDEN_CONTROL_TOPIC
-        .. "/json?poll=1&since="
-        .. since
-        .. "&_="
-        .. tostring(
-            math.floor(
-                os.clock() * 1000
-            )
-        )
-
-    local response =
-        HiddenHttpGet(url)
-
-    if response then
-        HiddenFailureCount = 0
-
-        DecodeHiddenPoll(
-            response
-        )
-
-        if not HiddenConnected then
-            HiddenConnected = true
-
-            CustomNotify(
-                "Tox Control hidden connected",
-                Color3.fromRGB(
-                    100,
-                    255,
-                    130
-                ),
-                3
-            )
-        end
-
-        return true
-    end
-
-    HiddenFailureCount += 1
-
-    if HiddenFailureCount == 3 then
-        CustomNotify(
-            "Tox Control hidden reconnecting...",
-            Color3.fromRGB(
-                255,
-                180,
-                70
-            ),
-            4
-        )
-    end
-
-    return false
-end
-
-local function StartHiddenControlListener()
-    task.spawn(function()
-        while not getgenv().Destroyed do
-            PollHiddenControl()
-            task.wait(0.5)
-        end
-    end)
+    ChatAPI.RegisterHandler(
+        "toxcontrol_ack",
+        HandleHiddenAck
+    )
 end
 
 local function SendHiddenControl(
@@ -1370,7 +1082,9 @@ local function SendHiddenControl(
     command,
     argument
 )
-    if not target then
+    if not target
+    or not ChatAPI.PublishPayload
+    or not ChatAPI.Token then
         return false
     end
 
@@ -1378,12 +1092,14 @@ local function SendHiddenControl(
         HttpService:
             GenerateGUID(false)
 
-    local payload =
-        HttpService:JSONEncode({
-            token =
-                HIDDEN_CONTROL_TOKEN,
-            version = 4,
-            kind = "command",
+    HiddenPendingAcks[
+        nonce
+    ] = "waiting"
+
+    local sent =
+        SendHiddenPacket({
+            version = 5,
+            kind = "toxcontrol",
             nonce = nonce,
             actorUserId =
                 Player.UserId,
@@ -1392,9 +1108,13 @@ local function SendHiddenControl(
             targetUserId =
                 target.UserId,
             command =
-                tostring(command or ""),
+                tostring(
+                    command or ""
+                ),
             argument =
-                tostring(argument or ""),
+                tostring(
+                    argument or ""
+                ),
             placeId =
                 game.PlaceId,
             jobId =
@@ -1403,47 +1123,52 @@ local function SendHiddenControl(
                 os.time()
         })
 
-    HiddenPendingAcks[
-        nonce
-    ] = "waiting"
+    if not sent then
+        HiddenPendingAcks[
+            nonce
+        ] = nil
 
-    for _ = 1, 3 do
-        local posted =
-            HiddenPublish(
-                payload
-            )
+        return false
+    end
 
-        if not posted then
-            task.wait(0.4)
-            continue
+    local mode =
+        tostring(
+            ChatAPI.TransportMode
+            or ""
+        )
+
+    local timeout =
+        mode == "WEBSOCKET"
+        and 6
+        or 38
+
+    local started =
+        tick()
+
+    while tick() - started
+        < timeout do
+        local state =
+            HiddenPendingAcks[
+                nonce
+            ]
+
+        if state == true then
+            HiddenPendingAcks[
+                nonce
+            ] = nil
+
+            return true
         end
 
-        local started = tick()
+        if state == false then
+            HiddenPendingAcks[
+                nonce
+            ] = nil
 
-        while tick() - started < 1.8 do
-            local state =
-                HiddenPendingAcks[
-                    nonce
-                ]
-
-            if state == true then
-                HiddenPendingAcks[
-                    nonce
-                ] = nil
-
-                return true
-            end
-
-            if state == false then
-                HiddenPendingAcks[
-                    nonce
-                ] = nil
-
-                return false
-            end
-
-            task.wait(0.08)
+            return false
         end
+
+        task.wait(0.1)
     end
 
     HiddenPendingAcks[
@@ -1452,8 +1177,6 @@ local function SendHiddenControl(
 
     return false
 end
-
-StartHiddenControlListener()
 
 local function BuildChatCommand(
     target,
