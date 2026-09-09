@@ -556,7 +556,131 @@ local function ResolveJoinUserId(text)
     return nil, "User not found"
 end
 
+local ToxRelayHost =
+    "https://tox-control-relay.1kobg-0o.workers.dev"
+
+local function PresenceRelayRequestOnce(
+    userId
+)
+    local url =
+        ToxRelayHost
+        .. "/roblox/presence?userId="
+        .. tostring(userId)
+        .. "&_="
+        .. tostring(
+            math.floor(
+                os.clock() * 1000
+            )
+        )
+
+    local body = nil
+
+    if RequestFunction then
+        local ok, response =
+            pcall(function()
+                return RequestFunction({
+                    Url = url,
+                    Method = "GET",
+                    Headers = {
+                        ["Accept"] =
+                            "application/json",
+                        ["Cache-Control"] =
+                            "no-cache"
+                    }
+                })
+            end)
+
+        if ok
+        and typeof(response)
+            == "table" then
+            local status =
+                tonumber(
+                    response.StatusCode
+                    or response.Status
+                    or 0
+                ) or 0
+
+            local success =
+                response.Success
+
+            if success == nil then
+                success =
+                    response.success
+            end
+
+            if (
+                status >= 200
+                and status < 300
+            )
+            or success == true then
+                body =
+                    response.Body
+                    or response.body
+            end
+        end
+    end
+
+    if typeof(body)
+        ~= "string"
+    or body == "" then
+        local ok, response =
+            pcall(function()
+                return game:HttpGet(
+                    url,
+                    true
+                )
+            end)
+
+        if not ok then
+            ok, response =
+                pcall(function()
+                    return game:HttpGet(
+                        url
+                    )
+                end)
+        end
+
+        if ok
+        and typeof(response)
+            == "string" then
+            body = response
+        end
+    end
+
+    if typeof(body)
+        ~= "string"
+    or body == "" then
+        return nil
+    end
+
+    local ok, decoded =
+        pcall(function()
+            return HttpService:
+                JSONDecode(body)
+        end)
+
+    if ok
+    and typeof(decoded)
+        == "table"
+    and decoded.ok == true
+    and typeof(decoded.presence)
+        == "table" then
+        return decoded.presence
+    end
+
+    return nil
+end
+
 local function PresenceRequestOnce(userId)
+    local relayPresence =
+        PresenceRelayRequestOnce(
+            userId
+        )
+
+    if relayPresence then
+        return relayPresence
+    end
+
     local requestData = {
         Url = "https://presence.roblox.com/v1/presence/users",
         Method = "POST",
@@ -1602,6 +1726,23 @@ local function ExecuteFling(TargetInput)
         return CustomNotify("Enter username or 'all'", Color3.fromRGB(255, 100, 100))
     end
 
+    if game.PlaceId == 189707
+    and Settings.NDSNoTP
+    and getgenv().SetNDSNoTP then
+        pcall(function()
+            getgenv().SetNDSNoTP(
+                false,
+                true
+            )
+        end)
+
+        if getgenv().AutoSaveConfiguration then
+            pcall(
+                getgenv().AutoSaveConfiguration
+            )
+        end
+    end
+
     local LowerInput = string.lower(TargetInput)
 
     if LowerInput == "all" or LowerInput == "others" then
@@ -2289,11 +2430,14 @@ end
 local CarFlyVelocity = nil
 local CarFlyGyro = nil
 local CarFlySeat = nil
+local CarFlyRoot = nil
+local CarFlyControlModule = nil
 
 local function DestroyCarFlyMovers()
     if CarFlyVelocity then
         pcall(function()
-            CarFlyVelocity:Destroy()
+            CarFlyVelocity:
+                Destroy()
         end)
 
         CarFlyVelocity = nil
@@ -2301,51 +2445,190 @@ local function DestroyCarFlyMovers()
 
     if CarFlyGyro then
         pcall(function()
-            CarFlyGyro:Destroy()
+            CarFlyGyro:
+                Destroy()
         end)
 
         CarFlyGyro = nil
     end
 
     CarFlySeat = nil
+    CarFlyRoot = nil
 end
 
-local function EnsureCarFlyMovers(seat)
-    if not seat then
+local function GetCarFlyMoveVector()
+    if not CarFlyControlModule then
+        pcall(function()
+            local playerModule =
+                Player.PlayerScripts:
+                    WaitForChild(
+                        "PlayerModule",
+                        2
+                    )
+
+            local controlModule =
+                playerModule
+                and playerModule:
+                    WaitForChild(
+                        "ControlModule",
+                        2
+                    )
+
+            if controlModule then
+                CarFlyControlModule =
+                    require(
+                        controlModule
+                    )
+            end
+        end)
+    end
+
+    if CarFlyControlModule
+    and CarFlyControlModule.GetMoveVector then
+        local ok, vector =
+            pcall(function()
+                return
+                    CarFlyControlModule:
+                        GetMoveVector()
+            end)
+
+        if ok
+        and typeof(vector)
+            == "Vector3" then
+            return vector
+        end
+    end
+
+    local vector =
+        Vector3.zero
+
+    if UserInputService:
+        IsKeyDown(
+            Enum.KeyCode.W
+        ) then
+        vector +=
+            Vector3.new(
+                0,
+                0,
+                -1
+            )
+    end
+
+    if UserInputService:
+        IsKeyDown(
+            Enum.KeyCode.S
+        ) then
+        vector +=
+            Vector3.new(
+                0,
+                0,
+                1
+            )
+    end
+
+    if UserInputService:
+        IsKeyDown(
+            Enum.KeyCode.A
+        ) then
+        vector +=
+            Vector3.new(
+                -1,
+                0,
+                0
+            )
+    end
+
+    if UserInputService:
+        IsKeyDown(
+            Enum.KeyCode.D
+        ) then
+        vector +=
+            Vector3.new(
+                1,
+                0,
+                0
+            )
+    end
+
+    return vector
+end
+
+local function EnsureCarFlyMovers(
+    root,
+    seat
+)
+    if not root
+    or not seat then
         DestroyCarFlyMovers()
         return false
     end
 
-    if CarFlySeat ~= seat then
+    if CarFlySeat ~= seat
+    or CarFlyRoot ~= root then
         DestroyCarFlyMovers()
         CarFlySeat = seat
+        CarFlyRoot = root
     end
 
-    if not CarFlyVelocity or CarFlyVelocity.Parent ~= seat then
+    if not CarFlyVelocity
+    or CarFlyVelocity.Parent
+        ~= root then
         if CarFlyVelocity then
-            CarFlyVelocity:Destroy()
+            CarFlyVelocity:
+                Destroy()
         end
 
-        CarFlyVelocity = Instance.new("BodyVelocity")
-        CarFlyVelocity.Name = "ToxCarFlyVelocity"
-        CarFlyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-        CarFlyVelocity.P = 2500
-        CarFlyVelocity.Velocity = Vector3.zero
-        CarFlyVelocity.Parent = seat
+        CarFlyVelocity =
+            Instance.new(
+                "BodyVelocity"
+            )
+
+        CarFlyVelocity.Name =
+            "ToxCarFlyVelocity"
+
+        CarFlyVelocity.MaxForce =
+            Vector3.new(
+                9e9,
+                9e9,
+                9e9
+            )
+
+        CarFlyVelocity.Velocity =
+            Vector3.zero
+
+        CarFlyVelocity.Parent =
+            root
     end
 
-    if not CarFlyGyro or CarFlyGyro.Parent ~= seat then
+    if not CarFlyGyro
+    or CarFlyGyro.Parent
+        ~= root then
         if CarFlyGyro then
-            CarFlyGyro:Destroy()
+            CarFlyGyro:
+                Destroy()
         end
 
-        CarFlyGyro = Instance.new("BodyGyro")
-        CarFlyGyro.Name = "ToxCarFlyGyro"
-        CarFlyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-        CarFlyGyro.P = 5000
-        CarFlyGyro.D = 450
-        CarFlyGyro.CFrame = seat.CFrame
-        CarFlyGyro.Parent = seat
+        CarFlyGyro =
+            Instance.new(
+                "BodyGyro"
+            )
+
+        CarFlyGyro.Name =
+            "ToxCarFlyGyro"
+
+        CarFlyGyro.MaxTorque =
+            Vector3.new(
+                9e9,
+                9e9,
+                9e9
+            )
+
+        CarFlyGyro.P = 9e4
+        CarFlyGyro.CFrame =
+            root.CFrame
+
+        CarFlyGyro.Parent =
+            root
     end
 
     return true
@@ -3717,70 +4000,82 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
             seat.CFrame.LookVector * (Settings.CarSpeedValue or 100)
     end
 
-    if Settings.CarFly and seat then
-        if EnsureCarFlyMovers(seat) then
-            local flySpeed = math.clamp(
-                tonumber(Settings.CarFlySpeed) or 80,
-                5,
-                300
-            )
-
-            local look = Camera.CFrame.LookVector
-            local right = Camera.CFrame.RightVector
-            local flatLook = Vector3.new(look.X, 0, look.Z)
-            local flatRight = Vector3.new(right.X, 0, right.Z)
-            local direction = Vector3.zero
-
-            if flatLook.Magnitude > 0.01 then
-                flatLook = flatLook.Unit
-            end
-
-            if flatRight.Magnitude > 0.01 then
-                flatRight = flatRight.Unit
-            end
-
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                direction = direction + flatLook
-            end
-
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                direction = direction - flatLook
-            end
-
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                direction = direction - flatRight
-            end
-
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                direction = direction + flatRight
-            end
-
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space)
-            or UserInputService:IsKeyDown(Enum.KeyCode.E) then
-                direction = direction + Vector3.new(0, 1, 0)
-            end
-
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
-            or UserInputService:IsKeyDown(Enum.KeyCode.Q) then
-                direction = direction - Vector3.new(0, 1, 0)
-            end
-
-            if direction.Magnitude > 0 then
-                CarFlyVelocity.Velocity = direction.Unit * flySpeed
-            else
-                CarFlyVelocity.Velocity = Vector3.zero
-            end
-
-            seat.AssemblyAngularVelocity = Vector3.zero
-
-            if flatLook.Magnitude > 0.01 then
-                CarFlyGyro.CFrame = CFrame.lookAt(
-                    seat.Position,
-                    seat.Position + flatLook
+    if Settings.CarFly
+    and seat
+    and Root then
+        if EnsureCarFlyMovers(
+            Root,
+            seat
+        ) then
+            local flySpeed =
+                math.clamp(
+                    tonumber(
+                        Settings.CarFlySpeed
+                    ) or 80,
+                    5,
+                    300
                 )
-            else
-                CarFlyGyro.CFrame = seat.CFrame
+
+            local moveVector =
+                GetCarFlyMoveVector()
+
+            local velocity =
+                Vector3.zero
+
+            velocity +=
+                Camera.CFrame.RightVector
+                * (
+                    moveVector.X
+                    * flySpeed
+                )
+
+            velocity -=
+                Camera.CFrame.LookVector
+                * (
+                    moveVector.Z
+                    * flySpeed
+                )
+
+            if UserInputService:
+                IsKeyDown(
+                    Enum.KeyCode.Space
+                )
+            or UserInputService:
+                IsKeyDown(
+                    Enum.KeyCode.E
+                ) then
+                velocity +=
+                    Vector3.new(
+                        0,
+                        flySpeed * 2,
+                        0
+                    )
             end
+
+            if UserInputService:
+                IsKeyDown(
+                    Enum.KeyCode.LeftShift
+                )
+            or UserInputService:
+                IsKeyDown(
+                    Enum.KeyCode.Q
+                ) then
+                velocity -=
+                    Vector3.new(
+                        0,
+                        flySpeed * 2,
+                        0
+                    )
+            end
+
+            CarFlyVelocity.Velocity =
+                velocity
+
+            CarFlyGyro.CFrame =
+                Camera.CFrame
+
+            Root.AssemblyAngularVelocity =
+                Vector3.zero
         end
     else
         DestroyCarFlyMovers()
@@ -3878,13 +4173,20 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
     local effectiveESPNames = Settings.ESPNames or mm2RoleESPActive
     local effectiveChams = Settings.Chams or mm2RoleESPActive
     local effectiveTeamColors = Settings.ESPTeamColors or mm2RoleESPActive
+    local toxRoleGetter =
+        getgenv().GetToxRole
+    local toxRoleESPActive =
+        effectiveESPEnabled
+        and type(toxRoleGetter)
+            == "function"
 
     local anyESPActive = effectiveESPEnabled and (effectiveESPNames
         or Settings.ESPDistance
         or Settings.ESPTracers
         or Settings.ESPBox
         or Settings.ESPHeadDot
-        or effectiveChams)
+        or effectiveChams
+        or toxRoleESPActive)
 
     if anyESPActive and tick() - LastESPSafetyRefresh >= 6 then
         LastESPSafetyRefresh = tick()
@@ -3954,7 +4256,14 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 local distFromMe = Root and (Root.Position - hrp.Position).Magnitude or 0
                 local withinDist = (Settings.EspMaxDistance <= 0) or (distFromMe <= Settings.EspMaxDistance)
 
-                if effectiveESPEnabled and (effectiveESPNames or Settings.ESPDistance) and hum.Health > 0 and withinDist then
+                if effectiveESPEnabled
+                and (
+                    effectiveESPNames
+                    or Settings.ESPDistance
+                    or toxRoleESPActive
+                )
+                and hum.Health > 0
+                and withinDist then
                     local billboard = ESPLabels[p]
 
                     if not billboard or billboard.Parent ~= char then
@@ -4006,6 +4315,25 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                         end
 
                         table.insert(lines, nameText)
+                    end
+
+                    if toxRoleESPActive then
+                        local ok, toxRole =
+                            pcall(
+                                toxRoleGetter,
+                                p
+                            )
+
+                        if ok
+                        and typeof(toxRole)
+                            == "string"
+                        and toxRole ~= "" then
+                            table.insert(
+                                lines,
+                                "Tox: "
+                                .. toxRole
+                            )
+                        end
                     end
 
                     if Settings.ESPDistance then
