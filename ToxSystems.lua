@@ -1065,6 +1065,30 @@ local function HandleHiddenAck(
     return true
 end
 
+ChatAPI.HandleControlPayload =
+    function(payload)
+        if typeof(payload)
+            ~= "table" then
+            return false
+        end
+
+        if payload.kind
+            == "toxcontrol" then
+            return HandleHiddenCommand(
+                payload
+            )
+        end
+
+        if payload.kind
+            == "toxcontrol_ack" then
+            return HandleHiddenAck(
+                payload
+            )
+        end
+
+        return false
+    end
+
 if ChatAPI.RegisterHandler then
     ChatAPI.RegisterHandler(
         "toxcontrol",
@@ -1140,7 +1164,7 @@ local function SendHiddenControl(
     local timeout =
         mode == "WEBSOCKET"
         and 6
-        or 38
+        or 10
 
     local started =
         tick()
