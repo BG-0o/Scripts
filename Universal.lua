@@ -1974,8 +1974,8 @@ local WalkFlingGeneration = 0
 local WalkFlingCollisionDefaults =
     setmetatable({}, {__mode = "k"})
 local WalkFlingImpulseActive = false
+local WalkFlingRestoreVelocity = nil
 getgenv().ToxWalkFlingImpulseActive = false
-    getgenv().ToxWalkFlingImpulseActive = false
 
 local function RestoreWalkFlingCollisions()
     local character = Player.Character
@@ -2021,8 +2021,43 @@ end
 
 local function StopWalkFling()
     WalkFlingGeneration += 1
+
+    local wasImpulseActive =
+        WalkFlingImpulseActive
+
     WalkFlingImpulseActive = false
     getgenv().ToxWalkFlingImpulseActive = false
+
+    local character =
+        Player.Character
+    local root =
+        character
+        and character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+    if wasImpulseActive
+    and root
+    and WalkFlingRestoreVelocity then
+        root.Velocity =
+            WalkFlingRestoreVelocity
+        root.AssemblyLinearVelocity =
+            WalkFlingRestoreVelocity
+    end
+
+    WalkFlingRestoreVelocity = nil
+
+    if root
+    and getgenv().SetNDSNoTPAnchor then
+        pcall(function()
+            getgenv().SetNDSNoTPAnchor(
+                root.CFrame,
+                true
+            )
+        end)
+    end
+
     RestoreWalkFlingCollisions()
 end
 
@@ -2083,6 +2118,9 @@ local function StartWalkFling()
             local velocity =
                 root.Velocity
 
+            WalkFlingRestoreVelocity =
+                velocity
+
             WalkFlingImpulseActive = true
             getgenv().ToxWalkFlingImpulseActive = true
 
@@ -2106,19 +2144,23 @@ local function StartWalkFling()
 
             RunService.RenderStepped:Wait()
 
+            if character.Parent
+            and root.Parent then
+                root.Velocity =
+                    velocity
+                root.AssemblyLinearVelocity =
+                    velocity
+            end
+
+            WalkFlingImpulseActive = false
+            getgenv().ToxWalkFlingImpulseActive = false
+            WalkFlingRestoreVelocity = nil
+
             if generation
                 ~= WalkFlingGeneration
             or not Settings.WalkFling then
                 break
             end
-
-            if character.Parent
-            and root.Parent then
-                root.Velocity =
-                    velocity
-            end
-
-            WalkFlingImpulseActive = false
 
             RunService.Stepped:Wait()
 
@@ -2144,6 +2186,8 @@ local function StartWalkFling()
         end
 
         WalkFlingImpulseActive = false
+        getgenv().ToxWalkFlingImpulseActive = false
+        WalkFlingRestoreVelocity = nil
 
         if generation
         == WalkFlingGeneration then
