@@ -56,6 +56,9 @@ local AutoSaveConfiguration =
 local ChatAPI =
     getgenv().ToxChatAPI or {}
 
+local RequestFunction =
+    getgenv().ToxRequestFunction
+
 if not Player
 or not Gui
 or not FlingPage
@@ -865,11 +868,171 @@ AddConnection(
         end)
 )
 
+local HIDDEN_CONTROL_TOKEN =
+    "toxcontrol-v3-8a7d3f2c"
+
+local HiddenSeenNonces = {}
+local HiddenLastID = nil
+local HiddenConnected = false
+local HiddenFailureCount = 0
+
+local function HiddenTopicForUserId(
+    userId
+)
+    return
+        "toxhub-control-v3-"
+        .. tostring(userId)
+        .. "-8a7d3f2c"
+end
+
+local function ReadHiddenResponse(
+    response
+)
+    if typeof(response)
+        == "string" then
+        return response, 200
+    end
+
+    if typeof(response)
+        ~= "table" then
+        return nil, 0
+    end
+
+    local body =
+        response.Body
+        or response.body
+
+    local status =
+        tonumber(
+            response.StatusCode
+            or response.Status
+            or response.status
+            or 0
+        ) or 0
+
+    return body, status
+end
+
+local function HiddenHttpGet(
+    url
+)
+    if RequestFunction then
+        local ok, response =
+            pcall(function()
+                return RequestFunction({
+                    Url = url,
+                    Method = "GET",
+                    Headers = {
+                        ["Accept"] =
+                            "application/x-ndjson",
+                        ["Cache-Control"] =
+                            "no-cache"
+                    }
+                })
+            end)
+
+        if ok then
+            local body, status =
+                ReadHiddenResponse(
+                    response
+                )
+
+            if typeof(body)
+                == "string"
+            and (
+                status == 0
+                or (
+                    status >= 200
+                    and status < 300
+                )
+            ) then
+                return body
+            end
+        end
+    end
+
+    local ok, body =
+        pcall(function()
+            return game:HttpGet(
+                url,
+                true
+            )
+        end)
+
+    if not ok then
+        ok, body =
+            pcall(function()
+                return game:HttpGet(
+                    url
+                )
+            end)
+    end
+
+    if ok
+    and typeof(body)
+        == "string" then
+        return body
+    end
+
+    return nil
+end
+
+local function HiddenHttpPost(
+    url,
+    body
+)
+    body =
+        tostring(body or "")
+
+    if RequestFunction then
+        local ok, response =
+            pcall(function()
+                return RequestFunction({
+                    Url = url,
+                    Method = "POST",
+                    Headers = {
+                        ["Content-Type"] =
+                            "text/plain; charset=utf-8",
+                        ["Cache"] =
+                            "yes"
+                    },
+                    Body = body
+                })
+            end)
+
+        if ok then
+            local _, status =
+                ReadHiddenResponse(
+                    response
+                )
+
+            if status == 0
+            or (
+                status >= 200
+                and status < 300
+            ) then
+                return true
+            end
+        end
+    end
+
+    return pcall(function()
+        HttpService:PostAsync(
+            url,
+            body,
+            Enum.HttpContentType.TextPlain,
+            false
+        )
+    end)
+end
+
 local function HandleHiddenPayload(
     payload
 )
     if typeof(payload)
         ~= "table"
+    or payload.token
+        ~= HIDDEN_CONTROL_TOKEN
     or payload.kind
         ~= "toxcontrol"
     or tonumber(
@@ -884,6 +1047,35 @@ local function HandleHiddenPayload(
         game.JobId
     ) then
         return false
+    end
+
+    local sentAt =
+        tonumber(
+            payload.sentAt
+        ) or 0
+
+    if sentAt <= 0
+    or math.abs(
+        os.time() - sentAt
+    ) > 20 then
+        return true
+    end
+
+    local nonce =
+        tostring(
+            payload.nonce or ""
+        )
+
+    if nonce ~= "" then
+        if HiddenSeenNonces[
+            nonce
+        ] then
+            return true
+        end
+
+        HiddenSeenNonces[
+            nonce
+        ] = os.time()
     end
 
     local actor =
@@ -902,41 +1094,136 @@ local function HandleHiddenPayload(
         return true
     end
 
-    local nonce =
-        tostring(
-            payload.nonce or ""
-        )
-
-    ChatAPI.SeenNonces =
-        ChatAPI.SeenNonces
-        or {}
-
-    if nonce ~= "" then
-        if ChatAPI.SeenNonces[
-            nonce
-        ] then
-            return true
-        end
-
-        ChatAPI.SeenNonces[
-            nonce
-        ] = true
-    end
-
-    ExecuteCommand(
+    return ExecuteCommand(
         actor,
         payload.command,
         payload.argument
     )
-
-    return true
 end
 
-if ChatAPI.RegisterHandler then
-    ChatAPI.RegisterHandler(
-        "toxcontrol",
-        HandleHiddenPayload
-    )
+local function DecodeHiddenPoll(
+    response
+)
+    if typeof(response)
+        ~= "string"
+    or response == "" then
+        return
+    end
+
+    for line in response:gmatch(
+        "[^\r\n]+"
+    ) do
+        local okOuter, outer =
+            pcall(function()
+                return HttpService:
+                    JSONDecode(line)
+            end)
+
+        if okOuter
+        and typeof(outer)
+            == "table"
+        and outer.event == "message"
+        and outer.id then
+            HiddenLastID =
+                outer.id
+
+            local okInner, payload =
+                pcall(function()
+                    return HttpService:
+                        JSONDecode(
+                            tostring(
+                                outer.message
+                                or ""
+                            )
+                        )
+                end)
+
+            if okInner then
+                HandleHiddenPayload(
+                    payload
+                )
+            end
+        end
+    end
+end
+
+local function PollHiddenControl()
+    local topic =
+        HiddenTopicForUserId(
+            Player.UserId
+        )
+
+    local since =
+        HiddenLastID
+        and HttpService:
+            UrlEncode(
+                HiddenLastID
+            )
+        or "5s"
+
+    local url =
+        "https://ntfy.sh/"
+        .. topic
+        .. "/json?poll=1&since="
+        .. since
+        .. "&_="
+        .. tostring(
+            math.floor(
+                os.clock() * 1000
+            )
+        )
+
+    local response =
+        HiddenHttpGet(url)
+
+    if response then
+        HiddenFailureCount = 0
+
+        DecodeHiddenPoll(
+            response
+        )
+
+        if not HiddenConnected then
+            HiddenConnected = true
+
+            CustomNotify(
+                "Tox Control hidden connected",
+                Color3.fromRGB(
+                    100,
+                    255,
+                    130
+                ),
+                3
+            )
+        end
+
+        return true
+    end
+
+    HiddenFailureCount += 1
+
+    if HiddenFailureCount == 3 then
+        CustomNotify(
+            "Tox Control hidden reconnecting...",
+            Color3.fromRGB(
+                255,
+                180,
+                70
+            ),
+            4
+        )
+    end
+
+    return false
+end
+
+local function StartHiddenControlListener()
+    task.spawn(function()
+        while not getgenv().Destroyed do
+            PollHiddenControl()
+            task.wait(0.75)
+        end
+    end)
 end
 
 local function SendHiddenControl(
@@ -944,16 +1231,20 @@ local function SendHiddenControl(
     command,
     argument
 )
-    if not ChatAPI.PublishPayload
-    or not ChatAPI.Token then
+    if not target then
         return false
     end
+
+    local topic =
+        HiddenTopicForUserId(
+            target.UserId
+        )
 
     local payload =
         HttpService:JSONEncode({
             token =
-                ChatAPI.Token,
-            version = 2,
+                HIDDEN_CONTROL_TOKEN,
+            version = 3,
             kind =
                 "toxcontrol",
             nonce =
@@ -966,9 +1257,9 @@ local function SendHiddenControl(
             targetUserId =
                 target.UserId,
             command =
-                command,
+                tostring(command or ""),
             argument =
-                argument or "",
+                tostring(argument or ""),
             placeId =
                 game.PlaceId,
             jobId =
@@ -977,10 +1268,14 @@ local function SendHiddenControl(
                 os.time()
         })
 
-    return ChatAPI.PublishPayload(
+    return HiddenHttpPost(
+        "https://ntfy.sh/"
+        .. topic,
         payload
-    ) == true
+    )
 end
+
+StartHiddenControlListener()
 
 local function BuildChatCommand(
     target,
@@ -1060,7 +1355,7 @@ local function SendControl(
     else
         CustomNotify(
             mode == "HIDDEN"
-            and "Tox Control hidden connection unavailable"
+            and "Tox Control hidden relay unavailable"
             or "Tox Control chat command failed",
             Color3.fromRGB(
                 255,
