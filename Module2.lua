@@ -143,45 +143,111 @@ if detected
 and detected.Ready
 and detected.Url
 and getgenv().GamePage then
-    task.spawn(function()
-        local ok, err =
-            pcall(function()
-                local source =
-                    game:HttpGet(
-                        detected.Url
-                    )
+    local env =
+        getgenv()
 
-                local chunk =
-                    loadstring(source)
+    local gamePage =
+        env.GamePage
 
-                if not chunk then
-                    error(
-                        "invalid game module"
-                    )
+    local moduleUrl =
+        tostring(
+            detected.Url
+        )
+
+    local alreadyLoaded =
+        env.ToxGameModuleLoadedPage
+            == gamePage
+        and env.ToxGameModuleLoadedUrl
+            == moduleUrl
+
+    local alreadyLoading =
+        env.ToxGameModuleLoadingPage
+            == gamePage
+        and env.ToxGameModuleLoadingUrl
+            == moduleUrl
+
+    if not alreadyLoaded
+    and not alreadyLoading then
+        env.ToxGameModuleLoadingPage =
+            gamePage
+
+        env.ToxGameModuleLoadingUrl =
+            moduleUrl
+
+        task.spawn(function()
+            local ok, err =
+                pcall(function()
+                    local source =
+                        game:HttpGet(
+                            moduleUrl
+                        )
+
+                    local chunk,
+                        compileError =
+                        loadstring(
+                            source
+                        )
+
+                    if not chunk then
+                        error(
+                            tostring(
+                                compileError
+                                or "invalid game module"
+                            )
+                        )
+                    end
+
+                    chunk()
+                end)
+
+            if env.ToxGameModuleLoadingPage
+                == gamePage
+            and env.ToxGameModuleLoadingUrl
+                == moduleUrl then
+                env.ToxGameModuleLoadingPage =
+                    nil
+
+                env.ToxGameModuleLoadingUrl =
+                    nil
+            end
+
+            if ok then
+                env.ToxGameModuleLoadedPage =
+                    gamePage
+
+                env.ToxGameModuleLoadedUrl =
+                    moduleUrl
+            else
+                if env.ToxGameModuleLoadedPage
+                    == gamePage
+                and env.ToxGameModuleLoadedUrl
+                    == moduleUrl then
+                    env.ToxGameModuleLoadedPage =
+                        nil
+
+                    env.ToxGameModuleLoadedUrl =
+                        nil
                 end
 
-                chunk()
-            end)
-
-        if not ok then
-            Notify(
-                tostring(
-                    detected.ShortName
-                    or "Game"
+                Notify(
+                    tostring(
+                        detected.ShortName
+                        or "Game"
+                    )
+                    .. " module failed to load",
+                    Color3.fromRGB(
+                        255,
+                        100,
+                        100
+                    ),
+                    5
                 )
-                .. " module failed to load",
-                Color3.fromRGB(
-                    255,
-                    100,
-                    100
-                ),
-                5
-            )
 
-            warn(
-                "[ToxHub Game Module Error]: "
-                .. tostring(err)
-            )
-        end
-    end)
+                warn(
+                    "[ToxHub Game Module Error]: "
+                    .. tostring(err)
+                )
+            end
+        end)
+    end
 end
