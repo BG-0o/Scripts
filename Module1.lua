@@ -16,7 +16,19 @@ if getgenv().Gui then pcall(function() getgenv().Gui:Destroy() end) end
 if getgenv().NotifGui then pcall(function() getgenv().NotifGui:Destroy() end) end
 
 local LOGO_ID = "rbxassetid://120675082996894"
-local MAIN_COLOR = Color3.fromRGB(9, 0, 136) 
+local MAIN_COLOR = Color3.fromRGB(9, 0, 136)
+
+local GUIColorMap = {
+    ["Blue"] = Color3.fromRGB(9, 0, 136),
+    ["Cyan"] = Color3.fromRGB(0, 120, 160),
+    ["Purple"] = Color3.fromRGB(95, 35, 180),
+    ["Green"] = Color3.fromRGB(25, 140, 80),
+    ["Red"] = Color3.fromRGB(160, 35, 50),
+    ["Orange"] = Color3.fromRGB(190, 90, 25),
+    ["Pink"] = Color3.fromRGB(180, 55, 130),
+    ["Gold"] = Color3.fromRGB(175, 130, 20),
+    ["White"] = Color3.fromRGB(150, 150, 165)
+}
 
 local ColorMap = {
 	["White"] = Color3.fromRGB(255, 255, 255),
@@ -34,6 +46,7 @@ local ColorMap = {
 }
 
 getgenv().ColorMap = ColorMap
+getgenv().GUIColorMap = GUIColorMap
 getgenv().LOGO_ID = LOGO_ID
 getgenv().MAIN_COLOR = MAIN_COLOR
 
@@ -80,6 +93,8 @@ getgenv().Settings = {
 	Render3D = true,
 	AutoExecute = false,
 	GUIKeybind = Enum.KeyCode.LeftAlt,
+    GUIColorName = "Blue",
+    GUIScales = {},
 
 	SpeedValue = 16,
 	JumpValue = 50,
@@ -1107,6 +1122,26 @@ local function LoadConfiguration()
 end
 
 LoadConfiguration()
+
+if typeof(Settings.GUIScales) ~= "table" then
+    Settings.GUIScales = {}
+end
+
+local LoadedGUIColor =
+    GUIColorMap[
+        tostring(
+            Settings.GUIColorName
+            or "Blue"
+        )
+    ]
+
+if LoadedGUIColor then
+    MAIN_COLOR = LoadedGUIColor
+    getgenv().MAIN_COLOR = MAIN_COLOR
+else
+    Settings.GUIColorName = "Blue"
+end
+
 LoadSharedMusicIDs()
 LoadSharedJoinGames()
 
@@ -1348,6 +1383,344 @@ getgenv().CustomNotify = function(text, color, customTime)
     end)
 end
 
+local ToxChatPopupContainer =
+    Instance.new("Frame")
+
+ToxChatPopupContainer.Name =
+    "ToxChatPopupContainer"
+
+ToxChatPopupContainer.Size =
+    UDim2.new(
+        0,
+        350,
+        0.62,
+        -30
+    )
+
+ToxChatPopupContainer.Position =
+    UDim2.new(
+        1,
+        -365,
+        0,
+        18
+    )
+
+ToxChatPopupContainer.BackgroundTransparency = 1
+ToxChatPopupContainer.Parent = NotifGui
+
+local ToxChatPopupLayout =
+    Instance.new("UIListLayout")
+
+ToxChatPopupLayout.VerticalAlignment =
+    Enum.VerticalAlignment.Top
+
+ToxChatPopupLayout.HorizontalAlignment =
+    Enum.HorizontalAlignment.Right
+
+ToxChatPopupLayout.SortOrder =
+    Enum.SortOrder.LayoutOrder
+
+ToxChatPopupLayout.Padding =
+    UDim.new(
+        0,
+        7
+    )
+
+ToxChatPopupLayout.Parent =
+    ToxChatPopupContainer
+
+getgenv().ShowToxChatPopup =
+    function(
+        displayName,
+        message,
+        blocked
+    )
+        if not ToxChatPopupContainer
+        or not ToxChatPopupContainer.Parent then
+            return
+        end
+
+        local frame =
+            Instance.new("Frame")
+
+        frame.Size =
+            UDim2.new(
+                1,
+                0,
+                0,
+                66
+            )
+
+        frame.AutomaticSize =
+            Enum.AutomaticSize.Y
+
+        frame.BackgroundColor3 =
+            Color3.fromRGB(
+                12,
+                12,
+                20
+            )
+
+        frame.BorderSizePixel = 0
+        frame.ClipsDescendants = true
+        frame.Parent =
+            ToxChatPopupContainer
+
+        local corner =
+            Instance.new("UICorner")
+
+        corner.CornerRadius =
+            UDim.new(
+                0,
+                7
+            )
+
+        corner.Parent = frame
+
+        local stroke =
+            Instance.new("UIStroke")
+
+        stroke.Color = MAIN_COLOR
+        stroke.Thickness = 2
+        stroke.Parent = frame
+
+        local title =
+            Instance.new("TextLabel")
+
+        title.Size =
+            UDim2.new(
+                1,
+                -20,
+                0,
+                22
+            )
+
+        title.Position =
+            UDim2.new(
+                0,
+                10,
+                0,
+                7
+            )
+
+        title.BackgroundTransparency = 1
+        title.Text =
+            "Tox Chat • "
+            .. tostring(
+                displayName
+            )
+
+        title.TextColor3 =
+            blocked
+            and Color3.fromRGB(
+                255,
+                120,
+                120
+            )
+            or Color3.fromRGB(
+                245,
+                245,
+                255
+            )
+
+        title.Font =
+            Enum.Font.GothamBold
+
+        title.TextSize = 14
+        title.TextXAlignment =
+            Enum.TextXAlignment.Left
+
+        title.TextTruncate =
+            Enum.TextTruncate.AtEnd
+
+        title.Parent = frame
+
+        local body =
+            Instance.new("TextLabel")
+
+        body.Size =
+            UDim2.new(
+                1,
+                -20,
+                0,
+                0
+            )
+
+        body.Position =
+            UDim2.new(
+                0,
+                10,
+                0,
+                31
+            )
+
+        body.AutomaticSize =
+            Enum.AutomaticSize.Y
+
+        body.BackgroundTransparency = 1
+        body.Text =
+            tostring(
+                message
+            )
+
+        body.TextColor3 =
+            blocked
+            and Color3.fromRGB(
+                255,
+                145,
+                145
+            )
+            or Color3.fromRGB(
+                225,
+                225,
+                238
+            )
+
+        body.Font =
+            Enum.Font.GothamMedium
+
+        body.TextSize = 14
+        body.TextWrapped = true
+        body.TextXAlignment =
+            Enum.TextXAlignment.Left
+
+        body.TextYAlignment =
+            Enum.TextYAlignment.Top
+
+        body.Parent = frame
+
+        local padding =
+            Instance.new("UIPadding")
+
+        padding.PaddingBottom =
+            UDim.new(
+                0,
+                9
+            )
+
+        padding.Parent = frame
+
+        frame.BackgroundTransparency = 1
+        title.TextTransparency = 1
+        body.TextTransparency = 1
+        stroke.Transparency = 1
+
+        local tweenInfo =
+            TweenInfo.new(
+                0.28,
+                Enum.EasingStyle.Quart,
+                Enum.EasingDirection.Out
+            )
+
+        TweenService:
+            Create(
+                frame,
+                tweenInfo,
+                {
+                    BackgroundTransparency = 0
+                }
+            ):
+            Play()
+
+        TweenService:
+            Create(
+                title,
+                tweenInfo,
+                {
+                    TextTransparency = 0
+                }
+            ):
+            Play()
+
+        TweenService:
+            Create(
+                body,
+                tweenInfo,
+                {
+                    TextTransparency = 0
+                }
+            ):
+            Play()
+
+        TweenService:
+            Create(
+                stroke,
+                tweenInfo,
+                {
+                    Transparency = 0
+                }
+            ):
+            Play()
+
+        task.delay(
+            5,
+            function()
+                if not frame
+                or not frame.Parent then
+                    return
+                end
+
+                local tweenOut =
+                    TweenInfo.new(
+                        0.3,
+                        Enum.EasingStyle.Quart,
+                        Enum.EasingDirection.In
+                    )
+
+                local fade =
+                    TweenService:
+                        Create(
+                            frame,
+                            tweenOut,
+                            {
+                                BackgroundTransparency = 1
+                            }
+                        )
+
+                TweenService:
+                    Create(
+                        title,
+                        tweenOut,
+                        {
+                            TextTransparency = 1
+                        }
+                    ):
+                    Play()
+
+                TweenService:
+                    Create(
+                        body,
+                        tweenOut,
+                        {
+                            TextTransparency = 1
+                        }
+                    ):
+                    Play()
+
+                TweenService:
+                    Create(
+                        stroke,
+                        tweenOut,
+                        {
+                            Transparency = 1
+                        }
+                    ):
+                    Play()
+
+                fade:Play()
+
+                fade.Completed:
+                    Connect(function()
+                        if frame
+                        and frame.Parent then
+                            frame:
+                                Destroy()
+                        end
+                    end)
+            end
+        )
+    end
+
 AddConnection(Players.PlayerAdded:Connect(function(p)
     if ScriptLoaded then CustomNotify("(" .. p.Name .. ") joined", Color3.fromRGB(50, 255, 50), 3) end
 end))
@@ -1378,6 +1751,293 @@ getgenv().MakeDraggable = function(Frame, DragHandle)
         end
     end))
 end
+
+local GuiScaleSaveTokens = {}
+
+getgenv().MakeResizable =
+    function(
+        frame,
+        key,
+        minScale,
+        maxScale
+    )
+        if not frame
+        or not frame:IsA("GuiObject") then
+            return nil
+        end
+
+        key =
+            tostring(
+                key
+                or frame.Name
+                or "GUI"
+            )
+
+        minScale =
+            math.clamp(
+                tonumber(minScale)
+                or 0.78,
+                0.65,
+                1
+            )
+
+        maxScale =
+            math.clamp(
+                tonumber(maxScale)
+                or 1.35,
+                1,
+                1.6
+            )
+
+        Settings.GUIScales =
+            typeof(Settings.GUIScales)
+                == "table"
+            and Settings.GUIScales
+            or {}
+
+        local scaleObject =
+            frame:
+                FindFirstChild(
+                    "ToxGuiScale"
+                )
+
+        if not scaleObject then
+            scaleObject =
+                Instance.new(
+                    "UIScale"
+                )
+
+            scaleObject.Name =
+                "ToxGuiScale"
+
+            scaleObject.Parent =
+                frame
+        end
+
+        local savedScale =
+            tonumber(
+                Settings.GUIScales[
+                    key
+                ]
+            )
+
+        scaleObject.Scale =
+            math.clamp(
+                savedScale
+                or 1,
+                minScale,
+                maxScale
+            )
+
+        local oldHandle =
+            frame:
+                FindFirstChild(
+                    "ToxResizeHandle"
+                )
+
+        if oldHandle then
+            oldHandle:
+                Destroy()
+        end
+
+        local handle =
+            Instance.new(
+                "TextButton"
+            )
+
+        handle.Name =
+            "ToxResizeHandle"
+
+        handle.Size =
+            UDim2.new(
+                0,
+                18,
+                0,
+                18
+            )
+
+        handle.Position =
+            UDim2.new(
+                1,
+                -18,
+                1,
+                -18
+            )
+
+        handle.BackgroundTransparency = 1
+        handle.BorderSizePixel = 0
+        handle.Text = "◢"
+        handle.TextColor3 =
+            Color3.fromRGB(
+                175,
+                175,
+                195
+            )
+
+        handle.TextSize = 15
+        handle.Font =
+            Enum.Font.GothamBold
+
+        handle.AutoButtonColor = false
+        handle.Active = true
+        handle.ZIndex = 100
+        handle.Parent = frame
+
+        local resizing = false
+        local resizeInput = nil
+        local dragStart = nil
+        local startScale = 1
+        local baseWidth = 300
+        local baseHeight = 300
+
+        local function saveScale()
+            Settings.GUIScales[
+                key
+            ] = scaleObject.Scale
+
+            GuiScaleSaveTokens[
+                key
+            ] =
+                (
+                    GuiScaleSaveTokens[
+                        key
+                    ]
+                    or 0
+                )
+                + 1
+
+            local token =
+                GuiScaleSaveTokens[
+                    key
+                ]
+
+            task.delay(
+                0.35,
+                function()
+                    if GuiScaleSaveTokens[
+                        key
+                    ] == token
+                    and not Destroyed then
+                        AutoSaveConfiguration()
+                    end
+                end
+            )
+        end
+
+        handle.InputBegan:
+            Connect(function(input)
+                if input.UserInputType
+                    ~= Enum.UserInputType.MouseButton1
+                and input.UserInputType
+                    ~= Enum.UserInputType.Touch then
+                    return
+                end
+
+                resizing = true
+                dragStart =
+                    input.Position
+
+                startScale =
+                    scaleObject.Scale
+
+                baseWidth =
+                    math.max(
+                        220,
+                        frame.Size.X.Offset
+                    )
+
+                baseHeight =
+                    math.max(
+                        180,
+                        frame.Size.Y.Offset
+                    )
+
+                input.Changed:
+                    Connect(function()
+                        if input.UserInputState
+                            == Enum.UserInputState.End then
+                            resizing = false
+                            saveScale()
+                        end
+                    end)
+            end)
+
+        handle.InputChanged:
+            Connect(function(input)
+                if input.UserInputType
+                    == Enum.UserInputType.MouseMovement
+                or input.UserInputType
+                    == Enum.UserInputType.Touch then
+                    resizeInput =
+                        input
+                end
+            end)
+
+        AddConnection(
+            UserInputService.InputChanged:
+                Connect(function(input)
+                    if not resizing
+                    or input
+                        ~= resizeInput
+                    or not dragStart then
+                        return
+                    end
+
+                    local delta =
+                        input.Position
+                        - dragStart
+
+                    local changeX =
+                        delta.X
+                        / baseWidth
+
+                    local changeY =
+                        delta.Y
+                        / baseHeight
+
+                    local change =
+                        (
+                            changeX
+                            + changeY
+                        )
+                        * 0.5
+
+                    local viewport =
+                        Camera.ViewportSize
+
+                    local viewportMax =
+                        math.min(
+                            maxScale,
+                            (
+                                viewport.X
+                                - 24
+                            )
+                            / baseWidth,
+                            (
+                                viewport.Y
+                                - 24
+                            )
+                            / baseHeight
+                        )
+
+                    viewportMax =
+                        math.max(
+                            minScale,
+                            viewportMax
+                        )
+
+                    scaleObject.Scale =
+                        math.clamp(
+                            startScale
+                            + change,
+                            minScale,
+                            viewportMax
+                        )
+                end)
+        )
+
+        return handle
+    end
 
 local GuiPositionSaveTokens = {}
 
@@ -1536,6 +2196,90 @@ Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 Gui.DisplayOrder = 999999999
 Gui.Parent = ParentContainer
 getgenv().Gui = Gui
+
+getgenv().SetToxGuiColor =
+    function(colorName)
+        local selected =
+            GUIColorMap[
+                tostring(
+                    colorName
+                )
+            ]
+
+        if not selected then
+            return false
+        end
+
+        local previous =
+            MAIN_COLOR
+
+        MAIN_COLOR =
+            selected
+
+        Settings.GUIColorName =
+            tostring(
+                colorName
+            )
+
+        getgenv().MAIN_COLOR =
+            MAIN_COLOR
+
+        local function apply(
+            root
+        )
+            if not root then
+                return
+            end
+
+            local objects = {
+                root
+            }
+
+            for _, item in ipairs(
+                root:
+                    GetDescendants()
+            ) do
+                table.insert(
+                    objects,
+                    item
+                )
+            end
+
+            for _, item in ipairs(
+                objects
+            ) do
+                if item:IsA(
+                    "UIStroke"
+                )
+                and item.Color
+                    == previous then
+                    item.Color =
+                        MAIN_COLOR
+                elseif item:IsA(
+                    "GuiObject"
+                )
+                and item.BackgroundColor3
+                    == previous then
+                    item.BackgroundColor3 =
+                        MAIN_COLOR
+                end
+
+                if item:IsA(
+                    "ScrollingFrame"
+                )
+                and item.ScrollBarImageColor3
+                    == previous then
+                    item.ScrollBarImageColor3 =
+                        MAIN_COLOR
+                end
+            end
+        end
+
+        apply(Gui)
+        apply(NotifGui)
+
+        return true
+    end
 
 local Main = Instance.new("Frame")
 Main.Size = UDim2.new(0, 0, 0, 0)
@@ -2690,7 +3434,7 @@ local ToxChatSendCorner = Instance.new("UICorner")
 ToxChatSendCorner.CornerRadius = UDim.new(0, 4)
 ToxChatSendCorner.Parent = ToxChatSendBtn
 
-getgenv().AddToxChatMessage = function(displayName, message, blocked)
+getgenv().AddToxChatMessage = function(displayName, message, blocked, showPopup)
     if not ToxChatScroll or not ToxChatScroll.Parent then
         return
     end
@@ -2735,6 +3479,15 @@ getgenv().AddToxChatMessage = function(displayName, message, blocked)
         if oldest and oldest.Parent then
             oldest:Destroy()
         end
+    end
+
+    if showPopup ~= false
+    and getgenv().ShowToxChatPopup then
+        getgenv().ShowToxChatPopup(
+            displayName,
+            message,
+            blocked
+        )
     end
 end
 
