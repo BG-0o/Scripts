@@ -50,13 +50,16 @@ local ToxChatSendBtn = getgenv().ToxChatSendBtn
 local ToxChatStatus = getgenv().ToxChatStatus
 local AddToxChatMessage = getgenv().AddToxChatMessage
 
-local ToxChatTopic = "toxhub-global-9f4d1c7a8e2b6f305a71"
-local ToxChatToken = "toxchat-v1-7cb3e59f1a"
-local ToxChatLastID = nil
+local ToxChatRelayHost =
+    "https://tox-control-relay.1kobg-0o.workers.dev"
+
+local ToxChatLastID = 0
 local ToxChatSeenIDs = {}
 local ToxChatSeenNonces = {}
 local ToxChatLastSend = 0
 local ToxChatSenderState = {}
+local ToxChatConnectedNotified = false
+local ToxChatFailureCount = 0
 
 local BlockedChatWords = {
     caralho = true,
@@ -393,176 +396,309 @@ local function CleanToxChatDisplayName(displayName)
 end
 
 
-local function DecodeToxChatResponse(response)
-    if typeof(response) ~= "string"
-    or response == "" then
-        return
+local function ReadRelayResponse(
+    response
+)
+    if typeof(response)
+        ~= "table" then
+        return nil, false
     end
 
-    for line in response:gmatch(
-        "[^\r\n]+"
+    local status =
+        tonumber(
+            response.StatusCode
+            or response.Status
+            or 0
+        ) or 0
+
+    local success =
+        response.Success
+
+    if success == nil then
+        success =
+            response.success
+    end
+
+    local body =
+        response.Body
+        or response.body
+
+    local ok =
+        (
+            status >= 200
+            and status < 300
+        )
+        or success == true
+
+    return body, ok
+end
+
+local function RelayRequest(
+    method,
+    path,
+    body
+)
+    if not RequestFunction then
+        return nil, false
+    end
+
+    local headers = {
+        ["Accept"] =
+            "application/json",
+        ["Cache-Control"] =
+            "no-cache"
+    }
+
+    if body ~= nil then
+        headers["Content-Type"] =
+            "application/json"
+    end
+
+    local ok, response =
+        pcall(function()
+            return RequestFunction({
+                Url =
+                    ToxChatRelayHost
+                    .. path,
+                Method = method,
+                Headers = headers,
+                Body = body
+            })
+        end)
+
+    if not ok then
+        return nil, false
+    end
+
+    return ReadRelayResponse(
+        response
+    )
+end
+
+local function DecodeToxChatResponse(
+    response
+)
+    if typeof(response)
+        ~= "string"
+    or response == "" then
+        return false
+    end
+
+    local ok, decoded =
+        pcall(function()
+            return HttpService:
+                JSONDecode(response)
+        end)
+
+    if not ok
+    or typeof(decoded)
+        ~= "table"
+    or decoded.ok ~= true
+    or typeof(decoded.messages)
+        ~= "table" then
+        return false
+    end
+
+    for _, payload in ipairs(
+        decoded.messages
     ) do
-        local okOuter, outer =
-            pcall(function()
-                return HttpService:
-                    JSONDecode(line)
-            end)
+        local id =
+            tonumber(
+                payload.id
+            ) or 0
 
-        if okOuter
-        and typeof(outer)
-            == "table"
-        and outer.event
-            == "message"
-        and outer.id then
-            ToxChatLastID =
-                outer.id
+        if id > ToxChatLastID then
+            ToxChatLastID = id
+        end
 
-            if not ToxChatSeenIDs[
-                outer.id
+        if id > 0
+        and not ToxChatSeenIDs[id] then
+            ToxChatSeenIDs[id] = true
+
+            local nonce =
+                tostring(
+                    payload.nonce
+                    or ""
+                )
+
+            if nonce == ""
+            or not ToxChatSeenNonces[
+                nonce
             ] then
-                ToxChatSeenIDs[
-                    outer.id
-                ] = true
+                if nonce ~= "" then
+                    ToxChatSeenNonces[
+                        nonce
+                    ] = true
+                end
 
-                local okInner, payload =
-                    pcall(function()
-                        return HttpService:
-                            JSONDecode(
-                                tostring(
-                                    outer.message
-                                    or ""
-                                )
-                            )
-                    end)
+                local userId =
+                    tonumber(
+                        payload.userId
+                    )
 
-                if okInner
-                and typeof(payload)
-                    == "table"
-                and payload.token
-                    == ToxChatToken
-                and typeof(
-                    payload.message
-                ) == "string"
-                and tonumber(
-                    payload.userId
-                ) then
-                    local nonce =
-                        tostring(
-                            payload.nonce
-                            or ""
+                local message =
+                    tostring(
+                        payload.message
+                        or ""
+                    )
+
+                if userId
+                and message ~= "" then
+                    local displayName =
+                        CleanToxChatDisplayName(
+                            payload.displayName
+                            or payload.username
                         )
 
-                    if nonce == ""
-                    or not ToxChatSeenNonces[
-                        nonce
-                    ] then
-                        if nonce ~= "" then
-                            ToxChatSeenNonces[
-                                nonce
-                            ] = true
-                        end
+                    local allowed =
+                        ModerateToxChatMessage(
+                            message
+                        )
 
-                        local displayName =
-                            CleanToxChatDisplayName(
-                                payload.displayName
-                            )
+                    local spam =
+                        IsToxChatSpam(
+                            userId,
+                            message
+                        )
 
-                        local allowed =
-                            ModerateToxChatMessage(
-                                payload.message
-                            )
-
-                        local spam =
-                            IsToxChatSpam(
-                                payload.userId,
-                                payload.message
-                            )
-
-                        if not spam then
-                            if not allowed then
-                                if AddToxChatMessage then
-                                    AddToxChatMessage(
-                                        displayName,
-                                        "[message blocked]",
-                                        true
-                                    )
-                                end
-                            elseif AddToxChatMessage then
+                    if not spam then
+                        if not allowed then
+                            if AddToxChatMessage then
                                 AddToxChatMessage(
                                     displayName,
-                                    payload.message,
-                                    false
+                                    "[message blocked]",
+                                    true
                                 )
                             end
+                        elseif AddToxChatMessage then
+                            AddToxChatMessage(
+                                displayName,
+                                message,
+                                false
+                            )
                         end
                     end
                 end
             end
         end
     end
+
+    return true
 end
 
 local function PollToxChat()
-    local since = ToxChatLastID and HttpService:UrlEncode(ToxChatLastID) or "5m"
-    local url = "https://ntfy.sh/" .. ToxChatTopic .. "/json?poll=1&since=" .. since
+    local response, ok =
+        RelayRequest(
+            "GET",
+            "/chat/poll?after="
+            .. tostring(
+                ToxChatLastID
+            )
+            .. "&limit=50&_="
+            .. tostring(
+                math.floor(
+                    os.clock() * 1000
+                )
+            )
+        )
 
-    local ok, response = pcall(function()
-        return game:HttpGet(url)
-    end)
+    if ok
+    and DecodeToxChatResponse(
+        response
+    ) then
+        ToxChatFailureCount = 0
 
-    if ok then
-        DecodeToxChatResponse(response)
+        if ToxChatStatus
+        and ToxChatStatus.Parent then
+            ToxChatStatus.Text =
+                "Global chat • connected"
 
-        if ToxChatStatus and ToxChatStatus.Parent then
-            ToxChatStatus.Text = "Global chat • connected"
-            ToxChatStatus.TextColor3 = Color3.fromRGB(100, 255, 130)
+            ToxChatStatus.TextColor3 =
+                Color3.fromRGB(
+                    100,
+                    255,
+                    130
+                )
         end
-    else
-        if ToxChatStatus and ToxChatStatus.Parent then
-            ToxChatStatus.Text = "Global chat • reconnecting..."
-            ToxChatStatus.TextColor3 = Color3.fromRGB(255, 180, 70)
+
+        if not ToxChatConnectedNotified then
+            ToxChatConnectedNotified =
+                true
+
+            CustomNotify(
+                "Tox Chat connected",
+                Color3.fromRGB(
+                    100,
+                    255,
+                    130
+                ),
+                3
+            )
         end
+
+        return true
     end
+
+    ToxChatFailureCount += 1
+
+    if ToxChatStatus
+    and ToxChatStatus.Parent then
+        ToxChatStatus.Text =
+            "Global chat • reconnecting..."
+
+        ToxChatStatus.TextColor3 =
+            Color3.fromRGB(
+                255,
+                180,
+                70
+            )
+    end
+
+    if ToxChatFailureCount == 3 then
+        CustomNotify(
+            "Tox Chat relay unavailable",
+            Color3.fromRGB(
+                255,
+                180,
+                70
+            ),
+            4
+        )
+    end
+
+    return false
 end
 
-local function PublishToxChatPayload(payload)
-    local body = HttpService:JSONEncode({
-        topic = ToxChatTopic,
-        title = "ToxChat",
-        message = payload
-    })
+local function PublishToxChatPayload(
+    payload
+)
+    local body =
+        HttpService:
+            JSONEncode(payload)
 
-    if RequestFunction then
-        local ok, response = pcall(function()
-            return RequestFunction({
-                Url = "https://ntfy.sh",
-                Method = "POST",
-                Headers = {
-                    ["Content-Type"] = "application/json"
-                },
-                Body = body
-            })
-        end)
+    local response, ok =
+        RelayRequest(
+            "POST",
+            "/chat/send",
+            body
+        )
 
-        if ok and response then
-            local statusCode = tonumber(response.StatusCode or response.Status or 0)
-
-            if statusCode == 0 or (statusCode >= 200 and statusCode < 300) then
-                return true
-            end
-        end
+    if not ok
+    or typeof(response)
+        ~= "string" then
+        return false
     end
 
-    local ok = pcall(function()
-        HttpService:PostAsync(
-            "https://ntfy.sh",
-            body,
-            Enum.HttpContentType.ApplicationJson,
-            false
-        )
-    end)
+    local decodeOk, decoded =
+        pcall(function()
+            return HttpService:
+                JSONDecode(response)
+        end)
 
-    return ok
+    return decodeOk
+        and typeof(decoded)
+            == "table"
+        and decoded.ok == true
 end
 
 local function SendToxChatMessage()
@@ -570,59 +706,147 @@ local function SendToxChatMessage()
         return
     end
 
-    if tick() - ToxChatLastSend < 1.2 then
-        CustomNotify("Wait a moment before sending again", Color3.fromRGB(255, 180, 70))
+    if tick() - ToxChatLastSend
+        < 1.2 then
+        CustomNotify(
+            "Wait a moment before sending again",
+            Color3.fromRGB(
+                255,
+                180,
+                70
+            )
+        )
+
         return
     end
 
-    local message = tostring(ToxChatInput.Text or "")
-    message = message:gsub("[\r\n]+", " ")
-    message = message:match("^%s*(.-)%s*$") or ""
+    local message =
+        tostring(
+            ToxChatInput.Text or ""
+        )
+
+    message =
+        message:
+            gsub(
+                "[\r\n]+",
+                " "
+            ):
+            match(
+                "^%s*(.-)%s*$"
+            )
+        or ""
+
+    if message == "" then
+        return
+    end
 
     if #message > 160 then
-        message = string.sub(message, 1, 160)
+        message =
+            string.sub(
+                message,
+                1,
+                160
+            )
     end
 
-    local allowed = ModerateToxChatMessage(message)
+    if not ModerateToxChatMessage(
+        message
+    ) then
+        CustomNotify(
+            "Message blocked by Tox Chat filter",
+            Color3.fromRGB(
+                255,
+                100,
+                100
+            )
+        )
 
-    if not allowed then
-        CustomNotify("Message blocked by Tox Chat filter", Color3.fromRGB(255, 100, 100))
         return
     end
 
-    if IsToxChatSpam(Player.UserId, message) then
-        CustomNotify("Message blocked as spam", Color3.fromRGB(255, 180, 70))
+    if IsToxChatSpam(
+        Player.UserId,
+        message
+    ) then
+        CustomNotify(
+            "Message blocked as spam",
+            Color3.fromRGB(
+                255,
+                180,
+                70
+            )
+        )
+
         return
     end
 
     ToxChatLastSend = tick()
 
-    local nonce = HttpService:GenerateGUID(false)
-    local payload = HttpService:JSONEncode({
-        token = ToxChatToken,
-        version = 1,
+    local nonce =
+        HttpService:
+            GenerateGUID(false)
+
+    local payload = {
         nonce = nonce,
-        displayName = Player.DisplayName,
-        username = Player.Name,
-        userId = Player.UserId,
+        displayName =
+            Player.DisplayName,
+        username =
+            Player.Name,
+        userId =
+            Player.UserId,
         message = message,
-        placeId = game.PlaceId,
-        gameId = game.GameId,
-        sentAt = os.time()
-    })
-
-    ToxChatSeenNonces[nonce] = true
-    ToxChatInput.Text = ""
-
-    if AddToxChatMessage then
-        AddToxChatMessage(Player.DisplayName, message, false)
-    end
+        placeId =
+            game.PlaceId,
+        gameId =
+            game.GameId,
+        sentAt =
+            os.time()
+    }
 
     task.spawn(function()
-        local success = PublishToxChatPayload(payload)
+        local success =
+            PublishToxChatPayload(
+                payload
+            )
 
-        if not success then
-            CustomNotify("Tox Chat connection failed", Color3.fromRGB(255, 100, 100))
+        if success then
+            ToxChatSeenNonces[
+                nonce
+            ] = true
+
+            if ToxChatInput
+            and ToxChatInput.Text
+                == message then
+                ToxChatInput.Text = ""
+            end
+
+            if AddToxChatMessage then
+                AddToxChatMessage(
+                    Player.DisplayName,
+                    message,
+                    false
+                )
+            end
+
+            CustomNotify(
+                "Tox Chat message sent",
+                Color3.fromRGB(
+                    100,
+                    255,
+                    130
+                ),
+                2
+            )
+        else
+            CustomNotify(
+                "Tox Chat send failed",
+                Color3.fromRGB(
+                    255,
+                    100,
+                    100
+                ),
+                4
+            )
         end
     end)
 end
