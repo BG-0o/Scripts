@@ -62,115 +62,36 @@ local ToxChatConnectedNotified = false
 local ToxChatFailureCount = 0
 
 local BlockedChatWords = {
-    caralho = true,
-    porra = true,
-    merda = true,
-    puta = true,
-    puto = true,
-    putaria = true,
-    buceta = true,
-    boceta = true,
-    xereca = true,
-    piroca = true,
-    punheta = true,
-    siririca = true,
-    foder = true,
-    fode = true,
-    foda = true,
-    fodase = true,
-    fdp = true,
-    arrombado = true,
-    arrombada = true,
-    desgracado = true,
-    desgracada = true,
-    cuzao = true,
-    viado = true,
-    viadinho = true,
-    bicha = true,
-    vagabunda = true,
-    vagabundo = true,
-    prostituta = true,
-    porno = true,
-    pornografia = true,
-    nude = true,
-    nudes = true,
-    sexo = true,
     estupro = true,
+    estrupo = true,
     estuprador = true,
     estupradora = true,
-    fuck = true,
-    fucking = true,
-    fucker = true,
-    motherfucker = true,
-    shit = true,
-    bullshit = true,
-    bitch = true,
-    asshole = true,
-    dick = true,
-    cock = true,
-    pussy = true,
-    cunt = true,
-    whore = true,
-    slut = true,
-    porn = true,
-    pornography = true,
     rape = true,
     rapist = true,
-    nigger = true,
-    nigga = true,
-    faggot = true,
-    retard = true,
-    retarded = true,
-    kys = true
+    pedofilia = true,
+    pedofilo = true,
+    pedofila = true,
+    zoofilia = true
 }
 
 local BlockedCompactChatParts = {
-    "caralho",
-    "buceta",
-    "boceta",
-    "xereca",
-    "piroca",
-    "punheta",
-    "siririca",
-    "arrombado",
-    "arrombada",
-    "desgracado",
-    "desgracada",
-    "vagabunda",
-    "vagabundo",
-    "prostituta",
-    "pornografia",
     "estupro",
+    "estrupo",
     "estuprador",
     "estupradora",
-    "motherfucker",
-    "asshole",
-    "fucking",
-    "bullshit",
-    "pussy",
-    "cunt",
-    "whore",
-    "pornography",
+    "rape",
     "rapist",
-    "nigger",
-    "nigga",
-    "faggot",
-    "retarded",
-    "onlyfans"
+    "pedofilia",
+    "pedofilo",
+    "pedofila",
+    "zoofilia"
 }
 
 local BlockedChatPhrases = {
     "kill yourself",
     "go kill yourself",
-    "go die",
-    "se mata",
-    "se matar",
     "vai se matar",
-    "vou te matar",
-    "vou matar voce",
-    "manda nude",
-    "manda nudes",
-    "send nudes"
+    "se mata"
 }
 
 local function ReplaceChatAccents(text)
@@ -270,7 +191,10 @@ local function NormalizeChatForFilter(message)
 end
 
 local function ModerateToxChatMessage(message)
-    local raw = tostring(message or "")
+    local raw =
+        tostring(
+            message or ""
+        )
 
     if raw == "" then
         return false, "empty"
@@ -280,58 +204,78 @@ local function ModerateToxChatMessage(message)
         return false, "too_long"
     end
 
-    local rawLower = string.lower(raw)
+    local normalized,
+        spaced,
+        compact =
+        NormalizeChatForFilter(
+            raw
+        )
 
-    if rawLower:find("http://", 1, true)
-    or rawLower:find("https://", 1, true)
-    or rawLower:find("www.", 1, true)
-    or rawLower:find("discord.gg", 1, true)
-    or rawLower:find("discord.com/invite", 1, true)
-    or rawLower:find("t.me/", 1, true)
-    or rawLower:find("bit.ly", 1, true)
-    or rawLower:find("tinyurl", 1, true) then
-        return false, "link"
-    end
+    local padded =
+        " "
+        .. spaced
+        .. " "
 
-    if rawLower:match("[%w%._%%+%-]+@[%w%.%-]+%.[%a][%a]+") then
-        return false, "contact"
-    end
-
-    if rawLower:match("%d+%.%d+%.%d+%.%d+") then
-        return false, "ip"
-    end
-
-    local normalized, spaced, compact = NormalizeChatForFilter(raw)
-    local padded = " " .. spaced .. " "
-
-    for word in spaced:gmatch("[a-z0-9]+") do
-        if BlockedChatWords[word] then
+    for word in spaced:gmatch(
+        "[a-z0-9]+"
+    ) do
+        if BlockedChatWords[
+            word
+        ] then
             return false, "word"
         end
     end
 
-    for _, phrase in ipairs(BlockedChatPhrases) do
-        if padded:find(" " .. phrase .. " ", 1, true) then
+    for _, phrase in ipairs(
+        BlockedChatPhrases
+    ) do
+        if padded:find(
+            " "
+            .. phrase
+            .. " ",
+            1,
+            true
+        ) then
             return false, "phrase"
         end
     end
 
-    local collapsedCompact = CollapseChatAllRepeats(compact)
+    local collapsedCompact =
+        CollapseChatAllRepeats(
+            compact
+        )
 
-    for _, part in ipairs(BlockedCompactChatParts) do
-        if compact:find(part, 1, true)
-        or collapsedCompact:find(CollapseChatAllRepeats(part), 1, true) then
+    for _, part in ipairs(
+        BlockedCompactChatParts
+    ) do
+        local collapsedPart =
+            CollapseChatAllRepeats(
+                part
+            )
+
+        if compact:find(
+            part,
+            1,
+            true
+        )
+        or collapsedCompact:find(
+            collapsedPart,
+            1,
+            true
+        ) then
             return false, "obfuscated"
         end
     end
 
-    if normalized:match("%f[%a]p+[%W_]*u+[%W_]*t+[%W_]*a+%f[%A]")
-    or normalized:match("%f[%a]p+[%W_]*o+[%W_]*r+[%W_]*r+[%W_]*a+%f[%A]")
-    or normalized:match("%f[%a]m+[%W_]*e+[%W_]*r+[%W_]*d+[%W_]*a+%f[%A]")
-    or normalized:match("%f[%a]f+[%W_]*o+[%W_]*d+[%W_]*a+%f[%A]")
-    or normalized:match("%f[%a]f+[%W_]*d+[%W_]*p+%f[%A]")
-    or normalized:match("%f[%a]f+[%W_]*u+[%W_]*c+[%W_]*k+%f[%A]")
-    or normalized:match("%f[%a]s+[%W_]*h+[%W_]*i+[%W_]*t+%f[%A]") then
+    if normalized:match(
+        "%f[%a]e+[%W_]*s+[%W_]*t+[%W_]*u+[%W_]*p+[%W_]*r+[%W_]*o+%f[%A]"
+    )
+    or normalized:match(
+        "%f[%a]e+[%W_]*s+[%W_]*t+[%W_]*r+[%W_]*u+[%W_]*p+[%W_]*o+%f[%A]"
+    )
+    or normalized:match(
+        "%f[%a]r+[%W_]*a+[%W_]*p+[%W_]*e+%f[%A]"
+    ) then
         return false, "obfuscated"
     end
 
@@ -393,6 +337,49 @@ local function CleanToxChatDisplayName(displayName)
     end
 
     return name
+end
+
+
+local function GetToxChatRole()
+    local roleGetter =
+        getgenv().GetToxRole
+
+    if type(roleGetter)
+        == "function" then
+        local ok, role =
+            pcall(
+                roleGetter,
+                Player
+            )
+
+        if ok
+        and typeof(role)
+            == "string"
+        and role ~= "" then
+            return role
+        end
+    end
+
+    local role =
+        tostring(
+            getgenv().ToxRole
+            or "Member"
+        )
+
+    if role == "" then
+        role = "Member"
+    end
+
+    return role
+end
+
+local function GetToxChatDisplayName()
+    return
+        CleanToxChatDisplayName(
+            Player.DisplayName
+        )
+        .. " • "
+        .. GetToxChatRole()
 end
 
 
@@ -789,7 +776,7 @@ local function SendToxChatMessage()
     local payload = {
         nonce = nonce,
         displayName =
-            Player.DisplayName,
+            GetToxChatDisplayName(),
         username =
             Player.Name,
         userId =
@@ -822,7 +809,7 @@ local function SendToxChatMessage()
 
             if AddToxChatMessage then
                 AddToxChatMessage(
-                    Player.DisplayName,
+                    GetToxChatDisplayName(),
                     message,
                     false
                 )
