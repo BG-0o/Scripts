@@ -4175,9 +4175,13 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
     local effectiveTeamColors = Settings.ESPTeamColors or mm2RoleESPActive
     local toxRoleGetter =
         getgenv().GetToxRole
+    local toxUserChecker =
+        getgenv().IsToxUser
     local toxRoleESPActive =
         effectiveESPEnabled
         and type(toxRoleGetter)
+            == "function"
+        and type(toxUserChecker)
             == "function"
 
     local anyESPActive = effectiveESPEnabled and (effectiveESPNames
@@ -4318,21 +4322,32 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                     end
 
                     if toxRoleESPActive then
-                        local ok, toxRole =
+                        local activeOk,
+                            isToxUser =
                             pcall(
-                                toxRoleGetter,
+                                toxUserChecker,
                                 p
                             )
 
-                        if ok
-                        and typeof(toxRole)
-                            == "string"
-                        and toxRole ~= "" then
-                            table.insert(
-                                lines,
-                                "Tox: "
-                                .. toxRole
-                            )
+                        if activeOk
+                        and isToxUser then
+                            local roleOk,
+                                toxRole =
+                                pcall(
+                                    toxRoleGetter,
+                                    p
+                                )
+
+                            if roleOk
+                            and typeof(toxRole)
+                                == "string"
+                            and toxRole ~= "" then
+                                table.insert(
+                                    lines,
+                                    "Tox: "
+                                    .. toxRole
+                                )
+                            end
                         end
                     end
 
