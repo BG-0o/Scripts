@@ -1715,9 +1715,9 @@ end
 local CombatTab = CreateTab("COMBAT", CombatPage)
 local PlayerTab = CreateTab("PLAYER", PlayerPage)
 local VisualsTab = CreateTab("VISUALS", VisualsPage)
-local FlingTab = CreateTab("MISC", FlingPage)
 local ScriptsTab = CreateTab("SCRIPTS", ScriptsPage)
 local JoinTab = CreateTab("JOIN", JoinPage)
+local FlingTab = CreateTab("MISC", FlingPage)
 local ConfigTab = CreateTab("CONFIG", ConfigPage)
 
 getgenv().GameTab = GameTab
