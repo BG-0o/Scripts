@@ -1460,6 +1460,475 @@ local function FindGuidedMurderer()
     return nil
 end
 
+local TargetMotionHistory =
+    setmetatable(
+        {},
+        {
+            __mode = "k"
+        }
+    )
+
+local function ClampVectorMagnitude(
+    vector,
+    maximum
+)
+    if typeof(vector)
+        ~= "Vector3" then
+        return Vector3.zero
+    end
+
+    local magnitude =
+        vector.Magnitude
+
+    if magnitude <= maximum
+    or magnitude <= 0 then
+        return vector
+    end
+
+    return
+        vector.Unit
+        * maximum
+end
+
+local function UpdateTargetMotion(
+    target
+)
+    if not target
+    or not target.Character then
+        TargetMotionHistory[
+            target
+        ] = nil
+
+        return
+    end
+
+    local root =
+        target.Character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+    if not root then
+        TargetMotionHistory[
+            target
+        ] = nil
+
+        return
+    end
+
+    local now =
+        os.clock()
+
+    local position =
+        root.Position
+
+    local state =
+        TargetMotionHistory[
+            target
+        ]
+
+    if not state then
+        TargetMotionHistory[
+            target
+        ] = {
+            Position = position,
+            Velocity =
+                root.AssemblyLinearVelocity,
+            Acceleration =
+                Vector3.zero,
+            Time = now
+        }
+
+        return
+    end
+
+    local deltaTime =
+        now
+        - (
+            state.Time
+            or now
+        )
+
+    if deltaTime < 0.012
+    or deltaTime > 0.35 then
+        state.Position =
+            position
+
+        state.Velocity =
+            root.AssemblyLinearVelocity
+
+        state.Acceleration =
+            Vector3.zero
+
+        state.Time = now
+
+        return
+    end
+
+    local measuredVelocity =
+        (
+            position
+            - state.Position
+        )
+        / deltaTime
+
+    measuredVelocity =
+        ClampVectorMagnitude(
+            measuredVelocity,
+            125
+        )
+
+    local previousVelocity =
+        state.Velocity
+        or measuredVelocity
+
+    local smoothedVelocity =
+        previousVelocity:
+            Lerp(
+                measuredVelocity,
+                0.58
+            )
+
+    local measuredAcceleration =
+        (
+            smoothedVelocity
+            - previousVelocity
+        )
+        / deltaTime
+
+    state.Acceleration =
+        ClampVectorMagnitude(
+            (
+                state.Acceleration
+                or Vector3.zero
+            ):
+                Lerp(
+                    measuredAcceleration,
+                    0.35
+                ),
+            95
+        )
+
+    state.Velocity =
+        smoothedVelocity
+
+    state.Position =
+        position
+
+    state.Time = now
+end
+
+AddConnection(
+    RunService.Heartbeat:
+        Connect(function()
+            for _, target in ipairs(
+                Players:
+                    GetPlayers()
+            ) do
+                if target ~= Player then
+                    UpdateTargetMotion(
+                        target
+                    )
+                end
+            end
+        end)
+)
+
+local function GetShotOrigin()
+    local character =
+        Player.Character
+
+    if not character then
+        return
+            Camera.CFrame.Position
+    end
+
+    local originPart =
+        character:
+            FindFirstChild(
+                "RightHand"
+            )
+        or character:
+            FindFirstChild(
+                "Right Arm"
+            )
+        or character:
+            FindFirstChild(
+                "UpperTorso"
+            )
+        or character:
+            FindFirstChild(
+                "Torso"
+            )
+        or character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+    return
+        originPart
+        and originPart.Position
+        or Camera.CFrame.Position
+end
+
+local function GetPredictionPing()
+    local ping =
+        0.055
+
+    pcall(function()
+        local value =
+            Player:
+                GetNetworkPing()
+
+        if typeof(value)
+            == "number"
+        and value > 0 then
+            ping =
+                value
+        end
+    end)
+
+    return
+        math.clamp(
+            ping,
+            0.02,
+            0.22
+        )
+end
+
+local function GetPredictedTargetPosition(
+    target
+)
+    if not target
+    or not target.Character then
+        return nil
+    end
+
+    local character =
+        target.Character
+
+    local humanoid =
+        character:
+            FindFirstChildOfClass(
+                "Humanoid"
+            )
+
+    local root =
+        character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+    if not humanoid
+    or humanoid.Health <= 0
+    or not root then
+        return nil
+    end
+
+    local torso =
+        character:
+            FindFirstChild(
+                "UpperTorso"
+            )
+        or character:
+            FindFirstChild(
+                "Torso"
+            )
+        or root
+
+    local basePosition =
+        torso.Position
+
+    local state =
+        TargetMotionHistory[
+            target
+        ]
+
+    local replicatedVelocity =
+        root.AssemblyLinearVelocity
+
+    local measuredVelocity =
+        state
+        and state.Velocity
+        or replicatedVelocity
+
+    local velocity =
+        replicatedVelocity:
+            Lerp(
+                measuredVelocity,
+                0.52
+            )
+
+    local horizontalVelocity =
+        Vector3.new(
+            velocity.X,
+            0,
+            velocity.Z
+        )
+
+    local moveDirection =
+        humanoid.MoveDirection
+
+    if moveDirection.Magnitude > 0.05 then
+        local expectedHorizontal =
+            moveDirection.Unit
+            * math.max(
+                tonumber(
+                    humanoid.WalkSpeed
+                ) or 16,
+                10
+            )
+
+        if horizontalVelocity.Magnitude
+            < 4 then
+            horizontalVelocity =
+                expectedHorizontal
+        else
+            horizontalVelocity =
+                horizontalVelocity:
+                    Lerp(
+                        expectedHorizontal,
+                        0.28
+                    )
+        end
+    end
+
+    horizontalVelocity =
+        ClampVectorMagnitude(
+            horizontalVelocity,
+            42
+        )
+
+    local verticalVelocity =
+        math.clamp(
+            velocity.Y,
+            -65,
+            65
+        )
+
+    local origin =
+        GetShotOrigin()
+
+    local distance =
+        (
+            basePosition
+            - origin
+        ).Magnitude
+
+    local ping =
+        GetPredictionPing()
+
+    local leadTime =
+        0.035
+        + (
+            ping
+            * 0.92
+        )
+        + (
+            distance
+            / 1850
+        )
+
+    leadTime =
+        math.clamp(
+            leadTime,
+            0.045,
+            0.26
+        )
+
+    local humanoidState =
+        humanoid:
+            GetState()
+
+    local airborne =
+        humanoid.FloorMaterial
+            == Enum.Material.Air
+        or humanoidState
+            == Enum.HumanoidStateType.Jumping
+        or humanoidState
+            == Enum.HumanoidStateType.Freefall
+
+    local verticalOffset =
+        verticalVelocity
+        * leadTime
+
+    if airborne then
+        verticalOffset -=
+            0.5
+            * workspace.Gravity
+            * leadTime
+            * leadTime
+    else
+        verticalOffset *=
+            0.28
+    end
+
+    local acceleration =
+        state
+        and state.Acceleration
+        or Vector3.zero
+
+    acceleration =
+        Vector3.new(
+            math.clamp(
+                acceleration.X,
+                -55,
+                55
+            ),
+            0,
+            math.clamp(
+                acceleration.Z,
+                -55,
+                55
+            )
+        )
+
+    local horizontalLead =
+        horizontalVelocity
+        * leadTime
+
+    horizontalLead +=
+        acceleration
+        * (
+            0.5
+            * leadTime
+            * leadTime
+        )
+
+    horizontalLead =
+        ClampVectorMagnitude(
+            horizontalLead,
+            12
+        )
+
+    local predicted =
+        basePosition
+        + horizontalLead
+        + Vector3.new(
+            0,
+            math.clamp(
+                verticalOffset,
+                -8,
+                8
+            ),
+            0
+        )
+
+    local rootDifference =
+        predicted
+        - root.Position
+
+    if rootDifference.Magnitude
+        > 16 then
+        predicted =
+            root.Position
+            + rootDifference.Unit
+            * 16
+    end
+
+    return predicted
+end
+
 local function FireGuidedGunShot(gun, targetPosition)
     local fired = false
 
@@ -1468,11 +1937,31 @@ local function FireGuidedGunShot(gun, targetPosition)
 
     if shootRemote and shootRemote:IsA("RemoteEvent") then
         local ok = pcall(function()
+            local origin =
+                GetShotOrigin()
+
+            local direction =
+                targetPosition
+                - origin
+
             shootRemote:FireServer(
-                CFrame.new(
-                    targetPosition + Vector3.new(0, 0.5, 0)
+                CFrame.lookAt(
+                    origin,
+                    targetPosition
                 ),
-                CFrame.new(targetPosition)
+                CFrame.lookAt(
+                    targetPosition,
+                    targetPosition
+                    + (
+                        direction.Magnitude > 0.01
+                        and direction.Unit
+                        or Vector3.new(
+                            0,
+                            0,
+                            -1
+                        )
+                    )
+                )
             )
         end)
 
@@ -1558,26 +2047,33 @@ local function ShootMurderer(showNotify)
         return false
     end
 
-    local targetPart = murderer.Character:FindFirstChild("Head")
-        or murderer.Character:FindFirstChild("HumanoidRootPart")
+    local targetPosition =
+        GetPredictedTargetPosition(
+            murderer
+        )
 
-    if not targetPart then
+    if not targetPosition then
         GuidedShotBusy = false
 
         if showNotify then
             CustomNotify(
                 "Murderer target unavailable",
-                Color3.fromRGB(255, 100, 100)
+                Color3.fromRGB(
+                    255,
+                    100,
+                    100
+                )
             )
         end
 
         return false
     end
 
-    local fired = FireGuidedGunShot(
-        gun,
-        targetPart.Position
-    )
+    local fired =
+        FireGuidedGunShot(
+            gun,
+            targetPosition
+        )
 
     if showNotify then
         if fired then
@@ -1689,20 +2185,36 @@ local function SilentAimShot()
         return false
     end
 
-    local targetPart = murderer.Character:FindFirstChild("Head")
-        or murderer.Character:FindFirstChild("HumanoidRootPart")
+    local targetPosition =
+        GetPredictedTargetPosition(
+            murderer
+        )
 
-    if not targetPart then
+    if not targetPosition then
         SilentAimBusy = false
         return false
     end
 
-    local fired = FireNormalDirectionalShot(
-        gun,
-        targetPart.Position
-    )
+    local fired =
+        FireNormalDirectionalShot(
+            gun,
+            targetPosition
+        )
 
-    task.delay(0.18, function()
+    task.spawn(function()
+        local started =
+            os.clock()
+
+        repeat
+            RunService.Heartbeat:
+                Wait()
+        until getgenv().Destroyed
+        or not gun
+        or not gun.Parent
+        or gun.Enabled ~= false
+        or os.clock() - started
+            >= 2.5
+
         SilentAimBusy = false
     end)
 
@@ -3178,7 +3690,7 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 
     if Settings.MM2ShootMurderKey and input.KeyCode == Settings.MM2ShootMurderKey then
-        if os.clock() - LastManualShootInput < 0.35 then
+        if os.clock() - LastManualShootInput < 0.08 then
             return
         end
 
