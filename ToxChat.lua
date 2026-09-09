@@ -60,6 +60,10 @@ local ToxChatLastSend = 0
 local ToxChatSenderState = {}
 local ToxChatConnectedNotified = false
 local ToxChatFailureCount = 0
+local ToxChatClearVersion = nil
+local TOX_OWNER_ID = 2245662672
+local ClearToxChatMessages =
+    getgenv().ClearToxChatMessages
 
 local BlockedChatWords = {
     estupro = true,
@@ -486,6 +490,39 @@ local function DecodeToxChatResponse(
         return false
     end
 
+    local initialSync =
+        ToxChatClearVersion
+        == nil
+
+    local clearVersion =
+        tonumber(
+            decoded.clearVersion
+        ) or 0
+
+    if ToxChatClearVersion
+        == nil then
+        ToxChatClearVersion =
+            clearVersion
+    elseif clearVersion
+        ~= ToxChatClearVersion then
+        ToxChatClearVersion =
+            clearVersion
+
+        if ClearToxChatMessages then
+            ClearToxChatMessages()
+        end
+
+        CustomNotify(
+            "Tox Chat cleared by Owner",
+            Color3.fromRGB(
+                120,
+                180,
+                255
+            ),
+            4
+        )
+    end
+
     for _, payload in ipairs(
         decoded.messages
     ) do
@@ -554,14 +591,16 @@ local function DecodeToxChatResponse(
                                 AddToxChatMessage(
                                     displayName,
                                     "[message blocked]",
-                                    true
+                                    true,
+                                    not initialSync
                                 )
                             end
                         elseif AddToxChatMessage then
                             AddToxChatMessage(
                                 displayName,
                                 message,
-                                false
+                                false,
+                                not initialSync
                             )
                         end
                     end
@@ -656,6 +695,69 @@ local function PollToxChat()
     return false
 end
 
+local function ClearToxChatForEveryone()
+    if Player.UserId
+        ~= TOX_OWNER_ID then
+        CustomNotify(
+            "/clear is Owner only",
+            Color3.fromRGB(
+                255,
+                120,
+                120
+            ),
+            4
+        )
+
+        return false
+    end
+
+    local body =
+        HttpService:
+            JSONEncode({
+                userId =
+                    Player.UserId
+            })
+
+    local response, ok =
+        RelayRequest(
+            "POST",
+            "/chat/clear",
+            body
+        )
+
+    if not ok
+    or typeof(response)
+        ~= "string" then
+        return false
+    end
+
+    local decodeOk, decoded =
+        pcall(function()
+            return HttpService:
+                JSONDecode(response)
+        end)
+
+    if not decodeOk
+    or typeof(decoded)
+        ~= "table"
+    or decoded.ok ~= true then
+        return false
+    end
+
+    ToxChatClearVersion =
+        tonumber(
+            decoded.clearVersion
+        )
+        or ToxChatClearVersion
+        or 0
+
+    if ClearToxChatMessages then
+        ClearToxChatMessages()
+    end
+
+    return true
+end
+
 local function PublishToxChatPayload(
     payload
 )
@@ -724,6 +826,44 @@ local function SendToxChatMessage()
         or ""
 
     if message == "" then
+        return
+    end
+
+    if string.lower(message)
+        == "/clear" then
+        ToxChatLastSend = tick()
+
+        task.spawn(function()
+            local success =
+                ClearToxChatForEveryone()
+
+            if success then
+                if ToxChatInput then
+                    ToxChatInput.Text = ""
+                end
+
+                CustomNotify(
+                    "Tox Chat cleared for everyone",
+                    Color3.fromRGB(
+                        120,
+                        180,
+                        255
+                    ),
+                    4
+                )
+            else
+                CustomNotify(
+                    "Tox Chat clear failed",
+                    Color3.fromRGB(
+                        255,
+                        100,
+                        100
+                    ),
+                    4
+                )
+            end
+        end)
+
         return
     end
 
@@ -811,19 +951,12 @@ local function SendToxChatMessage()
                 AddToxChatMessage(
                     GetToxChatDisplayName(),
                     message,
-                    false
+                    false,
+                    true
                 )
             end
 
-            CustomNotify(
-                "Tox Chat message sent",
-                Color3.fromRGB(
-                    100,
-                    255,
-                    130
-                ),
-                2
-            )
+            ToxChatFailureCount = 0
         else
             CustomNotify(
                 "Tox Chat send failed",
