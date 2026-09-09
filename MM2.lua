@@ -66,8 +66,22 @@ Settings.MM2GrabGunKey = Settings.MM2GrabGunKey or Enum.KeyCode.G
 Settings.MM2GrabGunAutoV2 = Settings.MM2GrabGunAutoV2 == true or Settings.MM2GrabGunAuto == true
 Settings.MM2GrabGunAuto = false
 Settings.MM2FlingTarget = Settings.MM2FlingTarget or "Murderer"
-Settings.MM2AutoFarmV2 = Settings.MM2AutoFarmV2 == true or Settings.MM2AutoFarmV2 == true
-Settings.MM2AutoFarmV2 = false
+
+local ResumeAutoFarmAfterAntiKick =
+    getgenv().__ToxAntiKickResume
+    == true
+    and getgenv().__ToxAntiKickResumeFarm
+        == true
+
+getgenv().__ToxAntiKickResume = nil
+getgenv().__ToxAntiKickResumeFarm = nil
+
+Settings.MM2AutoFarmV2 =
+    ResumeAutoFarmAfterAntiKick
+
+Settings.MM2AutoFarmResetOnFull =
+    Settings.MM2AutoFarmResetOnFull == true
+
 local configuredAutoFarmSpeed = tonumber(Settings.MM2AutoFarmSpeed)
 
 if not configuredAutoFarmSpeed or configuredAutoFarmSpeed == 50 then
@@ -82,6 +96,25 @@ Settings.MM2AutoFarmSpeed = math.clamp(
 Settings.MM2Whitelist = typeof(Settings.MM2Whitelist) == "table" and Settings.MM2Whitelist or {}
 
 local ActionBusy = false
+
+if ResumeAutoFarmAfterAntiKick then
+    task.delay(
+        2,
+        function()
+            if not getgenv().Destroyed then
+                CustomNotify(
+                    "Anti Kick • Auto Farm resumed",
+                    Color3.fromRGB(
+                        100,
+                        255,
+                        130
+                    ),
+                    5
+                )
+            end
+        end
+    )
+end
 
 local function IsInsideToxGui(obj)
     local toxGui = getgenv().Gui
@@ -739,6 +772,67 @@ local function TouchKnifeTarget(knife, target)
     return touched
 end
 
+local function KnifeTargetAlive(
+    target
+)
+    local humanoid =
+        target
+        and target.Character
+        and target.Character:
+            FindFirstChildOfClass(
+                "Humanoid"
+            )
+
+    return humanoid
+        and humanoid.Health > 0
+end
+
+local function AttackKnifeTargetUntilDone(
+    knife,
+    target,
+    timeout
+)
+    timeout =
+        tonumber(timeout)
+        or 3.5
+
+    local started =
+        os.clock()
+
+    local attacked = false
+
+    while not getgenv().Destroyed
+    and knife
+    and knife.Parent
+    and target
+    and target.Parent == Players
+    and KnifeTargetAlive(
+        target
+    )
+    and os.clock() - started
+        < timeout do
+        if knife:IsA("Tool")
+        and knife.Enabled == false then
+            RunService.Heartbeat:
+                Wait()
+        else
+            if TouchKnifeTarget(
+                knife,
+                target
+            ) then
+                attacked = true
+            end
+
+            task.wait(0.035)
+        end
+    end
+
+    return attacked
+        and not KnifeTargetAlive(
+            target
+        )
+end
+
 local function KillAll()
     if ActionBusy then
         return
@@ -760,9 +854,15 @@ local function KillAll()
 
     task.spawn(function()
         for _, target in ipairs(Players:GetPlayers()) do
-            if target ~= Player and not IsWhitelisted(target) then
-                TouchKnifeTarget(knife, target)
-                task.wait(0.025)
+            if target ~= Player
+            and not IsWhitelisted(target) then
+                AttackKnifeTargetUntilDone(
+                    knife,
+                    target,
+                    3.5
+                )
+
+                task.wait(0.015)
             end
         end
 
@@ -813,8 +913,13 @@ local function KillSelectedTargets()
 
             if target.Parent == Players
             and not IsWhitelisted(target) then
-                TouchKnifeTarget(knife, target)
-                task.wait(0.04)
+                AttackKnifeTargetUntilDone(
+                    knife,
+                    target,
+                    3.5
+                )
+
+                task.wait(0.015)
             end
         end
 
@@ -1473,7 +1578,20 @@ local function ShootMurderer(showNotify)
         end
     end
 
-    task.delay(0.22, function()
+    task.spawn(function()
+        local started =
+            os.clock()
+
+        repeat
+            RunService.Heartbeat:
+                Wait()
+        until getgenv().Destroyed
+        or not gun
+        or not gun.Parent
+        or gun.Enabled ~= false
+        or os.clock() - started
+            >= 2.5
+
         GuidedShotBusy = false
     end)
 
@@ -1692,6 +1810,10 @@ local AutoFarmCompleting = false
 local AutoFarmAtCoin = false
 local AutoFarmGeneration = 0
 local AutoFarmSessionCollected = 0
+local AutoFarmPausedFull = false
+local AutoFarmResetTriggered = false
+local AutoFarmPauseCharacter = nil
+local AutoFarmPauseMap = nil
 
 local function IsAliveCharacter()
     local character, humanoid, root = GetCharacterState()
@@ -1737,7 +1859,31 @@ local function ReadCoinBagFromGui()
 end
 
 local function RefreshFarmBagState()
-    return AutoFarmBagCoins, AutoFarmBagMax, AutoFarmBagKnown
+    local currentCoins,
+        maxCoins =
+        ReadCoinBagFromGui()
+
+    if typeof(currentCoins)
+        == "number" then
+        AutoFarmBagCoins =
+            currentCoins
+
+        AutoFarmBagKnown = true
+    end
+
+    if typeof(maxCoins)
+        == "number"
+    and maxCoins > 0 then
+        AutoFarmBagMax =
+            maxCoins
+
+        AutoFarmBagKnown = true
+    end
+
+    return
+        AutoFarmBagCoins,
+        AutoFarmBagMax,
+        AutoFarmBagKnown
 end
 
 local function IsFarmBagFull()
@@ -2148,28 +2294,85 @@ local function StopAutoFarm(restore)
     AutoFarmReturnCFrame = nil
     AutoFarmRotation = nil
     AutoFarmPrepared = false
+
+    if not AutoFarmPausedFull then
+        AutoFarmSessionCollected = 0
+    end
+end
+
+local function ResetAutoFarmFullPause()
+    AutoFarmPausedFull = false
+    AutoFarmResetTriggered = false
+    AutoFarmPauseCharacter = nil
+    AutoFarmPauseMap = nil
     AutoFarmSessionCollected = 0
 end
 
 local function CompleteAutoFarm()
-    if AutoFarmCompleting then
+    if AutoFarmCompleting
+    or AutoFarmPausedFull then
         return
     end
 
     AutoFarmCompleting = true
-    Settings.MM2AutoFarmV2 = false
+    AutoFarmPausedFull = true
+    AutoFarmPauseCharacter =
+        Player.Character
+    AutoFarmPauseMap =
+        workspace:
+            FindFirstChild(
+                "Normal"
+            )
+
     StopAutoFarm(true)
 
-    if SyncToggleVisuals then
-        SyncToggleVisuals("MM2AutoFarmV2", false)
+    if Settings.MM2AutoFarmResetOnFull
+    and not AutoFarmResetTriggered then
+        AutoFarmResetTriggered = true
+
+        CustomNotify(
+            "Bag full • resetting",
+            Color3.fromRGB(
+                255,
+                180,
+                70
+            )
+        )
+
+        task.delay(
+            0.15,
+            function()
+                if not Settings.MM2AutoFarmV2
+                or not Settings.MM2AutoFarmResetOnFull then
+                    return
+                end
+
+                local character =
+                    Player.Character
+
+                local humanoid =
+                    character
+                    and character:
+                        FindFirstChildOfClass(
+                            "Humanoid"
+                        )
+
+                if humanoid
+                and humanoid.Health > 0 then
+                    humanoid.Health = 0
+                end
+            end
+        )
+    else
+        CustomNotify(
+            "Bag full • Auto Farm paused",
+            Color3.fromRGB(
+                100,
+                255,
+                100
+            )
+        )
     end
-
-    AutoSaveConfiguration()
-
-    CustomNotify(
-        "Auto Farm complete",
-        Color3.fromRGB(100, 255, 100)
-    )
 
     AutoFarmCompleting = false
 end
@@ -2459,18 +2662,59 @@ end))
 task.spawn(function()
     while not getgenv().Destroyed and game.PlaceId == 142823291 do
         if Settings.MM2AutoFarmV2 then
-            local _, humanoid, root, alive = IsAliveCharacter()
+            RefreshFarmBagState()
 
-            if not alive then
+            local _,
+                humanoid,
+                root,
+                alive =
+                IsAliveCharacter()
+
+            local fallbackFull =
+                not AutoFarmBagKnown
+                and AutoFarmSessionCollected
+                    >= AutoFarmBagMax
+
+            if AutoFarmPausedFull then
+                local currentMap =
+                    workspace:
+                        FindFirstChild(
+                            "Normal"
+                        )
+
+                local bagReset =
+                    AutoFarmBagKnown
+                    and not IsFarmBagFull()
+
+                local roundChanged =
+                    AutoFarmPauseMap
+                    and currentMap
+                    and currentMap
+                        ~= AutoFarmPauseMap
+
+                if bagReset
+                or roundChanged then
+                    ResetAutoFarmFullPause()
+                    AutoFarmBagKnown = false
+                    AutoFarmBagCoins = 0
+                    RefreshFarmBagState()
+                else
+                    if AutoFarmPrepared then
+                        StopAutoFarm(false)
+                    end
+
+                    task.wait(0.2)
+                end
+            elseif not alive then
                 if AutoFarmPrepared then
                     StopAutoFarm(false)
                 end
 
                 task.wait(0.15)
             elseif IsFarmBagFull()
-            or (not AutoFarmBagKnown and AutoFarmSessionCollected >= AutoFarmBagMax) then
+            or fallbackFull then
                 CompleteAutoFarm()
-                task.wait(0.15)
+                task.wait(0.2)
             elseif not ActionBusy then
                 local coin = GetBestCoin(root.Position, false)
 
@@ -2556,14 +2800,111 @@ local function FlingSelectedRole()
     end)
 end
 
+local function CreateMM2Section(
+    text
+)
+    local label =
+        Instance.new(
+            "TextLabel"
+        )
+
+    label.Size =
+        UDim2.new(
+            1,
+            -5,
+            0,
+            26
+        )
+
+    label.BackgroundColor3 =
+        Color3.fromRGB(
+            13,
+            13,
+            21
+        )
+
+    label.BorderSizePixel = 0
+    label.Text =
+        "  "
+        .. tostring(
+            text
+        )
+
+    label.TextColor3 =
+        MAIN_COLOR
+
+    label.Font =
+        Enum.Font.GothamBold
+
+    label.TextSize = 11
+    label.TextXAlignment =
+        Enum.TextXAlignment.Left
+
+    label.Parent =
+        GamePage
+
+    local corner =
+        Instance.new("UICorner")
+
+    corner.CornerRadius =
+        UDim.new(
+            0,
+            5
+        )
+
+    corner.Parent =
+        label
+
+    return label
+end
+
+local AutoFarmHighSpeedWarningShown = false
+
+local function WarnAutoFarmSpeed(
+    speed
+)
+    speed =
+        tonumber(speed)
+        or 5
+
+    if speed > 10
+    and not AutoFarmHighSpeedWarningShown then
+        AutoFarmHighSpeedWarningShown =
+            true
+
+        CustomNotify(
+            "WARNING: Auto Farm speed above 10 may cause a kick or ban.",
+            Color3.fromRGB(
+                255,
+                170,
+                60
+            ),
+            7
+        )
+    elseif speed <= 10 then
+        AutoFarmHighSpeedWarningShown =
+            false
+    end
+end
+
+CreateMM2Section(
+    "FARM"
+)
+
 CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarmV2, Settings.MM2AutoFarmSpeed, function(v)
     if v then
         Settings.MM2AutoFarmV2 = true
+        ResetAutoFarmFullPause()
         AutoFarmBagKnown = false
-        AutoFarmSessionCollected = 0
+        AutoFarmBagCoins = 0
         RefreshFarmBagState()
+
+        WarnAutoFarmSpeed(
+            Settings.MM2AutoFarmSpeed
+        )
     else
         Settings.MM2AutoFarmV2 = false
+        ResetAutoFarmFullPause()
         StopAutoFarm(true)
 
         local character = Player.Character
@@ -2587,11 +2928,43 @@ CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarmV2, Settings.MM
 
     AutoSaveConfiguration()
 end, function(value)
-    Settings.MM2AutoFarmSpeed = math.clamp(tonumber(value) or 5, 5, 250)
+    Settings.MM2AutoFarmSpeed =
+        math.clamp(
+            tonumber(value)
+            or 5,
+            5,
+            250
+        )
+
+    WarnAutoFarmSpeed(
+        Settings.MM2AutoFarmSpeed
+    )
+
     AutoSaveConfiguration()
 end, "MM2AutoFarmV2")
 
-CreateToggle("ESP", GamePage, Settings.MM2RoleESP, function(v)
+CreateToggle(
+    "Reset On Full",
+    GamePage,
+    Settings.MM2AutoFarmResetOnFull,
+    function(v)
+        Settings.MM2AutoFarmResetOnFull =
+            v == true
+
+        if not Settings.MM2AutoFarmResetOnFull then
+            AutoFarmResetTriggered = false
+        end
+
+        AutoSaveConfiguration()
+    end,
+    "MM2AutoFarmResetOnFull"
+)
+
+CreateMM2Section(
+    "PLAYER"
+)
+
+CreateToggle("Role ESP", GamePage, Settings.MM2RoleESP, function(v)
     ApplyRoleESP(v)
 end, "MM2RoleESP")
 
@@ -2612,6 +2985,10 @@ end, "Noclip")
 CreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
     SetShared("AntiFling", v)
 end, "AntiFling")
+
+CreateMM2Section(
+    "COMBAT"
+)
 
 local MM2AutoRuntime = {
     KillAll = Settings.MM2KillAllAutoV2 == true,
@@ -2648,6 +3025,10 @@ end, function(enabled)
     Settings.MM2GrabGunAutoV2 = MM2AutoRuntime.GrabGun
 end, "MM2GrabGunAutoV2")
 
+CreateMM2Section(
+    "TARGETING"
+)
+
 CreateDropdown("Fling Target", {"Murderer", "Sheriff"}, GamePage, Settings.MM2FlingTarget, function(value)
     Settings.MM2FlingTarget = value
     AutoSaveConfiguration()
@@ -2663,7 +3044,7 @@ CreateButton("Whitelist", GamePage, function()
     OpenPlayerSelector("whitelist")
 end)
 
-local AutoKnifeOwned = false
+local AutoKnifeLastAttempt = 0
 local AutoShootLastAttempt = 0
 local AutoGrabAttemptedDrops = setmetatable({}, {__mode = "k"})
 
@@ -2676,15 +3057,20 @@ task.spawn(function()
         local alive = humanoid and humanoid.Health > 0
         local localRole = alive and GetRole(Player) or nil
 
-        if MM2AutoRuntime.KillAll and not Settings.MM2AutoFarmV2 then
-            if knife and not AutoKnifeOwned and alive and not ActionBusy then
-                AutoKnifeOwned = true
-                task.spawn(KillAll)
-            elseif not knife then
-                AutoKnifeOwned = false
-            end
-        else
-            AutoKnifeOwned = knife ~= nil
+        if MM2AutoRuntime.KillAll
+        and not Settings.MM2AutoFarmV2
+        and knife
+        and alive
+        and not ActionBusy
+        and knife.Enabled ~= false
+        and os.clock() - AutoKnifeLastAttempt
+            >= 0.05 then
+            AutoKnifeLastAttempt =
+                os.clock()
+
+            task.spawn(
+                KillAll
+            )
         end
 
         if MM2AutoRuntime.Shoot
@@ -2692,19 +3078,34 @@ task.spawn(function()
         and not Settings.MM2AutoFarmV2
         and gun
         and alive
-        and not ActionBusy then
-            local murderer = GetPlayerByRole("Murderer")
-            local murderHumanoid = murderer
+        and not ActionBusy
+        and not GuidedShotBusy
+        and gun.Enabled ~= false then
+            local murderer =
+                GetPlayerByRole(
+                    "Murderer"
+                )
+
+            local murderHumanoid =
+                murderer
                 and murderer.Character
-                and murderer.Character:FindFirstChildOfClass("Humanoid")
+                and murderer.Character:
+                    FindFirstChildOfClass(
+                        "Humanoid"
+                    )
 
             if murderer
             and murderHumanoid
             and murderHumanoid.Health > 0
-            and os.clock() - AutoShootLastAttempt >= 0.72 then
-                AutoShootLastAttempt = os.clock()
+            and os.clock() - AutoShootLastAttempt
+                >= 0.04 then
+                AutoShootLastAttempt =
+                    os.clock()
+
                 task.spawn(function()
-                    ShootMurderer(false)
+                    ShootMurderer(
+                        false
+                    )
                 end)
             end
         end
