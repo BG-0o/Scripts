@@ -590,13 +590,17 @@ local function DecodeToxChatResponse(response)
     end
 end
 
-local function ReadHttpBody(response)
-    if typeof(response) == "string" then
-        return response, 200
+local function ReadHttpResponse(
+    response
+)
+    if typeof(response)
+        == "string" then
+        return response, 200, true
     end
 
-    if typeof(response) ~= "table" then
-        return nil, 0
+    if typeof(response)
+        ~= "table" then
+        return nil, 0, false
     end
 
     local body =
@@ -611,32 +615,31 @@ local function ReadHttpBody(response)
             or 0
         ) or 0
 
-    return body, status
-end
+    local successFlag =
+        response.Success
 
-local function PollToxChat()
-    local since =
-        ToxChatLastID
-        and HttpService:UrlEncode(
-            ToxChatLastID
-        )
-        or "latest"
+    if successFlag == nil then
+        successFlag =
+            response.success
+    end
 
-    local url =
-        "https://ntfy.sh/"
-        .. ToxChatTopic
-        .. "/json?poll=1&since="
-        .. since
-        .. "&_="
-        .. tostring(
-            math.floor(
-                os.clock() * 1000
+    local success =
+        successFlag ~= false
+        and (
+            (
+                status >= 200
+                and status < 300
+            )
+            or (
+                status == 0
+                and successFlag == true
             )
         )
 
-    local body = nil
-    local success = false
+    return body, status, success
+end
 
+local function ToxHttpGet(url)
     if RequestFunction then
         local ok, response =
             pcall(function()
@@ -653,52 +656,96 @@ local function PollToxChat()
             end)
 
         if ok then
-            local responseBody,
-                status =
-                ReadHttpBody(response)
-
-            if typeof(responseBody)
-                == "string"
-            and (
-                status == 0
-                or (
-                    status >= 200
-                    and status < 300
+            local body, _, success =
+                ReadHttpResponse(
+                    response
                 )
-            ) then
-                body = responseBody
-                success = true
+
+            if success
+            and typeof(body)
+                == "string" then
+                return body
             end
         end
     end
 
-    if not success then
-        local ok, response =
+    local ok, body =
+        pcall(function()
+            return game:HttpGet(
+                url,
+                true
+            )
+        end)
+
+    if not ok then
+        ok, body =
             pcall(function()
                 return game:HttpGet(
-                    url,
-                    true
+                    url
                 )
             end)
-
-        if not ok then
-            ok, response =
-                pcall(function()
-                    return game:HttpGet(
-                        url
-                    )
-                end)
-        end
-
-        if ok
-        and typeof(response)
-            == "string" then
-            body = response
-            success = true
-        end
     end
 
-    if success then
+    if ok
+    and typeof(body)
+        == "string" then
+        return body
+    end
+
+    return nil
+end
+
+local function ToxPublishByGet(
+    topic,
+    payload
+)
+    local url =
+        "https://ntfy.sh/"
+        .. topic
+        .. "/publish?message="
+        .. HttpService:UrlEncode(
+            tostring(payload or "")
+        )
+        .. "&cache=yes&_="
+        .. tostring(
+            math.floor(
+                os.clock() * 1000
+            )
+        )
+
+    local body =
+        ToxHttpGet(url)
+
+    return typeof(body)
+        == "string"
+        and body ~= ""
+end
+
+local function PollToxChat()
+    local since =
+        ToxChatLastID
+        and HttpService:UrlEncode(
+            ToxChatLastID
+        )
+        or "15s"
+
+    local url =
+        "https://ntfy.sh/"
+        .. ToxChatTopic
+        .. "/json?poll=1&since="
+        .. since
+        .. "&_="
+        .. tostring(
+            math.floor(
+                os.clock() * 1000
+            )
+        )
+
+    local body =
+        ToxHttpGet(url)
+
+    if typeof(body)
+        == "string" then
         ToxChatFailureCount = 0
 
         DecodeToxChatResponse(
@@ -752,7 +799,7 @@ local function PollToxChat()
 
     if ToxChatFailureCount == 3 then
         CustomNotify(
-            "Tox Chat reconnecting...",
+            "Tox Chat receive unavailable",
             Color3.fromRGB(
                 255,
                 180,
@@ -775,21 +822,24 @@ local function PublishToxChatPayload(
         return false
     end
 
-    local url =
-        "https://ntfy.sh/"
-        .. ToxChatTopic
+    if ToxPublishByGet(
+        ToxChatTopic,
+        payload
+    ) then
+        return true
+    end
 
     if RequestFunction then
         local ok, response =
             pcall(function()
                 return RequestFunction({
-                    Url = url,
+                    Url =
+                        "https://ntfy.sh/"
+                        .. ToxChatTopic,
                     Method = "POST",
                     Headers = {
                         ["Content-Type"] =
                             "text/plain; charset=utf-8",
-                        ["Title"] =
-                            "ToxChat",
                         ["Cache"] =
                             "yes"
                     },
@@ -798,30 +848,18 @@ local function PublishToxChatPayload(
             end)
 
         if ok then
-            local _, status =
-                ReadHttpBody(response)
+            local _, _, success =
+                ReadHttpResponse(
+                    response
+                )
 
-            if status == 0
-            or (
-                status >= 200
-                and status < 300
-            ) then
+            if success then
                 return true
             end
         end
     end
 
-    local ok =
-        pcall(function()
-            HttpService:PostAsync(
-                url,
-                payload,
-                Enum.HttpContentType.TextPlain,
-                false
-            )
-        end)
-
-    return ok
+    return false
 end
 
 ChatAPI.Token = ToxChatToken
@@ -899,12 +937,7 @@ local function SendToxChatMessage()
         sentAt = os.time()
     })
 
-    ToxChatSeenNonces[nonce] = true
     ToxChatInput.Text = ""
-
-    if AddToxChatMessage then
-        AddToxChatMessage(Player.DisplayName, message, false)
-    end
 
     task.spawn(function()
         local success =
@@ -913,6 +946,18 @@ local function SendToxChatMessage()
             )
 
         if success then
+            ToxChatSeenNonces[
+                nonce
+            ] = true
+
+            if AddToxChatMessage then
+                AddToxChatMessage(
+                    Player.DisplayName,
+                    message,
+                    false
+                )
+            end
+
             CustomNotify(
                 "Tox Chat message sent",
                 Color3.fromRGB(
@@ -923,8 +968,12 @@ local function SendToxChatMessage()
                 2
             )
         else
+            ToxChatSeenNonces[
+                nonce
+            ] = nil
+
             CustomNotify(
-                "Tox Chat send failed",
+                "Tox Chat relay unavailable",
                 Color3.fromRGB(
                     255,
                     100,
@@ -951,7 +1000,7 @@ end
 task.spawn(function()
     while not getgenv().Destroyed do
         PollToxChat()
-        task.wait(1)
+        task.wait(0.6)
     end
 end)
 
