@@ -60,8 +60,9 @@ local AutoWinPreviousNoclip = nil
 local AutoWinCFrame = CFrame.new(-279.846, 166.742, 341.409)
 
 local WaterFlyConnection = nil
-local WaterFlyVelocity = nil
-local WaterFlyGyro = nil
+local WaterFlyOldGravity = nil
+local WaterFlyHumanoid = nil
+local WaterFlyStateDefaults = {}
 
 local NoFallGeneration = 0
 
@@ -455,117 +456,209 @@ local function StartAutoWin()
     end))
 end
 
-local function DestroyWaterFlyMovers()
-    if WaterFlyVelocity then
-        WaterFlyVelocity:Destroy()
-        WaterFlyVelocity = nil
+local function RestoreWaterFlyHumanoid()
+    if WaterFlyHumanoid
+    and WaterFlyHumanoid.Parent then
+        for state, enabled in pairs(
+            WaterFlyStateDefaults
+        ) do
+            pcall(function()
+                WaterFlyHumanoid:
+                    SetStateEnabled(
+                        state,
+                        enabled
+                    )
+            end)
+        end
+
+        pcall(function()
+            WaterFlyHumanoid:
+                ChangeState(
+                    Enum.HumanoidStateType.GettingUp
+                )
+        end)
     end
 
-    if WaterFlyGyro then
-        WaterFlyGyro:Destroy()
-        WaterFlyGyro = nil
+    WaterFlyHumanoid = nil
+    WaterFlyStateDefaults = {}
+end
+
+local function PrepareWaterFlyHumanoid(
+    humanoid
+)
+    if WaterFlyHumanoid
+        == humanoid then
+        return
     end
+
+    RestoreWaterFlyHumanoid()
+
+    WaterFlyHumanoid =
+        humanoid
+
+    if not humanoid then
+        return
+    end
+
+    for _, state in ipairs(
+        Enum.HumanoidStateType:
+            GetEnumItems()
+    ) do
+        if state
+            ~= Enum.HumanoidStateType.None then
+            local ok, enabled =
+                pcall(function()
+                    return humanoid:
+                        GetStateEnabled(
+                            state
+                        )
+                end)
+
+            if ok then
+                WaterFlyStateDefaults[
+                    state
+                ] = enabled
+            end
+
+            pcall(function()
+                humanoid:
+                    SetStateEnabled(
+                        state,
+                        false
+                    )
+            end)
+        end
+    end
+
+    pcall(function()
+        humanoid:
+            ChangeState(
+                Enum.HumanoidStateType.Swimming
+            )
+    end)
 end
 
 local function StopWaterFly()
     if WaterFlyConnection then
-        WaterFlyConnection:Disconnect()
+        WaterFlyConnection:
+            Disconnect()
+
         WaterFlyConnection = nil
     end
 
-    DestroyWaterFlyMovers()
+    if WaterFlyOldGravity
+        ~= nil then
+        workspace.Gravity =
+            WaterFlyOldGravity
 
-    local _, humanoid = GetCharacterState()
-
-    if humanoid and humanoid.Health > 0 then
-        pcall(function()
-            humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-        end)
-    end
-end
-
-local function EnsureWaterFlyMovers(root)
-    if not WaterFlyVelocity or WaterFlyVelocity.Parent ~= root then
-        if WaterFlyVelocity then WaterFlyVelocity:Destroy() end
-
-        WaterFlyVelocity = Instance.new("BodyVelocity")
-        WaterFlyVelocity.Name = "ToxNDSWaterFlyVelocity"
-        WaterFlyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-        WaterFlyVelocity.P = 2500
-        WaterFlyVelocity.Velocity = Vector3.zero
-        WaterFlyVelocity.Parent = root
+        WaterFlyOldGravity = nil
     end
 
-    if not WaterFlyGyro or WaterFlyGyro.Parent ~= root then
-        if WaterFlyGyro then WaterFlyGyro:Destroy() end
-
-        WaterFlyGyro = Instance.new("BodyGyro")
-        WaterFlyGyro.Name = "ToxNDSWaterFlyGyro"
-        WaterFlyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-        WaterFlyGyro.P = 3500
-        WaterFlyGyro.D = 350
-        WaterFlyGyro.CFrame = root.CFrame
-        WaterFlyGyro.Parent = root
-    end
+    RestoreWaterFlyHumanoid()
 end
 
 local function StartWaterFly()
     StopWaterFly()
 
-    SetShared("SmoothFly", false)
-    SetShared("NormalFly", false)
+    SetShared(
+        "SmoothFly",
+        false
+    )
 
-    WaterFlyConnection = AddConnection(RunService.RenderStepped:Connect(function()
-        if not Settings.NDSWaterFly then
-            return
-        end
+    SetShared(
+        "NormalFly",
+        false
+    )
 
-        local _, humanoid, root = GetCharacterState()
+    WaterFlyOldGravity =
+        workspace.Gravity
 
-        if not humanoid or humanoid.Health <= 0 or not root then
-            DestroyWaterFlyMovers()
-            return
-        end
+    workspace.Gravity = 0
 
-        EnsureWaterFlyMovers(root)
+    WaterFlyConnection =
+        AddConnection(
+            RunService.Heartbeat:
+                Connect(function()
+                    if not Settings.NDSWaterFly then
+                        return
+                    end
 
-        pcall(function()
-            humanoid.Sit = false
-            humanoid:ChangeState(Enum.HumanoidStateType.Swimming)
-        end)
+                    local _,
+                        humanoid,
+                        root =
+                        GetCharacterState()
 
-        local look = Camera.CFrame.LookVector
-        local right = Camera.CFrame.RightVector
-        local flatLook = Vector3.new(look.X, 0, look.Z)
-        local flatRight = Vector3.new(right.X, 0, right.Z)
-        local direction = Vector3.zero
+                    if not humanoid
+                    or humanoid.Health <= 0
+                    or not root then
+                        return
+                    end
 
-        if flatLook.Magnitude > 0 then flatLook = flatLook.Unit end
-        if flatRight.Magnitude > 0 then flatRight = flatRight.Unit end
+                    PrepareWaterFlyHumanoid(
+                        humanoid
+                    )
 
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then direction += flatLook end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then direction -= flatLook end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then direction += flatRight end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then direction -= flatRight end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then direction += Vector3.new(0, 0.65, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then direction -= Vector3.new(0, 0.65, 0) end
+                    pcall(function()
+                        humanoid:
+                            ChangeState(
+                                Enum.HumanoidStateType.Swimming
+                            )
+                    end)
 
-        local speed = math.clamp(
-            tonumber(Settings.NDSWaterFlySpeed) or 40,
-            5,
-            250
+                    local speed =
+                        math.clamp(
+                            tonumber(
+                                Settings.NDSWaterFlySpeed
+                            ) or 40,
+                            5,
+                            250
+                        )
+
+                    local moveDirection =
+                        humanoid.MoveDirection
+
+                    local vertical = 0
+
+                    if UserInputService:
+                        IsKeyDown(
+                            Enum.KeyCode.Space
+                        )
+                    or UserInputService:
+                        IsKeyDown(
+                            Enum.KeyCode.E
+                        ) then
+                        vertical = speed
+                    elseif UserInputService:
+                        IsKeyDown(
+                            Enum.KeyCode.LeftShift
+                        )
+                    or UserInputService:
+                        IsKeyDown(
+                            Enum.KeyCode.Q
+                        ) then
+                        vertical = -speed
+                    end
+
+                    if moveDirection
+                        ~= Vector3.zero
+                    or vertical ~= 0 then
+                        root.AssemblyLinearVelocity =
+                            Vector3.new(
+                                moveDirection.X
+                                    * speed,
+                                vertical,
+                                moveDirection.Z
+                                    * speed
+                            )
+                    else
+                        root.AssemblyLinearVelocity =
+                            Vector3.zero
+                    end
+
+                    root.AssemblyAngularVelocity =
+                        Vector3.zero
+                end)
         )
-
-        if direction.Magnitude > 0 then
-            WaterFlyVelocity.Velocity = direction.Unit * speed
-        else
-            WaterFlyVelocity.Velocity = Vector3.zero
-        end
-
-        if flatLook.Magnitude > 0.01 then
-            WaterFlyGyro.CFrame = CFrame.lookAt(root.Position, root.Position + flatLook)
-        end
-    end))
 end
 
 getgenv().SetNDSWaterFly = function(Value, Silent)
@@ -817,6 +910,81 @@ local function StopNoTP()
     NoTPCurrentCharacter = nil
 end
 
+local NoTPReplicatePulse = 1
+
+local function ApplyNoTPCorrection(
+    humanoid,
+    root
+)
+    if not root
+    or typeof(NoTPCorrectionCFrame)
+        ~= "CFrame" then
+        return
+    end
+
+    NoTPReplicatePulse =
+        -NoTPReplicatePulse
+
+    local pulse =
+        NoTPReplicatePulse
+        * 0.0015
+
+    pcall(function()
+        if sethiddenproperty then
+            sethiddenproperty(
+                root,
+                "NetworkIsSleeping",
+                false
+            )
+        end
+    end)
+
+    root.AssemblyAngularVelocity =
+        Vector3.zero
+
+    root.AssemblyLinearVelocity =
+        Vector3.new(
+            pulse * 12,
+            0,
+            0
+        )
+
+    root.CFrame =
+        NoTPCorrectionCFrame
+        * CFrame.new(
+            pulse,
+            0,
+            0
+        )
+
+    if humanoid then
+        pcall(function()
+            humanoid:
+                Move(
+                    Vector3.new(
+                        pulse,
+                        0,
+                        0
+                    ),
+                    false
+                )
+        end)
+    end
+
+    task.defer(function()
+        if root
+        and root.Parent
+        and tick()
+            < NoTPCorrectionUntil
+        and typeof(
+            NoTPCorrectionCFrame
+        ) == "CFrame" then
+            root.CFrame =
+                NoTPCorrectionCFrame
+        end
+    end)
+end
+
 local function StartNoTP()
     if game.PlaceId ~= NDSPlaceId then
         Settings.NDSNoTP = false
@@ -902,13 +1070,10 @@ local function StartNoTP()
             return
         end
 
-        currentRoot.AssemblyLinearVelocity =
-            Vector3.zero
-        currentRoot.AssemblyAngularVelocity =
-            Vector3.zero
-
-        currentRoot.CFrame =
-            NoTPCorrectionCFrame
+        ApplyNoTPCorrection(
+            currentHumanoid,
+            currentRoot
+        )
 
         NoTPLastObservedCFrame =
             NoTPCorrectionCFrame
@@ -980,14 +1145,14 @@ local function StartNoTP()
 
         if tick() < NoTPCorrectionUntil
         and typeof(NoTPCorrectionCFrame) == "CFrame" then
-            currentRoot.AssemblyLinearVelocity =
-                Vector3.zero
-            currentRoot.AssemblyAngularVelocity =
-                Vector3.zero
-            currentRoot.CFrame =
-                NoTPCorrectionCFrame
+            ApplyNoTPCorrection(
+                currentHumanoid,
+                currentRoot
+            )
+
             NoTPLastObservedCFrame =
                 NoTPCorrectionCFrame
+
             return
         end
 
@@ -1018,16 +1183,16 @@ local function StartNoTP()
             NoTPCorrectionCFrame =
                 NoTPAnchorCFrame
             NoTPCorrectionUntil =
-                tick() + 1.75
+                tick() + 3
 
-            currentRoot.AssemblyLinearVelocity =
-                Vector3.zero
-            currentRoot.AssemblyAngularVelocity =
-                Vector3.zero
-            currentRoot.CFrame =
-                NoTPCorrectionCFrame
+            ApplyNoTPCorrection(
+                currentHumanoid,
+                currentRoot
+            )
+
             NoTPLastObservedCFrame =
                 NoTPCorrectionCFrame
+
             return
         end
 
