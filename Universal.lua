@@ -486,7 +486,10 @@ RegisterSubGuiMinimize(ChatLogGui, -88)
 RegisterSubGuiMinimize(MusicGui, -52)
 RegisterSubGuiMinimize(WaypointsGui, -52)
 RegisterSubGuiMinimize(ToxChatGui, -52)
-RegisterSubGuiMinimize(JoinGamesGui, -52)
+
+if JoinGamesGui then
+    JoinGamesGui.Visible = false
+end
 
 if getgenv().MakeResizable then
     getgenv().MakeResizable(Main, "Main", 0.88, 1.50)
@@ -494,7 +497,6 @@ if getgenv().MakeResizable then
     getgenv().MakeResizable(MusicGui, "Music", 0.85, 1.50)
     getgenv().MakeResizable(WaypointsGui, "Waypoints", 0.85, 1.50)
     getgenv().MakeResizable(ToxChatGui, "ToxChat", 0.85, 1.50)
-    getgenv().MakeResizable(JoinGamesGui, "QuickJoin", 0.85, 1.50)
 end
 
 getgenv().ToxLinkedSubGuis = getgenv().ToxLinkedSubGuis or {}
@@ -1267,98 +1269,386 @@ local function CreateJoinInterface()
         return
     end
 
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, -5, 0, 108)
-    card.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    local card =
+        Instance.new(
+            "Frame"
+        )
+
+    card.Size =
+        UDim2.new(
+            1,
+            -5,
+            0,
+            78
+        )
+
+    card.BackgroundColor3 =
+        Color3.fromRGB(
+            18,
+            18,
+            26
+        )
+
     card.BorderSizePixel = 0
+    card.LayoutOrder = 1
     card.Parent = JoinPage
 
-    local cardCorner = Instance.new("UICorner")
-    cardCorner.CornerRadius = UDim.new(0, 4)
+    local cardCorner =
+        Instance.new(
+            "UICorner"
+        )
+
+    cardCorner.CornerRadius =
+        UDim.new(
+            0,
+            4
+        )
+
     cardCorner.Parent = card
 
-    JoinTargetBox = Instance.new("TextBox")
-    JoinTargetBox.Size = UDim2.new(0.52, -8, 0, 30)
-    JoinTargetBox.Position = UDim2.new(0, 8, 0, 8)
-    JoinTargetBox.BackgroundColor3 = Color3.fromRGB(27, 27, 39)
+    JoinTargetBox =
+        Instance.new(
+            "TextBox"
+        )
+
+    JoinTargetBox.Size =
+        UDim2.new(
+            0.52,
+            -8,
+            0,
+            30
+        )
+
+    JoinTargetBox.Position =
+        UDim2.new(
+            0,
+            8,
+            0,
+            8
+        )
+
+    JoinTargetBox.BackgroundColor3 =
+        Color3.fromRGB(
+            27,
+            27,
+            39
+        )
+
     JoinTargetBox.BorderSizePixel = 0
-    JoinTargetBox.PlaceholderText = "Nick / ID"
+    JoinTargetBox.PlaceholderText =
+        "Nick / ID"
+
     JoinTargetBox.Text = ""
-    JoinTargetBox.TextColor3 = Color3.fromRGB(245, 245, 245)
-    JoinTargetBox.PlaceholderColor3 = Color3.fromRGB(130, 130, 150)
-    JoinTargetBox.Font = Enum.Font.Gotham
+
+    JoinTargetBox.TextColor3 =
+        Color3.fromRGB(
+            245,
+            245,
+            245
+        )
+
+    JoinTargetBox.PlaceholderColor3 =
+        Color3.fromRGB(
+            130,
+            130,
+            150
+        )
+
+    JoinTargetBox.Font =
+        Enum.Font.Gotham
+
     JoinTargetBox.TextSize = 12
     JoinTargetBox.ClearTextOnFocus = false
     JoinTargetBox.Parent = card
 
-    local inputCorner = Instance.new("UICorner")
-    inputCorner.CornerRadius = UDim.new(0, 4)
-    inputCorner.Parent = JoinTargetBox
+    local inputCorner =
+        Instance.new(
+            "UICorner"
+        )
 
-    JoinPlayingLabel = Instance.new("TextLabel")
-    JoinPlayingLabel.Size = UDim2.new(0.48, -12, 0, 30)
-    JoinPlayingLabel.Position = UDim2.new(0.52, 4, 0, 8)
-    JoinPlayingLabel.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+    inputCorner.CornerRadius =
+        UDim.new(
+            0,
+            4
+        )
+
+    inputCorner.Parent =
+        JoinTargetBox
+
+    JoinPlayingLabel =
+        Instance.new(
+            "TextLabel"
+        )
+
+    JoinPlayingLabel.Size =
+        UDim2.new(
+            0.48,
+            -12,
+            0,
+            30
+        )
+
+    JoinPlayingLabel.Position =
+        UDim2.new(
+            0.52,
+            4,
+            0,
+            8
+        )
+
+    JoinPlayingLabel.BackgroundColor3 =
+        Color3.fromRGB(
+            22,
+            22,
+            32
+        )
+
     JoinPlayingLabel.BorderSizePixel = 0
-    JoinPlayingLabel.Text = "Playing: --"
-    JoinPlayingLabel.TextColor3 = Color3.fromRGB(170, 170, 185)
-    JoinPlayingLabel.Font = Enum.Font.Gotham
+    JoinPlayingLabel.Text =
+        "Playing: --"
+
+    JoinPlayingLabel.TextColor3 =
+        Color3.fromRGB(
+            170,
+            170,
+            185
+        )
+
+    JoinPlayingLabel.Font =
+        Enum.Font.Gotham
+
     JoinPlayingLabel.TextSize = 10
-    JoinPlayingLabel.TextXAlignment = Enum.TextXAlignment.Center
-    JoinPlayingLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    JoinPlayingLabel.TextXAlignment =
+        Enum.TextXAlignment.Center
+
+    JoinPlayingLabel.TextTruncate =
+        Enum.TextTruncate.AtEnd
+
     JoinPlayingLabel.Parent = card
 
-    local playingCorner = Instance.new("UICorner")
-    playingCorner.CornerRadius = UDim.new(0, 4)
-    playingCorner.Parent = JoinPlayingLabel
+    local playingCorner =
+        Instance.new(
+            "UICorner"
+        )
 
-    JoinPlayerButton = Instance.new("TextButton")
-    JoinPlayerButton.Size = UDim2.new(1, -16, 0, 28)
-    JoinPlayerButton.Position = UDim2.new(0, 8, 0, 44)
-    JoinPlayerButton.BackgroundColor3 = MAIN_COLOR
+    playingCorner.CornerRadius =
+        UDim.new(
+            0,
+            4
+        )
+
+    playingCorner.Parent =
+        JoinPlayingLabel
+
+    JoinPlayerButton =
+        Instance.new(
+            "TextButton"
+        )
+
+    JoinPlayerButton.Size =
+        UDim2.new(
+            1,
+            -16,
+            0,
+            28
+        )
+
+    JoinPlayerButton.Position =
+        UDim2.new(
+            0,
+            8,
+            0,
+            44
+        )
+
+    JoinPlayerButton.BackgroundColor3 =
+        MAIN_COLOR
+
     JoinPlayerButton.BorderSizePixel = 0
     JoinPlayerButton.Text = "JOIN"
-    JoinPlayerButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    JoinPlayerButton.Font = Enum.Font.GothamBold
+
+    JoinPlayerButton.TextColor3 =
+        Color3.fromRGB(
+            255,
+            255,
+            255
+        )
+
+    JoinPlayerButton.Font =
+        Enum.Font.GothamBold
+
     JoinPlayerButton.TextSize = 12
     JoinPlayerButton.Parent = card
 
-    local joinCorner = Instance.new("UICorner")
-    joinCorner.CornerRadius = UDim.new(0, 4)
-    joinCorner.Parent = JoinPlayerButton
+    local joinCorner =
+        Instance.new(
+            "UICorner"
+        )
 
-    JoinGamesButton = Instance.new("TextButton")
-    JoinGamesButton.Size = UDim2.new(1, -16, 0, 24)
-    JoinGamesButton.Position = UDim2.new(0, 8, 0, 78)
-    JoinGamesButton.BackgroundColor3 = Color3.fromRGB(24, 24, 36)
-    JoinGamesButton.BorderSizePixel = 0
-    JoinGamesButton.Text = "Quick Games"
-    JoinGamesButton.TextColor3 = Color3.fromRGB(240, 240, 240)
-    JoinGamesButton.Font = Enum.Font.GothamBold
-    JoinGamesButton.TextSize = 11
-    JoinGamesButton.Parent = card
+    joinCorner.CornerRadius =
+        UDim.new(
+            0,
+            4
+        )
 
-    local gamesCorner = Instance.new("UICorner")
-    gamesCorner.CornerRadius = UDim.new(0, 4)
-    gamesCorner.Parent = JoinGamesButton
+    joinCorner.Parent =
+        JoinPlayerButton
 
-    JoinTargetBox.FocusLost:Connect(function()
-        if CleanJoinTarget(JoinTargetBox.Text) ~= "" then
-            task.spawn(function()
-                UpdateJoinStatus(JoinTargetBox.Text, false)
-            end)
-        end
-    end)
+    local quickGamesCard =
+        Instance.new(
+            "Frame"
+        )
 
-    JoinPlayerButton.MouseButton1Click:Connect(function()
-        task.spawn(JoinTargetPlayer)
-    end)
+    quickGamesCard.Name =
+        "InlineQuickGames"
 
-    JoinGamesButton.MouseButton1Click:Connect(function()
-        if JoinGamesGui then
-            JoinGamesGui.Visible = not JoinGamesGui.Visible
-        end
-    end)
+    quickGamesCard.Size =
+        UDim2.new(
+            1,
+            -5,
+            0,
+            326
+        )
+
+    quickGamesCard.BackgroundColor3 =
+        Color3.fromRGB(
+            18,
+            18,
+            26
+        )
+
+    quickGamesCard.BorderSizePixel = 0
+    quickGamesCard.LayoutOrder = 2
+    quickGamesCard.ClipsDescendants = true
+    quickGamesCard.Parent = JoinPage
+
+    local quickCorner =
+        Instance.new(
+            "UICorner"
+        )
+
+    quickCorner.CornerRadius =
+        UDim.new(
+            0,
+            4
+        )
+
+    quickCorner.Parent =
+        quickGamesCard
+
+    local quickTitle =
+        Instance.new(
+            "TextLabel"
+        )
+
+    quickTitle.Size =
+        UDim2.new(
+            1,
+            -16,
+            0,
+            24
+        )
+
+    quickTitle.Position =
+        UDim2.new(
+            0,
+            8,
+            0,
+            5
+        )
+
+    quickTitle.BackgroundTransparency = 1
+    quickTitle.Text = "Quick Games"
+
+    quickTitle.TextColor3 =
+        Color3.fromRGB(
+            245,
+            245,
+            245
+        )
+
+    quickTitle.Font =
+        Enum.Font.GothamBold
+
+    quickTitle.TextSize = 11
+    quickTitle.TextXAlignment =
+        Enum.TextXAlignment.Left
+
+    quickTitle.Parent =
+        quickGamesCard
+
+    if JoinGameIdBox
+    and JoinGameIdBox.Parent then
+        local addArea =
+            JoinGameIdBox.Parent
+
+        addArea.Parent =
+            quickGamesCard
+
+        addArea.Size =
+            UDim2.new(
+                1,
+                -16,
+                0,
+                32
+            )
+
+        addArea.Position =
+            UDim2.new(
+                0,
+                8,
+                0,
+                32
+            )
+    end
+
+    if JoinGamesScroll then
+        JoinGamesScroll.Parent =
+            quickGamesCard
+
+        JoinGamesScroll.Size =
+            UDim2.new(
+                1,
+                -16,
+                1,
+                -72
+            )
+
+        JoinGamesScroll.Position =
+            UDim2.new(
+                0,
+                8,
+                0,
+                68
+            )
+    end
+
+    if JoinGamesGui then
+        JoinGamesGui.Visible = false
+    end
+
+    JoinGamesButton = nil
+
+    JoinTargetBox.FocusLost:
+        Connect(function()
+            if CleanJoinTarget(
+                JoinTargetBox.Text
+            ) ~= "" then
+                task.spawn(function()
+                    UpdateJoinStatus(
+                        JoinTargetBox.Text,
+                        false
+                    )
+                end)
+            end
+        end)
+
+    JoinPlayerButton.MouseButton1Click:
+        Connect(function()
+            task.spawn(
+                JoinTargetPlayer
+            )
+        end)
 end
 
 local function ResolvePlaceName(placeId)
@@ -1385,121 +1675,371 @@ local function RefreshQuickJoinGames()
         return
     end
 
-    for _, child in ipairs(JoinGamesScroll:GetChildren()) do
-        if child:IsA("Frame") then
-            child:Destroy()
+    for _, child in ipairs(
+        JoinGamesScroll:
+            GetChildren()
+    ) do
+        if child:IsA(
+            "Frame"
+        ) then
+            child:
+                Destroy()
         end
     end
 
-    for idx, info in ipairs(SavedJoinGames) do
-        local placeId = tonumber(info.id or info.PlaceId)
-        local gameName = tostring(info.name or info.Name or ("Place " .. tostring(placeId or "?")))
-        local favorite = info.favorite == true
+    for idx, info in ipairs(
+        SavedJoinGames
+    ) do
+        local placeId =
+            tonumber(
+                info.id
+                or info.PlaceId
+            )
 
-        local row = Instance.new("Frame")
-        row.Size = UDim2.new(1, -4, 0, 48)
-        row.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+        local gameName =
+            tostring(
+                info.name
+                or info.Name
+                or (
+                    "Place "
+                    .. tostring(
+                        placeId
+                        or "?"
+                    )
+                )
+            )
+
+        local favorite =
+            info.favorite == true
+
+        local row =
+            Instance.new(
+                "Frame"
+            )
+
+        row.Size =
+            UDim2.new(
+                1,
+                -4,
+                0,
+                74
+            )
+
+        row.BackgroundColor3 =
+            Color3.fromRGB(
+                18,
+                18,
+                28
+            )
+
         row.BorderSizePixel = 0
         row.LayoutOrder = idx
-        row.Parent = JoinGamesScroll
+        row.Parent =
+            JoinGamesScroll
 
-        local rowCorner = Instance.new("UICorner")
-        rowCorner.CornerRadius = UDim.new(0, 4)
+        local rowCorner =
+            Instance.new(
+                "UICorner"
+            )
+
+        rowCorner.CornerRadius =
+            UDim.new(
+                0,
+                4
+            )
+
         rowCorner.Parent = row
 
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(0, 225, 0, 24)
-        nameLabel.Position = UDim2.new(0, 8, 0, 3)
+        local nameLabel =
+            Instance.new(
+                "TextLabel"
+            )
+
+        nameLabel.Size =
+            UDim2.new(
+                1,
+                -16,
+                0,
+                22
+            )
+
+        nameLabel.Position =
+            UDim2.new(
+                0,
+                8,
+                0,
+                3
+            )
+
         nameLabel.BackgroundTransparency = 1
-        nameLabel.Text = (favorite and "★ " or "") .. gameName
-        nameLabel.TextColor3 = favorite
-            and Color3.fromRGB(255, 215, 70)
-            or Color3.fromRGB(245, 245, 245)
-        nameLabel.Font = Enum.Font.GothamBold
+
+        nameLabel.Text =
+            (
+                favorite
+                and "★ "
+                or ""
+            )
+            .. gameName
+
+        nameLabel.TextColor3 =
+            favorite
+            and Color3.fromRGB(
+                255,
+                215,
+                70
+            )
+            or Color3.fromRGB(
+                245,
+                245,
+                245
+            )
+
+        nameLabel.Font =
+            Enum.Font.GothamBold
+
         nameLabel.TextSize = 11
-        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-        nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        nameLabel.TextXAlignment =
+            Enum.TextXAlignment.Left
+
+        nameLabel.TextTruncate =
+            Enum.TextTruncate.AtEnd
+
         nameLabel.Parent = row
 
-        local idLabel = Instance.new("TextLabel")
-        idLabel.Size = UDim2.new(0, 225, 0, 16)
-        idLabel.Position = UDim2.new(0, 8, 0, 27)
+        local idLabel =
+            Instance.new(
+                "TextLabel"
+            )
+
+        idLabel.Size =
+            UDim2.new(
+                1,
+                -16,
+                0,
+                15
+            )
+
+        idLabel.Position =
+            UDim2.new(
+                0,
+                8,
+                0,
+                24
+            )
+
         idLabel.BackgroundTransparency = 1
-        idLabel.Text = "ID: " .. tostring(placeId or "?")
-        idLabel.TextColor3 = Color3.fromRGB(145, 145, 165)
-        idLabel.Font = Enum.Font.Gotham
+        idLabel.Text =
+            "ID: "
+            .. tostring(
+                placeId
+                or "?"
+            )
+
+        idLabel.TextColor3 =
+            Color3.fromRGB(
+                145,
+                145,
+                165
+            )
+
+        idLabel.Font =
+            Enum.Font.Gotham
+
         idLabel.TextSize = 9
-        idLabel.TextXAlignment = Enum.TextXAlignment.Left
+        idLabel.TextXAlignment =
+            Enum.TextXAlignment.Left
+
         idLabel.Parent = row
 
-        local function makeButton(text, x, width)
-            local button = Instance.new("TextButton")
-            button.Size = UDim2.new(0, width, 0, 24)
-            button.Position = UDim2.new(1, x, 0.5, -12)
-            button.BackgroundColor3 = Color3.fromRGB(25, 25, 38)
+        local function makeButton(
+            text,
+            xScale,
+            widthScale
+        )
+            local button =
+                Instance.new(
+                    "TextButton"
+                )
+
+            button.Size =
+                UDim2.new(
+                    widthScale,
+                    -3,
+                    0,
+                    24
+                )
+
+            button.Position =
+                UDim2.new(
+                    xScale,
+                    2,
+                    0,
+                    44
+                )
+
+            button.BackgroundColor3 =
+                Color3.fromRGB(
+                    25,
+                    25,
+                    38
+                )
+
             button.BorderSizePixel = 0
             button.Text = text
-            button.TextColor3 = Color3.fromRGB(240, 240, 240)
-            button.Font = Enum.Font.GothamBold
+
+            button.TextColor3 =
+                Color3.fromRGB(
+                    240,
+                    240,
+                    240
+                )
+
+            button.Font =
+                Enum.Font.GothamBold
+
             button.TextSize = 9
             button.Parent = row
 
-            local corner = Instance.new("UICorner")
-            corner.CornerRadius = UDim.new(0, 4)
-            corner.Parent = button
+            local corner =
+                Instance.new(
+                    "UICorner"
+                )
+
+            corner.CornerRadius =
+                UDim.new(
+                    0,
+                    4
+                )
+
+            corner.Parent =
+                button
 
             return button
         end
 
-        local joinButton = makeButton("Join", -205, 42)
-        local upButton = makeButton("Up", -159, 28)
-        local downButton = makeButton("Down", -127, 38)
-        local favoriteButton = makeButton("Fav", -85, 32)
-        local removeButton = makeButton("Remove", -49, 45)
+        local joinButton =
+            makeButton(
+                "Join",
+                0,
+                0.20
+            )
 
-        favoriteButton.TextColor3 = favorite
-            and Color3.fromRGB(255, 215, 70)
-            or Color3.fromRGB(210, 210, 220)
+        local upButton =
+            makeButton(
+                "Up",
+                0.20,
+                0.14
+            )
 
-        joinButton.MouseButton1Click:Connect(function()
-            if placeId then
-                task.spawn(function()
-                    JoinPublicGame(placeId)
-                end)
-            end
-        end)
+        local downButton =
+            makeButton(
+                "Down",
+                0.34,
+                0.18
+            )
 
-        upButton.MouseButton1Click:Connect(function()
-            if idx > 1 then
-                SavedJoinGames[idx], SavedJoinGames[idx - 1] =
-                    SavedJoinGames[idx - 1], SavedJoinGames[idx]
+        local favoriteButton =
+            makeButton(
+                "Fav",
+                0.52,
+                0.17
+            )
+
+        local removeButton =
+            makeButton(
+                "Remove",
+                0.69,
+                0.31
+            )
+
+        favoriteButton.TextColor3 =
+            favorite
+            and Color3.fromRGB(
+                255,
+                215,
+                70
+            )
+            or Color3.fromRGB(
+                210,
+                210,
+                220
+            )
+
+        joinButton.MouseButton1Click:
+            Connect(function()
+                if placeId then
+                    task.spawn(function()
+                        JoinPublicGame(
+                            placeId
+                        )
+                    end)
+                end
+            end)
+
+        upButton.MouseButton1Click:
+            Connect(function()
+                if idx > 1 then
+                    SavedJoinGames[
+                        idx
+                    ],
+                    SavedJoinGames[
+                        idx - 1
+                    ] =
+                        SavedJoinGames[
+                            idx - 1
+                        ],
+                        SavedJoinGames[
+                            idx
+                        ]
+
+                    AutoSaveConfiguration()
+                    RefreshQuickJoinGames()
+                end
+            end)
+
+        downButton.MouseButton1Click:
+            Connect(function()
+                if idx
+                    < #SavedJoinGames then
+                    SavedJoinGames[
+                        idx
+                    ],
+                    SavedJoinGames[
+                        idx + 1
+                    ] =
+                        SavedJoinGames[
+                            idx + 1
+                        ],
+                        SavedJoinGames[
+                            idx
+                        ]
+
+                    AutoSaveConfiguration()
+                    RefreshQuickJoinGames()
+                end
+            end)
+
+        favoriteButton.MouseButton1Click:
+            Connect(function()
+                SavedJoinGames[
+                    idx
+                ].favorite =
+                    not favorite
 
                 AutoSaveConfiguration()
                 RefreshQuickJoinGames()
-            end
-        end)
+            end)
 
-        downButton.MouseButton1Click:Connect(function()
-            if idx < #SavedJoinGames then
-                SavedJoinGames[idx], SavedJoinGames[idx + 1] =
-                    SavedJoinGames[idx + 1], SavedJoinGames[idx]
+        removeButton.MouseButton1Click:
+            Connect(function()
+                table.remove(
+                    SavedJoinGames,
+                    idx
+                )
 
                 AutoSaveConfiguration()
                 RefreshQuickJoinGames()
-            end
-        end)
-
-        favoriteButton.MouseButton1Click:Connect(function()
-            SavedJoinGames[idx].favorite = not favorite
-            AutoSaveConfiguration()
-            RefreshQuickJoinGames()
-        end)
-
-        removeButton.MouseButton1Click:Connect(function()
-            table.remove(SavedJoinGames, idx)
-            AutoSaveConfiguration()
-            RefreshQuickJoinGames()
-        end)
+            end)
     end
 end
 
@@ -4158,10 +4698,10 @@ CreateDropdown(
 CreateToggle(
     "3D Rendering",
     ConfigPage,
-    Settings.Render3D,
+    Settings.Render3D == false,
     function(v)
         SetRender3DEnabled(
-            v
+            not v
         )
 
         AutoSaveConfiguration()
@@ -5431,7 +5971,6 @@ if Minimize then
             CollapseSubGuiWithMain("Music", MusicGui)
             CollapseSubGuiWithMain("Waypoints", WaypointsGui)
             CollapseSubGuiWithMain("ToxChat", ToxChatGui)
-            CollapseSubGuiWithMain("QuickJoin", JoinGamesGui)
 
             for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
                 CollapseSubGuiWithMain("Extra_" .. tostring(key), gui)
@@ -5441,7 +5980,6 @@ if Minimize then
             RestoreSubGuiAfterMain("Music", MusicGui)
             RestoreSubGuiAfterMain("Waypoints", WaypointsGui)
             RestoreSubGuiAfterMain("ToxChat", ToxChatGui)
-            RestoreSubGuiAfterMain("QuickJoin", JoinGamesGui)
 
             for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
                 RestoreSubGuiAfterMain("Extra_" .. tostring(key), gui)
