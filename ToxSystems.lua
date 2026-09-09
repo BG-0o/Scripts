@@ -822,7 +822,7 @@ AddConnection(
         end)
 )
 
-(function()
+local function InitToxControlGui()
 local ToxControlGui =
     Instance.new("Frame")
 ToxControlGui.Name =
@@ -1502,8 +1502,9 @@ CreateButton("Tox Control", FlingPage, function()
         not ToxControlGui.Visible
 end)
 
-end)()
+end
 
+InitToxControlGui()
 
 AddConnection(Player.CharacterAdded:Connect(function(character)
     ToxControlFrozen = false
