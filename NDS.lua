@@ -865,6 +865,15 @@ local function StartNoTP()
             return
         end
 
+        local flingBypassUntil =
+            tonumber(
+                getgenv().ToxFlingBypassUntil
+            ) or 0
+
+        if tick() < flingBypassUntil then
+            return
+        end
+
         if Settings.WalkFling
         and getgenv().ToxWalkFlingImpulseActive
         == true then
