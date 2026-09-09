@@ -485,6 +485,15 @@ RegisterSubGuiMinimize(WaypointsGui, -52)
 RegisterSubGuiMinimize(ToxChatGui, -52)
 RegisterSubGuiMinimize(JoinGamesGui, -52)
 
+if getgenv().MakeResizable then
+    getgenv().MakeResizable(Main, "Main", 0.80, 1.32)
+    getgenv().MakeResizable(ChatLogGui, "ChatLogs", 0.78, 1.35)
+    getgenv().MakeResizable(MusicGui, "Music", 0.78, 1.35)
+    getgenv().MakeResizable(WaypointsGui, "Waypoints", 0.78, 1.35)
+    getgenv().MakeResizable(ToxChatGui, "ToxChat", 0.78, 1.35)
+    getgenv().MakeResizable(JoinGamesGui, "QuickJoin", 0.78, 1.35)
+end
+
 getgenv().ToxLinkedSubGuis = getgenv().ToxLinkedSubGuis or {}
 
 getgenv().RegisterToxSubGuiMinimize = function(gui, buttonOffset)
@@ -506,7 +515,22 @@ getgenv().RegisterToxLinkedSubGui = function(key, gui)
         return
     end
 
-    getgenv().ToxLinkedSubGuis[tostring(key)] = gui
+    local normalizedKey =
+        tostring(key)
+
+    getgenv().ToxLinkedSubGuis[
+        normalizedKey
+    ] = gui
+
+    if getgenv().MakeResizable then
+        getgenv().MakeResizable(
+            gui,
+            "Linked_"
+            .. normalizedKey,
+            0.78,
+            1.35
+        )
+    end
 end
 
 for _, page in pairs(Pages) do
@@ -3552,6 +3576,36 @@ CreateToggle("Auto Execute", ConfigPage, Settings.AutoExecute, function(v)
         )
     end
 end)
+CreateDropdown(
+    "GUI Color",
+    {
+        "Blue",
+        "Cyan",
+        "Purple",
+        "Green",
+        "Red",
+        "Orange",
+        "Pink",
+        "Gold",
+        "White"
+    },
+    ConfigPage,
+    tostring(
+        Settings.GUIColorName
+        or "Blue"
+    ),
+    function(value)
+        Settings.GUIColorName =
+            value
+
+        if getgenv().SetToxGuiColor then
+            getgenv().SetToxGuiColor(
+                value
+            )
+        end
+    end
+)
+
 CreateKeybindButton("GUI Keybind", ConfigPage, Settings.GUIKeybind, function(key)
     Settings.GUIKeybind = key
 
