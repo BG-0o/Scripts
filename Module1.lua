@@ -214,6 +214,10 @@ local MusicIDsFilePath =
     FolderName
     .. "/music_ids.json"
 
+local JoinGamesFilePath =
+    FolderName
+    .. "/saved_join_games.json"
+
 local LegacyConfigFilePath =
     FolderName
     .. "/config.json"
@@ -223,6 +227,9 @@ getgenv().ToxConfigFilePath =
 
 getgenv().ToxMusicIDsFilePath =
     MusicIDsFilePath
+
+getgenv().ToxJoinGamesFilePath =
+    JoinGamesFilePath
 
 local function EnsureFolder()
     if makefolder and isfolder then
@@ -646,6 +653,156 @@ end
 getgenv().SaveToxMusicIDs =
     SaveSharedMusicIDs
 
+local function DecodeSavedJoinGamesFromFile(
+    path
+)
+    if not isfile
+    or not readfile
+    or not path
+    or not isfile(path) then
+        return nil
+    end
+
+    local ok, value =
+        pcall(function()
+            local raw =
+                readfile(path)
+
+            if not raw
+            or raw == "" then
+                return nil
+            end
+
+            local data =
+                HttpService:
+                    JSONDecode(raw)
+
+            if typeof(data)
+                ~= "table" then
+                return nil
+            end
+
+            local source =
+                data.SavedJoinGames
+                or data.JoinGames
+                or data.PlaceIDs
+
+            if source == nil then
+                return nil
+            end
+
+            local decoded =
+                DeserializeConfigValue(
+                    source
+                )
+
+            if typeof(decoded)
+                == "table"
+            and next(decoded)
+                ~= nil then
+                return decoded
+            end
+
+            return nil
+        end)
+
+    if ok then
+        return value
+    end
+
+    return nil
+end
+
+local function SaveSharedJoinGames()
+    EnsureFolder()
+
+    if not writefile then
+        return false
+    end
+
+    local data = {
+        Version = 1,
+        SavedJoinGames =
+            SerializeConfigValue(
+                getgenv().SavedJoinGames
+                or {}
+            )
+    }
+
+    return pcall(function()
+        writefile(
+            JoinGamesFilePath,
+            HttpService:
+                JSONEncode(data)
+        )
+    end)
+end
+
+local function LoadSharedJoinGames()
+    local saved =
+        DecodeSavedJoinGamesFromFile(
+            JoinGamesFilePath
+        )
+
+    if not saved then
+        saved =
+            DecodeSavedJoinGamesFromFile(
+                LegacyConfigFilePath
+            )
+    end
+
+    if not saved then
+        saved =
+            DecodeSavedJoinGamesFromFile(
+                ConfigFilePath
+            )
+    end
+
+    if not saved
+    and listfiles then
+        pcall(function()
+            local files =
+                listfiles(
+                    FolderName
+                )
+
+            for _, path in ipairs(
+                files
+            ) do
+                local normalized =
+                    tostring(path)
+                        :gsub("\\", "/")
+
+                if string.match(
+                    normalized,
+                    "/config_%d+%.json$"
+                ) then
+                    local candidate =
+                        DecodeSavedJoinGamesFromFile(
+                            path
+                        )
+
+                    if candidate then
+                        saved = candidate
+                        break
+                    end
+                end
+            end
+        end)
+    end
+
+    if typeof(saved)
+        == "table" then
+        getgenv().SavedJoinGames =
+            saved
+
+        SaveSharedJoinGames()
+    end
+end
+
+getgenv().SaveToxJoinGames =
+    SaveSharedJoinGames
+
 local function BuildGlobalSettingsSnapshot()
     local snapshot = {}
     local keys = {}
@@ -820,9 +977,6 @@ getgenv().AutoSaveConfiguration = function()
         GameSpecificSettings = SerializeConfigValue(
             getgenv().GameSpecificSettings
         ),
-        SavedJoinGames = SerializeConfigValue(
-            getgenv().SavedJoinGames
-        ),
         SavedWaypoints = SerializeConfigValue(
             getgenv().SavedWaypoints
         ),
@@ -839,6 +993,7 @@ getgenv().AutoSaveConfiguration = function()
     end)
 
     SaveSharedMusicIDs()
+    SaveSharedJoinGames()
 end
 
 local function LoadConfiguration()
@@ -928,15 +1083,6 @@ local function LoadConfiguration()
         end
 
 
-        if data.SavedJoinGames ~= nil then
-            local value = DeserializeConfigValue(
-                data.SavedJoinGames
-            )
-
-            if typeof(value) == "table" then
-                getgenv().SavedJoinGames = value
-            end
-        end
 
         if data.SavedWaypoints ~= nil then
             local value = DeserializeConfigValue(
@@ -962,6 +1108,7 @@ end
 
 LoadConfiguration()
 LoadSharedMusicIDs()
+LoadSharedJoinGames()
 
 local function ResolveQueueOnTeleport()
     local env = getgenv()
