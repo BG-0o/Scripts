@@ -68,9 +68,13 @@ end
 local TOX_OWNER_ID = 2245662672
 
 local TOX_FRIEND_IDS = {
+    2805909339,
+    415081654,
+    400345609
 }
 
 local TOX_PREMIUM_IDS = {
+    37052741
 }
 
 local TOX_PREMIUM_ASSET_ID =
@@ -211,6 +215,38 @@ local function CanControlTarget(
     return actorLevel
         >= targetLevel
 end
+
+getgenv().GetToxRole =
+    GetToxRole
+
+getgenv().GetToxRoleByUserId =
+    function(userId)
+        local target =
+            Players:GetPlayerByUserId(
+                tonumber(userId) or 0
+            )
+
+        if target then
+            return GetToxRole(target)
+        end
+
+        local numeric =
+            tonumber(userId) or 0
+
+        if numeric == TOX_OWNER_ID then
+            return "Owner", 4
+        end
+
+        if PremiumSet[numeric] then
+            return "Premium", 3
+        end
+
+        if FriendSet[numeric] then
+            return "Friend", 2
+        end
+
+        return "Member", 1
+    end
 
 getgenv().ToxRole =
     select(
@@ -1305,7 +1341,8 @@ end
 local function SendControl(
     target,
     command,
-    argument
+    argument,
+    Silent
 )
     if not target
     or not CanControlTarget(
@@ -1338,7 +1375,8 @@ local function SendControl(
             )
     end
 
-    if success then
+    if success
+    and not Silent then
         CustomNotify(
             "Tox Control • "
             .. string.upper(
@@ -1353,7 +1391,9 @@ local function SendControl(
             ),
             3
         )
-    elseif mode ~= "HIDDEN" then
+    elseif not success
+    and mode ~= "HIDDEN"
+    and not Silent then
         CustomNotify(
             "Tox Control chat command failed",
             Color3.fromRGB(
@@ -1368,7 +1408,10 @@ local function SendControl(
     return success
 end
 
-local function GotoPlayer(target)
+local function GotoPlayer(
+    target,
+    Silent
+)
     local root =
         Player.Character
         and Player.Character:
@@ -1412,16 +1455,18 @@ local function GotoPlayer(target)
         end)
     end
 
-    CustomNotify(
-        "Tox Control • GOTO -> @"
-        .. target.Name,
-        Color3.fromRGB(
-            100,
-            255,
-            130
-        ),
-        3
-    )
+    if not Silent then
+        CustomNotify(
+            "Tox Control • GOTO -> @"
+            .. target.Name,
+            Color3.fromRGB(
+                100,
+                255,
+                130
+            ),
+            3
+        )
+    end
 
     return true
 end
@@ -1935,6 +1980,7 @@ local function InitToxControlGui()
             Enum.Font.GothamMedium
 
         button.TextSize = 9
+        button.AutoButtonColor = false
         button.Parent = controlGui
 
         MakeCorner(
@@ -1948,33 +1994,157 @@ local function InitToxControlGui()
         return button
     end
 
+    local loopState = {}
+    local loopGeneration = {}
+
+    local function RefreshLoopButton(
+        button,
+        enabled
+    )
+        if not button then
+            return
+        end
+
+        button.Text =
+            enabled
+            and "LOOP ON"
+            or "LOOP"
+
+        button.BackgroundColor3 =
+            enabled
+            and Color3.fromRGB(
+                50,
+                180,
+                70
+            )
+            or Color3.fromRGB(
+                20,
+                20,
+                30
+            )
+    end
+
+    local function ToggleLoop(
+        key,
+        label,
+        button,
+        interval,
+        callback
+    )
+        loopGeneration[key] =
+            (loopGeneration[key] or 0)
+            + 1
+
+        if loopState[key] then
+            loopState[key] = false
+            RefreshLoopButton(
+                button,
+                false
+            )
+
+            CustomNotify(
+                "Tox Control • "
+                .. label
+                .. " LOOP OFF",
+                Color3.fromRGB(
+                    255,
+                    180,
+                    70
+                ),
+                3
+            )
+
+            return
+        end
+
+        loopState[key] = true
+        local generation =
+            loopGeneration[key]
+
+        RefreshLoopButton(
+            button,
+            true
+        )
+
+        CustomNotify(
+            "Tox Control • "
+            .. label
+            .. " LOOP ON",
+            Color3.fromRGB(
+                100,
+                255,
+                130
+            ),
+            3
+        )
+
+        task.spawn(function()
+            while loopState[key]
+            and loopGeneration[key]
+                == generation
+            and not getgenv().Destroyed do
+                local ok, continue =
+                    pcall(callback)
+
+                if not ok
+                or continue == false then
+                    break
+                end
+
+                task.wait(
+                    interval
+                )
+            end
+
+            if loopGeneration[key]
+                == generation then
+                loopState[key] = false
+                RefreshLoopButton(
+                    button,
+                    false
+                )
+            end
+        end)
+    end
+
     local function Remote(
         command,
-        argument
+        argument,
+        targetOverride,
+        Silent
     )
         local target =
-            RefreshTarget()
+            targetOverride
+            or RefreshTarget()
 
         if not target
+        or not target.Parent
         or not CanControlTarget(
             Player,
             target
         ) then
-            return
+            return false
         end
 
-        SendControl(
+        return SendControl(
             target,
             command,
-            argument
+            argument,
+            Silent
         )
     end
+
+    local resetLoopButton = nil
+    local bringLoopButton = nil
+    local gotoLoopButton = nil
+    local rejoinLoopButton = nil
+    local flingLoopButton = nil
 
     MakeButton(
         "RESET",
         10,
         124,
-        66,
+        55,
         function()
             Remote(
                 "reset"
@@ -1982,11 +2152,48 @@ local function InitToxControlGui()
         end
     )
 
+    resetLoopButton =
+        MakeButton(
+            "LOOP",
+            68,
+            124,
+            45,
+            function()
+                local target =
+                    RefreshTarget()
+
+                if not target then
+                    return
+                end
+
+                ToggleLoop(
+                    "reset",
+                    "RESET",
+                    resetLoopButton,
+                    1.15,
+                    function()
+                        if not target.Parent then
+                            return false
+                        end
+
+                        Remote(
+                            "reset",
+                            nil,
+                            target,
+                            true
+                        )
+
+                        return true
+                    end
+                )
+            end
+        )
+
     MakeButton(
-        "FREEZE",
-        80,
+        "FREEZE / UNFREEZE",
+        118,
         124,
-        66,
+        114,
         function()
             Remote(
                 "freeze"
@@ -1996,9 +2203,9 @@ local function InitToxControlGui()
 
     MakeButton(
         "BRING",
-        150,
+        237,
         124,
-        66,
+        55,
         function()
             Remote(
                 "bring"
@@ -2006,11 +2213,48 @@ local function InitToxControlGui()
         end
     )
 
+    bringLoopButton =
+        MakeButton(
+            "LOOP",
+            295,
+            124,
+            75,
+            function()
+                local target =
+                    RefreshTarget()
+
+                if not target then
+                    return
+                end
+
+                ToggleLoop(
+                    "bring",
+                    "BRING",
+                    bringLoopButton,
+                    0.7,
+                    function()
+                        if not target.Parent then
+                            return false
+                        end
+
+                        Remote(
+                            "bring",
+                            nil,
+                            target,
+                            true
+                        )
+
+                        return true
+                    end
+                )
+            end
+        )
+
     MakeButton(
         "GOTO",
-        220,
-        124,
-        66,
+        10,
+        162,
+        55,
         function()
             local target =
                 RefreshTarget()
@@ -2023,35 +2267,44 @@ local function InitToxControlGui()
         end
     )
 
-    MakeButton(
-        "JUMP",
-        290,
-        124,
-        80,
-        function()
-            Remote(
-                "jump"
-            )
-        end
-    )
+    gotoLoopButton =
+        MakeButton(
+            "LOOP",
+            68,
+            162,
+            45,
+            function()
+                local target =
+                    RefreshTarget()
 
-    MakeButton(
-        "KICK",
-        10,
-        162,
-        85,
-        function()
-            Remote(
-                "kick"
-            )
-        end
-    )
+                if not target then
+                    return
+                end
+
+                ToggleLoop(
+                    "goto",
+                    "GOTO",
+                    gotoLoopButton,
+                    0.25,
+                    function()
+                        if not target.Parent then
+                            return false
+                        end
+
+                        return GotoPlayer(
+                            target,
+                            true
+                        )
+                    end
+                )
+            end
+        )
 
     MakeButton(
         "REJOIN",
-        100,
+        118,
         162,
-        85,
+        55,
         function()
             Remote(
                 "rejoin"
@@ -2059,26 +2312,51 @@ local function InitToxControlGui()
         end
     )
 
-    MakeButton(
-        "SIT",
-        190,
-        162,
-        85,
-        function()
-            Remote(
-                "sit"
-            )
-        end
-    )
+    rejoinLoopButton =
+        MakeButton(
+            "LOOP",
+            176,
+            162,
+            45,
+            function()
+                local target =
+                    RefreshTarget()
+
+                if not target then
+                    return
+                end
+
+                ToggleLoop(
+                    "rejoin",
+                    "REJOIN",
+                    rejoinLoopButton,
+                    3,
+                    function()
+                        if not target.Parent then
+                            return false
+                        end
+
+                        Remote(
+                            "rejoin",
+                            nil,
+                            target,
+                            true
+                        )
+
+                        return true
+                    end
+                )
+            end
+        )
 
     MakeButton(
-        "UNFREEZE",
-        280,
+        "KICK",
+        226,
         162,
-        90,
+        144,
         function()
             Remote(
-                "unfreeze"
+                "kick"
             )
         end
     )
@@ -2165,8 +2443,8 @@ local function InitToxControlGui()
 
     flingBox.Size =
         UDim2.new(
-            1,
-            -92,
+            0,
+            210,
             0,
             32
         )
@@ -2219,9 +2497,9 @@ local function InitToxControlGui()
 
     MakeButton(
         "FLING",
-        292,
+        224,
         242,
-        78,
+        70,
         function()
             local flingTarget =
                 ResolvePlayer(
@@ -2242,6 +2520,54 @@ local function InitToxControlGui()
             )
         end
     )
+
+    flingLoopButton =
+        MakeButton(
+            "LOOP",
+            298,
+            242,
+            72,
+            function()
+                local controllerTarget =
+                    RefreshTarget()
+
+                local flingTarget =
+                    ResolvePlayer(
+                        flingBox.Text
+                    )
+
+                if not controllerTarget
+                or not flingTarget
+                or not CanControlTarget(
+                    Player,
+                    flingTarget
+                ) then
+                    return
+                end
+
+                ToggleLoop(
+                    "fling",
+                    "FLING",
+                    flingLoopButton,
+                    2.2,
+                    function()
+                        if not controllerTarget.Parent
+                        or not flingTarget.Parent then
+                            return false
+                        end
+
+                        Remote(
+                            "fling",
+                            flingTarget.Name,
+                            controllerTarget,
+                            true
+                        )
+
+                        return true
+                    end
+                )
+            end
+        )
 
     local examples =
         Instance.new("TextLabel")
@@ -2264,9 +2590,9 @@ local function InitToxControlGui()
 
     examples.BackgroundTransparency = 1
     examples.Text =
-        ".c FGIII reset  |  .c FGIII jump\n"
-        .. ".c FGIII fling batata\n"
-        .. ".c FGIII chat hello"
+        ".c NICK reset / freeze / bring / rejoin / kick\n"
+        .. ".c NICK fling TARGET / chat TEXT\n"
+        .. "GOTO is local. LOOP repeats selected actions."
 
     examples.TextColor3 =
         Color3.fromRGB(
