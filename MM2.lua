@@ -2831,7 +2831,11 @@ local function CreateMM2Section(
         )
 
     label.TextColor3 =
-        MAIN_COLOR
+        Color3.fromRGB(
+            255,
+            255,
+            255
+        )
 
     label.Font =
         Enum.Font.GothamBold
