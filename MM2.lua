@@ -1929,6 +1929,164 @@ local function GetPredictedTargetPosition(
     return predicted
 end
 
+local function GetGuidedTargetPosition(
+    target
+)
+    if not target
+    or not target.Character then
+        return nil
+    end
+
+    local character =
+        target.Character
+
+    local humanoid =
+        character:
+            FindFirstChildOfClass(
+                "Humanoid"
+            )
+
+    local root =
+        character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+    if not humanoid
+    or humanoid.Health <= 0
+    or not root then
+        return nil
+    end
+
+    local targetPart =
+        character:
+            FindFirstChild(
+                "UpperTorso"
+            )
+        or character:
+            FindFirstChild(
+                "Torso"
+            )
+        or root
+
+    local basePosition =
+        targetPart.Position
+
+    local velocity =
+        root.AssemblyLinearVelocity
+
+    local horizontalVelocity =
+        Vector3.new(
+            velocity.X,
+            0,
+            velocity.Z
+        )
+
+    local moveDirection =
+        humanoid.MoveDirection
+
+    if moveDirection.Magnitude
+        > 0.05 then
+        local walkVelocity =
+            moveDirection.Unit
+            * math.max(
+                tonumber(
+                    humanoid.WalkSpeed
+                ) or 16,
+                8
+            )
+
+        if horizontalVelocity.Magnitude
+            < 2 then
+            horizontalVelocity =
+                walkVelocity
+        else
+            horizontalVelocity =
+                horizontalVelocity:
+                    Lerp(
+                        walkVelocity,
+                        0.18
+                    )
+        end
+    end
+
+    horizontalVelocity =
+        ClampVectorMagnitude(
+            horizontalVelocity,
+            34
+        )
+
+    local origin =
+        GetShotOrigin()
+
+    local distance =
+        (
+            basePosition
+            - origin
+        ).Magnitude
+
+    local ping =
+        GetPredictionPing()
+
+    local leadTime =
+        0.018
+        + ping * 0.48
+        + distance / 4200
+
+    leadTime =
+        math.clamp(
+            leadTime,
+            0.025,
+            0.115
+        )
+
+    local horizontalLead =
+        horizontalVelocity
+        * leadTime
+
+    horizontalLead =
+        ClampVectorMagnitude(
+            horizontalLead,
+            4.25
+        )
+
+    local verticalLead = 0
+
+    local humanoidState =
+        humanoid:
+            GetState()
+
+    local airborne =
+        humanoid.FloorMaterial
+            == Enum.Material.Air
+        or humanoidState
+            == Enum.HumanoidStateType.Jumping
+        or humanoidState
+            == Enum.HumanoidStateType.Freefall
+
+    if airborne then
+        verticalLead =
+            math.clamp(
+                velocity.Y
+                * math.min(
+                    leadTime,
+                    0.08
+                ),
+                -2.2,
+                2.2
+            )
+    end
+
+    return
+        basePosition
+        + horizontalLead
+        + Vector3.new(
+            0,
+            verticalLead,
+            0
+        )
+end
+
 local function FireGuidedGunShot(gun, targetPosition)
     local fired = false
 
@@ -2027,17 +2185,12 @@ local function ShootMurderer(showNotify)
         return false
     end
 
-    local targetPart =
-        murderer.Character:
-            FindFirstChild(
-                "Head"
-            )
-        or murderer.Character:
-            FindFirstChild(
-                "HumanoidRootPart"
-            )
+    local targetPosition =
+        GetGuidedTargetPosition(
+            murderer
+        )
 
-    if not targetPart then
+    if not targetPosition then
         GuidedShotBusy = false
 
         if showNotify then
@@ -2057,7 +2210,7 @@ local function ShootMurderer(showNotify)
     local fired =
         FireGuidedGunShot(
             gun,
-            targetPart.Position
+            targetPosition
         )
 
     if showNotify then
