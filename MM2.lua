@@ -1986,55 +1986,86 @@ local function GetGuidedTargetPosition(
         and state.Velocity
         or replicatedVelocity
 
-    local velocity =
-        replicatedVelocity:
-            Lerp(
-                measuredVelocity,
-                0.68
-            )
+    local measuredHorizontal =
+        Vector3.new(
+            measuredVelocity.X,
+            0,
+            measuredVelocity.Z
+        )
+
+    local replicatedHorizontal =
+        Vector3.new(
+            replicatedVelocity.X,
+            0,
+            replicatedVelocity.Z
+        )
 
     local horizontalVelocity =
-        Vector3.new(
-            velocity.X,
-            0,
-            velocity.Z
-        )
+        replicatedHorizontal:
+            Lerp(
+                measuredHorizontal,
+                0.78
+            )
 
     local moveDirection =
         humanoid.MoveDirection
 
+    local walkSpeed =
+        math.max(
+            tonumber(
+                humanoid.WalkSpeed
+            ) or 16,
+            8
+        )
+
     if moveDirection.Magnitude
         > 0.05 then
-        local walkSpeed =
+        local forward =
+            moveDirection.Unit
+
+        local projectedSpeed =
+            horizontalVelocity:
+                Dot(
+                    forward
+                )
+
+        projectedSpeed =
             math.max(
-                tonumber(
-                    humanoid.WalkSpeed
-                ) or 16,
-                8
+                projectedSpeed,
+                walkSpeed * 0.92
             )
 
-        local desiredVelocity =
-            moveDirection.Unit
-            * walkSpeed
+        projectedSpeed =
+            math.clamp(
+                projectedSpeed,
+                6,
+                55
+            )
 
-        if horizontalVelocity.Magnitude
-            < 3 then
+        local forwardVelocity =
+            forward
+            * projectedSpeed
+
+        horizontalVelocity =
+            horizontalVelocity:
+                Lerp(
+                    forwardVelocity,
+                    0.72
+                )
+
+        if horizontalVelocity:
+            Dot(
+                forward
+            ) < 0 then
             horizontalVelocity =
-                desiredVelocity
-        else
-            horizontalVelocity =
-                horizontalVelocity:
-                    Lerp(
-                        desiredVelocity,
-                        0.42
-                    )
+                forwardVelocity
         end
     end
 
     horizontalVelocity =
         ClampVectorMagnitude(
             horizontalVelocity,
-            55
+            58
         )
 
     local origin =
@@ -2052,79 +2083,84 @@ local function GetGuidedTargetPosition(
     local speed =
         horizontalVelocity.Magnitude
 
-    local serverDelay =
-        0.115
-        + (
-            ping
-            * 0.9
-        )
+    local guidedDropDelay =
+        0.34
+
+    local networkDelay =
+        ping
+        * 1.65
 
     local distanceDelay =
         math.clamp(
             distance
-            / 1500,
+            / 1900,
             0,
-            0.09
+            0.10
         )
 
     local movementDelay =
         math.clamp(
             speed
-            / 220,
+            / 260,
             0,
-            0.10
+            0.08
         )
 
     local leadTime =
-        serverDelay
+        guidedDropDelay
+        + networkDelay
         + distanceDelay
         + movementDelay
 
     leadTime =
         math.clamp(
             leadTime,
-            0.12,
-            0.34
-        )
-
-    local acceleration =
-        state
-        and state.Acceleration
-        or Vector3.zero
-
-    acceleration =
-        Vector3.new(
-            math.clamp(
-                acceleration.X,
-                -70,
-                70
-            ),
-            0,
-            math.clamp(
-                acceleration.Z,
-                -70,
-                70
-            )
+            0.34,
+            0.68
         )
 
     local horizontalLead =
         horizontalVelocity
         * leadTime
 
-    if speed > 3 then
-        horizontalLead +=
-            acceleration
-            * (
-                0.30
-                * leadTime
-                * leadTime
+    if moveDirection.Magnitude
+        > 0.05
+    and speed > 2 then
+        local forward =
+            moveDirection.Unit
+
+        local minimumForwardLead =
+            math.clamp(
+                math.max(
+                    walkSpeed,
+                    speed
+                )
+                * 0.36,
+                5.2,
+                12
             )
+
+        local forwardAmount =
+            horizontalLead:
+                Dot(
+                    forward
+                )
+
+        if forwardAmount
+            < minimumForwardLead then
+            horizontalLead +=
+                forward
+                * (
+                    minimumForwardLead
+                    - forwardAmount
+                )
+        end
     end
 
     horizontalLead =
         ClampVectorMagnitude(
             horizontalLead,
-            10.5
+            19
         )
 
     local humanoidState =
@@ -2144,7 +2180,7 @@ local function GetGuidedTargetPosition(
     if airborne then
         local verticalVelocity =
             math.clamp(
-                velocity.Y,
+                measuredVelocity.Y,
                 -70,
                 70
             )
@@ -2152,7 +2188,7 @@ local function GetGuidedTargetPosition(
         local verticalTime =
             math.min(
                 leadTime,
-                0.20
+                0.24
             )
 
         verticalLead =
@@ -2168,8 +2204,8 @@ local function GetGuidedTargetPosition(
         verticalLead =
             math.clamp(
                 verticalLead,
-                -5.5,
-                5.5
+                -6,
+                6
             )
     end
 
@@ -2182,64 +2218,41 @@ local function GetGuidedTargetPosition(
             0
         )
 
+    local horizontalOffset =
+        Vector3.new(
+            predicted.X
+                - basePosition.X,
+            0,
+            predicted.Z
+                - basePosition.Z
+        )
+
     if moveDirection.Magnitude
         > 0.05
-    and horizontalVelocity.Magnitude
-        > 2 then
-        local minimumForwardLead =
-            math.clamp(
-                speed * 0.11,
-                1.6,
-                4.5
-            )
-
-        local currentLead =
-            (
-                Vector3.new(
-                    predicted.X,
-                    0,
-                    predicted.Z
-                )
-                - Vector3.new(
-                    basePosition.X,
-                    0,
-                    basePosition.Z
-                )
-            )
-
+    and horizontalOffset.Magnitude
+        > 0.01 then
         local forward =
-            horizontalVelocity.Unit
+            moveDirection.Unit
 
-        local forwardAmount =
-            currentLead:
-                Dot(
-                    forward
-                )
-
-        if forwardAmount
-            < minimumForwardLead then
-            predicted +=
+        if horizontalOffset:
+            Dot(
                 forward
-                * (
-                    minimumForwardLead
-                    - forwardAmount
+            ) < 0 then
+            predicted =
+                basePosition
+                + forward
+                * math.clamp(
+                    walkSpeed
+                    * 0.40,
+                    5.5,
+                    12
+                )
+                + Vector3.new(
+                    0,
+                    verticalLead,
+                    0
                 )
         end
-    end
-
-    local maxOffset =
-        11.5
-
-    local offset =
-        predicted
-        - basePosition
-
-    if offset.Magnitude
-        > maxOffset then
-        predicted =
-            basePosition
-            + offset.Unit
-            * maxOffset
     end
 
     return predicted
