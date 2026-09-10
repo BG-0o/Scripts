@@ -1975,12 +1975,228 @@ local function GetGuidedTargetPosition(
             target
         )
 
+    local character =
+        target
+        and target.Character
+
+    local root =
+        character
+        and character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
+
     if not targetPart
-    or not targetPart.Parent then
+    or not targetPart.Parent
+    or not root then
         return nil
     end
 
-    return targetPart.Position
+    local basePosition =
+        targetPart.Position
+
+    local myCharacter =
+        Player.Character
+
+    local myRoot =
+        myCharacter
+        and myCharacter:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+    local origin =
+        myRoot
+        and myRoot.Position
+        or GetShotOrigin()
+
+    local distance =
+        (
+            origin
+            - basePosition
+        ).Magnitude
+
+    local velocity =
+        root.AssemblyLinearVelocity
+
+    local state =
+        TargetMotionHistory[
+            target
+        ]
+
+    if state
+    and state.Velocity then
+        velocity =
+            velocity:
+                Lerp(
+                    state.Velocity,
+                    0.38
+                )
+    end
+
+    velocity =
+        ClampVectorMagnitude(
+            velocity,
+            80
+        )
+
+    local bulletLead =
+        math.clamp(
+            distance
+            / 280,
+            0.02,
+            0.25
+        )
+
+    local pingLead =
+        GetPredictionPing()
+        * 0.35
+
+    local leadTime =
+        math.clamp(
+            bulletLead
+            + pingLead,
+            0.025,
+            0.29
+        )
+
+    local horizontalVelocity =
+        Vector3.new(
+            velocity.X,
+            0,
+            velocity.Z
+        )
+
+    local horizontalLead =
+        horizontalVelocity
+        * leadTime
+
+    horizontalLead =
+        ClampVectorMagnitude(
+            horizontalLead,
+            8.5
+        )
+
+    local verticalLead = 0
+
+    local humanoid =
+        character:
+            FindFirstChildOfClass(
+                "Humanoid"
+            )
+
+    if humanoid then
+        local stateType =
+            humanoid:
+                GetState()
+
+        local airborne =
+            humanoid.FloorMaterial
+                == Enum.Material.Air
+            or stateType
+                == Enum.HumanoidStateType.Jumping
+            or stateType
+                == Enum.HumanoidStateType.Freefall
+
+        if airborne then
+            local verticalTime =
+                math.min(
+                    leadTime,
+                    0.16
+                )
+
+            verticalLead =
+                math.clamp(
+                    velocity.Y
+                    * verticalTime
+                    - 0.5
+                    * workspace.Gravity
+                    * verticalTime
+                    * verticalTime,
+                    -4,
+                    4
+                )
+        end
+    end
+
+    return
+        basePosition
+        + horizontalLead
+        + Vector3.new(
+            0,
+            verticalLead,
+            0
+        )
+end
+
+local function GuidedGunClickAt(
+    targetPosition
+)
+    if not Camera
+    or not targetPosition then
+        return
+    end
+
+    local screenPosition,
+        onScreen =
+        Camera:
+            WorldToViewportPoint(
+                targetPosition
+            )
+
+    local viewport =
+        Camera.ViewportSize
+
+    local inset =
+        GuiService:
+            GetGuiInset()
+
+    local x =
+        onScreen
+        and screenPosition.X
+        or viewport.X / 2
+
+    local y =
+        onScreen
+        and screenPosition.Y
+        or viewport.Y / 2
+
+    y += inset.Y
+
+    pcall(function()
+        VirtualInputManager:
+            SendMouseMoveEvent(
+                x,
+                y,
+                game
+            )
+    end)
+
+    pcall(function()
+        VirtualInputManager:
+            SendMouseButtonEvent(
+                x,
+                y,
+                0,
+                true,
+                game,
+                0
+            )
+
+        task.wait(
+            0.015
+        )
+
+        VirtualInputManager:
+            SendMouseButtonEvent(
+                x,
+                y,
+                0,
+                false,
+                game,
+                0
+            )
+    end)
 end
 
 local function FireGuidedGunShot(
@@ -1989,18 +2205,52 @@ local function FireGuidedGunShot(
 )
     local fired = false
 
-    local function liveTorsoPosition()
-        local position =
+    local function currentAim()
+        return
             GetGuidedTargetPosition(
                 target
             )
-
-        if position then
-            return position
-        end
-
-        return nil
     end
+
+    local targetPosition =
+        currentAim()
+
+    if not targetPosition then
+        return false
+    end
+
+    local previousCameraCFrame =
+        Camera
+        and Camera.CFrame
+
+    if Camera then
+        pcall(function()
+            local look =
+                CFrame.lookAt(
+                    Camera.CFrame.Position,
+                    targetPosition
+                )
+
+            Camera.CFrame =
+                Camera.CFrame:
+                    Lerp(
+                        look,
+                        0.65
+                    )
+        end)
+    end
+
+    RunService.RenderStepped:
+        Wait()
+
+    pcall(function()
+        gun:
+            Activate()
+    end)
+
+    GuidedGunClickAt(
+        targetPosition
+    )
 
     local shootRemote =
         gun:
@@ -2019,25 +2269,22 @@ local function FireGuidedGunShot(
     ) then
         local ok =
             pcall(function()
-                local targetPosition =
-                    liveTorsoPosition()
-
-                if not targetPosition then
-                    return
-                end
+                local livePosition =
+                    currentAim()
+                    or targetPosition
 
                 shootRemote:
                     FireServer(
                         CFrame.new(
-                            targetPosition
+                            livePosition
                             + Vector3.new(
                                 0,
-                                0.35,
+                                0.5,
                                 0
                             )
                         ),
                         CFrame.new(
-                            targetPosition
+                            livePosition
                         )
                     )
             end)
@@ -2046,6 +2293,8 @@ local function FireGuidedGunShot(
             fired = true
         end
     end
+
+    local remoteFunction = nil
 
     pcall(function()
         local knifeLocal =
@@ -2073,7 +2322,7 @@ local function FireGuidedGunShot(
                     )
             )
 
-        local remoteFunction =
+        remoteFunction =
             createBeam
             and (
                 createBeam:
@@ -2091,23 +2340,81 @@ local function FireGuidedGunShot(
         and remoteFunction:IsA(
             "RemoteFunction"
         ) then
-            local targetPosition =
-                liveTorsoPosition()
-
-            if not targetPosition then
-                return
-            end
+            local livePosition =
+                currentAim()
+                or targetPosition
 
             remoteFunction:
                 InvokeServer(
                     1,
-                    targetPosition,
+                    livePosition,
                     "AH2"
                 )
 
             fired = true
         end
     end)
+
+    if remoteFunction
+    and remoteFunction:IsA(
+        "RemoteFunction"
+    ) then
+        task.spawn(function()
+            task.wait(
+                0.035
+            )
+
+            if getgenv().Destroyed
+            or not gun
+            or not gun.Parent
+            or not target
+            or target.Parent
+                ~= Players then
+                return
+            end
+
+            local humanoid =
+                target.Character
+                and target.Character:
+                    FindFirstChildOfClass(
+                        "Humanoid"
+                    )
+
+            if not humanoid
+            or humanoid.Health <= 0 then
+                return
+            end
+
+            local correctedPosition =
+                currentAim()
+
+            if correctedPosition then
+                pcall(function()
+                    remoteFunction:
+                        InvokeServer(
+                            1,
+                            correctedPosition,
+                            "AH2"
+                        )
+                end)
+            end
+        end)
+    end
+
+    if Camera
+    and previousCameraCFrame then
+        task.defer(function()
+            RunService.RenderStepped:
+                Wait()
+
+            if Camera then
+                pcall(function()
+                    Camera.CFrame =
+                        previousCameraCFrame
+                end)
+            end
+        end)
+    end
 
     return fired
 end
