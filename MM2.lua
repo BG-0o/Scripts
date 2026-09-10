@@ -80,6 +80,7 @@ Settings.MM2ShootMurderAuto = false
 Settings.MM2GrabGunKey = Settings.MM2GrabGunKey or Enum.KeyCode.G
 Settings.MM2GrabGunAutoV2 = Settings.MM2GrabGunAutoV2 == true or Settings.MM2GrabGunAuto == true
 Settings.MM2GrabGunAuto = false
+Settings.MM2GunESP = Settings.MM2GunESP == true
 Settings.MM2FlingTarget = Settings.MM2FlingTarget or "Murderer"
 
 local ResumeAutoFarmAfterAntiKick =
@@ -1972,8 +1973,25 @@ local function GetGuidedTargetPosition(
     local basePosition =
         targetPart.Position
 
-    local velocity =
+    local state =
+        TargetMotionHistory[
+            target
+        ]
+
+    local replicatedVelocity =
         root.AssemblyLinearVelocity
+
+    local measuredVelocity =
+        state
+        and state.Velocity
+        or replicatedVelocity
+
+    local velocity =
+        replicatedVelocity:
+            Lerp(
+                measuredVelocity,
+                0.68
+            )
 
     local horizontalVelocity =
         Vector3.new(
@@ -1987,25 +2005,28 @@ local function GetGuidedTargetPosition(
 
     if moveDirection.Magnitude
         > 0.05 then
-        local walkVelocity =
-            moveDirection.Unit
-            * math.max(
+        local walkSpeed =
+            math.max(
                 tonumber(
                     humanoid.WalkSpeed
                 ) or 16,
                 8
             )
 
+        local desiredVelocity =
+            moveDirection.Unit
+            * walkSpeed
+
         if horizontalVelocity.Magnitude
-            < 2 then
+            < 3 then
             horizontalVelocity =
-                walkVelocity
+                desiredVelocity
         else
             horizontalVelocity =
                 horizontalVelocity:
                     Lerp(
-                        walkVelocity,
-                        0.18
+                        desiredVelocity,
+                        0.42
                     )
         end
     end
@@ -2013,7 +2034,7 @@ local function GetGuidedTargetPosition(
     horizontalVelocity =
         ClampVectorMagnitude(
             horizontalVelocity,
-            34
+            55
         )
 
     local origin =
@@ -2028,29 +2049,83 @@ local function GetGuidedTargetPosition(
     local ping =
         GetPredictionPing()
 
+    local speed =
+        horizontalVelocity.Magnitude
+
+    local serverDelay =
+        0.115
+        + (
+            ping
+            * 0.9
+        )
+
+    local distanceDelay =
+        math.clamp(
+            distance
+            / 1500,
+            0,
+            0.09
+        )
+
+    local movementDelay =
+        math.clamp(
+            speed
+            / 220,
+            0,
+            0.10
+        )
+
     local leadTime =
-        0.018
-        + ping * 0.48
-        + distance / 4200
+        serverDelay
+        + distanceDelay
+        + movementDelay
 
     leadTime =
         math.clamp(
             leadTime,
-            0.025,
-            0.115
+            0.12,
+            0.34
+        )
+
+    local acceleration =
+        state
+        and state.Acceleration
+        or Vector3.zero
+
+    acceleration =
+        Vector3.new(
+            math.clamp(
+                acceleration.X,
+                -70,
+                70
+            ),
+            0,
+            math.clamp(
+                acceleration.Z,
+                -70,
+                70
+            )
         )
 
     local horizontalLead =
         horizontalVelocity
         * leadTime
 
+    if speed > 3 then
+        horizontalLead +=
+            acceleration
+            * (
+                0.30
+                * leadTime
+                * leadTime
+            )
+    end
+
     horizontalLead =
         ClampVectorMagnitude(
             horizontalLead,
-            4.25
+            10.5
         )
-
-    local verticalLead = 0
 
     local humanoidState =
         humanoid:
@@ -2064,20 +2139,41 @@ local function GetGuidedTargetPosition(
         or humanoidState
             == Enum.HumanoidStateType.Freefall
 
+    local verticalLead = 0
+
     if airborne then
+        local verticalVelocity =
+            math.clamp(
+                velocity.Y,
+                -70,
+                70
+            )
+
+        local verticalTime =
+            math.min(
+                leadTime,
+                0.20
+            )
+
+        verticalLead =
+            verticalVelocity
+            * verticalTime
+
+        verticalLead -=
+            0.5
+            * workspace.Gravity
+            * verticalTime
+            * verticalTime
+
         verticalLead =
             math.clamp(
-                velocity.Y
-                * math.min(
-                    leadTime,
-                    0.08
-                ),
-                -2.2,
-                2.2
+                verticalLead,
+                -5.5,
+                5.5
             )
     end
 
-    return
+    local predicted =
         basePosition
         + horizontalLead
         + Vector3.new(
@@ -2085,6 +2181,68 @@ local function GetGuidedTargetPosition(
             verticalLead,
             0
         )
+
+    if moveDirection.Magnitude
+        > 0.05
+    and horizontalVelocity.Magnitude
+        > 2 then
+        local minimumForwardLead =
+            math.clamp(
+                speed * 0.11,
+                1.6,
+                4.5
+            )
+
+        local currentLead =
+            (
+                Vector3.new(
+                    predicted.X,
+                    0,
+                    predicted.Z
+                )
+                - Vector3.new(
+                    basePosition.X,
+                    0,
+                    basePosition.Z
+                )
+            )
+
+        local forward =
+            horizontalVelocity.Unit
+
+        local forwardAmount =
+            currentLead:
+                Dot(
+                    forward
+                )
+
+        if forwardAmount
+            < minimumForwardLead then
+            predicted +=
+                forward
+                * (
+                    minimumForwardLead
+                    - forwardAmount
+                )
+        end
+    end
+
+    local maxOffset =
+        11.5
+
+    local offset =
+        predicted
+        - basePosition
+
+    if offset.Magnitude
+        > maxOffset then
+        predicted =
+            basePosition
+            + offset.Unit
+            * maxOffset
+    end
+
+    return predicted
 end
 
 local function FireGuidedGunShot(gun, targetPosition)
@@ -2360,22 +2518,270 @@ local function SilentAimShot()
 end
 
 local function FindGunDrop()
-    local gunDrop = workspace:FindFirstChild("GunDrop", true)
+    local gunDrop =
+        workspace:
+            FindFirstChild(
+                "GunDrop",
+                true
+            )
 
     if not gunDrop then
         return nil
     end
 
-    if gunDrop:IsA("BasePart") then
+    if gunDrop:IsA(
+        "BasePart"
+    ) then
         return gunDrop
     end
 
-    if gunDrop:IsA("Model") then
-        return gunDrop.PrimaryPart or gunDrop:FindFirstChildWhichIsA("BasePart", true)
+    if gunDrop:IsA(
+        "Model"
+    ) then
+        return
+            gunDrop.PrimaryPart
+            or gunDrop:
+                FindFirstChildWhichIsA(
+                    "BasePart",
+                    true
+                )
     end
 
-    return gunDrop:FindFirstChildWhichIsA("BasePart", true)
+    return gunDrop:
+        FindFirstChildWhichIsA(
+            "BasePart",
+            true
+        )
 end
+
+local GunESPHighlight = nil
+local GunESPBillboard = nil
+local GunESPAdornee = nil
+local LastGunDrop = nil
+local GunDropWasPresent = false
+
+local function ClearGunESP()
+    if GunESPHighlight then
+        pcall(function()
+            GunESPHighlight:
+                Destroy()
+        end)
+
+        GunESPHighlight = nil
+    end
+
+    if GunESPBillboard then
+        pcall(function()
+            GunESPBillboard:
+                Destroy()
+        end)
+
+        GunESPBillboard = nil
+    end
+
+    GunESPAdornee = nil
+end
+
+local function CreateGunESP(
+    gunDrop
+)
+    if not Settings.MM2GunESP
+    or not gunDrop
+    or not gunDrop.Parent then
+        ClearGunESP()
+        return
+    end
+
+    if GunESPAdornee
+        == gunDrop
+    and GunESPHighlight
+    and GunESPHighlight.Parent
+    and GunESPBillboard
+    and GunESPBillboard.Parent then
+        return
+    end
+
+    ClearGunESP()
+
+    GunESPAdornee =
+        gunDrop
+
+    GunESPHighlight =
+        Instance.new(
+            "Highlight"
+        )
+
+    GunESPHighlight.Name =
+        "ToxGunESPHighlight"
+
+    GunESPHighlight.Adornee =
+        gunDrop
+
+    GunESPHighlight.FillColor =
+        Color3.fromRGB(
+            255,
+            215,
+            60
+        )
+
+    GunESPHighlight.OutlineColor =
+        Color3.fromRGB(
+            255,
+            255,
+            255
+        )
+
+    GunESPHighlight.FillTransparency =
+        0.35
+
+    GunESPHighlight.OutlineTransparency =
+        0
+
+    GunESPHighlight.DepthMode =
+        Enum.HighlightDepthMode.AlwaysOnTop
+
+    GunESPHighlight.Parent =
+        gunDrop
+
+    GunESPBillboard =
+        Instance.new(
+            "BillboardGui"
+        )
+
+    GunESPBillboard.Name =
+        "ToxGunESPBillboard"
+
+    GunESPBillboard.Adornee =
+        gunDrop
+
+    GunESPBillboard.Size =
+        UDim2.new(
+            0,
+            110,
+            0,
+            28
+        )
+
+    GunESPBillboard.StudsOffset =
+        Vector3.new(
+            0,
+            2.1,
+            0
+        )
+
+    GunESPBillboard.AlwaysOnTop =
+        true
+
+    GunESPBillboard.MaxDistance =
+        100000
+
+    GunESPBillboard.Parent =
+        gunDrop
+
+    local label =
+        Instance.new(
+            "TextLabel"
+        )
+
+    label.Size =
+        UDim2.new(
+            1,
+            0,
+            1,
+            0
+        )
+
+    label.BackgroundTransparency =
+        1
+
+    label.Text =
+        "GUN"
+
+    label.TextColor3 =
+        Color3.fromRGB(
+            255,
+            255,
+            255
+        )
+
+    label.TextStrokeColor3 =
+        Color3.fromRGB(
+            0,
+            0,
+            0
+        )
+
+    label.TextStrokeTransparency =
+        0
+
+    label.Font =
+        Enum.Font.GothamBold
+
+    label.TextSize = 14
+    label.Parent =
+        GunESPBillboard
+end
+
+local function RefreshGunDropState()
+    local gunDrop =
+        FindGunDrop()
+
+    if gunDrop
+    and gunDrop.Parent then
+        if not GunDropWasPresent
+        or LastGunDrop
+            ~= gunDrop then
+            GunDropWasPresent =
+                true
+
+            LastGunDrop =
+                gunDrop
+
+            CustomNotify(
+                "Gun Dropped!",
+                Color3.fromRGB(
+                    255,
+                    215,
+                    70
+                ),
+                5
+            )
+        end
+
+        if Settings.MM2GunESP then
+            CreateGunESP(
+                gunDrop
+            )
+        elseif GunESPHighlight
+        or GunESPBillboard then
+            ClearGunESP()
+        end
+    else
+        GunDropWasPresent =
+            false
+
+        LastGunDrop = nil
+
+        if GunESPHighlight
+        or GunESPBillboard then
+            ClearGunESP()
+        end
+    end
+end
+
+task.spawn(function()
+    while not getgenv().Destroyed
+    and game.PlaceId
+        == 142823291 do
+        pcall(
+            RefreshGunDropState
+        )
+
+        task.wait(
+            0.12
+        )
+    end
+end)
 
 local function GrabGun(silent, requestedDrop)
     if ActionBusy then
@@ -3637,6 +4043,32 @@ CreateToggle("Role ESP", GamePage, Settings.MM2RoleESP, function(v)
     ApplyRoleESP(v)
 end, "MM2RoleESP")
 
+CreateToggle(
+    "Gun ESP",
+    GamePage,
+    Settings.MM2GunESP,
+    function(v)
+        Settings.MM2GunESP =
+            v == true
+
+        if Settings.MM2GunESP then
+            local gunDrop =
+                FindGunDrop()
+
+            if gunDrop then
+                CreateGunESP(
+                    gunDrop
+                )
+            end
+        else
+            ClearGunESP()
+        end
+
+        AutoSaveConfiguration()
+    end,
+    "MM2GunESP"
+)
+
 CreateToggleWithValue("Speed", GamePage, Settings.Speed, Settings.SpeedValue, function(v)
     SetShared("Speed", v)
 end, function(value)
@@ -3917,6 +4349,8 @@ getgenv().ToxMM2Cleanup = function()
         StopAutoFarm(true)
     end
 
+    ClearGunESP()
+
     if PlayerSelectorFrame then
         PlayerSelectorFrame.Visible = false
     end
@@ -3928,6 +4362,7 @@ getgenv().ToxMM2Cleanup = function()
     if getgenv().SyncToggleVisuals then
         getgenv().SyncToggleVisuals("MM2AutoFarmV2", false)
         getgenv().SyncToggleVisuals("MM2RoleESP", false)
+        getgenv().SyncToggleVisuals("MM2GunESP", Settings.MM2GunESP)
         getgenv().SyncToggleVisuals("MM2KillAllAutoV2", false)
         getgenv().SyncToggleVisuals("MM2ShootMurderAutoV2", false)
         getgenv().SyncToggleVisuals("MM2GrabGunAutoV2", false)
