@@ -1937,31 +1937,11 @@ local function FireGuidedGunShot(gun, targetPosition)
 
     if shootRemote and shootRemote:IsA("RemoteEvent") then
         local ok = pcall(function()
-            local origin =
-                GetShotOrigin()
-
-            local direction =
-                targetPosition
-                - origin
-
             shootRemote:FireServer(
-                CFrame.lookAt(
-                    origin,
-                    targetPosition
+                CFrame.new(
+                    targetPosition + Vector3.new(0, 0.5, 0)
                 ),
-                CFrame.lookAt(
-                    targetPosition,
-                    targetPosition
-                    + (
-                        direction.Magnitude > 0.01
-                        and direction.Unit
-                        or Vector3.new(
-                            0,
-                            0,
-                            -1
-                        )
-                    )
-                )
+                CFrame.new(targetPosition)
             )
         end)
 
@@ -2047,12 +2027,17 @@ local function ShootMurderer(showNotify)
         return false
     end
 
-    local targetPosition =
-        GetPredictedTargetPosition(
-            murderer
-        )
+    local targetPart =
+        murderer.Character:
+            FindFirstChild(
+                "Head"
+            )
+        or murderer.Character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
 
-    if not targetPosition then
+    if not targetPart then
         GuidedShotBusy = false
 
         if showNotify then
@@ -2072,7 +2057,7 @@ local function ShootMurderer(showNotify)
     local fired =
         FireGuidedGunShot(
             gun,
-            targetPosition
+            targetPart.Position
         )
 
     if showNotify then
