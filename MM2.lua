@@ -1930,7 +1930,7 @@ local function GetPredictedTargetPosition(
     return predicted
 end
 
-local function GetGuidedTargetPosition(
+local function GetGuidedTargetPart(
     target
 )
     if not target
@@ -1947,19 +1947,12 @@ local function GetGuidedTargetPosition(
                 "Humanoid"
             )
 
-    local root =
-        character:
-            FindFirstChild(
-                "HumanoidRootPart"
-            )
-
     if not humanoid
-    or humanoid.Health <= 0
-    or not root then
+    or humanoid.Health <= 0 then
         return nil
     end
 
-    local targetPart =
+    return
         character:
             FindFirstChild(
                 "UpperTorso"
@@ -1968,311 +1961,86 @@ local function GetGuidedTargetPosition(
             FindFirstChild(
                 "Torso"
             )
-        or root
-
-    local basePosition =
-        targetPart.Position
-
-    local state =
-        TargetMotionHistory[
-            target
-        ]
-
-    local replicatedVelocity =
-        root.AssemblyLinearVelocity
-
-    local measuredVelocity =
-        state
-        and state.Velocity
-        or replicatedVelocity
-
-    local measuredHorizontal =
-        Vector3.new(
-            measuredVelocity.X,
-            0,
-            measuredVelocity.Z
-        )
-
-    local replicatedHorizontal =
-        Vector3.new(
-            replicatedVelocity.X,
-            0,
-            replicatedVelocity.Z
-        )
-
-    local horizontalVelocity =
-        replicatedHorizontal:
-            Lerp(
-                measuredHorizontal,
-                0.78
+        or character:
+            FindFirstChild(
+                "HumanoidRootPart"
             )
-
-    local moveDirection =
-        humanoid.MoveDirection
-
-    local walkSpeed =
-        math.max(
-            tonumber(
-                humanoid.WalkSpeed
-            ) or 16,
-            8
-        )
-
-    if moveDirection.Magnitude
-        > 0.05 then
-        local forward =
-            moveDirection.Unit
-
-        local projectedSpeed =
-            horizontalVelocity:
-                Dot(
-                    forward
-                )
-
-        projectedSpeed =
-            math.max(
-                projectedSpeed,
-                walkSpeed * 0.92
-            )
-
-        projectedSpeed =
-            math.clamp(
-                projectedSpeed,
-                6,
-                55
-            )
-
-        local forwardVelocity =
-            forward
-            * projectedSpeed
-
-        horizontalVelocity =
-            horizontalVelocity:
-                Lerp(
-                    forwardVelocity,
-                    0.72
-                )
-
-        if horizontalVelocity:
-            Dot(
-                forward
-            ) < 0 then
-            horizontalVelocity =
-                forwardVelocity
-        end
-    end
-
-    horizontalVelocity =
-        ClampVectorMagnitude(
-            horizontalVelocity,
-            58
-        )
-
-    local origin =
-        GetShotOrigin()
-
-    local distance =
-        (
-            basePosition
-            - origin
-        ).Magnitude
-
-    local ping =
-        GetPredictionPing()
-
-    local speed =
-        horizontalVelocity.Magnitude
-
-    local guidedDropDelay =
-        0.34
-
-    local networkDelay =
-        ping
-        * 1.65
-
-    local distanceDelay =
-        math.clamp(
-            distance
-            / 1900,
-            0,
-            0.10
-        )
-
-    local movementDelay =
-        math.clamp(
-            speed
-            / 260,
-            0,
-            0.08
-        )
-
-    local leadTime =
-        guidedDropDelay
-        + networkDelay
-        + distanceDelay
-        + movementDelay
-
-    leadTime =
-        math.clamp(
-            leadTime,
-            0.34,
-            0.68
-        )
-
-    local horizontalLead =
-        horizontalVelocity
-        * leadTime
-
-    if moveDirection.Magnitude
-        > 0.05
-    and speed > 2 then
-        local forward =
-            moveDirection.Unit
-
-        local minimumForwardLead =
-            math.clamp(
-                math.max(
-                    walkSpeed,
-                    speed
-                )
-                * 0.36,
-                5.2,
-                12
-            )
-
-        local forwardAmount =
-            horizontalLead:
-                Dot(
-                    forward
-                )
-
-        if forwardAmount
-            < minimumForwardLead then
-            horizontalLead +=
-                forward
-                * (
-                    minimumForwardLead
-                    - forwardAmount
-                )
-        end
-    end
-
-    horizontalLead =
-        ClampVectorMagnitude(
-            horizontalLead,
-            19
-        )
-
-    local humanoidState =
-        humanoid:
-            GetState()
-
-    local airborne =
-        humanoid.FloorMaterial
-            == Enum.Material.Air
-        or humanoidState
-            == Enum.HumanoidStateType.Jumping
-        or humanoidState
-            == Enum.HumanoidStateType.Freefall
-
-    local verticalLead = 0
-
-    if airborne then
-        local verticalVelocity =
-            math.clamp(
-                measuredVelocity.Y,
-                -70,
-                70
-            )
-
-        local verticalTime =
-            math.min(
-                leadTime,
-                0.24
-            )
-
-        verticalLead =
-            verticalVelocity
-            * verticalTime
-
-        verticalLead -=
-            0.5
-            * workspace.Gravity
-            * verticalTime
-            * verticalTime
-
-        verticalLead =
-            math.clamp(
-                verticalLead,
-                -6,
-                6
-            )
-    end
-
-    local predicted =
-        basePosition
-        + horizontalLead
-        + Vector3.new(
-            0,
-            verticalLead,
-            0
-        )
-
-    local horizontalOffset =
-        Vector3.new(
-            predicted.X
-                - basePosition.X,
-            0,
-            predicted.Z
-                - basePosition.Z
-        )
-
-    if moveDirection.Magnitude
-        > 0.05
-    and horizontalOffset.Magnitude
-        > 0.01 then
-        local forward =
-            moveDirection.Unit
-
-        if horizontalOffset:
-            Dot(
-                forward
-            ) < 0 then
-            predicted =
-                basePosition
-                + forward
-                * math.clamp(
-                    walkSpeed
-                    * 0.40,
-                    5.5,
-                    12
-                )
-                + Vector3.new(
-                    0,
-                    verticalLead,
-                    0
-                )
-        end
-    end
-
-    return predicted
 end
 
-local function FireGuidedGunShot(gun, targetPosition)
+local function GetGuidedTargetPosition(
+    target
+)
+    local targetPart =
+        GetGuidedTargetPart(
+            target
+        )
+
+    if not targetPart
+    or not targetPart.Parent then
+        return nil
+    end
+
+    return targetPart.Position
+end
+
+local function FireGuidedGunShot(
+    gun,
+    target
+)
     local fired = false
 
-    local shootRemote = gun:FindFirstChild("Shoot")
-        or gun:FindFirstChild("Shoot", true)
-
-    if shootRemote and shootRemote:IsA("RemoteEvent") then
-        local ok = pcall(function()
-            shootRemote:FireServer(
-                CFrame.new(
-                    targetPosition + Vector3.new(0, 0.5, 0)
-                ),
-                CFrame.new(targetPosition)
+    local function liveTorsoPosition()
+        local position =
+            GetGuidedTargetPosition(
+                target
             )
-        end)
+
+        if position then
+            return position
+        end
+
+        return nil
+    end
+
+    local shootRemote =
+        gun:
+            FindFirstChild(
+                "Shoot"
+            )
+        or gun:
+            FindFirstChild(
+                "Shoot",
+                true
+            )
+
+    if shootRemote
+    and shootRemote:IsA(
+        "RemoteEvent"
+    ) then
+        local ok =
+            pcall(function()
+                local targetPosition =
+                    liveTorsoPosition()
+
+                if not targetPosition then
+                    return
+                end
+
+                shootRemote:
+                    FireServer(
+                        CFrame.new(
+                            targetPosition
+                            + Vector3.new(
+                                0,
+                                0.35,
+                                0
+                            )
+                        ),
+                        CFrame.new(
+                            targetPosition
+                        )
+                    )
+            end)
 
         if ok then
             fired = true
@@ -2280,29 +2048,62 @@ local function FireGuidedGunShot(gun, targetPosition)
     end
 
     pcall(function()
-        local knifeLocal = gun:FindFirstChild("KnifeLocal")
-            or gun:FindFirstChild("KnifeLocal", true)
+        local knifeLocal =
+            gun:
+                FindFirstChild(
+                    "KnifeLocal"
+                )
+            or gun:
+                FindFirstChild(
+                    "KnifeLocal",
+                    true
+                )
 
-        local createBeam = knifeLocal and (
-            knifeLocal:FindFirstChild("CreateBeam")
-            or knifeLocal:FindFirstChild("CreateBeam", true)
-        )
-
-        local remoteFunction = createBeam and (
-            createBeam:FindFirstChild("RemoteFunction")
-            or createBeam:FindFirstChildWhichIsA(
-                "RemoteFunction",
-                true
+        local createBeam =
+            knifeLocal
+            and (
+                knifeLocal:
+                    FindFirstChild(
+                        "CreateBeam"
+                    )
+                or knifeLocal:
+                    FindFirstChild(
+                        "CreateBeam",
+                        true
+                    )
             )
-        )
+
+        local remoteFunction =
+            createBeam
+            and (
+                createBeam:
+                    FindFirstChild(
+                        "RemoteFunction"
+                    )
+                or createBeam:
+                    FindFirstChildWhichIsA(
+                        "RemoteFunction",
+                        true
+                    )
+            )
 
         if remoteFunction
-        and remoteFunction:IsA("RemoteFunction") then
-            remoteFunction:InvokeServer(
-                1,
-                targetPosition,
-                "AH2"
-            )
+        and remoteFunction:IsA(
+            "RemoteFunction"
+        ) then
+            local targetPosition =
+                liveTorsoPosition()
+
+            if not targetPosition then
+                return
+            end
+
+            remoteFunction:
+                InvokeServer(
+                    1,
+                    targetPosition,
+                    "AH2"
+                )
 
             fired = true
         end
@@ -2356,12 +2157,12 @@ local function ShootMurderer(showNotify)
         return false
     end
 
-    local targetPosition =
-        GetGuidedTargetPosition(
+    local targetPart =
+        GetGuidedTargetPart(
             murderer
         )
 
-    if not targetPosition then
+    if not targetPart then
         GuidedShotBusy = false
 
         if showNotify then
@@ -2381,7 +2182,7 @@ local function ShootMurderer(showNotify)
     local fired =
         FireGuidedGunShot(
             gun,
-            targetPosition
+            murderer
         )
 
     if showNotify then
