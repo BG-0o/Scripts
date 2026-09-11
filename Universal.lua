@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-11-mm2-autofarm-coinpass-v4"
+ToxUpdateVersion = "2026-09-11-mm2-autofarm-roundonly-tween-v5"
 
 
 function ClearToxTable(target)
@@ -7265,21 +7265,21 @@ if getgenv().ShowToxUpdateGui then
         ToxUpdateVersion,
         {
             ADDED = {
-                "Auto Farm do MM2 agora usa movimento de passagem rente a moeda.",
-                "Auto Win do MM2 so executa a rotina quando a mochila estiver cheia."
+                "Auto Farm do MM2 agora valida partida ativa antes de iniciar."
             },
             FIXED = {
-                "Auto Farm do MM2 so trabalha enquanto o personagem estiver vivo.",
-                "Auto Farm do MM2 nao usa mais queda/subida do ceu para buscar moedas.",
-                "Auto Farm do MM2 filtra melhor moedas reais do CoinContainer.",
-                "Auto Farm do MM2 nao dispara Auto Win ou Reset por contagem falsa sem mochila cheia."
+                "Auto Farm do MM2 nao funciona mais no lobby.",
+                "Auto Farm do MM2 nao usa mais fallback no workspace inteiro para evitar moeda falsa ou direcao aleatoria.",
+                "Auto Farm do MM2 para corretamente quando nao existe CoinContainer valido.",
+                "Auto Win e Reset On Full continuam executando somente quando a mochila estiver cheia."
             },
             CHANGED = {
-                "Auto Farm do MM2 prioriza moeda mais proxima e escolhe uma aleatoria a cada 10 coletas.",
-                "Coleta do MM2 ficou mais proxima da moeda usando touch repetido e passagem curta."
+                "Auto Farm do MM2 voltou para tween direto na moeda real do CoinContainer.",
+                "Auto Farm do MM2 prioriza a moeda mais proxima e usa moeda aleatoria a cada 10 coletas.",
+                "Coleta do MM2 ficou mais simples para evitar subir para o ceu ou ficar preso parado."
             },
             REMOVED = {
-                "Metodo antigo do Auto Farm que prendia ou jogava o personagem para cima."
+                "Removido comportamento de buscar moedas fora da partida/lobby."
             }
         }
     )
