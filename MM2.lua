@@ -81,6 +81,8 @@ for _, child in ipairs(
 end
 
 Settings.MM2SilentAimKey = Settings.MM2SilentAimKey or Enum.KeyCode.E
+Settings.MM2SilentAimAutoV2 = Settings.MM2SilentAimAutoV2 == true or Settings.MM2SilentAimAuto == true
+Settings.MM2SilentAimAuto = false
 Settings.MM2KillAllKey = Settings.MM2KillAllKey or Enum.KeyCode.K
 Settings.MM2KillAllAutoV2 = Settings.MM2KillAllAutoV2 == true or Settings.MM2KillAllAuto == true
 Settings.MM2KillAllAuto = false
@@ -4963,14 +4965,18 @@ CreateMM2Section(
 )
 
 MM2AutoRuntime = {
+    SilentAim = Settings.MM2SilentAimAutoV2 == true,
     KillAll = Settings.MM2KillAllAutoV2 == true,
     Shoot = Settings.MM2ShootMurderAutoV2 == true,
     GrabGun = Settings.MM2GrabGunAutoV2 == true
 }
 
-CreateKeybindButton("Silent Aim", GamePage, Settings.MM2SilentAimKey, function(key)
+CreateKeybindToggle("Silent Aim", GamePage, Settings.MM2SilentAimKey, MM2AutoRuntime.SilentAim, function(key)
     Settings.MM2SilentAimKey = key
-end)
+end, function(enabled)
+    MM2AutoRuntime.SilentAim = enabled == true
+    Settings.MM2SilentAimAutoV2 = MM2AutoRuntime.SilentAim
+end, "MM2SilentAimAutoV2")
 
 CreateKeybindToggle("Kill All", GamePage, Settings.MM2KillAllKey, MM2AutoRuntime.KillAll, function(key)
     Settings.MM2KillAllKey = key
@@ -5545,6 +5551,7 @@ CreateButton(
 
 
 AutoKnifeLastAttempt = 0
+AutoSilentAimLastAttempt = 0
 AutoShootLastAttempt = 0
 AutoGrabAttemptedDrops = setmetatable({}, {__mode = "k"})
 
@@ -5571,6 +5578,39 @@ task.spawn(function()
             task.spawn(
                 KillAll
             )
+        end
+
+        if MM2AutoRuntime.SilentAim
+        and Settings.MM2SilentAimAutoV2
+        and not Settings.MM2AutoFarmV2
+        and gun
+        and alive
+        and not ActionBusy
+        and not SilentAimBusy
+        and gun.Enabled ~= false then
+            local murderer =
+                FindGuidedMurderer()
+
+            local murderHumanoid =
+                murderer
+                and murderer.Character
+                and murderer.Character:
+                    FindFirstChildOfClass(
+                        "Humanoid"
+                    )
+
+            if murderer
+            and murderHumanoid
+            and murderHumanoid.Health > 0
+            and os.clock() - AutoSilentAimLastAttempt
+                >= 0.08 then
+                AutoSilentAimLastAttempt =
+                    os.clock()
+
+                task.spawn(
+                    SilentAimShot
+                )
+            end
         end
 
         if MM2AutoRuntime.Shoot
@@ -5697,6 +5737,8 @@ getgenv().ToxMM2Cleanup = function()
     Settings.MM2AutoFarm = false
     Settings.MM2AutoFarmV2 = false
     Settings.MM2RoleESP = false
+    Settings.MM2SilentAimAuto = false
+    Settings.MM2SilentAimAutoV2 = false
     Settings.MM2KillAllAuto = false
     Settings.MM2KillAllAutoV2 = false
     Settings.MM2ShootMurderAuto = false
@@ -5704,6 +5746,7 @@ getgenv().ToxMM2Cleanup = function()
     Settings.MM2GrabGunAuto = false
     Settings.MM2GrabGunAutoV2 = false
 
+    MM2AutoRuntime.SilentAim = false
     MM2AutoRuntime.KillAll = false
     MM2AutoRuntime.Shoot = false
     MM2AutoRuntime.GrabGun = false
@@ -5711,6 +5754,7 @@ getgenv().ToxMM2Cleanup = function()
     GuidedShotBusy = false
     SilentAimBusy = false
     ActionBusy = false
+    AutoSilentAimLastAttempt = 0
     AutoShootLastAttempt = 0
     ClearToxTable(KnifeTargetIds)
 
@@ -5767,6 +5811,7 @@ getgenv().ToxMM2Cleanup = function()
         getgenv().SyncToggleVisuals("MM2AutoFarmV2", false)
         getgenv().SyncToggleVisuals("MM2RoleESP", false)
         getgenv().SyncToggleVisuals("MM2GunESP", Settings.MM2GunESP)
+        getgenv().SyncToggleVisuals("MM2SilentAimAutoV2", false)
         getgenv().SyncToggleVisuals("MM2KillAllAutoV2", false)
         getgenv().SyncToggleVisuals("MM2ShootMurderAutoV2", false)
         getgenv().SyncToggleVisuals("MM2GrabGunAutoV2", false)
