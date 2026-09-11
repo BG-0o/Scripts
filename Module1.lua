@@ -2131,7 +2131,25 @@ getgenv().MakeResizable =
         local startWidth = 0
         local startHeight = 0
 
+        local function isFrameMinimized()
+            if frame == getgenv().Main
+            and getgenv().ToxMainMinimized == true then
+                return true
+            end
+
+            if frame:FindFirstChild("ToxSubGuiMinimize")
+            and frame.AbsoluteSize.Y <= 44 then
+                return true
+            end
+
+            return false
+        end
+
         local function saveSize()
+            if isFrameMinimized() then
+                return
+            end
+
             local currentSize =
                 frame.AbsoluteSize
 
@@ -2188,6 +2206,11 @@ getgenv().MakeResizable =
                     return
                 end
 
+                if isFrameMinimized() then
+                    resizing = false
+                    return
+                end
+
                 resizing = true
                 dragStart =
                     input.Position
@@ -2229,6 +2252,11 @@ getgenv().MakeResizable =
                     or input
                         ~= resizeInput
                     or not dragStart then
+                        return
+                    end
+
+                    if isFrameMinimized() then
+                        resizing = false
                         return
                     end
 
@@ -2789,10 +2817,160 @@ getgenv().CreateTab = function(Name, Page)
 	return Button
 end
 
+local ToxTabReloadOverlay = nil
+local ToxTabReloadMenu = nil
+
+local function CloseToxTabReloadMenu()
+    if ToxTabReloadMenu then
+        ToxTabReloadMenu:Destroy()
+        ToxTabReloadMenu = nil
+    end
+
+    if ToxTabReloadOverlay then
+        ToxTabReloadOverlay:Destroy()
+        ToxTabReloadOverlay = nil
+    end
+end
+
+getgenv().ReloadToxGameModule = function(moduleInfo)
+    moduleInfo = moduleInfo or getgenv().CurrentGameModule
+
+    if typeof(moduleInfo) ~= "table"
+    or not moduleInfo.Url then
+        CustomNotify("Module reload unavailable", Color3.fromRGB(255, 120, 120), 4)
+        return false
+    end
+
+    if getgenv().ToxGameModuleReloading then
+        CustomNotify("Module reload already running", Color3.fromRGB(255, 180, 70), 3)
+        return false
+    end
+
+    getgenv().ToxGameModuleReloading = true
+
+    task.spawn(function()
+        local shortName = tostring(moduleInfo.ShortName or "Game")
+        local url = tostring(moduleInfo.Url)
+        local ok, err = pcall(function()
+            local cleanupName = "Tox" .. shortName .. "Cleanup"
+
+            if getgenv()[cleanupName] then
+                pcall(getgenv()[cleanupName])
+            end
+
+            getgenv().ToxGameModuleLoadedPage = nil
+            getgenv().ToxGameModuleLoadedUrl = nil
+            getgenv().ToxGameModuleLoadingPage = nil
+            getgenv().ToxGameModuleLoadingUrl = nil
+
+            local source = game:HttpGet(url)
+            local chunk, compileErr = loadstring(source)
+
+            if not chunk then
+                error(tostring(compileErr or "compile error"))
+            end
+
+            local runOk, runErr = pcall(chunk)
+
+            if not runOk then
+                error(tostring(runErr))
+            end
+
+            getgenv().ToxGameModuleLoadedPage = getgenv().GamePage
+            getgenv().ToxGameModuleLoadedUrl = url
+        end)
+
+        getgenv().ToxGameModuleReloading = false
+
+        if ok then
+            CustomNotify("Reloaded " .. shortName, Color3.fromRGB(100, 255, 130), 4)
+        else
+            CustomNotify(shortName .. " reload failed", Color3.fromRGB(255, 100, 100), 5)
+            warn("[ToxHub Reload Error]: " .. tostring(err))
+        end
+    end)
+
+    return true
+end
+
+local function ShowToxTabReloadMenu(tabButton, moduleInfo)
+    CloseToxTabReloadMenu()
+
+    if not tabButton
+    or not tabButton.Parent
+    or typeof(moduleInfo) ~= "table" then
+        return
+    end
+
+    local shortName = tostring(moduleInfo.ShortName or "Module")
+    local absolute = tabButton.AbsolutePosition
+    local size = tabButton.AbsoluteSize
+
+    ToxTabReloadOverlay = Instance.new("TextButton")
+    ToxTabReloadOverlay.Name = "ToxTabReloadOverlay"
+    ToxTabReloadOverlay.Size = UDim2.new(1, 0, 1, 0)
+    ToxTabReloadOverlay.Position = UDim2.new(0, 0, 0, 0)
+    ToxTabReloadOverlay.BackgroundTransparency = 1
+    ToxTabReloadOverlay.Text = ""
+    ToxTabReloadOverlay.AutoButtonColor = false
+    ToxTabReloadOverlay.ZIndex = 198
+    ToxTabReloadOverlay.Parent = Gui
+
+    ToxTabReloadMenu = Instance.new("Frame")
+    ToxTabReloadMenu.Name = "ToxTabReloadMenu"
+    ToxTabReloadMenu.Size = UDim2.new(0, 132, 0, 36)
+    ToxTabReloadMenu.Position = UDim2.new(0, absolute.X, 0, absolute.Y + size.Y + 4)
+    ToxTabReloadMenu.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+    ToxTabReloadMenu.BorderSizePixel = 0
+    ToxTabReloadMenu.ZIndex = 200
+    ToxTabReloadMenu.Parent = Gui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 5)
+    corner.Parent = ToxTabReloadMenu
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = MAIN_COLOR
+    stroke.Thickness = 1
+    stroke.Transparency = 0.15
+    stroke.Parent = ToxTabReloadMenu
+
+    local reload = Instance.new("TextButton")
+    reload.Size = UDim2.new(1, -8, 1, -8)
+    reload.Position = UDim2.new(0, 4, 0, 4)
+    reload.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+    reload.BorderSizePixel = 0
+    reload.Text = "Reload " .. shortName
+    reload.TextColor3 = Color3.fromRGB(245, 245, 245)
+    reload.Font = Enum.Font.GothamBold
+    reload.TextSize = 11
+    reload.AutoButtonColor = false
+    reload.ZIndex = 201
+    reload.Parent = ToxTabReloadMenu
+
+    local reloadCorner = Instance.new("UICorner")
+    reloadCorner.CornerRadius = UDim.new(0, 4)
+    reloadCorner.Parent = reload
+
+    ToxTabReloadOverlay.MouseButton1Click:Connect(CloseToxTabReloadMenu)
+    ToxTabReloadOverlay.MouseButton2Click:Connect(CloseToxTabReloadMenu)
+
+    reload.MouseButton1Click:Connect(function()
+        CloseToxTabReloadMenu()
+        getgenv().ReloadToxGameModule(moduleInfo)
+    end)
+end
+
 local GameTab = nil
 
 if GamePage and DetectedGameModule then
     GameTab = CreateTab(DetectedGameModule.ShortName, GamePage)
+
+    if GameTab then
+        GameTab.MouseButton2Click:Connect(function()
+            ShowToxTabReloadMenu(GameTab, DetectedGameModule)
+        end)
+    end
 end
 
 local CombatTab = CreateTab("COMBAT", CombatPage)
@@ -3161,6 +3339,87 @@ end
 
 CreateToxInlineSearch()
 
+local function NormalizeToxChanges(changes)
+    local categories = {
+        ADDED = {},
+        FIXED = {},
+        CHANGED = {},
+        REMOVED = {}
+    }
+
+    if typeof(changes) ~= "table" then
+        return categories
+    end
+
+    local keyMap = {
+        Added = "ADDED",
+        ADDED = "ADDED",
+        added = "ADDED",
+        Fixed = "FIXED",
+        FIXED = "FIXED",
+        fixed = "FIXED",
+        Changed = "CHANGED",
+        CHANGED = "CHANGED",
+        changed = "CHANGED",
+        Removed = "REMOVED",
+        REMOVED = "REMOVED",
+        removed = "REMOVED"
+    }
+
+    local hasNamed = false
+
+    for key, value in pairs(changes) do
+        local mapped = keyMap[key]
+
+        if mapped then
+            hasNamed = true
+
+            if typeof(value) == "table" then
+                for _, item in ipairs(value) do
+                    table.insert(categories[mapped], tostring(item))
+                end
+            elseif value ~= nil then
+                table.insert(categories[mapped], tostring(value))
+            end
+        end
+    end
+
+    if not hasNamed then
+        for _, item in ipairs(changes) do
+            table.insert(categories.CHANGED, tostring(item))
+        end
+    end
+
+    return categories
+end
+
+local function AddToxChangeText(parent, text, layoutOrder, isHeader)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -4, 0, isHeader and 26 or 34)
+    label.BackgroundColor3 = isHeader and MAIN_COLOR or Color3.fromRGB(18, 18, 28)
+    label.BorderSizePixel = 0
+    label.Text = tostring(text)
+    label.TextColor3 = Color3.fromRGB(245, 245, 245)
+    label.Font = isHeader and Enum.Font.GothamBold or Enum.Font.Gotham
+    label.TextSize = isHeader and 12 or 11
+    label.TextWrapped = true
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.LayoutOrder = layoutOrder
+    label.Parent = parent
+
+    local padding = Instance.new("UIPadding")
+    padding.PaddingLeft = UDim.new(0, 8)
+    padding.PaddingRight = UDim.new(0, 8)
+    padding.Parent = label
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = label
+
+    return label
+end
+
 getgenv().ShowToxUpdateGui = function(version, changes)
     version = tostring(version or "")
 
@@ -3177,8 +3436,8 @@ getgenv().ShowToxUpdateGui = function(version, changes)
 
     local frame = Instance.new("Frame")
     frame.Name = "ToxUpdatedFrame"
-    frame.Size = UDim2.new(0, 390, 0, 330)
-    frame.Position = UDim2.new(0.5, -195, 0.5, -165)
+    frame.Size = UDim2.new(0, 410, 0, 350)
+    frame.Position = UDim2.new(0.5, -205, 0.5, -175)
     frame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
     frame.BorderSizePixel = 0
     frame.Active = true
@@ -3245,28 +3504,28 @@ getgenv().ShowToxUpdateGui = function(version, changes)
         scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 8)
     end)
 
-    for _, text in ipairs(changes or {}) do
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, -4, 0, 34)
-        label.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
-        label.BorderSizePixel = 0
-        label.Text = "• " .. tostring(text)
-        label.TextColor3 = Color3.fromRGB(235, 235, 245)
-        label.Font = Enum.Font.Gotham
-        label.TextSize = 11
-        label.TextWrapped = true
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.TextYAlignment = Enum.TextYAlignment.Center
-        label.Parent = scroll
+    local categories = NormalizeToxChanges(changes)
+    local order = 0
+    local names = {"ADDED", "FIXED", "CHANGED", "REMOVED"}
 
-        local padding = Instance.new("UIPadding")
-        padding.PaddingLeft = UDim.new(0, 8)
-        padding.PaddingRight = UDim.new(0, 8)
-        padding.Parent = label
+    for _, category in ipairs(names) do
+        local list = categories[category]
 
-        local labelCorner = Instance.new("UICorner")
-        labelCorner.CornerRadius = UDim.new(0, 4)
-        labelCorner.Parent = label
+        if typeof(list) == "table"
+        and #list > 0 then
+            order += 1
+            AddToxChangeText(scroll, category, order, true)
+
+            for _, text in ipairs(list) do
+                order += 1
+                AddToxChangeText(scroll, "• " .. tostring(text), order, false)
+            end
+        end
+    end
+
+    if order == 0 then
+        AddToxChangeText(scroll, "CHANGED", 1, true)
+        AddToxChangeText(scroll, "• Update completed", 2, false)
     end
 
     local ok = Instance.new("TextButton")
