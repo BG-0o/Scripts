@@ -70,10 +70,28 @@ getgenv().GameModuleRegistry = {
 
 getgenv().CurrentGameModule = getgenv().GameModuleRegistry[game.PlaceId]
 getgenv().ToxTeleportBypassUntil = 0
-getgenv().AllowToxTeleport = function(seconds)
+getgenv().ToxTeleportWhitelistUntil = 0
+getgenv().ToxTeleportWhitelistReason = nil
+getgenv().AllowToxTeleport = function(seconds, reason)
+    local untilTime = tick() + (tonumber(seconds) or 1)
+
     getgenv().ToxTeleportBypassUntil = math.max(
         tonumber(getgenv().ToxTeleportBypassUntil) or 0,
-        tick() + (tonumber(seconds) or 1)
+        untilTime
+    )
+
+    getgenv().ToxTeleportWhitelistUntil = math.max(
+        tonumber(getgenv().ToxTeleportWhitelistUntil) or 0,
+        untilTime
+    )
+
+    getgenv().ToxTeleportWhitelistReason = tostring(reason or "ToxHub")
+end
+
+getgenv().ToxIsToxTeleportAllowed = function()
+    return tick() < math.max(
+        tonumber(getgenv().ToxTeleportBypassUntil) or 0,
+        tonumber(getgenv().ToxTeleportWhitelistUntil) or 0
     )
 end
 
@@ -146,6 +164,7 @@ getgenv().Settings = {
     Fullbright = false,
     TracerOrigin = "DOWN",
     EspMaxDistance = 1000,
+    EspMaxDistanceByPlace = {},
     Chams = false,
 	EspColorName = "White",
 	EspColor = Color3.fromRGB(255, 255, 255),
@@ -184,7 +203,9 @@ getgenv().Settings = {
     ADMINKillAll = false,
     ADMINRocketTarget = "",
     ADMINRocketAll = false,
-    ADMINKickTarget = ""
+    ADMINKickTarget = "",
+
+    ToxLastChangelogVersion = ""
 }
 
 local PersistedSettingKeys = {}
@@ -196,6 +217,7 @@ end
 getgenv().SavedIDs = {}
 getgenv().SavedJoinGames = {}
 getgenv().SavedWaypoints = {}
+getgenv().SavedWaypointsByPlace = {}
 getgenv().UIPositions = {}
 getgenv().GameSharedSettings = {}
 getgenv().GameSpecificSettings = {}
@@ -983,6 +1005,17 @@ getgenv().AutoSaveConfiguration = function()
         ] = BuildCurrentGameSettingsSnapshot()
     end
 
+    local placeKey = tostring(game.PlaceId)
+
+    getgenv().SavedWaypointsByPlace =
+        typeof(getgenv().SavedWaypointsByPlace) == "table"
+        and getgenv().SavedWaypointsByPlace
+        or {}
+
+    getgenv().SavedWaypointsByPlace[placeKey] =
+        getgenv().SavedWaypoints
+        or {}
+
     local guiKeyName = "NONE"
 
     if Settings.GUIKeybind
@@ -999,6 +1032,9 @@ getgenv().AutoSaveConfiguration = function()
         ),
         SavedWaypoints = SerializeConfigValue(
             getgenv().SavedWaypoints
+        ),
+        SavedWaypointsByPlace = SerializeConfigValue(
+            getgenv().SavedWaypointsByPlace
         ),
         UIPositions = SerializeConfigValue(
             getgenv().UIPositions
@@ -1104,14 +1140,37 @@ local function LoadConfiguration()
 
 
 
+        local currentPlaceKey = tostring(game.PlaceId)
+
+        if data.SavedWaypointsByPlace ~= nil then
+            local value = DeserializeConfigValue(
+                data.SavedWaypointsByPlace
+            )
+
+            if typeof(value) == "table" then
+                getgenv().SavedWaypointsByPlace = value
+            end
+        end
+
         if data.SavedWaypoints ~= nil then
             local value = DeserializeConfigValue(
                 data.SavedWaypoints
             )
 
             if typeof(value) == "table" then
-                getgenv().SavedWaypoints = value
+                if typeof(getgenv().SavedWaypointsByPlace) ~= "table" then
+                    getgenv().SavedWaypointsByPlace = {}
+                end
+
+                if typeof(getgenv().SavedWaypointsByPlace[currentPlaceKey]) ~= "table" then
+                    getgenv().SavedWaypointsByPlace[currentPlaceKey] = value
+                end
             end
+        end
+
+        if typeof(getgenv().SavedWaypointsByPlace) == "table"
+        and typeof(getgenv().SavedWaypointsByPlace[currentPlaceKey]) == "table" then
+            getgenv().SavedWaypoints = getgenv().SavedWaypointsByPlace[currentPlaceKey]
         end
 
         if data.UIPositions ~= nil then
@@ -1127,6 +1186,40 @@ local function LoadConfiguration()
 end
 
 LoadConfiguration()
+
+getgenv().SavedWaypointsByPlace =
+    typeof(getgenv().SavedWaypointsByPlace) == "table"
+    and getgenv().SavedWaypointsByPlace
+    or {}
+
+local CurrentWaypointPlaceKey = tostring(game.PlaceId)
+
+if typeof(getgenv().SavedWaypointsByPlace[CurrentWaypointPlaceKey]) ~= "table" then
+    getgenv().SavedWaypointsByPlace[CurrentWaypointPlaceKey] =
+        typeof(getgenv().SavedWaypoints) == "table"
+        and getgenv().SavedWaypoints
+        or {}
+end
+
+getgenv().SavedWaypoints =
+    getgenv().SavedWaypointsByPlace[CurrentWaypointPlaceKey]
+
+getgenv().GetCurrentToxWaypoints = function()
+    local placeKey = tostring(game.PlaceId)
+
+    getgenv().SavedWaypointsByPlace =
+        typeof(getgenv().SavedWaypointsByPlace) == "table"
+        and getgenv().SavedWaypointsByPlace
+        or {}
+
+    if typeof(getgenv().SavedWaypointsByPlace[placeKey]) ~= "table" then
+        getgenv().SavedWaypointsByPlace[placeKey] = {}
+    end
+
+    getgenv().SavedWaypoints = getgenv().SavedWaypointsByPlace[placeKey]
+
+    return getgenv().SavedWaypoints
+end
 
 if typeof(Settings.GUIScales) ~= "table" then
     Settings.GUIScales = {}
@@ -2647,10 +2740,21 @@ getgenv().CreateTab = function(Name, Page)
 	Button.AutoButtonColor = false
 	Button.Parent = Tabs
 
+    getgenv().ToxPageButtonsByPage = getgenv().ToxPageButtonsByPage or {}
+    getgenv().ToxPageNamesByPage = getgenv().ToxPageNamesByPage or {}
+    getgenv().ToxPageButtonsByPage[Page] = Button
+    getgenv().ToxPageNamesByPage[Page] = Name
+
 	local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 4) Corner.Parent = Button
 
 	Button.MouseButton1Click:Connect(function()
 		if Destroyed then return end
+
+        if getgenv().ToxOpenPage then
+            getgenv().ToxOpenPage(Page)
+            return
+        end
+
 		for _, OtherPage in pairs(Pages) do OtherPage.Visible = false end
 		Page.Visible = true
 		getgenv().CurrentPage = Page
@@ -2688,6 +2792,479 @@ getgenv().GameTab = GameTab
 CombatPage.Visible = true
 CombatTab.BackgroundColor3 = MAIN_COLOR
 CombatTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+
+getgenv().ToxPageButtonsByPage = getgenv().ToxPageButtonsByPage or {}
+getgenv().ToxPageNamesByPage = getgenv().ToxPageNamesByPage or {}
+getgenv().ToxSearchControls = {}
+
+local ToxSearchAliasMap = {
+    tp = {"teleport", "return", "ctrl click", "no tp", "spawn", "map", "island", "waypoint"},
+    teleport = {"teleport", "return", "ctrl click", "no tp", "spawn", "map", "island", "waypoint"},
+    fps = {"fps booster", "performance", "restore", "texture"},
+    perf = {"fps booster", "performance", "restore", "texture"},
+    gun = {"gun esp", "grab gun", "shoot murderer"},
+    arma = {"gun esp", "grab gun", "shoot murderer"},
+    target = {"target", "murderer", "sheriff", "kill", "fling"},
+    alvo = {"target", "murderer", "sheriff", "kill", "fling"},
+    esp = {"esp", "chams", "tracers", "names", "distance"},
+    fly = {"fly", "air walk", "car fly", "water fly"},
+    noclip = {"noclip", "clip"},
+    config = {"config", "keybind", "gui", "search", "changelog", "compatibility"}
+}
+
+local function GetToxPageName(page)
+    if not page then
+        return ""
+    end
+
+    return getgenv().ToxPageNamesByPage[page]
+        or tostring(page.Name or "")
+end
+
+getgenv().ToxOpenPage = function(page)
+    if not page then
+        return
+    end
+
+    for _, otherPage in pairs(Pages) do
+        otherPage.Visible = false
+    end
+
+    page.Visible = true
+    getgenv().CurrentPage = page
+
+    for _, object in ipairs(Tabs:GetChildren()) do
+        if object:IsA("TextButton") then
+            object.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+            object.TextColor3 = Color3.fromRGB(170, 170, 185)
+        end
+    end
+
+    local tabButton = getgenv().ToxPageButtonsByPage[page]
+
+    if tabButton and tabButton.Parent then
+        tabButton.BackgroundColor3 = MAIN_COLOR
+        tabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+end
+
+getgenv().RegisterToxSearchControl = function(name, page, object, aliases)
+    if typeof(name) ~= "string"
+    or not page
+    or not object then
+        return
+    end
+
+    table.insert(
+        getgenv().ToxSearchControls,
+        {
+            Name = name,
+            Page = page,
+            Object = object,
+            Aliases = aliases or {}
+        }
+    )
+end
+
+local SearchFrame = nil
+local SearchInput = nil
+local SearchScroll = nil
+local SearchLayout = nil
+
+local function HighlightSearchResult(object)
+    if not object
+    or not object:IsA("GuiObject") then
+        return
+    end
+
+    local oldColor = object.BackgroundColor3
+    local oldTransparency = object.BackgroundTransparency
+
+    object.BackgroundColor3 = MAIN_COLOR
+    object.BackgroundTransparency = 0
+
+    task.delay(0.65, function()
+        if object and object.Parent then
+            object.BackgroundColor3 = oldColor
+            object.BackgroundTransparency = oldTransparency
+        end
+    end)
+end
+
+local function ControlMatchesSearch(item, query)
+    local pageName = string.lower(GetToxPageName(item.Page))
+    local haystack = string.lower(tostring(item.Name or "") .. " " .. pageName)
+
+    for _, alias in ipairs(item.Aliases or {}) do
+        haystack ..= " " .. string.lower(tostring(alias))
+    end
+
+    if string.find(haystack, query, 1, true) then
+        return true
+    end
+
+    local mapped = ToxSearchAliasMap[query]
+
+    if mapped then
+        for _, term in ipairs(mapped) do
+            if string.find(haystack, term, 1, true) then
+                return true
+            end
+        end
+    end
+
+    for alias, terms in pairs(ToxSearchAliasMap) do
+        if string.find(alias, query, 1, true) then
+            for _, term in ipairs(terms) do
+                if string.find(haystack, term, 1, true) then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+local function RebuildSearchResults()
+    if not SearchScroll then
+        return
+    end
+
+    for _, child in ipairs(SearchScroll:GetChildren()) do
+        if child:IsA("GuiObject") then
+            child:Destroy()
+        end
+    end
+
+    local query = string.lower(
+        tostring(SearchInput and SearchInput.Text or "")
+            :gsub("^%s+", "")
+            :gsub("%s+$", "")
+    )
+
+    if query == "" then
+        query = " "
+    end
+
+    local shown = 0
+
+    for _, item in ipairs(getgenv().ToxSearchControls or {}) do
+        if item.Object
+        and item.Object.Parent
+        and (query == " " or ControlMatchesSearch(item, query)) then
+            shown += 1
+
+            if shown > 40 then
+                break
+            end
+
+            local result = Instance.new("TextButton")
+            result.Size = UDim2.new(1, -4, 0, 32)
+            result.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+            result.BorderSizePixel = 0
+            result.Text = GetToxPageName(item.Page) .. " • " .. item.Name
+            result.TextColor3 = Color3.fromRGB(245, 245, 245)
+            result.TextSize = 11
+            result.Font = Enum.Font.GothamMedium
+            result.TextXAlignment = Enum.TextXAlignment.Left
+            result.Parent = SearchScroll
+
+            local resultPadding = Instance.new("UIPadding")
+            resultPadding.PaddingLeft = UDim.new(0, 8)
+            resultPadding.Parent = result
+
+            local resultCorner = Instance.new("UICorner")
+            resultCorner.CornerRadius = UDim.new(0, 4)
+            resultCorner.Parent = result
+
+            result.MouseButton1Click:Connect(function()
+                getgenv().ToxOpenPage(item.Page)
+
+                task.defer(function()
+                    if item.Page
+                    and item.Object
+                    and item.Object.Parent then
+                        local offset =
+                            item.Object.AbsolutePosition.Y
+                            - item.Page.AbsolutePosition.Y
+                            + item.Page.CanvasPosition.Y
+                            - 12
+
+                        item.Page.CanvasPosition = Vector2.new(
+                            0,
+                            math.max(0, offset)
+                        )
+
+                        HighlightSearchResult(item.Object)
+                    end
+                end)
+            end)
+        end
+    end
+
+    if shown == 0 then
+        local empty = Instance.new("TextLabel")
+        empty.Size = UDim2.new(1, -4, 0, 32)
+        empty.BackgroundTransparency = 1
+        empty.Text = "No options found"
+        empty.TextColor3 = Color3.fromRGB(170, 170, 185)
+        empty.TextSize = 11
+        empty.Font = Enum.Font.Gotham
+        empty.Parent = SearchScroll
+    end
+end
+
+getgenv().OpenToxSearch = function()
+    if SearchFrame and SearchFrame.Parent then
+        SearchFrame.Visible = not SearchFrame.Visible
+
+        if SearchFrame.Visible then
+            RebuildSearchResults()
+        end
+
+        return
+    end
+
+    SearchFrame = Instance.new("Frame")
+    SearchFrame.Name = "ToxSearchFrame"
+    SearchFrame.Size = UDim2.new(0, 360, 0, 320)
+    SearchFrame.Position = UDim2.new(0.5, -180, 0.5, -160)
+    SearchFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+    SearchFrame.BorderSizePixel = 0
+    SearchFrame.Visible = true
+    SearchFrame.Active = true
+    SearchFrame.ClipsDescendants = true
+    SearchFrame.Parent = Gui
+
+    if getgenv().RegisterToxLinkedSubGui then
+        getgenv().RegisterToxLinkedSubGui("Search", SearchFrame)
+    end
+
+    if getgenv().RegisterToxSubGuiMinimize then
+        getgenv().RegisterToxSubGuiMinimize(SearchFrame, -52)
+    end
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = SearchFrame
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = MAIN_COLOR
+    stroke.Thickness = 2
+    stroke.Parent = SearchFrame
+
+    local topBar = Instance.new("Frame")
+    topBar.Size = UDim2.new(1, 0, 0, 32)
+    topBar.BackgroundColor3 = MAIN_COLOR
+    topBar.BorderSizePixel = 0
+    topBar.Parent = SearchFrame
+
+    MakeDraggable(SearchFrame, topBar)
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -44, 1, 0)
+    title.Position = UDim2.new(0, 10, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "Tox Search"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 13
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = topBar
+
+    local close = Instance.new("TextButton")
+    close.Size = UDim2.new(0, 22, 0, 20)
+    close.Position = UDim2.new(1, -26, 0.5, -10)
+    close.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
+    close.BorderSizePixel = 0
+    close.Text = "X"
+    close.TextColor3 = Color3.fromRGB(220, 220, 230)
+    close.TextSize = 11
+    close.Font = Enum.Font.GothamBold
+    close.Parent = topBar
+
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 4)
+    closeCorner.Parent = close
+
+    close.MouseButton1Click:Connect(function()
+        SearchFrame.Visible = false
+    end)
+
+    SearchInput = Instance.new("TextBox")
+    SearchInput.Size = UDim2.new(1, -16, 0, 30)
+    SearchInput.Position = UDim2.new(0, 8, 0, 40)
+    SearchInput.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+    SearchInput.BorderSizePixel = 0
+    SearchInput.Text = ""
+    SearchInput.PlaceholderText = "Search: tp, fps, gun, target, esp..."
+    SearchInput.TextColor3 = Color3.fromRGB(245, 245, 245)
+    SearchInput.PlaceholderColor3 = Color3.fromRGB(130, 130, 150)
+    SearchInput.Font = Enum.Font.Gotham
+    SearchInput.TextSize = 11
+    SearchInput.ClearTextOnFocus = false
+    SearchInput.Parent = SearchFrame
+
+    local inputCorner = Instance.new("UICorner")
+    inputCorner.CornerRadius = UDim.new(0, 4)
+    inputCorner.Parent = SearchInput
+
+    SearchScroll = Instance.new("ScrollingFrame")
+    SearchScroll.Size = UDim2.new(1, -16, 1, -82)
+    SearchScroll.Position = UDim2.new(0, 8, 0, 76)
+    SearchScroll.BackgroundTransparency = 1
+    SearchScroll.BorderSizePixel = 0
+    SearchScroll.ScrollBarThickness = 3
+    SearchScroll.ScrollBarImageColor3 = MAIN_COLOR
+    SearchScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    SearchScroll.Parent = SearchFrame
+
+    SearchLayout = Instance.new("UIListLayout")
+    SearchLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    SearchLayout.Padding = UDim.new(0, 5)
+    SearchLayout.Parent = SearchScroll
+
+    SearchLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        SearchScroll.CanvasSize = UDim2.new(0, 0, 0, SearchLayout.AbsoluteContentSize.Y + 8)
+    end)
+
+    SearchInput:GetPropertyChangedSignal("Text"):Connect(RebuildSearchResults)
+    RebuildSearchResults()
+end
+
+getgenv().ShowToxUpdateGui = function(version, changes)
+    version = tostring(version or "")
+
+    if version == ""
+    or Settings.ToxLastChangelogVersion == version then
+        return
+    end
+
+    local old = Gui:FindFirstChild("ToxUpdatedFrame")
+
+    if old then
+        old:Destroy()
+    end
+
+    local frame = Instance.new("Frame")
+    frame.Name = "ToxUpdatedFrame"
+    frame.Size = UDim2.new(0, 390, 0, 330)
+    frame.Position = UDim2.new(0.5, -195, 0.5, -165)
+    frame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+    frame.BorderSizePixel = 0
+    frame.Active = true
+    frame.ClipsDescendants = true
+    frame.Parent = Gui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = MAIN_COLOR
+    stroke.Thickness = 2
+    stroke.Parent = frame
+
+    local topBar = Instance.new("Frame")
+    topBar.Size = UDim2.new(1, 0, 0, 38)
+    topBar.BackgroundColor3 = MAIN_COLOR
+    topBar.BorderSizePixel = 0
+    topBar.Parent = frame
+
+    MakeDraggable(frame, topBar)
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -20, 1, 0)
+    title.Position = UDim2.new(0, 10, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "UPDATED"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 16
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = topBar
+
+    local versionLabel = Instance.new("TextLabel")
+    versionLabel.Size = UDim2.new(1, -20, 0, 24)
+    versionLabel.Position = UDim2.new(0, 10, 0, 46)
+    versionLabel.BackgroundTransparency = 1
+    versionLabel.Text = "Version: " .. version
+    versionLabel.TextColor3 = Color3.fromRGB(180, 180, 205)
+    versionLabel.Font = Enum.Font.GothamMedium
+    versionLabel.TextSize = 11
+    versionLabel.TextXAlignment = Enum.TextXAlignment.Left
+    versionLabel.Parent = frame
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, -20, 1, -116)
+    scroll.Position = UDim2.new(0, 10, 0, 74)
+    scroll.BackgroundTransparency = 1
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 3
+    scroll.ScrollBarImageColor3 = MAIN_COLOR
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scroll.Parent = frame
+
+    local layout = Instance.new("UIListLayout")
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 5)
+    layout.Parent = scroll
+
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 8)
+    end)
+
+    for _, text in ipairs(changes or {}) do
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -4, 0, 34)
+        label.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+        label.BorderSizePixel = 0
+        label.Text = "• " .. tostring(text)
+        label.TextColor3 = Color3.fromRGB(235, 235, 245)
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 11
+        label.TextWrapped = true
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.TextYAlignment = Enum.TextYAlignment.Center
+        label.Parent = scroll
+
+        local padding = Instance.new("UIPadding")
+        padding.PaddingLeft = UDim.new(0, 8)
+        padding.PaddingRight = UDim.new(0, 8)
+        padding.Parent = label
+
+        local labelCorner = Instance.new("UICorner")
+        labelCorner.CornerRadius = UDim.new(0, 4)
+        labelCorner.Parent = label
+    end
+
+    local ok = Instance.new("TextButton")
+    ok.Size = UDim2.new(1, -20, 0, 32)
+    ok.Position = UDim2.new(0, 10, 1, -40)
+    ok.BackgroundColor3 = MAIN_COLOR
+    ok.BorderSizePixel = 0
+    ok.Text = "OK"
+    ok.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ok.Font = Enum.Font.GothamBold
+    ok.TextSize = 12
+    ok.Parent = frame
+
+    local okCorner = Instance.new("UICorner")
+    okCorner.CornerRadius = UDim.new(0, 5)
+    okCorner.Parent = ok
+
+    ok.MouseButton1Click:Connect(function()
+        Settings.ToxLastChangelogVersion = version
+
+        if getgenv().AutoSaveConfiguration then
+            getgenv().AutoSaveConfiguration()
+        end
+
+        frame:Destroy()
+    end)
+end
 
 local ChatLogGui = Instance.new("Frame")
 ChatLogGui.Name = "ChatLogFrame"
@@ -2958,6 +3535,9 @@ end
 local RefreshWaypointsUI
 
 RefreshWaypointsUI = function()
+    if getgenv().GetCurrentToxWaypoints then
+        getgenv().GetCurrentToxWaypoints()
+    end
     for _, child in ipairs(WayScroll:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
     end
@@ -2986,7 +3566,16 @@ RefreshWaypointsUI = function()
         goBtn.MouseButton1Click:Connect(function()
             local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
             if Root and wp.x and wp.y and wp.z then
-                if getgenv().AllowToxTeleport then getgenv().AllowToxTeleport(1.25) end
+                if getgenv().RecordToxTeleportReturn then
+                    getgenv().RecordToxTeleportReturn()
+                end
+
+                if getgenv().AllowToxTeleport then
+                    getgenv().AllowToxTeleport(1.25, "Waypoint")
+                end
+
+                Root.AssemblyLinearVelocity = Vector3.zero
+                Root.AssemblyAngularVelocity = Vector3.zero
                 Root.CFrame = CFrame.new(wp.x, wp.y, wp.z)
                 CustomNotify("Teleported to " .. wp.name, Color3.fromRGB(100, 255, 100))
             end
@@ -3996,6 +4585,11 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     end)
 
     Update()
+
+    if getgenv().RegisterToxSearchControl then
+        getgenv().RegisterToxSearchControl(Name, Page, Button)
+    end
+
     return Button
 end
 
@@ -4113,6 +4707,11 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     end)
 
     UpdateToggle()
+
+    if getgenv().RegisterToxSearchControl then
+        getgenv().RegisterToxSearchControl(Name, Page, Container)
+    end
+
     return Container
 end
 
@@ -4164,6 +4763,10 @@ getgenv().CreateInputWithButton = function(Name, Page, DefaultText, ButtonText, 
 		if Destroyed then return end
 		Callback(Input.Text)
 	end)
+
+    if getgenv().RegisterToxSearchControl then
+        getgenv().RegisterToxSearchControl(Name, Page, Box)
+    end
 
 	return Box
 end
@@ -4234,6 +4837,10 @@ getgenv().CreateInputWithTwoButtons = function(Name, Page, DefaultText, Btn1Text
 		Callback(Input.Text, "LOOP")
 	end)
 
+    if getgenv().RegisterToxSearchControl then
+        getgenv().RegisterToxSearchControl(Name, Page, Box)
+    end
+
 	return Box
 end
 
@@ -4278,6 +4885,10 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback
         AutoSaveConfiguration()
 	end)
 
+    if getgenv().RegisterToxSearchControl then
+        getgenv().RegisterToxSearchControl(Name, Page, Box, Options)
+    end
+
 	return Box
 end
 
@@ -4297,6 +4908,10 @@ getgenv().CreateButton = function(Name, Page, Callback)
 		if Destroyed then return end
 		Callback(Button)
 	end)
+
+    if getgenv().RegisterToxSearchControl then
+        getgenv().RegisterToxSearchControl(Name, Page, Button)
+    end
 
 	return Button
 end
@@ -4335,6 +4950,10 @@ getgenv().CreateConfirmButton = function(Name, Page, Callback)
             Callback(Button)
         end
     end)
+
+    if getgenv().RegisterToxSearchControl then
+        getgenv().RegisterToxSearchControl(Name, Page, Button)
+    end
 
     return Button
 end
@@ -4409,6 +5028,10 @@ getgenv().CreateKeybindButton = function(Name, Page, DefaultKey, Callback)
             end
         end)
     end)
+
+    if getgenv().RegisterToxSearchControl then
+        getgenv().RegisterToxSearchControl(Name, Page, Box)
+    end
 
     return Box
 end
@@ -4557,6 +5180,10 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     end)
 
     UpdateToggle()
+
+    if getgenv().RegisterToxSearchControl then
+        getgenv().RegisterToxSearchControl(Name, Page, Box)
+    end
+
     return Box
 end
-
