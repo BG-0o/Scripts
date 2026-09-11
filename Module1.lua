@@ -93,6 +93,7 @@ getgenv().Settings = {
 	Render3D = true,
     Render3DColor = "BLACK",
     AntiKick = false,
+    FPSBooster = false,
 	AutoExecute = false,
 	GUIKeybind = Enum.KeyCode.LeftAlt,
     GUIColorName = "Blue",
@@ -2248,28 +2249,101 @@ end
 
 local AirWalkPart = nil
 local LockedAirWalkY = nil
+local AirWalkLastUpdate = tick()
 
 local function UpdateAirWalk()
-    local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-    if Settings.AirWalk and Root then
+    local now = tick()
+
+    local deltaTime =
+        math.clamp(
+            now - AirWalkLastUpdate,
+            0,
+            0.08
+        )
+
+    AirWalkLastUpdate = now
+
+    local Root =
+        Player.Character
+        and Player.Character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+    if Settings.AirWalk
+    and Root then
         if not LockedAirWalkY then
-            LockedAirWalkY = Root.Position.Y - 3.4
+            LockedAirWalkY =
+                Root.Position.Y
+                - 3.4
         end
-        if not AirWalkPart or not AirWalkPart.Parent then
-            AirWalkPart = Instance.new("Part")
-            AirWalkPart.Name = "ToxAirWalk"
-            AirWalkPart.Size = Vector3.new(8, 1, 8)
+
+        local vertical = 0
+
+        if UserInputService:
+            IsKeyDown(
+                Enum.KeyCode.E
+            ) then
+            vertical += 1
+        end
+
+        if UserInputService:
+            IsKeyDown(
+                Enum.KeyCode.Q
+            ) then
+            vertical -= 1
+        end
+
+        if vertical ~= 0 then
+            LockedAirWalkY +=
+                vertical
+                * 18
+                * deltaTime
+        end
+
+        if not AirWalkPart
+        or not AirWalkPart.Parent then
+            AirWalkPart =
+                Instance.new(
+                    "Part"
+                )
+
+            AirWalkPart.Name =
+                "ToxAirWalk"
+
+            AirWalkPart.Size =
+                Vector3.new(
+                    8,
+                    1,
+                    8
+                )
+
             AirWalkPart.Transparency = 1
             AirWalkPart.Anchored = true
+            AirWalkPart.CanCollide = true
             AirWalkPart.Parent = workspace
         end
-        AirWalkPart.CFrame = CFrame.new(Root.Position.X, LockedAirWalkY, Root.Position.Z)
+
+        AirWalkPart.CFrame =
+            CFrame.new(
+                Root.Position.X,
+                LockedAirWalkY,
+                Root.Position.Z
+            )
     else
         LockedAirWalkY = nil
-        if AirWalkPart then AirWalkPart:Destroy() AirWalkPart = nil end
+
+        if AirWalkPart then
+            AirWalkPart:
+                Destroy()
+
+            AirWalkPart = nil
+        end
     end
 end
-getgenv().UpdateAirWalk = UpdateAirWalk
+
+getgenv().UpdateAirWalk =
+    UpdateAirWalk
 
 local function UpdateMouseIcon()
     pcall(function()
