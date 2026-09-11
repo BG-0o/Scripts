@@ -3765,6 +3765,7 @@ local AutoFarmPausedFull = false
 local AutoFarmResetTriggered = false
 local AutoFarmPauseCharacter = nil
 local AutoFarmPauseMap = nil
+local AutoFarmLastTravelY = nil
 
 local function IsAliveCharacter()
     local character, humanoid, root = GetCharacterState()
@@ -4019,7 +4020,7 @@ end
 local function GetBestCoin(origin, competitionAware)
     local coins = GetMM2Coins(false)
     local bestCoin = nil
-    local bestScore = math.huge
+    local bestDistance = math.huge
     local now = os.clock()
 
     for coin, expiry in pairs(MM2CoinBlacklist) do
@@ -4030,39 +4031,18 @@ local function GetBestCoin(origin, competitionAware)
 
     for _, coin in ipairs(coins) do
         if IsCoinValid(coin) and not MM2CoinBlacklist[coin] then
-            local myDistance = (origin - coin.Position).Magnitude
-            local score = myDistance
+            local distance
 
-            local cluster = 0
-
-            for _, otherCoin in ipairs(coins) do
-                if otherCoin ~= coin
-                and IsCoinValid(otherCoin)
-                and (coin.Position - otherCoin.Position).Magnitude <= 22 then
-                    cluster = cluster + 1
-                end
+            if typeof(origin) == "Vector3" then
+                local a = Vector2.new(origin.X, origin.Z)
+                local b = Vector2.new(coin.Position.X, coin.Position.Z)
+                distance = (a - b).Magnitude
+            else
+                distance = 0
             end
 
-            score = score - math.min(cluster * 3.5, 18)
-
-            if competitionAware then
-                local otherDistance, incoming = GetOtherPlayerCoinPressure(coin)
-
-                if otherDistance < myDistance then
-                    score = score + 70 + math.min((myDistance - otherDistance) * 2, 60)
-                end
-
-                if otherDistance < 8 then
-                    score = score + 110
-                end
-
-                if incoming and otherDistance < myDistance + 12 then
-                    score = score + 75
-                end
-            end
-
-            if score < bestScore then
-                bestScore = score
+            if distance < bestDistance then
+                bestDistance = distance
                 bestCoin = coin
             end
         end
@@ -4070,7 +4050,6 @@ local function GetBestCoin(origin, competitionAware)
 
     return bestCoin
 end
-
 function ToxMM2GetCoinTouchParts(coin)
     local parts = {}
 
@@ -4253,6 +4232,7 @@ local function StopAutoFarm(restore)
     AutoFarmGeneration = AutoFarmGeneration + 1
     AutoFarmAtCoin = false
     AutoFarmHoldPosition = nil
+    AutoFarmLastTravelY = nil
 
     if AutoFarmTween then
         pcall(function()
@@ -4431,6 +4411,7 @@ local function PrepareAutoFarm()
     AutoFarmPrepared = true
     AutoFarmAtCoin = false
     AutoFarmHoldPosition = nil
+    AutoFarmLastTravelY = nil
     AutoFarmSessionCollected = 0
 
     humanoid.PlatformStand = true
@@ -4451,9 +4432,10 @@ local function PrepareAutoFarm()
     return true
 end
 
-local AutoFarmUndergroundTravelOffset = 6.75
-local AutoFarmUndergroundPickupOffset = 6.35
-local AutoFarmCoinHoldTime = 1.25
+local AutoFarmUndergroundTravelOffset = 7.25
+local AutoFarmUndergroundPickupOffset = 3.15
+local AutoFarmCoinHoldTime = 1.45
+local AutoFarmFloorCache = setmetatable({}, {__mode = "k"})
 
 local function GetCoinBasePosition(coin)
     if not coin
@@ -4464,14 +4446,77 @@ local function GetCoinBasePosition(coin)
     return coin.Position
 end
 
-local function GetCoinTravelPosition(coin)
+local function GetCoinFloorY(coin)
+    if not coin
+    or not coin.Parent then
+        return nil
+    end
+
+    local cached = AutoFarmFloorCache[coin]
+
+    if cached
+    and os.clock() - cached.Time < 0.75 then
+        return cached.Y
+    end
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+
+    local ignore = {}
+
+    if Player.Character then
+        table.insert(ignore, Player.Character)
+    end
+
+    if coin.Parent then
+        table.insert(ignore, coin.Parent)
+    end
+
+    params.FilterDescendantsInstances = ignore
+
+    local result = workspace:Raycast(
+        coin.Position + Vector3.new(0, 4, 0),
+        Vector3.new(0, -35, 0),
+        params
+    )
+
+    if result then
+        AutoFarmFloorCache[coin] = {
+            Y = result.Position.Y,
+            Time = os.clock()
+        }
+
+        return result.Position.Y
+    end
+
+    return nil
+end
+
+local function GetCoinTravelPosition(coin, currentPosition)
     local position = GetCoinBasePosition(coin)
 
     if not position then
         return Vector3.zero
     end
 
-    return position - Vector3.new(0, AutoFarmUndergroundTravelOffset, 0)
+    local floorY = GetCoinFloorY(coin)
+    local travelY = position.Y - AutoFarmUndergroundTravelOffset
+
+    if floorY then
+        travelY = math.min(travelY, floorY - 2.85)
+    end
+
+    if typeof(currentPosition) == "Vector3" then
+        travelY = math.min(travelY, currentPosition.Y)
+    end
+
+    if typeof(AutoFarmLastTravelY) == "number" then
+        travelY = math.min(travelY, AutoFarmLastTravelY + 0.35)
+    end
+
+    AutoFarmLastTravelY = travelY
+
+    return Vector3.new(position.X, travelY, position.Z)
 end
 
 local function GetCoinPickupPosition(coin)
@@ -4481,9 +4526,15 @@ local function GetCoinPickupPosition(coin)
         return Vector3.zero
     end
 
-    return position - Vector3.new(0, AutoFarmUndergroundPickupOffset, 0)
-end
+    local floorY = GetCoinFloorY(coin)
+    local pickupY = position.Y - AutoFarmUndergroundPickupOffset
 
+    if floorY then
+        pickupY = math.min(pickupY, floorY - 0.65)
+    end
+
+    return Vector3.new(position.X, pickupY, position.Z)
+end
 local function TweenFarmRoot(targetPosition, duration, coin)
     if not AutoFarmRoot
     or not AutoFarmRoot.Parent then
@@ -4652,15 +4703,38 @@ local function AutoFarmCoin(coin)
     )
 
     local speed = speedValue * 4
-
-    local travelPosition = GetCoinTravelPosition(coin)
-    local distance = (AutoFarmRoot.Position - travelPosition).Magnitude
-
-    local arrived = TweenFarmRoot(
-        travelPosition,
-        distance / speed,
-        coin
+    local currentPosition = AutoFarmRoot.Position
+    local travelPosition = GetCoinTravelPosition(coin, currentPosition)
+    local descendPosition = Vector3.new(
+        currentPosition.X,
+        travelPosition.Y,
+        currentPosition.Z
     )
+
+    local arrived = true
+
+    if math.abs(currentPosition.Y - travelPosition.Y) > 0.15 then
+        arrived = TweenFarmRoot(
+            descendPosition,
+            math.abs(currentPosition.Y - travelPosition.Y) / speed,
+            coin
+        )
+    else
+        SetFarmPosition(descendPosition, true)
+    end
+
+    if arrived then
+        local horizontalDistance = (
+            Vector2.new(descendPosition.X, descendPosition.Z)
+            - Vector2.new(travelPosition.X, travelPosition.Z)
+        ).Magnitude
+
+        arrived = TweenFarmRoot(
+            travelPosition,
+            horizontalDistance / speed,
+            coin
+        )
+    end
 
     if not Settings.MM2AutoFarmV2 then
         return false
@@ -4674,18 +4748,29 @@ local function AutoFarmCoin(coin)
 
     if not arrived then
         if IsCoinValid(coin) then
-            MM2CoinBlacklist[coin] = os.clock() + 0.7
+            MM2CoinBlacklist[coin] = os.clock() + 0.45
         end
 
         return false
     end
 
+    local pickupPosition = GetCoinPickupPosition(coin)
+    local pickupDistance = (AutoFarmRoot.Position - pickupPosition).Magnitude
+
+    if pickupDistance > 0.12 then
+        TweenFarmRoot(
+            pickupPosition,
+            pickupDistance / math.max(speed * 0.75, 1),
+            coin
+        )
+    end
+
     local collected = CollectFarmCoin(coin)
 
     if collected then
-        MM2CoinBlacklist[coin] = os.clock() + 0.12
+        MM2CoinBlacklist[coin] = os.clock() + 0.08
     else
-        MM2CoinBlacklist[coin] = os.clock() + 0.35
+        MM2CoinBlacklist[coin] = os.clock() + 0.22
     end
 
     if IsFarmBagFull()
@@ -4695,7 +4780,6 @@ local function AutoFarmCoin(coin)
 
     return collected
 end
-
 AddConnection(RunService.Heartbeat:Connect(function()
     if not Settings.MM2AutoFarmV2
     or not AutoFarmPrepared
