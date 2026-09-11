@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-11-nds-autowin-spawn"
+ToxUpdateVersion = "2026-09-11-loadgate-english"
 
 
 function ClearToxTable(target)
@@ -6436,7 +6436,36 @@ AddConnection(Player.Idled:Connect(function()
 end))
 
 AddConnection(RunService.Stepped:Connect(function()
-    if Destroyed or not ScriptLoaded then return end
+    if Destroyed then return end
+
+    if not ScriptLoaded then
+        if Settings.AntiFling then
+            for _, p in ipairs(
+                Players:GetPlayers()
+            ) do
+                if p ~= Player
+                and p.Character then
+                    for _, part in ipairs(
+                        p.Character:GetChildren()
+                    ) do
+                        if part:IsA(
+                            "BasePart"
+                        ) then
+                            if AntiFlingDefaults[part]
+                            == nil then
+                                AntiFlingDefaults[part] =
+                                    part.CanCollide
+                            end
+
+                            part.CanCollide = false
+                        end
+                    end
+                end
+            end
+        end
+
+        return
+    end
 
     if Settings.Noclip and Player.Character then
         for _, part in ipairs(Player.Character:GetDescendants()) do
@@ -7147,7 +7176,6 @@ function ShowCenterLoadSequence()
         task.wait(duration / steps)
     end
 
-    ScriptLoaded = true
     if blur then blur:Destroy() end
 
     local fallTween = TweenService:Create(SplashFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
@@ -7157,6 +7185,9 @@ function ShowCenterLoadSequence()
     fallTween:Play()
     fallTween.Completed:Connect(function()
         SplashFrame:Destroy()
+        ScriptLoaded = true
+        getgenv().ScriptLoaded = true
+
         if not Destroyed then
             local finalPosition = (getgenv().GetSavedGuiPosition and getgenv().GetSavedGuiPosition("Main")) or UDim2.new(0.5, -165, 0.5, -197)
 
@@ -7334,42 +7365,69 @@ if Minimize then
     end)
 end
 
-if Settings.AntiVoid then StartAntiVoid() end
+local function ApplyUniversalSavedOptionsAfterLoad()
+    if Destroyed
+    or not ScriptLoaded then
+        return
+    end
 
-if Settings.FPSBooster then
-    SetFPSBooster(
-        true,
-        true
-    )
+    if Settings.AntiVoid then
+        StartAntiVoid()
+    end
+
+    if Settings.FPSBooster then
+        SetFPSBooster(
+            true,
+            true
+        )
+    end
+
+    if Settings.ToxServerInfoVisible then
+        SetServerInfoVisible(true)
+    end
 end
 
-if Settings.ToxServerInfoVisible then
-    SetServerInfoVisible(true)
-end
-
-
-if getgenv().ShowToxUpdateGui then
-    getgenv().ShowToxUpdateGui(
-        ToxUpdateVersion,
-        {
-            ADDED = {
-                "NDS Auto Win agora volta para o SPAWN quando for desativado.",
-                "NDS recebeu secoes recolhiveis igual ao MM2.",
-                "NDS recebeu Disaster Detector com notificacao de 5 segundos."
-            },
-            FIXED = {
-                "NDS Auto Win nao reequipara o item durante o loop depois da ativacao.",
-                "NDS Walk Fling ficou mais fraco para reduzir subida e instabilidade."
-            },
-            CHANGED = {
-                "NDS Auto Win usa o item segurado depois da ativacao sem forcar troca repetida.",
-                "NDS organizado em secoes AUTO, MOVEMENT, PROTECTION e TELEPORTS."
-            },
-            REMOVED = {
-                "Removido re-equipamento repetido do item no NDS Auto Win."
+local function ShowUniversalUpdateAfterLoad()
+    if getgenv().ShowToxUpdateGui then
+        getgenv().ShowToxUpdateGui(
+            ToxUpdateVersion,
+            {
+                ADDED = {
+                    "Saved options now wait until ToxHub finishes loading before activating.",
+                    "The changelog now appears only after the loading screen is complete."
+                },
+                FIXED = {
+                    "NDS saved options no longer start during the loading screen.",
+                    "MM2 saved automatic options no longer run before ToxHub finishes loading.",
+                    "Anti Fling stays active during loading for protection."
+                },
+                CHANGED = {
+                    "Changelog text is now in English.",
+                    "Startup activation order is cleaner and safer."
+                },
+                REMOVED = {
+                    "Early startup activation for saved options except Anti Fling."
+                }
             }
-        }
-    )
+        )
+    end
 end
+
+task.spawn(function()
+    while not Destroyed
+    and not ScriptLoaded do
+        task.wait(0.05)
+    end
+
+    if Destroyed then
+        return
+    end
+
+    ApplyUniversalSavedOptionsAfterLoad()
+
+    task.wait(0.2)
+
+    ShowUniversalUpdateAfterLoad()
+end)
 
 getgenv().ToxUniversalLoaded = true
