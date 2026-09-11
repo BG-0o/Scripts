@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-11-mm2-shoot-ref-farm-standard-v3"
+    "2026-09-11-role-notify-1"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -5908,6 +5908,65 @@ MM2CreateButton(
     end
 )
 
+local MM2LastRoleNoticeKey = nil
+
+local function GetMM2RoleNoticeMapKey()
+    local mapRoot = GetMM2ActiveMapRoot()
+
+    if not mapRoot then
+        return nil
+    end
+
+    local count = 0
+    local sample = {}
+
+    for _, object in ipairs(mapRoot:GetDescendants()) do
+        if object:IsA("BasePart") then
+            count += 1
+
+            if #sample < 8 then
+                table.insert(sample, object.Name)
+            end
+        end
+    end
+
+    return mapRoot.Name .. "|" .. tostring(count) .. "|" .. table.concat(sample, ",")
+end
+
+local function NotifyMM2LocalRole(role, mapKey)
+    if not role then
+        return
+    end
+
+    local notifyRole = role
+
+    if notifyRole == "Hero" then
+        notifyRole = "Sheriff"
+    end
+
+    local key = tostring(mapKey or "") .. "|" .. tostring(notifyRole)
+
+    if MM2LastRoleNoticeKey == key then
+        return
+    end
+
+    MM2LastRoleNoticeKey = key
+
+    local color = Color3.fromRGB(100, 255, 130)
+
+    if notifyRole == "Murderer" then
+        color = Color3.fromRGB(255, 70, 70)
+    elseif notifyRole == "Sheriff" then
+        color = Color3.fromRGB(70, 160, 255)
+    end
+
+    CustomNotify(
+        "You are " .. notifyRole,
+        color,
+        5
+    )
+end
+
 
 AutoKnifeLastAttempt = 0
 AutoSilentAimLastAttempt = 0
@@ -5927,6 +5986,13 @@ task.spawn(function()
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         local alive = humanoid and humanoid.Health > 0
         local localRole = alive and GetRole(Player) or nil
+        local roleMapKey = GetMM2RoleNoticeMapKey()
+
+        if not roleMapKey then
+            MM2LastRoleNoticeKey = nil
+        elseif localRole then
+            NotifyMM2LocalRole(localRole, roleMapKey)
+        end
 
         if MM2AutoRuntime.KillAll
         and not Settings.MM2AutoFarmV2
