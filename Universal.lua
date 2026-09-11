@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-11-loadgate-english"
+ToxUpdateVersion = "2026-09-11-nds-mm2-serverinfo"
 
 
 function ClearToxTable(target)
@@ -5768,10 +5768,15 @@ ServerInfoText = nil
 ServerInfoFrameCount = 0
 ServerInfoLastClock = os.clock()
 ServerInfoFPS = 0
+ServerInfoRegionCache = nil
+ServerInfoRegionCacheTime = 0
+ServerInfoCountryCache = nil
+ServerInfoCountryChecked = false
 ServerInfoModes = {
     "FPS",
     "FPS/Ping",
-    "FPS/Ping/Players"
+    "FPS/Ping/Players",
+    "Server"
 }
 
 RunService.RenderStepped:Connect(function()
@@ -5806,6 +5811,156 @@ function GetServerPingText()
     return "N/A"
 end
 
+function GetServerPingNumber()
+    local text = GetServerPingText()
+    local number = tonumber(tostring(text):match("([%d%.]+)"))
+    return number
+end
+
+function GetShortServerId(value)
+    value = tostring(value or "")
+
+    if value == "" then
+        return "N/A"
+    end
+
+    if #value <= 18 then
+        return value
+    end
+
+    return string.sub(value, 1, 8) .. "..." .. string.sub(value, -6)
+end
+
+function GetLocalCountryCode()
+    if ServerInfoCountryChecked then
+        return ServerInfoCountryCache or ""
+    end
+
+    ServerInfoCountryChecked = true
+
+    local ok, code = pcall(function()
+        local localization = game:GetService("LocalizationService")
+        return localization:GetCountryRegionForPlayerAsync(Player)
+    end)
+
+    if ok and code and code ~= "" then
+        ServerInfoCountryCache = tostring(code)
+        return ServerInfoCountryCache
+    end
+
+    ServerInfoCountryCache = ""
+    return ""
+end
+
+function GetServerRegionText()
+    if ServerInfoRegionCache
+    and os.clock() - ServerInfoRegionCacheTime < 8 then
+        return ServerInfoRegionCache
+    end
+
+    local ok, value = pcall(function()
+        for _, object in ipairs(StatsService:GetDescendants()) do
+            local lower = string.lower(tostring(object.Name or ""))
+
+            if string.find(lower, "region", 1, true)
+            or string.find(lower, "location", 1, true)
+            or string.find(lower, "country", 1, true) then
+                if object.GetValueString then
+                    local text = object:GetValueString()
+
+                    if text and text ~= "" then
+                        return text
+                    end
+                end
+
+                if object:IsA("StringValue") and object.Value ~= "" then
+                    return object.Value
+                end
+            end
+        end
+
+        return nil
+    end)
+
+    if ok and value and tostring(value) ~= "" then
+        ServerInfoRegionCache = tostring(value)
+        ServerInfoRegionCacheTime = os.clock()
+        return ServerInfoRegionCache
+    end
+
+    local country = GetLocalCountryCode()
+    local ping = GetServerPingNumber()
+    local result = nil
+
+    if country == "BR" then
+        if ping and ping <= 95 then
+            result = "São Paulo / BR"
+        elseif ping and ping <= 180 then
+            result = "US / NA"
+        end
+    elseif country == "US" then
+        if ping and ping <= 120 then
+            result = "US"
+        end
+    elseif country ~= "" then
+        if ping and ping <= 120 then
+            result = country
+        end
+    end
+
+    ServerInfoRegionCache = result or (country ~= "" and country .. " / Unknown" or "Unknown")
+    ServerInfoRegionCacheTime = os.clock()
+    return ServerInfoRegionCache
+end
+
+function BuildServerJoinText()
+    local lines = {
+        "PlaceId: " .. tostring(game.PlaceId),
+        "JobId: " .. tostring(game.JobId ~= "" and game.JobId or "N/A"),
+        "JoinId: " .. tostring(game.JobId ~= "" and game.JobId or "N/A"),
+        "Players: " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers),
+        "Region: " .. GetServerRegionText()
+    }
+
+    return table.concat(lines, "\n")
+end
+
+function CopyServerJoinId()
+    local text = BuildServerJoinText()
+    local copied = false
+
+    if setclipboard then
+        pcall(function()
+            setclipboard(text)
+            copied = true
+        end)
+    elseif toclipboard then
+        pcall(function()
+            toclipboard(text)
+            copied = true
+        end)
+    elseif Clipboard and Clipboard.set then
+        pcall(function()
+            Clipboard.set(text)
+            copied = true
+        end)
+    end
+
+    if copied then
+        CustomNotify(
+            "Server info copied",
+            Color3.fromRGB(100, 255, 130),
+            3
+        )
+    else
+        CustomNotify(
+            "Clipboard not supported",
+            Color3.fromRGB(255, 180, 70),
+            3
+        )
+    end
+end
+
 function NormalizeServerInfoMode(value)
     value = tostring(value or "")
 
@@ -5822,6 +5977,15 @@ function BuildServerInfoLines()
     local mode = NormalizeServerInfoMode(Settings.ToxServerInfoMode)
     local lines = {}
 
+    if mode == "Server" then
+        table.insert(lines, "Region: " .. GetServerRegionText())
+        table.insert(lines, "Players: " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers))
+        table.insert(lines, "PlaceId: " .. tostring(game.PlaceId))
+        table.insert(lines, "JobId: " .. GetShortServerId(game.JobId))
+        table.insert(lines, "JoinId: " .. GetShortServerId(game.JobId))
+        return lines
+    end
+
     table.insert(lines, "FPS: " .. tostring(ServerInfoFPS))
 
     if mode == "FPS/Ping"
@@ -5831,6 +5995,7 @@ function BuildServerInfoLines()
 
     if mode == "FPS/Ping/Players" then
         table.insert(lines, "Players: " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers))
+        table.insert(lines, "Region: " .. GetServerRegionText())
     end
 
     return lines
@@ -5842,7 +6007,13 @@ function RefreshServerInfoSize()
     end
 
     local lineCount = #BuildServerInfoLines()
-    ServerInfoFrame.Size = UDim2.new(0, 190, 0, 34 + lineCount * 20)
+    local width = NormalizeServerInfoMode(Settings.ToxServerInfoMode) == "Server" and 320 or 250
+    local height = math.max(92, 38 + lineCount * 20)
+    ServerInfoFrame.Size = UDim2.new(0, width, 0, height)
+
+    if ServerInfoText then
+        ServerInfoText.Size = UDim2.new(1, -16, 1, -36)
+    end
 end
 
 function ServerInfoModeButtonText(mode)
@@ -5852,6 +6023,10 @@ function ServerInfoModeButtonText(mode)
 
     if mode == "FPS/Ping" then
         return "PING"
+    end
+
+    if mode == "Server" then
+        return "SERVER"
     end
 
     return "ALL"
@@ -5870,8 +6045,8 @@ function CreateServerInfoFrame()
 
     ServerInfoFrame = Instance.new("Frame")
     ServerInfoFrame.Name = "ToxServerInfoFrame"
-    ServerInfoFrame.Size = UDim2.new(0, 190, 0, 94)
-    ServerInfoFrame.Position = UDim2.new(1, -210, 0, 110)
+    ServerInfoFrame.Size = UDim2.new(0, 250, 0, 98)
+    ServerInfoFrame.Position = UDim2.new(1, -340, 0, 110)
     ServerInfoFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
     ServerInfoFrame.BackgroundTransparency = 0.35
     ServerInfoFrame.BorderSizePixel = 0
@@ -5909,7 +6084,7 @@ function CreateServerInfoFrame()
     end
 
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -86, 1, 0)
+    title.Size = UDim2.new(1, -158, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
     title.Text = "SERVER INFO"
@@ -5920,8 +6095,8 @@ function CreateServerInfoFrame()
     title.Parent = topBar
 
     local modeButton = Instance.new("TextButton")
-    modeButton.Size = UDim2.new(0, 52, 0, 18)
-    modeButton.Position = UDim2.new(1, -80, 0.5, -9)
+    modeButton.Size = UDim2.new(0, 60, 0, 18)
+    modeButton.Position = UDim2.new(1, -148, 0.5, -9)
     modeButton.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
     modeButton.BorderSizePixel = 0
     modeButton.Text = ServerInfoModeButtonText(NormalizeServerInfoMode(Settings.ToxServerInfoMode))
@@ -5933,6 +6108,21 @@ function CreateServerInfoFrame()
     local modeCorner = Instance.new("UICorner")
     modeCorner.CornerRadius = UDim.new(0, 4)
     modeCorner.Parent = modeButton
+
+    local copyButton = Instance.new("TextButton")
+    copyButton.Size = UDim2.new(0, 58, 0, 18)
+    copyButton.Position = UDim2.new(1, -84, 0.5, -9)
+    copyButton.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
+    copyButton.BorderSizePixel = 0
+    copyButton.Text = "COPY"
+    copyButton.TextColor3 = Color3.fromRGB(230, 230, 240)
+    copyButton.Font = Enum.Font.GothamBold
+    copyButton.TextSize = 10
+    copyButton.Parent = topBar
+
+    local copyCorner = Instance.new("UICorner")
+    copyCorner.CornerRadius = UDim.new(0, 4)
+    copyCorner.Parent = copyButton
 
     local closeButton = Instance.new("TextButton")
     closeButton.Size = UDim2.new(0, 22, 0, 18)
@@ -5957,9 +6147,14 @@ function CreateServerInfoFrame()
     ServerInfoText.TextColor3 = Color3.fromRGB(240, 240, 245)
     ServerInfoText.Font = Enum.Font.GothamMedium
     ServerInfoText.TextSize = 12
+    ServerInfoText.TextWrapped = true
     ServerInfoText.TextXAlignment = Enum.TextXAlignment.Left
     ServerInfoText.TextYAlignment = Enum.TextYAlignment.Top
     ServerInfoText.Parent = ServerInfoFrame
+
+    copyButton.MouseButton1Click:Connect(function()
+        CopyServerJoinId()
+    end)
 
     closeButton.MouseButton1Click:Connect(function()
         Settings.ToxServerInfoVisible = false
@@ -7393,20 +7588,20 @@ local function ShowUniversalUpdateAfterLoad()
             ToxUpdateVersion,
             {
                 ADDED = {
-                    "Saved options now wait until ToxHub finishes loading before activating.",
-                    "The changelog now appears only after the loading screen is complete."
+                    "NDS Disaster Detector now waits for the map to load and warns once per map.",
+                    "MM2 now notifies your role when the round role is detected.",
+                    "Server Info now has a server page with region, JobId, JoinId and copy support."
                 },
                 FIXED = {
-                    "NDS saved options no longer start during the loading screen.",
-                    "MM2 saved automatic options no longer run before ToxHub finishes loading.",
-                    "Anti Fling stays active during loading for protection."
+                    "Server Info sizing was adjusted so the text no longer cuts off.",
+                    "NDS Disaster Detector no longer repeats the same disaster every few seconds."
                 },
                 CHANGED = {
-                    "Changelog text is now in English.",
-                    "Startup activation order is cleaner and safer."
+                    "Server Info uses a wider layout when showing server details.",
+                    "Disaster notifications now say Disaster incoming and last 5 seconds."
                 },
                 REMOVED = {
-                    "Early startup activation for saved options except Anti Fling."
+                    "Repeated disaster notices during the same map."
                 }
             }
         )
