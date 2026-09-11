@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-11-mm2-shoot-farm-fling-fix"
+    "2026-09-11-mm2-shoot-ref-farm-standard-v3"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -2684,6 +2684,9 @@ local function GetPredictionPing()
         )
 end
 
+local MM2ShootOffset = 2.8
+local MM2OffsetPingMultiplier = 1
+
 local function GetPredictedTargetPosition(
     target
 )
@@ -2692,227 +2695,33 @@ local function GetPredictedTargetPosition(
         return nil
     end
 
-    local character =
-        target.Character
-
-    local humanoid =
-        character:
-            FindFirstChildOfClass(
-                "Humanoid"
-            )
-
-    local root =
-        character:
-            FindFirstChild(
-                "HumanoidRootPart"
-            )
+    local character = target.Character
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local aimPart = character:FindFirstChild("UpperTorso")
+        or character:FindFirstChild("Torso")
+        or character:FindFirstChild("HumanoidRootPart")
 
     if not humanoid
     or humanoid.Health <= 0
-    or not root then
+    or not aimPart then
         return nil
     end
 
-    local torso =
-        character:
-            FindFirstChild(
-                "UpperTorso"
-            )
-        or character:
-            FindFirstChild(
-                "Torso"
-            )
-        or root
+    local velocity = aimPart.AssemblyLinearVelocity
+    local moveDirection = humanoid.MoveDirection
+    local offset = tonumber(Settings.MM2ShootOffset) or MM2ShootOffset
+    local pingMultiplier = tonumber(Settings.MM2ShootPingMultiplier) or MM2OffsetPingMultiplier
+    local pingScale = 1
 
-    local basePosition =
-        torso.Position
+    pcall(function()
+        pingScale = ((Player:GetNetworkPing() * 1000) * ((pingMultiplier - 1) * 0.01)) + 1
+    end)
 
-    local state =
-        TargetMotionHistory[
-            target
-        ]
+    local predicted = aimPart.Position
+        + ((velocity * Vector3.new(0.75, 0.5, 0.75)) * (offset / 15))
+        + (moveDirection * offset)
 
-    local replicatedVelocity =
-        root.AssemblyLinearVelocity
-
-    local measuredVelocity =
-        state
-        and state.Velocity
-        or replicatedVelocity
-
-    local velocity =
-        replicatedVelocity:
-            Lerp(
-                measuredVelocity,
-                0.52
-            )
-
-    local horizontalVelocity =
-        Vector3.new(
-            velocity.X,
-            0,
-            velocity.Z
-        )
-
-    local moveDirection =
-        humanoid.MoveDirection
-
-    if moveDirection.Magnitude > 0.05 then
-        local expectedHorizontal =
-            moveDirection.Unit
-            * math.max(
-                tonumber(
-                    humanoid.WalkSpeed
-                ) or 16,
-                10
-            )
-
-        if horizontalVelocity.Magnitude
-            < 4 then
-            horizontalVelocity =
-                expectedHorizontal
-        else
-            horizontalVelocity =
-                horizontalVelocity:
-                    Lerp(
-                        expectedHorizontal,
-                        0.28
-                    )
-        end
-    end
-
-    horizontalVelocity =
-        ClampVectorMagnitude(
-            horizontalVelocity,
-            42
-        )
-
-    local verticalVelocity =
-        math.clamp(
-            velocity.Y,
-            -65,
-            65
-        )
-
-    local origin =
-        GetShotOrigin()
-
-    local distance =
-        (
-            basePosition
-            - origin
-        ).Magnitude
-
-    local ping =
-        GetPredictionPing()
-
-    local leadTime =
-        0.035
-        + (
-            ping
-            * 0.92
-        )
-        + (
-            distance
-            / 1850
-        )
-
-    leadTime =
-        math.clamp(
-            leadTime,
-            0.045,
-            0.26
-        )
-
-    local humanoidState =
-        humanoid:
-            GetState()
-
-    local airborne =
-        humanoid.FloorMaterial
-            == Enum.Material.Air
-        or humanoidState
-            == Enum.HumanoidStateType.Jumping
-        or humanoidState
-            == Enum.HumanoidStateType.Freefall
-
-    local verticalOffset =
-        verticalVelocity
-        * leadTime
-
-    if airborne then
-        verticalOffset -=
-            0.5
-            * workspace.Gravity
-            * leadTime
-            * leadTime
-    else
-        verticalOffset *=
-            0.28
-    end
-
-    local acceleration =
-        state
-        and state.Acceleration
-        or Vector3.zero
-
-    acceleration =
-        Vector3.new(
-            math.clamp(
-                acceleration.X,
-                -55,
-                55
-            ),
-            0,
-            math.clamp(
-                acceleration.Z,
-                -55,
-                55
-            )
-        )
-
-    local horizontalLead =
-        horizontalVelocity
-        * leadTime
-
-    horizontalLead +=
-        acceleration
-        * (
-            0.5
-            * leadTime
-            * leadTime
-        )
-
-    horizontalLead =
-        ClampVectorMagnitude(
-            horizontalLead,
-            12
-        )
-
-    local predicted =
-        basePosition
-        + horizontalLead
-        + Vector3.new(
-            0,
-            math.clamp(
-                verticalOffset,
-                -8,
-                8
-            ),
-            0
-        )
-
-    local rootDifference =
-        predicted
-        - root.Position
-
-    if rootDifference.Magnitude
-        > 16 then
-        predicted =
-            root.Position
-            + rootDifference.Unit
-            * 16
-    end
+    predicted = predicted * pingScale
 
     return predicted
 end
@@ -3135,186 +2944,60 @@ local function FireGuidedGunShot(
         return false
     end
 
-    local samples =
-        BuildGuidedTargetSamples(
-            target
-        )
+    local character = Player.Character
+    local predicted = GetPredictedTargetPosition(target)
 
-    if #samples == 0 then
+    if not character
+    or not predicted then
         return false
     end
 
-    local fired = false
+    local originPart = character:FindFirstChild("RightHand")
+        or character:FindFirstChild("Right Arm")
+        or character:FindFirstChild("HumanoidRootPart")
 
-    local shootRemote =
-        gun:
-            FindFirstChild(
-                "Shoot"
-            )
-        or gun:
-            FindFirstChild(
-                "Shoot",
-                true
-            )
+    if not originPart then
+        return false
+    end
 
-    local knifeLocal =
-        gun:
-            FindFirstChild(
-                "KnifeLocal"
-            )
-        or gun:
-            FindFirstChild(
-                "KnifeLocal",
-                true
-            )
-
-    local createBeam =
-        knifeLocal
-        and (
-            knifeLocal:
-                FindFirstChild(
-                    "CreateBeam"
-                )
-            or knifeLocal:
-                FindFirstChild(
-                    "CreateBeam",
-                    true
-                )
-        )
-
-    local remoteFunction =
-        createBeam
-        and (
-            createBeam:
-                FindFirstChild(
-                    "RemoteFunction"
-                )
-            or createBeam:
-                FindFirstChildWhichIsA(
-                    "RemoteFunction",
-                    true
-                )
-        )
+    local shootRemote = gun:FindFirstChild("Shoot")
+        or gun:FindFirstChild("Shoot", true)
 
     if shootRemote
-    and shootRemote:IsA(
-        "RemoteEvent"
-    ) then
-        for _, position in ipairs(samples) do
-            local origin = GetShotOrigin()
-            local direction = position - origin
+    and shootRemote:IsA("RemoteEvent") then
+        local ok = pcall(function()
+            shootRemote:FireServer(
+                CFrame.new(originPart.Position),
+                CFrame.new(predicted)
+            )
+        end)
 
-            if direction.Magnitude > 0.1 then
-                local ok =
-                    pcall(function()
-                        shootRemote:
-                            FireServer(
-                                CFrame.lookAt(origin, position),
-                                CFrame.lookAt(
-                                    position,
-                                    position + direction.Unit
-                                )
-                            )
-                    end)
-
-                if ok then
-                    fired = true
-                end
-            end
+        if ok then
+            return true
         end
     end
+
+    local knifeLocal = gun:FindFirstChild("KnifeLocal")
+        or gun:FindFirstChild("KnifeLocal", true)
+    local createBeam = knifeLocal and (
+        knifeLocal:FindFirstChild("CreateBeam")
+        or knifeLocal:FindFirstChild("CreateBeam", true)
+    )
+    local remoteFunction = createBeam and (
+        createBeam:FindFirstChild("RemoteFunction")
+        or createBeam:FindFirstChildWhichIsA("RemoteFunction", true)
+    )
 
     if remoteFunction
-    and remoteFunction:IsA(
-        "RemoteFunction"
-    ) then
-        for _, position in ipairs(
-            samples
-        ) do
-            pcall(function()
-                remoteFunction:
-                    InvokeServer(
-                        1,
-                        position,
-                        "AH2"
-                    )
-            end)
-
-            fired = true
-        end
-    end
-
-    if shootRemote
-    and shootRemote:IsA(
-        "RemoteEvent"
-    )
-    and #samples > 1 then
-        local burstSerial = ShootSafetySerial
-
-        task.spawn(function()
-            for index = 2, #samples do
-                task.wait(
-                    0.012
-                )
-
-                if getgenv().Destroyed
-                or burstSerial ~= ShootSafetySerial
-                or not gun
-                or not gun.Parent
-                or not target
-                or not target.Parent then
-                    break
-                end
-
-                local liveSamples =
-                    BuildGuidedTargetSamples(
-                        target
-                    )
-
-                local position =
-                    liveSamples[
-                        math.min(
-                            index,
-                            #liveSamples
-                        )
-                    ]
-
-                if position then
-                    local origin = GetShotOrigin()
-                    local direction = position - origin
-
-                    if direction.Magnitude > 0.1 then
-                        pcall(function()
-                            shootRemote:
-                                FireServer(
-                                    CFrame.lookAt(origin, position),
-                                    CFrame.lookAt(
-                                        position,
-                                        position + direction.Unit
-                                    )
-                                )
-                        end)
-                    end
-
-                    if remoteFunction
-                    and remoteFunction:IsA(
-                        "RemoteFunction"
-                    ) then
-                        pcall(function()
-                            remoteFunction:
-                                InvokeServer(
-                                    1,
-                                    position,
-                                    "AH2"
-                                )
-                        end)
-                    end
-                end
-            end
+    and remoteFunction:IsA("RemoteFunction") then
+        local ok = pcall(function()
+            remoteFunction:InvokeServer(1, predicted, "AH2")
         end)
+
+        return ok
     end
 
-    return fired
+    return false
 end
 
 local function ShootMurderer(showNotify)
@@ -4374,7 +4057,8 @@ end
 local function SetFarmPosition(position, hold)
     if not AutoFarmRoot
     or not AutoFarmRoot.Parent
-    or not AutoFarmRotation then
+    or not AutoFarmHumanoid
+    or AutoFarmHumanoid.Health <= 0 then
         return false
     end
 
@@ -4388,19 +4072,10 @@ local function SetFarmPosition(position, hold)
         AutoFarmHoldPosition = position
     end
 
-    local character = Player.Character
-    local cframe = CFrame.new(position) * AutoFarmRotation
-
-    AutoFarmRoot.Anchored = true
-
-    if character and character.Parent then
-        character:PivotTo(cframe)
-    else
-        AutoFarmRoot.CFrame = cframe
-    end
-
+    AutoFarmRoot.Anchored = false
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+    AutoFarmRoot.CFrame = CFrame.new(position)
 
     return true
 end
@@ -4717,12 +4392,13 @@ local function PrepareAutoFarm()
     end
 
     if AutoFarmPrepared and AutoFarmRoot == root then
-        root.Anchored = true
+        root.Anchored = false
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
         humanoid.PlatformStand = false
         humanoid.Sit = false
-        humanoid.AutoRotate = false
+        humanoid.AutoRotate = true
+        SetFarmCollision(false)
         return true
     end
 
@@ -4734,10 +4410,7 @@ local function PrepareAutoFarm()
     AutoFarmRoot = root
     AutoFarmHumanoid = humanoid
     AutoFarmReturnCFrame = character:GetPivot()
-
-    local _, farmYaw, _ = root.CFrame:ToOrientation()
-    AutoFarmRotation = CFrame.Angles(0, farmYaw, 0)
-
+    AutoFarmRotation = CFrame.new()
     AutoFarmOriginalAnchored = root.Anchored
     AutoFarmOriginalAutoRotate = humanoid.AutoRotate
     AutoFarmOriginalPlatformStand = humanoid.PlatformStand
@@ -4752,51 +4425,38 @@ local function PrepareAutoFarm()
 
     humanoid.PlatformStand = false
     humanoid.Sit = false
-    humanoid.AutoRotate = false
-
-    pcall(function()
-        humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-        humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-    end)
-
-    SetFarmCollision(false)
-
-    root.Anchored = true
+    humanoid.AutoRotate = true
+    root.Anchored = false
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
+    SetFarmCollision(false)
 
     return true
 end
 
-local AutoFarmPickupOffsetY = 2.55
-local AutoFarmCoinHoldTime = 0.38
-local AutoFarmMinTweenSpeed = 8
+local AutoFarmPickupOffsetY = 0.15
+local AutoFarmCoinHoldTime = 0.18
+local AutoFarmMinTweenSpeed = 6
 local TouchCoin = nil
 
 local function GetCoinBasePosition(coin)
-    if not coin
-    or not coin:IsA("BasePart") then
+    if not coin then
         return nil
     end
 
-    return coin.Position
-end
-
-local function GetAutoFarmYawCFrame(fromPosition, toPosition)
-    local direction = Vector3.new(
-        toPosition.X - fromPosition.X,
-        0,
-        toPosition.Z - fromPosition.Z
-    )
-
-    if direction.Magnitude < 0.05 then
-        return AutoFarmRotation or CFrame.new()
+    if coin:IsA("BasePart") then
+        return coin.Position
     end
 
-    return CFrame.lookAt(
-        Vector3.zero,
-        direction.Unit
-    )
+    local ok, pivot = pcall(function()
+        return coin:GetPivot()
+    end)
+
+    if ok and typeof(pivot) == "CFrame" then
+        return pivot.Position
+    end
+
+    return nil
 end
 
 local function GetCoinFarmPosition(coin)
@@ -4806,19 +4466,14 @@ local function GetCoinFarmPosition(coin)
         return nil
     end
 
-    local yOffset = math.max(
-        AutoFarmPickupOffsetY,
-        coin.Size.Y * 0.5 + 1.9
-    )
-
     return Vector3.new(
         position.X,
-        position.Y + yOffset,
+        position.Y + AutoFarmPickupOffsetY,
         position.Z
     )
 end
 
-local function SetAutoFarmCoinPosition(position, lookAt)
+local function SetAutoFarmCoinPosition(position)
     if not AutoFarmRoot
     or not AutoFarmRoot.Parent
     or not AutoFarmHumanoid
@@ -4826,30 +4481,14 @@ local function SetAutoFarmCoinPosition(position, lookAt)
         return false
     end
 
-    local rotation = AutoFarmRotation or CFrame.new()
-
-    if typeof(lookAt) == "Vector3" then
-        rotation = GetAutoFarmYawCFrame(position, lookAt)
-        AutoFarmRotation = rotation
-    end
-
-    local character = Player.Character
-    local cframe = CFrame.new(position) * rotation
-
     AutoFarmHoldPosition = position
-    AutoFarmRoot.Anchored = true
-
-    if character and character.Parent then
-        character:PivotTo(cframe)
-    else
-        AutoFarmRoot.CFrame = cframe
-    end
-
+    AutoFarmRoot.Anchored = false
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+    AutoFarmRoot.CFrame = CFrame.new(position)
     AutoFarmHumanoid.PlatformStand = false
     AutoFarmHumanoid.Sit = false
-    AutoFarmHumanoid.AutoRotate = false
+    AutoFarmHumanoid.AutoRotate = true
 
     return true
 end
@@ -4861,10 +4500,33 @@ local function TweenFarmRoot(targetPosition, duration, coin)
     end
 
     local generation = AutoFarmGeneration
-    local startPosition = AutoFarmRoot.Position
-    local delta = targetPosition - startPosition
-    local startTime = os.clock()
-    duration = math.max(duration, 0.035)
+    duration = math.max(duration, 0.05)
+
+    if AutoFarmTween then
+        pcall(function()
+            AutoFarmTween:Cancel()
+        end)
+    end
+
+    AutoFarmRoot.Anchored = false
+    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+    AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+
+    local tweenInfo = TweenInfo.new(
+        duration,
+        Enum.EasingStyle.Linear,
+        Enum.EasingDirection.Out
+    )
+
+    AutoFarmTween = TweenService:Create(
+        AutoFarmRoot,
+        tweenInfo,
+        {
+            CFrame = CFrame.new(targetPosition)
+        }
+    )
+
+    AutoFarmTween:Play()
 
     while Settings.MM2AutoFarmV2
     and AutoFarmPrepared
@@ -4874,23 +4536,16 @@ local function TweenFarmRoot(targetPosition, duration, coin)
     and AutoFarmHumanoid
     and AutoFarmHumanoid.Health > 0 do
         if coin and not IsCoinValid(coin) then
+            pcall(function()
+                AutoFarmTween:Cancel()
+            end)
             return false
         end
 
         if IsFarmBagFull() then
-            return false
-        end
-
-        local alpha = math.clamp(
-            (os.clock() - startTime) / duration,
-            0,
-            1
-        )
-
-        local smooth = alpha
-        local position = startPosition + delta * smooth
-
-        if not SetAutoFarmCoinPosition(position, targetPosition) then
+            pcall(function()
+                AutoFarmTween:Cancel()
+            end)
             return false
         end
 
@@ -4898,11 +4553,21 @@ local function TweenFarmRoot(targetPosition, duration, coin)
             TouchCoin(coin)
         end
 
-        if alpha >= 1 then
+        if AutoFarmTween.PlaybackState == Enum.PlaybackState.Completed then
             return true
         end
 
+        if AutoFarmTween.PlaybackState == Enum.PlaybackState.Cancelled then
+            return false
+        end
+
         RunService.Heartbeat:Wait()
+    end
+
+    if AutoFarmTween then
+        pcall(function()
+            AutoFarmTween:Cancel()
+        end)
     end
 
     return false
@@ -5001,6 +4666,7 @@ local function CollectFarmCoin(coin)
     end
 
     AutoFarmAtCoin = true
+    SetAutoFarmCoinPosition(farmPosition)
 
     local holdUntil = os.clock() + AutoFarmCoinHoldTime
 
@@ -5013,16 +4679,10 @@ local function CollectFarmCoin(coin)
     and AutoFarmHumanoid
     and AutoFarmHumanoid.Health > 0
     and os.clock() <= holdUntil do
-        if not SetAutoFarmCoinPosition(farmPosition, position) then
-            break
-        end
+        TouchCoin(coin)
 
-        for _ = 1, 3 do
-            TouchCoin(coin)
-
-            if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
-                return true
-            end
+        if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
+            return true
         end
 
         RunService.Heartbeat:Wait()
@@ -5053,13 +4713,11 @@ local function AutoFarmCoin(coin)
         250
     )
 
-    local speed = math.max(speedValue * 2.2, AutoFarmMinTweenSpeed)
+    local speed = math.clamp(speedValue * 4, AutoFarmMinTweenSpeed, 120)
     local currentPosition = AutoFarmRoot.Position
-    local basePosition = GetCoinBasePosition(coin)
     local travelPosition = GetCoinFarmPosition(coin)
 
-    if not basePosition
-    or not travelPosition then
+    if not travelPosition then
         return false
     end
 
@@ -5088,7 +4746,7 @@ local function AutoFarmCoin(coin)
     end
 
     if not arrived then
-        MM2CoinBlacklist[coin] = os.clock() + 0.12
+        MM2CoinBlacklist[coin] = os.clock() + 0.1
         return false
     end
 
@@ -5097,7 +4755,7 @@ local function AutoFarmCoin(coin)
     if collected then
         MM2CoinBlacklist[coin] = os.clock() + 0.02
     else
-        MM2CoinBlacklist[coin] = os.clock() + 0.16
+        MM2CoinBlacklist[coin] = os.clock() + 0.12
     end
 
     RefreshFarmBagState()
@@ -5108,6 +4766,7 @@ local function AutoFarmCoin(coin)
 
     return collected
 end
+
 AddConnection(RunService.Heartbeat:Connect(function()
     if not Settings.MM2AutoFarmV2
     or not AutoFarmPrepared
@@ -5123,30 +4782,11 @@ AddConnection(RunService.Heartbeat:Connect(function()
         return
     end
 
-    AutoFarmRoot.Anchored = true
-
-    if AutoFarmRotation then
-        local character = Player.Character
-        local position = AutoFarmHoldPosition or AutoFarmRoot.Position
-        local cframe = CFrame.new(position) * AutoFarmRotation
-
-        if character and character.Parent then
-            character:PivotTo(cframe)
-        else
-            AutoFarmRoot.CFrame = cframe
-        end
-    end
-
-    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+    AutoFarmRoot.Anchored = false
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
-
-    if AutoFarmHumanoid
-    and AutoFarmHumanoid.Parent
-    and AutoFarmHumanoid.Health > 0 then
-        AutoFarmHumanoid.PlatformStand = false
-        AutoFarmHumanoid.Sit = false
-        AutoFarmHumanoid.AutoRotate = false
-    end
+    AutoFarmHumanoid.PlatformStand = false
+    AutoFarmHumanoid.Sit = false
+    AutoFarmHumanoid.AutoRotate = true
 end))
 
 task.spawn(function()
