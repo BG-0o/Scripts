@@ -44,7 +44,7 @@ or not CreateButton then
 end
 
 local NDSModuleVersion =
-    "2026-09-09-ui-once-1"
+    "2026-09-11-disaster-sections-1"
 
 if getgenv().ToxNDSModuleLoadedJobId
     == game.JobId
@@ -86,12 +86,19 @@ Settings.NDSWaterFlySpeed = math.clamp(
     250
 )
 
+Settings.NDSDisasterDetector = Settings.NDSDisasterDetector == true
+Settings.NDSCollapsedSections =
+    typeof(Settings.NDSCollapsedSections) == "table"
+    and Settings.NDSCollapsedSections
+    or {}
+
 local AutoWinConnection = nil
 local AutoWinLastActivate = 0
 local AutoWinLastEquip = 0
 local AutoWinTool = nil
 local AutoWinToolName = nil
 local AutoWinPreviousNoclip = nil
+local AutoWinInitialEquipDone = false
 local AutoWinCFrame = CFrame.new(-279.846, 166.742, 341.409)
 
 local WaterFlyConnection = nil
@@ -100,6 +107,11 @@ local WaterFlyHumanoid = nil
 local WaterFlyStateDefaults = {}
 
 local NoFallGeneration = 0
+
+local DisasterConnection = nil
+local LastDisasterNotified = nil
+local LastDisasterNotifyTime = 0
+local LastDisasterScanTime = 0
 
 local NoTPConnection = nil
 local NoTPCharacterConnection = nil
@@ -208,29 +220,21 @@ local function EquipAndGetHotbarTwo()
         return nil
     end
 
-    PressHotbarTwo()
-    task.wait(0.06)
-
     local equipped = character:FindFirstChildOfClass("Tool")
 
     if equipped then
         return equipped
     end
 
-    local apple = FindAppleByName and FindAppleByName()
-
-    if apple and apple:IsA("Tool") then
-        pcall(function()
-            humanoid:EquipTool(apple)
-        end)
-
-        task.wait(0.04)
-
-        return character:FindFirstChildOfClass("Tool")
-            or apple
+    if AutoWinInitialEquipDone then
+        return nil
     end
 
-    return nil
+    AutoWinInitialEquipDone = true
+    PressHotbarTwo()
+    task.wait(0.08)
+
+    return character:FindFirstChildOfClass("Tool")
 end
 
 local FindAppleByName
@@ -285,27 +289,6 @@ local function FindAutoWinTool()
         return hotbarTwo
     end
 
-    local namedApple = FindAppleByName()
-
-    if namedApple then
-        AutoWinTool = namedApple
-        AutoWinToolName = namedApple.Name
-
-        if character
-        and namedApple.Parent ~= character then
-            local humanoid =
-                character:FindFirstChildOfClass("Humanoid")
-
-            if humanoid then
-                pcall(function()
-                    humanoid:EquipTool(namedApple)
-                end)
-            end
-        end
-
-        return namedApple
-    end
-
     if AutoWinToolName then
         local cached =
             (character and character:FindFirstChild(AutoWinToolName))
@@ -327,12 +310,6 @@ local function ClickAutoWinTool(tool)
     or not humanoid
     or humanoid.Health <= 0 then
         return false
-    end
-
-    if tick() - AutoWinLastEquip >= 0.45 then
-        AutoWinLastEquip = tick()
-        PressHotbarTwo()
-        task.wait(0.055)
     end
 
     local equipped =
@@ -413,6 +390,7 @@ local function StopAutoWin()
     AutoWinToolName = nil
     AutoWinLastActivate = 0
     AutoWinLastEquip = 0
+    AutoWinInitialEquipDone = false
 end
 
 local function StartAutoWin()
@@ -425,6 +403,7 @@ local function StartAutoWin()
     AutoWinToolName = nil
     AutoWinLastActivate = 0
     AutoWinLastEquip = 0
+    AutoWinInitialEquipDone = false
     AutoWinPreviousNoclip = Settings.Noclip == true
 
     SetShared("Noclip", true)
@@ -432,6 +411,8 @@ local function StartAutoWin()
     local _, humanoid, root = GetCharacterState()
 
     if humanoid and humanoid.Health > 0 and root then
+        FindAutoWinTool()
+
         AllowToxTeleport(2, "NDS Auto Win")
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
@@ -475,15 +456,11 @@ local function StartAutoWin()
         end
 
         if tool.Parent ~= character then
-            PressHotbarTwo()
-            task.wait(0.05)
-            tool = FindAutoWinTool() or tool
+            pcall(function()
+                currentHumanoid:EquipTool(tool)
+            end)
 
-            if tool.Parent ~= character then
-                pcall(function()
-                    currentHumanoid:EquipTool(tool)
-                end)
-            end
+            task.wait(0.04)
         end
 
         if tool
@@ -1252,6 +1229,226 @@ getgenv().SetNDSNoTPAnchor = function(
     return true
 end
 
+local NDSDisasterNames = {
+    "Acid Rain",
+    "Blizzard",
+    "Deadly Virus",
+    "Earthquake",
+    "Fire",
+    "Flash Flood",
+    "Meteor Shower",
+    "Sandstorm",
+    "Thunder Storm",
+    "Tornado",
+    "Tsunami",
+    "Volcanic Eruption"
+}
+
+local function MatchNDSDisasterText(text)
+    local lower =
+        string.lower(
+            tostring(text or "")
+        )
+
+    for _, name in ipairs(NDSDisasterNames) do
+        local clean =
+            string.lower(name)
+
+        if string.find(
+            lower,
+            clean,
+            1,
+            true
+        ) then
+            return name
+        end
+    end
+
+    if string.find(lower, "meteor", 1, true) then
+        return "Meteor Shower"
+    end
+
+    if string.find(lower, "volcano", 1, true)
+    or string.find(lower, "lava", 1, true) then
+        return "Volcanic Eruption"
+    end
+
+    if string.find(lower, "tsunami", 1, true) then
+        return "Tsunami"
+    end
+
+    if string.find(lower, "tornado", 1, true) then
+        return "Tornado"
+    end
+
+    if string.find(lower, "sandstorm", 1, true)
+    or string.find(lower, "sand storm", 1, true) then
+        return "Sandstorm"
+    end
+
+    if string.find(lower, "blizzard", 1, true) then
+        return "Blizzard"
+    end
+
+    if string.find(lower, "acid", 1, true) then
+        return "Acid Rain"
+    end
+
+    if string.find(lower, "earthquake", 1, true) then
+        return "Earthquake"
+    end
+
+    if string.find(lower, "flash flood", 1, true)
+    or string.find(lower, "flood", 1, true) then
+        return "Flash Flood"
+    end
+
+    if string.find(lower, "thunder", 1, true) then
+        return "Thunder Storm"
+    end
+
+    if lower == "fire"
+    or string.find(lower, "disaster fire", 1, true) then
+        return "Fire"
+    end
+
+    if string.find(lower, "virus", 1, true) then
+        return "Deadly Virus"
+    end
+
+    return nil
+end
+
+local function ReadNDSAttributeDisaster(object)
+    if not object then
+        return nil
+    end
+
+    local names = {
+        "Disaster",
+        "CurrentDisaster",
+        "ActiveDisaster",
+        "DisasterName"
+    }
+
+    for _, attribute in ipairs(names) do
+        local value = object:GetAttribute(attribute)
+
+        if value then
+            local matched = MatchNDSDisasterText(value)
+
+            if matched then
+                return matched
+            end
+        end
+    end
+
+    return nil
+end
+
+local function FindNDSDisaster()
+    local gui = Player:FindFirstChildOfClass("PlayerGui")
+
+    if gui then
+        for _, object in ipairs(gui:GetDescendants()) do
+            if object:IsA("TextLabel")
+            or object:IsA("TextButton")
+            or object:IsA("TextBox") then
+                local matched = MatchNDSDisasterText(object.Text)
+
+                if matched then
+                    return matched
+                end
+            end
+        end
+    end
+
+    for _, object in ipairs({workspace, game:GetService("ReplicatedStorage")}) do
+        local matched = ReadNDSAttributeDisaster(object)
+
+        if matched then
+            return matched
+        end
+    end
+
+    for _, object in ipairs(workspace:GetDescendants()) do
+        local matched = MatchNDSDisasterText(object.Name)
+
+        if matched then
+            return matched
+        end
+    end
+
+    return nil
+end
+
+local function StopNDSDisasterDetector()
+    if DisasterConnection then
+        DisasterConnection:Disconnect()
+        DisasterConnection = nil
+    end
+end
+
+local function StartNDSDisasterDetector()
+    StopNDSDisasterDetector()
+
+    DisasterConnection = AddConnection(RunService.Heartbeat:Connect(function()
+        if not Settings.NDSDisasterDetector then
+            return
+        end
+
+        if tick() - LastDisasterScanTime < 1 then
+            return
+        end
+
+        LastDisasterScanTime = tick()
+
+        local disaster = FindNDSDisaster()
+
+        if disaster
+        and (
+            disaster ~= LastDisasterNotified
+            or tick() - LastDisasterNotifyTime > 28
+        ) then
+            LastDisasterNotified = disaster
+            LastDisasterNotifyTime = tick()
+
+            CustomNotify(
+                "Disaster: " .. disaster,
+                Color3.fromRGB(
+                    255,
+                    190,
+                    70
+                ),
+                5
+            )
+        elseif not disaster then
+            LastDisasterNotified = nil
+        end
+    end))
+end
+
+getgenv().SetNDSDisasterDetector = function(Value, Silent)
+    local enabled = Value == true
+    Settings.NDSDisasterDetector = enabled
+
+    if enabled then
+        StartNDSDisasterDetector()
+    else
+        StopNDSDisasterDetector()
+        LastDisasterNotified = nil
+    end
+
+    if SyncToggleVisuals then
+        SyncToggleVisuals("NDSDisasterDetector", enabled)
+    end
+
+    if not Silent
+    and AutoSaveConfiguration then
+        AutoSaveConfiguration()
+    end
+end
+
 getgenv().SetNDSNoTP = function(Value, Silent)
     local enabled =
         Value == true
@@ -1278,7 +1475,136 @@ getgenv().SetNDSNoTP = function(Value, Silent)
     end
 end
 
-CreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
+local NDSCurrentSection = nil
+local NDSSections = {}
+
+local function ApplyNDSSectionState(section)
+    if typeof(section) ~= "table" then
+        return
+    end
+
+    Settings.NDSCollapsedSections =
+        typeof(Settings.NDSCollapsedSections) == "table"
+        and Settings.NDSCollapsedSections
+        or {}
+
+    local collapsed =
+        Settings.NDSCollapsedSections[section.Key] == true
+
+    if section.Header
+    and section.Header.Parent then
+        section.Header.Text =
+            collapsed
+            and "  > " .. section.Name
+            or "  v " .. section.Name
+    end
+
+    for _, object in ipairs(section.Controls) do
+        if object
+        and object.Parent
+        and object:IsA("GuiObject") then
+            object.Visible = not collapsed
+        end
+    end
+end
+
+local function TrackNDSControl(object)
+    if NDSCurrentSection
+    and object
+    and object:IsA("GuiObject") then
+        table.insert(
+            NDSCurrentSection.Controls,
+            object
+        )
+
+        ApplyNDSSectionState(
+            NDSCurrentSection
+        )
+    end
+
+    return object
+end
+
+local function NDSCreateToggle(...)
+    return TrackNDSControl(
+        CreateToggle(...)
+    )
+end
+
+local function NDSCreateToggleWithValue(...)
+    return TrackNDSControl(
+        CreateToggleWithValue(...)
+    )
+end
+
+local function NDSCreateButton(...)
+    return TrackNDSControl(
+        CreateButton(...)
+    )
+end
+
+local function CreateNDSSection(text)
+    Settings.NDSCollapsedSections =
+        typeof(Settings.NDSCollapsedSections) == "table"
+        and Settings.NDSCollapsedSections
+        or {}
+
+    local name = tostring(text)
+    local key =
+        string.gsub(
+            name,
+            "%s+",
+            ""
+        )
+
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -5, 0, 26)
+    button.BackgroundColor3 = Color3.fromRGB(13, 13, 21)
+    button.BorderSizePixel = 0
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 11
+    button.TextXAlignment = Enum.TextXAlignment.Left
+    button.AutoButtonColor = false
+    button.Parent = GamePage
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 5)
+    corner.Parent = button
+
+    local section = {
+        Name = name,
+        Key = key,
+        Header = button,
+        Controls = {}
+    }
+
+    table.insert(
+        NDSSections,
+        section
+    )
+
+    NDSCurrentSection = section
+
+    button.MouseButton1Click:Connect(function()
+        Settings.NDSCollapsedSections[key] =
+            not Settings.NDSCollapsedSections[key]
+
+        ApplyNDSSectionState(section)
+
+        if AutoSaveConfiguration then
+            AutoSaveConfiguration()
+        end
+    end)
+
+    ApplyNDSSectionState(section)
+
+    return button
+end
+
+CreateNDSSection("AUTO")
+
+NDSCreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
     Settings.NDSAutoWin = v
 
     if v then
@@ -1288,19 +1614,25 @@ CreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
     end
 end, "NDSAutoWin")
 
-CreateToggle("Ctrl Click TP", GamePage, Settings.CtrlClickTP, function(v)
+NDSCreateToggle("Disaster Detector", GamePage, Settings.NDSDisasterDetector, function(v)
+    getgenv().SetNDSDisasterDetector(v, true)
+end, "NDSDisasterDetector")
+
+CreateNDSSection("MOVEMENT")
+
+NDSCreateToggle("Ctrl Click TP", GamePage, Settings.CtrlClickTP, function(v)
     SetShared("CtrlClickTP", v)
 end, "CtrlClickTP")
 
-CreateToggle("No TP", GamePage, Settings.NDSNoTP, function(v)
+NDSCreateToggle("No TP", GamePage, Settings.NDSNoTP, function(v)
     getgenv().SetNDSNoTP(v, true)
 end, "NDSNoTP")
 
-CreateToggle("Noclip", GamePage, Settings.Noclip, function(v)
+NDSCreateToggle("Noclip", GamePage, Settings.Noclip, function(v)
     SetShared("Noclip", v)
 end, "Noclip")
 
-CreateToggleWithValue("Water Fly", GamePage, Settings.NDSWaterFly, Settings.NDSWaterFlySpeed, function(v)
+NDSCreateToggleWithValue("Water Fly", GamePage, Settings.NDSWaterFly, Settings.NDSWaterFlySpeed, function(v)
     getgenv().SetNDSWaterFly(v, true)
 end, function(value)
     Settings.NDSWaterFlySpeed = math.clamp(
@@ -1314,7 +1646,7 @@ end, function(value)
     end
 end, "NDSWaterFly")
 
-CreateToggleWithValue("Car Fly", GamePage, Settings.CarFly, Settings.CarFlySpeed, function(v)
+NDSCreateToggleWithValue("Car Fly", GamePage, Settings.CarFly, Settings.CarFlySpeed, function(v)
     SetShared("CarFly", v)
 end, function(value)
     Settings.CarFlySpeed = math.clamp(tonumber(value) or 80, 5, 300)
@@ -1324,19 +1656,21 @@ end, function(value)
     end
 end, "CarFly")
 
-CreateToggle("No Fall Damage", GamePage, Settings.NoFallDamage, function(v)
+CreateNDSSection("PROTECTION")
+
+NDSCreateToggle("No Fall Damage", GamePage, Settings.NoFallDamage, function(v)
     SetShared("NoFallDamage", v)
 end, "NoFallDamage")
 
-CreateToggle("Anti Void", GamePage, Settings.AntiVoid, function(v)
+NDSCreateToggle("Anti Void", GamePage, Settings.AntiVoid, function(v)
     SetShared("AntiVoid", v)
 end, "AntiVoid")
 
-CreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
+NDSCreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
     SetShared("AntiFling", v)
 end, "AntiFling")
 
-CreateToggle("Walk Fling", GamePage, Settings.WalkFling, function(v)
+NDSCreateToggle("Walk Fling", GamePage, Settings.WalkFling, function(v)
     SetShared("WalkFling", v)
 
     if v then
@@ -1346,11 +1680,13 @@ CreateToggle("Walk Fling", GamePage, Settings.WalkFling, function(v)
     end
 end, "WalkFling")
 
-CreateButton("SPAWN", GamePage, function()
+CreateNDSSection("TELEPORTS")
+
+NDSCreateButton("SPAWN", GamePage, function()
     TeleportTo(SpawnCFrame, "SPAWN")
 end)
 
-CreateButton("ISLAND", GamePage, function()
+NDSCreateButton("ISLAND", GamePage, function()
     TeleportTo(IslandCFrame, "ISLAND")
 end)
 
@@ -1376,6 +1712,10 @@ else
     StopNoTP()
 end
 
+if Settings.NDSDisasterDetector then
+    StartNDSDisasterDetector()
+end
+
 getgenv().ToxNDSCleanup =
     function()
         pcall(
@@ -1392,6 +1732,10 @@ getgenv().ToxNDSCleanup =
 
         pcall(
             StopNoTP
+        )
+
+        pcall(
+            StopNDSDisasterDetector
         )
     end
 
