@@ -21,6 +21,9 @@ local StatsService = game:GetService("Stats")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
+getgenv().Settings = getgenv().Settings or {}
+Settings = getgenv().Settings
+
 local NDSPlaceId = 189707
 local MM2PlaceId = 142823291
 
@@ -44,10 +47,10 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-local ToxUpdateVersion = "2026-09-11-rest-pack-1"
+ToxUpdateVersion = "2026-09-11-rest-pack-2"
 
 
-local function ClearToxTable(target)
+function ClearToxTable(target)
     if typeof(target) ~= "table" then
         return
     end
@@ -61,11 +64,11 @@ Settings.ToxQuickActionsVisible = Settings.ToxQuickActionsVisible == true
 Settings.ToxServerInfoVisible = Settings.ToxServerInfoVisible == true
 Settings.ToxServerInfoMode = Settings.ToxServerInfoMode or "FPS/Ping/Players"
 
-local function GetCurrentPlaceKey()
+function GetCurrentPlaceKey()
     return tostring(game.PlaceId)
 end
 
-local function GetCurrentESPMAX()
+function GetCurrentESPMAX()
     local placeKey = GetCurrentPlaceKey()
     local saved = tonumber(
         Settings.EspMaxDistanceByPlace[placeKey]
@@ -78,7 +81,7 @@ local function GetCurrentESPMAX()
     return tonumber(Settings.EspMaxDistance) or 1000
 end
 
-local function SetCurrentESPMAX(value)
+function SetCurrentESPMAX(value)
     local number = math.clamp(
         math.floor((tonumber(value) or 1000) + 0.5),
         0,
@@ -5241,9 +5244,9 @@ CreateButton("Bundle Edit", ScriptsPage, function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/All/refs/heads/main/BundleEdit.lua"))()
 end)
 
-local CompatibilityButton = nil
+CompatibilityButton = nil
 
-local function GetToxCompatibilityIssues()
+function GetToxCompatibilityIssues()
     local issues = {}
 
     if Settings.SmoothFly and Settings.NormalFly then
@@ -5375,12 +5378,12 @@ CreateToggle(
 )
 
 
-local ServerInfoFrame = nil
-local ServerInfoText = nil
-local ServerInfoFrameCount = 0
-local ServerInfoLastClock = os.clock()
-local ServerInfoFPS = 0
-local ServerInfoModes = {
+ServerInfoFrame = nil
+ServerInfoText = nil
+ServerInfoFrameCount = 0
+ServerInfoLastClock = os.clock()
+ServerInfoFPS = 0
+ServerInfoModes = {
     "FPS",
     "FPS/Ping",
     "FPS/Ping/Players"
@@ -5398,7 +5401,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-local function GetServerPingText()
+function GetServerPingText()
     local ok, value = pcall(function()
         local network = StatsService and StatsService:FindFirstChild("Network")
         local serverStats = network and network:FindFirstChild("ServerStatsItem")
@@ -5418,7 +5421,7 @@ local function GetServerPingText()
     return "N/A"
 end
 
-local function NormalizeServerInfoMode(value)
+function NormalizeServerInfoMode(value)
     value = tostring(value or "")
 
     for _, mode in ipairs(ServerInfoModes) do
@@ -5430,7 +5433,7 @@ local function NormalizeServerInfoMode(value)
     return "FPS/Ping/Players"
 end
 
-local function BuildServerInfoLines()
+function BuildServerInfoLines()
     local mode = NormalizeServerInfoMode(Settings.ToxServerInfoMode)
     local lines = {}
 
@@ -5448,7 +5451,7 @@ local function BuildServerInfoLines()
     return lines
 end
 
-local function RefreshServerInfoSize()
+function RefreshServerInfoSize()
     if not ServerInfoFrame then
         return
     end
@@ -5457,7 +5460,7 @@ local function RefreshServerInfoSize()
     ServerInfoFrame.Size = UDim2.new(0, 190, 0, 34 + lineCount * 20)
 end
 
-local function CreateServerInfoFrame()
+function CreateServerInfoFrame()
     if ServerInfoFrame and ServerInfoFrame.Parent then
         return
     end
@@ -5608,7 +5611,7 @@ local function CreateServerInfoFrame()
     end)
 end
 
-local function SetServerInfoVisible(enabled)
+function SetServerInfoVisible(enabled)
     Settings.ToxServerInfoVisible = enabled == true
     CreateServerInfoFrame()
 
@@ -5628,9 +5631,9 @@ getgenv().OpenToxServerInfo = function()
     AutoSaveConfiguration()
 end
 
-local QuickActionsFrame = nil
+QuickActionsFrame = nil
 
-local function CreateQuickActionsFrame()
+function CreateQuickActionsFrame()
     if QuickActionsFrame and QuickActionsFrame.Parent then
         return
     end
@@ -5748,7 +5751,7 @@ local function CreateQuickActionsFrame()
     end
 end
 
-local function SetQuickActionsVisible(enabled)
+function SetQuickActionsVisible(enabled)
     Settings.ToxQuickActionsVisible = enabled == true
     CreateQuickActionsFrame()
 
@@ -6099,7 +6102,7 @@ AddConnection(UserInputService.JumpRequest:Connect(function()
     end
 end))
 
-local SubGuisPreKeyHiddenState = {}
+SubGuisPreKeyHiddenState = {}
 
 AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and Settings.CtrlClickTP and input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -6275,8 +6278,8 @@ AddConnection(RunService.Stepped:Connect(function()
     if Settings.Fullbright then UpdateFullbright() end
 end))
 
-local FlyBV, FlyBG
-local function DisableNormalFlyPhysics()
+FlyBV, FlyBG
+function DisableNormalFlyPhysics()
     local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
     if FlyBV then FlyBV:Destroy() FlyBV = nil end
     if FlyBG then FlyBG:Destroy() FlyBG = nil end
@@ -6830,7 +6833,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
     end
 end))
 
-local function ShowCenterLoadSequence()
+function ShowCenterLoadSequence()
     local blur = Instance.new("BlurEffect")
     blur.Size = 18
     blur.Parent = Lighting
@@ -6974,10 +6977,10 @@ end
 
 task.spawn(ShowCenterLoadSequence)
 
-local SubGuisPreMinimizedState = {}
-local Minimize = getgenv().Minimize
-local Minimized = false
-local MainExpandedSize =
+SubGuisPreMinimizedState = {}
+Minimize = getgenv().Minimize
+Minimized = false
+MainExpandedSize =
     (
         getgenv().GetSavedGuiSize
         and getgenv().GetSavedGuiSize(
@@ -6997,7 +7000,7 @@ local MainExpandedSize =
         395
     )
 
-local function CollapseSubGuiWithMain(key, gui)
+function CollapseSubGuiWithMain(key, gui)
     if not gui then return end
 
     local control = SubGuiControls[gui]
@@ -7012,7 +7015,7 @@ local function CollapseSubGuiWithMain(key, gui)
     end
 end
 
-local function RestoreSubGuiAfterMain(key, gui)
+function RestoreSubGuiAfterMain(key, gui)
     if not gui then return end
 
     local state = SubGuisPreMinimizedState[key]
