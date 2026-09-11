@@ -3278,6 +3278,32 @@ getgenv().ShowToxUpdateGui = function(version, changes)
         return
     end
 
+    if not getgenv().ScriptLoaded then
+        local queuedVersion = version
+        local queuedChanges = changes
+
+        task.spawn(function()
+            local started = os.clock()
+
+            repeat
+                task.wait(0.05)
+            until getgenv().Destroyed
+            or getgenv().ScriptLoaded
+            or os.clock() - started > 20
+
+            if not getgenv().Destroyed
+            and getgenv().ScriptLoaded
+            and getgenv().ShowToxUpdateGui then
+                getgenv().ShowToxUpdateGui(
+                    queuedVersion,
+                    queuedChanges
+                )
+            end
+        end)
+
+        return
+    end
+
     local old = Gui:FindFirstChild("ToxUpdatedFrame")
 
     if old then
