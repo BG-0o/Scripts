@@ -2311,6 +2311,29 @@ end
 
 local ShootSafetySerial = 0
 local GuidedShotBusy = false
+local AutoShootGeneration = 0
+
+local function CancelAutoShootMurderer(syncVisual)
+    AutoShootGeneration = AutoShootGeneration + 1
+    ShootSafetySerial = ShootSafetySerial + 1
+    GuidedShotBusy = false
+
+    if MM2AutoRuntime then
+        MM2AutoRuntime.Shoot = false
+    end
+
+    Settings.MM2ShootMurderAuto = false
+    Settings.MM2ShootMurderAutoV2 = false
+    AutoShootLastAttempt = os.clock() + 1.5
+
+    if syncVisual and SyncToggleVisuals then
+        SyncToggleVisuals("MM2ShootMurderAutoV2", false)
+    end
+
+    if AutoSaveConfiguration then
+        AutoSaveConfiguration()
+    end
+end
 
 local function IsMM2PlayerAlive(target)
     if not target or not target.Character then
@@ -4382,8 +4405,17 @@ local function SetFarmPosition(position, hold)
         AutoFarmHoldPosition = position
     end
 
-    AutoFarmRoot.Anchored = true
-    AutoFarmRoot.CFrame = CFrame.new(position) * AutoFarmRotation
+    local character = Player.Character
+    local cframe = CFrame.new(position) * AutoFarmRotation
+
+    AutoFarmRoot.Anchored = false
+
+    if character and character.Parent then
+        character:PivotTo(cframe)
+    else
+        AutoFarmRoot.CFrame = cframe
+    end
+
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
 
@@ -4694,7 +4726,7 @@ local function PrepareAutoFarm()
     end
 
     if AutoFarmPrepared and AutoFarmRoot == root then
-        root.Anchored = true
+        root.Anchored = false
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
         humanoid.PlatformStand = false
@@ -4738,16 +4770,16 @@ local function PrepareAutoFarm()
 
     SetFarmCollision(false)
 
-    root.Anchored = true
+    root.Anchored = false
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
     return true
 end
 
-local AutoFarmPickupOffsetY = 0.25
-local AutoFarmCoinHoldTime = 0.28
-local AutoFarmMinTweenSpeed = 36
+local AutoFarmPickupOffsetY = 0
+local AutoFarmCoinHoldTime = 0.55
+local AutoFarmMinTweenSpeed = 32
 local TouchCoin = nil
 
 local function GetCoinBasePosition(coin)
@@ -4805,9 +4837,18 @@ local function SetAutoFarmCoinPosition(position, lookAt)
         AutoFarmRotation = rotation
     end
 
+    local character = Player.Character
+    local cframe = CFrame.new(position) * rotation
+
     AutoFarmHoldPosition = position
-    AutoFarmRoot.Anchored = true
-    AutoFarmRoot.CFrame = CFrame.new(position) * rotation
+    AutoFarmRoot.Anchored = false
+
+    if character and character.Parent then
+        character:PivotTo(cframe)
+    else
+        AutoFarmRoot.CFrame = cframe
+    end
+
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
     AutoFarmHumanoid.PlatformStand = false
@@ -4976,11 +5017,16 @@ local function CollectFarmCoin(coin)
     and AutoFarmHumanoid
     and AutoFarmHumanoid.Health > 0
     and os.clock() <= holdUntil do
-        SetAutoFarmCoinPosition(farmPosition, position)
-        TouchCoin(coin)
+        if not SetAutoFarmCoinPosition(farmPosition, position) then
+            break
+        end
 
-        if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
-            return true
+        for _ = 1, 3 do
+            TouchCoin(coin)
+
+            if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
+                return true
+            end
         end
 
         RunService.Heartbeat:Wait()
@@ -5011,7 +5057,7 @@ local function AutoFarmCoin(coin)
         250
     )
 
-    local speed = math.max(speedValue * 8, AutoFarmMinTweenSpeed)
+    local speed = math.max(speedValue * 6.5, AutoFarmMinTweenSpeed)
     local currentPosition = AutoFarmRoot.Position
     local basePosition = GetCoinBasePosition(coin)
     local travelPosition = GetCoinFarmPosition(coin)
@@ -5081,11 +5127,18 @@ AddConnection(RunService.Heartbeat:Connect(function()
         return
     end
 
-    AutoFarmRoot.Anchored = true
+    AutoFarmRoot.Anchored = false
 
     if AutoFarmRotation then
+        local character = Player.Character
         local position = AutoFarmHoldPosition or AutoFarmRoot.Position
-        AutoFarmRoot.CFrame = CFrame.new(position) * AutoFarmRotation
+        local cframe = CFrame.new(position) * AutoFarmRotation
+
+        if character and character.Parent then
+            character:PivotTo(cframe)
+        else
+            AutoFarmRoot.CFrame = cframe
+        end
     end
 
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
@@ -5638,18 +5691,16 @@ end, "MM2KillAllAutoV2")
 MM2CreateKeybindToggle("Shoot Murderer", GamePage, Settings.MM2ShootMurderKey, MM2AutoRuntime.Shoot, function(key)
     Settings.MM2ShootMurderKey = key
 end, function(enabled)
-    MM2AutoRuntime.Shoot = enabled == true
-    Settings.MM2ShootMurderAutoV2 = MM2AutoRuntime.Shoot
-
-    if not MM2AutoRuntime.Shoot then
-        ShootSafetySerial = ShootSafetySerial + 1
-        GuidedShotBusy = false
-        AutoShootLastAttempt = os.clock() + 2
-    else
+    if enabled then
+        AutoShootGeneration = AutoShootGeneration + 1
+        MM2AutoRuntime.Shoot = true
+        Settings.MM2ShootMurderAutoV2 = true
+        Settings.MM2ShootMurderAuto = false
         AutoShootLastAttempt = 0
+        AutoSaveConfiguration()
+    else
+        CancelAutoShootMurderer(false)
     end
-
-    AutoSaveConfiguration()
 end, "MM2ShootMurderAutoV2")
 
 MM2CreateKeybindToggle("Grab Gun", GamePage, Settings.MM2GrabGunKey, MM2AutoRuntime.GrabGun, function(key)
@@ -6278,36 +6329,26 @@ task.spawn(function()
         and not ActionBusy
         and not GuidedShotBusy
         and gun.Enabled ~= false then
-            local murderer =
-                GetPlayerByRole(
-                    "Murderer"
-                )
-
-            local murderHumanoid =
-                murderer
+            local murderer = FindGuidedMurderer()
+            local murderHumanoid = murderer
                 and murderer.Character
-                and murderer.Character:
-                    FindFirstChildOfClass(
-                        "Humanoid"
-                    )
+                and murderer.Character:FindFirstChildOfClass("Humanoid")
 
-            if murderer
-            and murderHumanoid
-            and murderHumanoid.Health > 0
-            and os.clock() - AutoShootLastAttempt
-                >= 0.04 then
-                AutoShootLastAttempt =
-                    os.clock()
+            if not murderer
+            or not murderHumanoid
+            or murderHumanoid.Health <= 0 then
+                CancelAutoShootMurderer(true)
+            elseif os.clock() - AutoShootLastAttempt >= 0.16 then
+                AutoShootLastAttempt = os.clock()
 
-                local shootSerial = ShootSafetySerial
+                local shootGeneration = AutoShootGeneration
 
                 task.spawn(function()
                     if MM2AutoRuntime.Shoot
                     and Settings.MM2ShootMurderAutoV2
-                    and shootSerial == ShootSafetySerial then
-                        ShootMurderer(
-                            false
-                        )
+                    and shootGeneration == AutoShootGeneration
+                    and not getgenv().Destroyed then
+                        ShootMurderer(false)
                     end
                 end)
             end
@@ -6363,22 +6404,12 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 
     if Settings.MM2ShootMurderKey and input.KeyCode == Settings.MM2ShootMurderKey then
-        if os.clock() - LastManualShootInput < 0.08 then
+        if os.clock() - LastManualShootInput < 0.16 then
             return
         end
 
         LastManualShootInput = os.clock()
-
-        MM2AutoRuntime.Shoot = false
-        Settings.MM2ShootMurderAuto = false
-        Settings.MM2ShootMurderAutoV2 = false
-        ShootSafetySerial = ShootSafetySerial + 1
-
-        if SyncToggleVisuals then
-            SyncToggleVisuals("MM2ShootMurderAutoV2", false)
-        end
-
-        AutoSaveConfiguration()
+        CancelAutoShootMurderer(true)
 
         task.defer(function()
             if not getgenv().Destroyed then
