@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-11-changelog-reload-sections-1"
+ToxUpdateVersion = "2026-09-11-mm2-underground-autofarm-1"
 
 
 function ClearToxTable(target)
@@ -7005,10 +7005,12 @@ if getgenv().ShowToxUpdateGui then
                 "Secoes recolhiveis no MM2."
             },
             FIXED = {
-                "Resize bloqueado quando a UI principal esta minimizada."
+                "Resize bloqueado quando a UI principal esta minimizada.",
+                "Auto Farm do MM2 nao restaura colisao enquanto ainda esta ativo sem moeda."
             },
             CHANGED = {
-                "Menu de update agora separa Added, Fixed, Changed e Removed."
+                "Menu de update agora separa Added, Fixed, Changed e Removed.",
+                "Auto Farm do MM2 agora anda por baixo do mapa e coleta moedas por baixo."
             }
         }
     )
