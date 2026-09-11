@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-11-mm2-autofarm-roundonly-tween-v5"
+ToxUpdateVersion = "2026-09-11-mm2-fling-shoot-farm-fix"
 
 
 function ClearToxTable(target)
@@ -2171,8 +2171,74 @@ end
 CreateJoinInterface()
 RefreshQuickJoinGames()
 
+local ToxActiveFlingTargets = getgenv().ToxActiveFlingTargets
+
+if typeof(ToxActiveFlingTargets) ~= "table" then
+    ToxActiveFlingTargets = setmetatable({}, {__mode = "k"})
+    getgenv().ToxActiveFlingTargets = ToxActiveFlingTargets
+end
+
+local function GetToxFlingBlockReason(targetPlayer)
+    if not targetPlayer
+    or not targetPlayer.Parent
+    or not targetPlayer.Character then
+        return "unavailable"
+    end
+
+    local character = targetPlayer.Character
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local root = character:FindFirstChild("HumanoidRootPart")
+        or humanoid and humanoid.RootPart
+
+    if not humanoid
+    or humanoid.Health <= 0
+    or not root then
+        return "dead"
+    end
+
+    local activeUntil = ToxActiveFlingTargets[targetPlayer]
+
+    if typeof(activeUntil) == "number"
+    and activeUntil > tick() then
+        return "busy"
+    end
+
+    local velocity = root.AssemblyLinearVelocity.Magnitude
+    local angular = root.AssemblyAngularVelocity.Magnitude
+    local state = humanoid:GetState()
+
+    if humanoid.Sit
+    or humanoid.PlatformStand
+    or state == Enum.HumanoidStateType.Ragdoll
+    or state == Enum.HumanoidStateType.FallingDown
+    or state == Enum.HumanoidStateType.Physics
+    or state == Enum.HumanoidStateType.Seated then
+        return "unstable"
+    end
+
+    if velocity > 95
+    or angular > 85 then
+        return "moving"
+    end
+
+    return nil
+end
+
+local function CanStartToxFlingTarget(targetPlayer)
+    local reason = GetToxFlingBlockReason(targetPlayer)
+    return reason == nil, reason
+end
+
+getgenv().ToxCanFlingTarget = CanStartToxFlingTarget
+
 local function SkidFling(TargetPlayer)
-    if not TargetPlayer or not TargetPlayer.Character then return end
+    local canFling, blockReason = CanStartToxFlingTarget(TargetPlayer)
+
+    if not canFling then
+        return false, blockReason
+    end
+
+    if not TargetPlayer or not TargetPlayer.Character then return false end
 
     local Character = Player.Character
     local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
@@ -2184,10 +2250,10 @@ local function SkidFling(TargetPlayer)
     local Accessory = TCharacter and TCharacter:FindFirstChildOfClass("Accessory")
     local Handle = Accessory and Accessory:FindFirstChild("Handle")
 
-    if not (Character and Humanoid and RootPart and TCharacter) then return end
+    if not (Character and Humanoid and RootPart and TCharacter) then return false end
 
     getgenv().OldPos = RootPart.CFrame
-    if THumanoid and THumanoid.Sit then return end
+    if THumanoid and THumanoid.Sit then return false end
 
     local oldCameraSubject = Camera.CameraSubject
     if THead then
@@ -2201,8 +2267,10 @@ local function SkidFling(TargetPlayer)
     local targetBasePart = TRootPart or THead or Handle
     if not targetBasePart then
         Camera.CameraSubject = oldCameraSubject
-        return
+        return false
     end
+
+    ToxActiveFlingTargets[TargetPlayer] = tick() + 4
 
     getgenv().FPDH = workspace.FallenPartsDestroyHeight
 
@@ -2346,6 +2414,9 @@ local function SkidFling(TargetPlayer)
             )
         end)
     end
+
+    ToxActiveFlingTargets[TargetPlayer] = nil
+    return true
 end
 
 getgenv().ToxFlingBypassUntil =
@@ -2481,7 +2552,13 @@ local function ExecuteFling(TargetInput)
     if LowerInput == "all" or LowerInput == "others" then
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= Player then
-                task.spawn(function() SkidFling(p) end)
+                local canFling = CanStartToxFlingTarget(p)
+
+                if canFling then
+                    task.spawn(function()
+                        SkidFling(p)
+                    end)
+                end
             end
         end
         return
@@ -2496,7 +2573,18 @@ local function ExecuteFling(TargetInput)
     end
 
     if target then
-        task.spawn(function() SkidFling(target) end)
+        local canFling, blockReason = CanStartToxFlingTarget(target)
+
+        if canFling then
+            task.spawn(function()
+                SkidFling(target)
+            end)
+        else
+            CustomNotify(
+                "Fling skipped • " .. tostring(blockReason or "busy"),
+                Color3.fromRGB(255, 180, 70)
+            )
+        end
     else
         CustomNotify("Player not found!", Color3.fromRGB(255, 100, 100))
     end
@@ -7265,21 +7353,21 @@ if getgenv().ShowToxUpdateGui then
         ToxUpdateVersion,
         {
             ADDED = {
-                "Auto Farm do MM2 agora valida partida ativa antes de iniciar."
+                "Fling agora ignora alvo morto, instavel ou ja sendo flingado."
             },
             FIXED = {
-                "Auto Farm do MM2 nao funciona mais no lobby.",
-                "Auto Farm do MM2 nao usa mais fallback no workspace inteiro para evitar moeda falsa ou direcao aleatoria.",
-                "Auto Farm do MM2 para corretamente quando nao existe CoinContainer valido.",
-                "Auto Win e Reset On Full continuam executando somente quando a mochila estiver cheia."
+                "Auto Farm do MM2 voltou para tween padrao levando o personagem inteiro ate a moeda.",
+                "Auto Farm do MM2 respeita melhor a velocidade configurada.",
+                "Silent Aim nao fica mais em loop automatico.",
+                "Shoot Murderer automatico cancela melhor quando desativado.",
+                "Shoot Murderer manual no C usa disparo guiado com mais amostras."
             },
             CHANGED = {
-                "Auto Farm do MM2 voltou para tween direto na moeda real do CoinContainer.",
-                "Auto Farm do MM2 prioriza a moeda mais proxima e usa moeda aleatoria a cada 10 coletas.",
-                "Coleta do MM2 ficou mais simples para evitar subir para o ceu ou ficar preso parado."
+                "Silent Aim ativado libera o uso da tecla E e desativado bloqueia a tecla E.",
+                "Auto Farm do MM2 continua priorizando moeda mais proxima e alternando uma aleatoria a cada 10 coletas."
             },
             REMOVED = {
-                "Removido comportamento de buscar moedas fora da partida/lobby."
+                "Removido loop automatico do Silent Aim."
             }
         }
     )
