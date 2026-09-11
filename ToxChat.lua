@@ -991,11 +991,22 @@ task.spawn(function()
 end)
 
 
-CreateButton("Tox Chat", FlingPage, function()
-    if ToxChatGui then
-        ToxChatGui.Visible =
-            not ToxChatGui.Visible
-    end
-end)
+local ToxChatPageButton =
+    CreateButton(
+        "Tox Chat",
+        FlingPage,
+        function()
+            if ToxChatGui then
+                ToxChatGui.Visible =
+                    not ToxChatGui.Visible
+            end
+        end
+    )
+
+if ToxChatPageButton then
+    ToxChatPageButton.LayoutOrder =
+        991
+end
+
 
 getgenv().ToxChatLoaded = true
