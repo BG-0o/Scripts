@@ -3864,12 +3864,19 @@ if coinCollectedRemote and coinCollectedRemote:IsA("RemoteEvent") then
 end
 
 local function IsCoinValid(coin)
-    return coin
-        and coin.Parent
-        and coin:IsA("BasePart")
-        and not coin:GetAttribute("Collected")
-        and not coin:GetAttribute("Delete")
-        and coin.Transparency < 0.95
+    if not coin
+    or not coin.Parent
+    or not coin:IsA("BasePart")
+    or coin:GetAttribute("Collected")
+    or coin:GetAttribute("Delete") then
+        return false
+    end
+
+    if coin.Transparency < 0.98 then
+        return true
+    end
+
+    return coin:FindFirstChildWhichIsA("TouchTransmitter", true) ~= nil
 end
 
 local function GetMM2Coins(force)
@@ -4062,33 +4069,80 @@ local function GetBestCoin(origin, competitionAware)
     return bestCoin
 end
 
-local function TouchCoin(coin)
-    if not IsCoinValid(coin) then
-        return false
-    end
+function ToxMM2GetCoinTouchParts(coin)
+    local parts = {}
 
-    local character, humanoid, root, alive = IsAliveCharacter()
+    if coin
+    and coin.Parent then
+        if coin:IsA("BasePart") then
+            table.insert(parts, coin)
+        end
 
-    if not alive then
-        return false
-    end
+        local parent = coin.Parent
 
-    local touched = false
+        if parent then
+            for _, object in ipairs(parent:GetDescendants()) do
+                if object:IsA("BasePart")
+                and object ~= coin then
+                    local lower = string.lower(tostring(object.Name or ""))
 
-    if firetouchinterest then
-        for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                pcall(function()
-                    firetouchinterest(part, coin, 0)
-                    firetouchinterest(part, coin, 1)
-                end)
-
-                touched = true
+                    if object:FindFirstChildWhichIsA("TouchTransmitter", true)
+                    or string.find(lower, "coin", 1, true)
+                    or string.find(lower, "touch", 1, true)
+                    or string.find(lower, "hit", 1, true) then
+                        table.insert(parts, object)
+                    end
+                end
             end
         end
     end
 
-    return touched
+    return parts
+end
+
+function ToxMM2GetCharacterTouchParts(character, root)
+    local parts = {}
+
+    if root then
+        table.insert(parts, root)
+    end
+
+    if character then
+        local names = {
+            "UpperTorso",
+            "LowerTorso",
+            "Torso",
+            "HumanoidRootPart",
+            "LeftFoot",
+            "RightFoot",
+            "Left Leg",
+            "Right Leg",
+            "LeftLowerLeg",
+            "RightLowerLeg"
+        }
+
+        for _, name in ipairs(names) do
+            local part = character:FindFirstChild(name, true)
+
+            if part
+            and part:IsA("BasePart") then
+                local exists = false
+
+                for _, saved in ipairs(parts) do
+                    if saved == part then
+                        exists = true
+                        break
+                    end
+                end
+
+                if not exists then
+                    table.insert(parts, part)
+                end
+            end
+        end
+    end
+
+    return parts
 end
 
 local function SetFarmCollision(enabled)
@@ -4379,8 +4433,8 @@ local function PrepareAutoFarm()
 end
 
 local AutoFarmUndergroundTravelOffset = 5
-local AutoFarmUndergroundPickupOffset = 3.25
-local AutoFarmCoinHoldTime = 0.55
+local AutoFarmUndergroundPickupOffset = 2.55
+local AutoFarmCoinHoldTime = 1.05
 
 local function GetCoinBasePosition(coin)
     if not coin
@@ -4469,18 +4523,30 @@ local function TouchCoin(coin)
         return false
     end
 
+    local coinParts = ToxMM2GetCoinTouchParts(coin)
+    local characterParts = ToxMM2GetCharacterTouchParts(character, root)
+    local touched = false
+
     if firetouchinterest then
-        for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                pcall(function()
-                    firetouchinterest(part, coin, 0)
-                    firetouchinterest(part, coin, 1)
-                end)
+        for _, coinPart in ipairs(coinParts) do
+            if coinPart
+            and coinPart.Parent then
+                for _, bodyPart in ipairs(characterParts) do
+                    if bodyPart
+                    and bodyPart.Parent then
+                        pcall(function()
+                            firetouchinterest(bodyPart, coinPart, 0)
+                            firetouchinterest(bodyPart, coinPart, 1)
+                        end)
+
+                        touched = true
+                    end
+                end
             end
         end
     end
 
-    return true
+    return touched
 end
 
 local function CollectFarmCoin(coin)
@@ -4493,12 +4559,22 @@ local function CollectFarmCoin(coin)
     local generation = AutoFarmGeneration
     local serialBefore = AutoFarmCoinSerial
     local bagBefore = AutoFarmBagCoins
-    local pickupPosition = GetCoinPickupPosition(coin)
     local holdUntil = os.clock() + AutoFarmCoinHoldTime
+    local sweepIndex = 1
+    local sweepOffsets = {
+        Vector3.new(0, 0, 0),
+        Vector3.new(0, 0.55, 0),
+        Vector3.new(0, 1.05, 0),
+        Vector3.new(0.65, 0.65, 0),
+        Vector3.new(-0.65, 0.65, 0),
+        Vector3.new(0, 0.65, 0.65),
+        Vector3.new(0, 0.65, -0.65),
+        Vector3.new(0, 1.35, 0)
+    }
 
     AutoFarmAtCoin = true
 
-    SetFarmPosition(pickupPosition)
+    SetFarmPosition(GetCoinPickupPosition(coin))
     RunService.Heartbeat:Wait()
 
     while Settings.MM2AutoFarmV2
@@ -4508,10 +4584,19 @@ local function CollectFarmCoin(coin)
     and AutoFarmRoot
     and AutoFarmRoot.Parent
     and os.clock() <= holdUntil do
-        if (AutoFarmRoot.Position - pickupPosition).Magnitude > 1.25 then
-            SetFarmPosition(pickupPosition)
-        else
-            AutoFarmRoot.CFrame = CFrame.new(pickupPosition) * AutoFarmRotation
+        local basePosition = GetCoinPickupPosition(coin)
+        local offset = sweepOffsets[sweepIndex]
+        local targetPosition = basePosition + offset
+
+        sweepIndex = sweepIndex + 1
+
+        if sweepIndex > #sweepOffsets then
+            sweepIndex = 1
+        end
+
+        if AutoFarmRotation then
+            AutoFarmRoot.Anchored = false
+            AutoFarmRoot.CFrame = CFrame.new(targetPosition) * AutoFarmRotation
             AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
             AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
         end
@@ -4536,7 +4621,7 @@ local function CollectFarmCoin(coin)
             return true
         end
 
-        RunService.Heartbeat:Wait()
+        task.wait(0.035)
     end
 
     AutoFarmAtCoin = false
@@ -4592,9 +4677,9 @@ local function AutoFarmCoin(coin)
     local collected = CollectFarmCoin(coin)
 
     if collected then
-        MM2CoinBlacklist[coin] = os.clock() + 0.2
+        MM2CoinBlacklist[coin] = os.clock() + 0.12
     else
-        MM2CoinBlacklist[coin] = os.clock() + 1.1
+        MM2CoinBlacklist[coin] = os.clock() + 0.35
     end
 
     if IsFarmBagFull()
