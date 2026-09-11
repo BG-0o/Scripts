@@ -122,9 +122,9 @@ local function GetCharacterState()
     return character, humanoid, root
 end
 
-local function AllowToxTeleport(seconds)
+local function AllowToxTeleport(seconds, reason)
     if getgenv().AllowToxTeleport then
-        getgenv().AllowToxTeleport(seconds or 1)
+        getgenv().AllowToxTeleport(seconds or 1, reason or "NDS")
     end
 end
 
@@ -162,7 +162,11 @@ local function TeleportTo(cframe, name)
         return
     end
 
-    AllowToxTeleport(1.5)
+    if getgenv().RecordToxTeleportReturn then
+        getgenv().RecordToxTeleportReturn()
+    end
+
+    AllowToxTeleport(1.5, "NDS " .. tostring(name or "TP"))
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
     root.CFrame = cframe
@@ -428,7 +432,7 @@ local function StartAutoWin()
     local _, humanoid, root = GetCharacterState()
 
     if humanoid and humanoid.Health > 0 and root then
-        AllowToxTeleport(2)
+        AllowToxTeleport(2, "NDS Auto Win")
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
         root.CFrame = AutoWinCFrame
@@ -454,7 +458,7 @@ local function StartAutoWin()
         end
 
         if (currentRoot.Position - AutoWinCFrame.Position).Magnitude > 5 then
-            AllowToxTeleport(0.35)
+            AllowToxTeleport(0.35, "NDS Auto Win Step")
             currentRoot.AssemblyLinearVelocity = Vector3.zero
             currentRoot.AssemblyAngularVelocity = Vector3.zero
             currentRoot.CFrame = AutoWinCFrame
@@ -880,11 +884,10 @@ local function RestoreNoTPCharacter(
             local safe =
                 GetNDSRespawnSafeCFrame()
 
-            if getgenv().AllowToxTeleport then
-                getgenv().AllowToxTeleport(
-                    1.25
-                )
-            end
+            AllowToxTeleport(
+                1.25,
+                "NDS Void Restore"
+            )
 
             root.AssemblyLinearVelocity =
                 Vector3.zero
@@ -1054,8 +1057,13 @@ local function StartNoTP()
                 getgenv().ToxTeleportBypassUntil
             ) or 0
 
+        local toxTeleportAllowed =
+            getgenv().ToxIsToxTeleportAllowed
+            and getgenv().ToxIsToxTeleportAllowed()
+
         if tick() < flingBypassUntil
         or tick() < teleportBypassUntil
+        or toxTeleportAllowed
         or (
             Settings.WalkFling
             and getgenv().ToxWalkFlingImpulseActive
@@ -1123,7 +1131,12 @@ local function StartNoTP()
                 getgenv().ToxTeleportBypassUntil
             ) or 0
 
-        if tick() < bypassUntil then
+        local toxTeleportAllowed =
+            getgenv().ToxIsToxTeleportAllowed
+            and getgenv().ToxIsToxTeleportAllowed()
+
+        if tick() < bypassUntil
+        or toxTeleportAllowed then
             NoTPCorrectionCFrame = nil
             NoTPCorrectionUntil = 0
 
