@@ -4333,7 +4333,7 @@ local function SetFarmPosition(position, hold)
         AutoFarmHoldPosition = position
     end
 
-    AutoFarmRoot.Anchored = false
+    AutoFarmRoot.Anchored = true
     AutoFarmRoot.CFrame = CFrame.new(position) * AutoFarmRotation
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
@@ -4676,7 +4676,7 @@ local function PrepareAutoFarm()
 
     SetFarmCollision(false)
 
-    root.Anchored = false
+    root.Anchored = true
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
@@ -4823,14 +4823,20 @@ local function GetCoinTravelPosition(coin, currentPosition)
     local position = GetCoinBasePosition(coin)
 
     if not position then
+        if typeof(currentPosition) == "Vector3" then
+            return currentPosition
+        end
+
         return Vector3.zero
     end
 
-    local targetY = position.Y + 0.15
-    local floorY = GetCoinFloorY(coin)
+    local targetY = position.Y + 0.2
 
-    if floorY then
-        targetY = math.max(targetY, floorY + 2.35)
+    if typeof(currentPosition) == "Vector3" then
+        if currentPosition.Y > targetY + 7 then
+            AutoFarmLastTravelY = targetY
+            return Vector3.new(currentPosition.X, targetY, currentPosition.Z)
+        end
     end
 
     AutoFarmLastTravelY = targetY
@@ -4844,14 +4850,7 @@ local function GetCoinPickupPosition(coin)
         return Vector3.zero
     end
 
-    local targetY = position.Y + 0.05
-    local floorY = GetCoinFloorY(coin)
-
-    if floorY then
-        targetY = math.max(targetY, floorY + 2.2)
-    end
-
-    return Vector3.new(position.X, targetY, position.Z)
+    return Vector3.new(position.X, position.Y + 0.1, position.Z)
 end
 
 local function TweenFarmRoot(targetPosition, duration, coin)
@@ -5039,26 +5038,37 @@ local function AutoFarmCoin(coin)
 
     local speed = speedValue * 4
     local currentPosition = AutoFarmRoot.Position
-    local travelPosition = GetCoinTravelPosition(coin, currentPosition)
-    local descendPosition = Vector3.new(
+    local basePosition = GetCoinBasePosition(coin)
+
+    if not basePosition then
+        return false
+    end
+
+    local farmY = basePosition.Y + 0.2
+    local levelPosition = Vector3.new(
         currentPosition.X,
-        travelPosition.Y,
+        farmY,
         currentPosition.Z
     )
 
-    if currentPosition.Y > travelPosition.Y + 0.08 then
-        SetFarmPosition(descendPosition, true)
+    if math.abs(currentPosition.Y - farmY) > 0.35 then
+        SetFarmPosition(levelPosition, true)
         RunService.Heartbeat:Wait()
-    else
-        SetFarmPosition(descendPosition, true)
+        currentPosition = levelPosition
     end
 
     if not Settings.MM2AutoFarmV2 then
         return false
     end
 
+    local travelPosition = Vector3.new(
+        basePosition.X,
+        farmY,
+        basePosition.Z
+    )
+
     local horizontalDistance = (
-        Vector2.new(descendPosition.X, descendPosition.Z)
+        Vector2.new(currentPosition.X, currentPosition.Z)
         - Vector2.new(travelPosition.X, travelPosition.Z)
     ).Magnitude
 
@@ -5091,11 +5101,17 @@ local function AutoFarmCoin(coin)
     RunService.Heartbeat:Wait()
 
     local collected = CollectFarmCoin(coin)
-    local leavePosition = GetCoinTravelPosition(coin, AutoFarmRoot and AutoFarmRoot.Position or pickupPosition)
 
     if AutoFarmRoot
     and AutoFarmRoot.Parent then
-        SetFarmPosition(leavePosition, true)
+        SetFarmPosition(
+            Vector3.new(
+                pickupPosition.X,
+                pickupPosition.Y + 0.1,
+                pickupPosition.Z
+            ),
+            true
+        )
     end
 
     if collected then
@@ -5119,7 +5135,7 @@ AddConnection(RunService.Heartbeat:Connect(function()
         return
     end
 
-    AutoFarmRoot.Anchored = false
+    AutoFarmRoot.Anchored = true
 
     if AutoFarmRotation then
         local position = AutoFarmHoldPosition or AutoFarmRoot.Position
