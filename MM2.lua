@@ -3750,6 +3750,8 @@ local AutoFarmOriginalSit = false
 local AutoFarmOriginalRagdoll = true
 local AutoFarmOriginalFallingDown = true
 local AutoFarmCollisionCache = {}
+local AutoFarmCanTouchCache = {}
+local AutoFarmHoldPosition = nil
 local AutoFarmPrepared = false
 local AutoFarmBagCoins = 0
 local AutoFarmBagMax = 40
@@ -4154,11 +4156,14 @@ local function SetFarmCollision(enabled)
 
     if not enabled then
         ClearToxTable(AutoFarmCollisionCache)
+        ClearToxTable(AutoFarmCanTouchCache)
 
         for _, part in ipairs(character:GetDescendants()) do
             if part:IsA("BasePart") then
                 AutoFarmCollisionCache[part] = part.CanCollide
+                AutoFarmCanTouchCache[part] = part.CanTouch
                 part.CanCollide = false
+                part.CanTouch = true
             end
         end
     else
@@ -4168,7 +4173,14 @@ local function SetFarmCollision(enabled)
             end
         end
 
+        for part, oldValue in pairs(AutoFarmCanTouchCache) do
+            if part and part.Parent then
+                part.CanTouch = oldValue
+            end
+        end
+
         ClearToxTable(AutoFarmCollisionCache)
+        ClearToxTable(AutoFarmCanTouchCache)
     end
 end
 
@@ -4188,7 +4200,7 @@ local function EnableLocalControls()
     end)
 end
 
-local function SetFarmPosition(position)
+local function SetFarmPosition(position, hold)
     if not AutoFarmRoot
     or not AutoFarmRoot.Parent
     or not AutoFarmRotation then
@@ -4199,6 +4211,10 @@ local function SetFarmPosition(position)
 
     if allow then
         allow(0.18, "MM2 Auto Farm")
+    end
+
+    if hold then
+        AutoFarmHoldPosition = position
     end
 
     AutoFarmRoot.Anchored = false
@@ -4236,6 +4252,7 @@ end
 local function StopAutoFarm(restore)
     AutoFarmGeneration = AutoFarmGeneration + 1
     AutoFarmAtCoin = false
+    AutoFarmHoldPosition = nil
 
     if AutoFarmTween then
         pcall(function()
@@ -4296,6 +4313,7 @@ local function StopAutoFarm(restore)
     AutoFarmHumanoid = nil
     AutoFarmReturnCFrame = nil
     AutoFarmRotation = nil
+    AutoFarmHoldPosition = nil
     AutoFarmPrepared = false
 
     if not AutoFarmPausedFull then
@@ -4412,6 +4430,7 @@ local function PrepareAutoFarm()
     AutoFarmOriginalFallingDown = humanoid:GetStateEnabled(Enum.HumanoidStateType.FallingDown)
     AutoFarmPrepared = true
     AutoFarmAtCoin = false
+    AutoFarmHoldPosition = nil
     AutoFarmSessionCollected = 0
 
     humanoid.PlatformStand = true
@@ -4432,9 +4451,9 @@ local function PrepareAutoFarm()
     return true
 end
 
-local AutoFarmUndergroundTravelOffset = 5
-local AutoFarmUndergroundPickupOffset = 2.55
-local AutoFarmCoinHoldTime = 1.05
+local AutoFarmUndergroundTravelOffset = 6.75
+local AutoFarmUndergroundPickupOffset = 6.35
+local AutoFarmCoinHoldTime = 1.25
 
 local function GetCoinBasePosition(coin)
     if not coin
@@ -4498,7 +4517,7 @@ local function TweenFarmRoot(targetPosition, duration, coin)
             1
         )
 
-        if not SetFarmPosition(startPosition + delta * alpha) then
+        if not SetFarmPosition(startPosition + delta * alpha, true) then
             return false
         end
 
@@ -4560,21 +4579,11 @@ local function CollectFarmCoin(coin)
     local serialBefore = AutoFarmCoinSerial
     local bagBefore = AutoFarmBagCoins
     local holdUntil = os.clock() + AutoFarmCoinHoldTime
-    local sweepIndex = 1
-    local sweepOffsets = {
-        Vector3.new(0, 0, 0),
-        Vector3.new(0, 0.55, 0),
-        Vector3.new(0, 1.05, 0),
-        Vector3.new(0.65, 0.65, 0),
-        Vector3.new(-0.65, 0.65, 0),
-        Vector3.new(0, 0.65, 0.65),
-        Vector3.new(0, 0.65, -0.65),
-        Vector3.new(0, 1.35, 0)
-    }
+    local pickupPosition = GetCoinPickupPosition(coin)
+    local retouchAt = 0
 
     AutoFarmAtCoin = true
-
-    SetFarmPosition(GetCoinPickupPosition(coin))
+    SetFarmPosition(pickupPosition, true)
     RunService.Heartbeat:Wait()
 
     while Settings.MM2AutoFarmV2
@@ -4584,29 +4593,26 @@ local function CollectFarmCoin(coin)
     and AutoFarmRoot
     and AutoFarmRoot.Parent
     and os.clock() <= holdUntil do
-        local basePosition = GetCoinPickupPosition(coin)
-        local offset = sweepOffsets[sweepIndex]
-        local targetPosition = basePosition + offset
-
-        sweepIndex = sweepIndex + 1
-
-        if sweepIndex > #sweepOffsets then
-            sweepIndex = 1
-        end
+        pickupPosition = GetCoinPickupPosition(coin)
+        AutoFarmHoldPosition = pickupPosition
 
         if AutoFarmRotation then
             AutoFarmRoot.Anchored = false
-            AutoFarmRoot.CFrame = CFrame.new(targetPosition) * AutoFarmRotation
+            AutoFarmRoot.CFrame = CFrame.new(pickupPosition) * AutoFarmRotation
             AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
             AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
         end
 
-        TouchCoin(coin)
+        if os.clock() >= retouchAt then
+            TouchCoin(coin)
+            retouchAt = os.clock() + 0.08
+        end
 
         if not IsCoinValid(coin)
         or AutoFarmCoinSerial ~= serialBefore
         or AutoFarmBagCoins > bagBefore then
             AutoFarmAtCoin = false
+            AutoFarmHoldPosition = nil
             AutoFarmSessionCollected = AutoFarmSessionCollected + 1
 
             if AutoFarmCoinSerial == serialBefore
@@ -4621,13 +4627,13 @@ local function CollectFarmCoin(coin)
             return true
         end
 
-        task.wait(0.035)
+        task.wait(0.025)
     end
 
     AutoFarmAtCoin = false
+    AutoFarmHoldPosition = nil
     return false
 end
-
 local function AutoFarmCoin(coin)
     if not IsCoinValid(coin) or not PrepareAutoFarm() then
         return false
@@ -4701,7 +4707,8 @@ AddConnection(RunService.Heartbeat:Connect(function()
     AutoFarmRoot.Anchored = false
 
     if AutoFarmRotation then
-        AutoFarmRoot.CFrame = CFrame.new(AutoFarmRoot.Position) * AutoFarmRotation
+        local position = AutoFarmHoldPosition or AutoFarmRoot.Position
+        AutoFarmRoot.CFrame = CFrame.new(position) * AutoFarmRotation
     end
 
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
