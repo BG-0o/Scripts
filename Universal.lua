@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-11-mm2-underground-autofarm-1"
+ToxUpdateVersion = "2026-09-11-serverhop-modes-1"
 
 
 function ClearToxTable(target)
@@ -2973,22 +2973,247 @@ pcall(function()
     end
 end)
 
-local function ServerHop()
-    pcall(function()
-        local sfUrl = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/0?sortOrder=Asc&limit=100"
-        local req = game:HttpGet(sfUrl)
-        local data = HttpService:JSONDecode(req)
-        if data and data.data then
-            for _, s in ipairs(data.data) do
-                if s.playing < s.maxPlayers and s.id ~= game.JobId then
-                    TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, Player)
-                    CustomNotify("Teleporting to server...", Color3.fromRGB(100, 255, 100))
-                    return
-                end
+local ServerHopMenu = nil
+local ServerHopOverlay = nil
+
+local function CloseServerHopMenu()
+    if ServerHopMenu then
+        ServerHopMenu:Destroy()
+        ServerHopMenu = nil
+    end
+
+    if ServerHopOverlay then
+        ServerHopOverlay:Destroy()
+        ServerHopOverlay = nil
+    end
+end
+
+local function GetServerHopScore(server, mode)
+    if typeof(server) ~= "table" then
+        return nil
+    end
+
+    local playing = tonumber(server.playing) or 0
+    local maxPlayers = tonumber(server.maxPlayers) or 0
+    local serverId = tostring(server.id or "")
+
+    if serverId == ""
+    or serverId == game.JobId
+    or maxPlayers <= 0
+    or playing >= maxPlayers then
+        return nil
+    end
+
+    if mode == "High" then
+        return -playing
+    end
+
+    if mode == "Medium" then
+        return math.abs(playing - (maxPlayers * 0.5))
+    end
+
+    return playing
+end
+
+local function FetchServerHopPage(cursor, order)
+    local url =
+        "https://games.roblox.com/v1/games/"
+        .. tostring(game.PlaceId)
+        .. "/servers/Public?sortOrder="
+        .. order
+        .. "&limit=100"
+
+    if cursor and cursor ~= "" then
+        url = url .. "&cursor=" .. cursor
+    end
+
+    local ok, result = pcall(function()
+        return game:HttpGet(url)
+    end)
+
+    if not ok
+    or not result then
+        return nil
+    end
+
+    local decodeOk, data = pcall(function()
+        return HttpService:JSONDecode(result)
+    end)
+
+    if decodeOk then
+        return data
+    end
+
+    return nil
+end
+
+local function FindServerHopTarget(mode)
+    mode = tostring(mode or "Low")
+
+    if mode ~= "Low"
+    and mode ~= "Medium"
+    and mode ~= "High" then
+        mode = "Low"
+    end
+
+    local order = mode == "High" and "Desc" or "Asc"
+    local cursor = nil
+    local selected = nil
+    local selectedScore = nil
+
+    for _ = 1, 5 do
+        local data = FetchServerHopPage(cursor, order)
+
+        if not data
+        or typeof(data.data) ~= "table" then
+            break
+        end
+
+        for _, server in ipairs(data.data) do
+            local score = GetServerHopScore(server, mode)
+
+            if score
+            and (
+                not selectedScore
+                or score < selectedScore
+            ) then
+                selected = server
+                selectedScore = score
             end
         end
-        CustomNotify("No suitable server found", Color3.fromRGB(255, 100, 100))
+
+        cursor = data.nextPageCursor
+
+        if not cursor
+        or cursor == "" then
+            break
+        end
+
+        if selected and mode ~= "Medium" then
+            break
+        end
+    end
+
+    return selected
+end
+
+local function ServerHop(mode)
+    mode = tostring(mode or "Low")
+
+    CustomNotify(
+        "Searching " .. mode .. " server...",
+        Color3.fromRGB(100, 180, 255),
+        3
+    )
+
+    task.spawn(function()
+        local server = FindServerHopTarget(mode)
+
+        if server
+        and server.id then
+            CustomNotify(
+                "Teleporting to "
+                .. mode
+                .. " server • "
+                .. tostring(server.playing or "?")
+                .. "/"
+                .. tostring(server.maxPlayers or "?"),
+                Color3.fromRGB(100, 255, 100),
+                5
+            )
+
+            TeleportService:TeleportToPlaceInstance(
+                game.PlaceId,
+                tostring(server.id),
+                Player
+            )
+
+            return
+        end
+
+        CustomNotify(
+            "No " .. mode .. " server found",
+            Color3.fromRGB(255, 100, 100),
+            5
+        )
     end)
+end
+
+local function AddServerHopOption(parent, text, y, mode)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -10, 0, 28)
+    button.Position = UDim2.new(0, 5, 0, y)
+    button.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+    button.BorderSizePixel = 0
+    button.Text = text
+    button.TextColor3 = Color3.fromRGB(240, 240, 240)
+    button.TextSize = 12
+    button.Font = Enum.Font.GothamMedium
+    button.ZIndex = 202
+    button.Parent = parent
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = button
+
+    button.MouseButton1Click:Connect(function()
+        CloseServerHopMenu()
+        ServerHop(mode)
+    end)
+end
+
+local function ShowServerHopMenu(button)
+    CloseServerHopMenu()
+
+    local gui = getgenv().Gui
+
+    if not gui
+    or not button then
+        ServerHop("Low")
+        return
+    end
+
+    ServerHopOverlay = Instance.new("TextButton")
+    ServerHopOverlay.Name = "ToxServerHopOverlay"
+    ServerHopOverlay.Size = UDim2.new(1, 0, 1, 0)
+    ServerHopOverlay.Position = UDim2.new(0, 0, 0, 0)
+    ServerHopOverlay.BackgroundTransparency = 1
+    ServerHopOverlay.Text = ""
+    ServerHopOverlay.AutoButtonColor = false
+    ServerHopOverlay.ZIndex = 198
+    ServerHopOverlay.Parent = gui
+
+    local absolute = button.AbsolutePosition
+    local size = button.AbsoluteSize
+    local viewport = Camera and Camera.ViewportSize or Vector2.new(800, 600)
+    local x = math.clamp(absolute.X, 8, math.max(8, viewport.X - 176))
+    local y = math.clamp(absolute.Y + size.Y + 4, 8, math.max(8, viewport.Y - 110))
+
+    ServerHopMenu = Instance.new("Frame")
+    ServerHopMenu.Name = "ToxServerHopMenu"
+    ServerHopMenu.Size = UDim2.new(0, 168, 0, 100)
+    ServerHopMenu.Position = UDim2.new(0, x, 0, y)
+    ServerHopMenu.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+    ServerHopMenu.BorderSizePixel = 0
+    ServerHopMenu.ZIndex = 200
+    ServerHopMenu.Parent = gui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = ServerHopMenu
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = MAIN_COLOR
+    stroke.Thickness = 1
+    stroke.Transparency = 0.15
+    stroke.Parent = ServerHopMenu
+
+    AddServerHopOption(ServerHopMenu, "Low", 6, "Low")
+    AddServerHopOption(ServerHopMenu, "Medium", 36, "Medium")
+    AddServerHopOption(ServerHopMenu, "High", 66, "High")
+
+    ServerHopOverlay.MouseButton1Click:Connect(CloseServerHopMenu)
+    ServerHopOverlay.MouseButton2Click:Connect(CloseServerHopMenu)
 end
 
 local FPSObjectDefaults = {}
@@ -5750,7 +5975,7 @@ CreateKeybindButton("GUI Keybind", ConfigPage, Settings.GUIKeybind, function(key
         getgenv().AutoSaveConfiguration()
     end
 end)
-CreateConfirmButton("Server Hop", ConfigPage, function() ServerHop() end)
+CreateButton("Server Hop", ConfigPage, function(button) ShowServerHopMenu(button) end)
 CreateConfirmButton("Rejoin Server", ConfigPage, function()
 	if #Players:GetPlayers() <= 1 then TeleportService:Teleport(game.PlaceId, Player)
 	else TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player) end
@@ -7000,6 +7225,7 @@ if getgenv().ShowToxUpdateGui then
         ToxUpdateVersion,
         {
             ADDED = {
+                "Server Hop agora abre opcoes Low, Medium e High.",
                 "Changelog expandido com categorias.",
                 "Reload do modulo pelo botao direito no tab do jogo.",
                 "Secoes recolhiveis no MM2."
@@ -7009,6 +7235,7 @@ if getgenv().ShowToxUpdateGui then
                 "Auto Farm do MM2 nao restaura colisao enquanto ainda esta ativo sem moeda."
             },
             CHANGED = {
+                "Server Hop agora escolhe servidor por quantidade de players.",
                 "Menu de update agora separa Added, Fixed, Changed e Removed.",
                 "Auto Farm do MM2 agora anda por baixo do mapa e coleta moedas por baixo."
             }
