@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-11-changelog-reload-sections-1"
+    "2026-09-11-mm2-autowin-farm-fix-1"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -114,6 +114,9 @@ Settings.MM2AutoFarmV2 =
 
 Settings.MM2AutoFarmResetOnFull =
     Settings.MM2AutoFarmResetOnFull == true
+
+Settings.MM2AutoWin =
+    Settings.MM2AutoWin == true
 
 local configuredAutoFarmSpeed = tonumber(Settings.MM2AutoFarmSpeed)
 
@@ -2158,7 +2161,74 @@ local function FindLikelyRoundState(mainGui, gameGui)
     return "N/A"
 end
 
+local function ReadTimerFromValue(value, name, depth)
+    if depth and depth > 3 then
+        return nil
+    end
+
+    if typeof(value) == "number" then
+        return FormatRoundSeconds(value)
+    end
+
+    if typeof(value) == "string" then
+        return ReadTimerFromText(value, name)
+    end
+
+    if typeof(value) == "table" then
+        for key, child in pairs(value) do
+            local found = ReadTimerFromValue(
+                child,
+                tostring(key),
+                (depth or 0) + 1
+            )
+
+            if found then
+                return found
+            end
+        end
+    end
+
+    return nil
+end
+
+local function TryRoundTimerRemote()
+    local names = {
+        "GetTimer",
+        "GetRoundTimer",
+        "RoundTimer",
+        "GetTime",
+        "GetGameTimer",
+        "GetRoundTime"
+    }
+
+    for _, name in ipairs(names) do
+        local remote = ReplicatedStorage:FindFirstChild(name, true)
+
+        if remote and remote:IsA("RemoteFunction") then
+            local ok, value = pcall(function()
+                return remote:InvokeServer()
+            end)
+
+            if ok then
+                local found = ReadTimerFromValue(value, name, 0)
+
+                if found then
+                    return found
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
 local function FindMM2RoundTimerText()
+    local remoteTimer = TryRoundTimerRemote()
+
+    if remoteTimer then
+        return remoteTimer
+    end
+
     local playerGui = Player:FindFirstChildOfClass("PlayerGui")
     local mainGui = playerGui and playerGui:FindFirstChild("MainGUI")
     local gameGui = mainGui and mainGui:FindFirstChild("Game")
@@ -2166,8 +2236,11 @@ local function FindMM2RoundTimerText()
     local preferredPaths = {
         {"MainGUI", "Game", "Timer", "Container", "Timer"},
         {"MainGUI", "Game", "Timer", "Timer"},
+        {"MainGUI", "Game", "Timer", "Time"},
+        {"MainGUI", "Game", "Timer", "TextLabel"},
         {"MainGUI", "Game", "Timer"},
         {"MainGUI", "Game", "RoundTimer"},
+        {"MainGUI", "Game", "Round", "Timer"},
         {"MainGUI", "Lobby", "Timer"},
         {"MainGUI", "Lobby", "Screens", "Timer"},
         {"MainGUI", "Lobby", "Intermission", "Timer"}
@@ -2182,10 +2255,53 @@ local function FindMM2RoundTimerText()
         end
     end
 
+    local best = nil
+    local bestScore = -1
+    local ownGui = getgenv().Gui
+
+    if playerGui then
+        for _, object in ipairs(playerGui:GetDescendants()) do
+            if (not ownGui or not object:IsDescendantOf(ownGui))
+            and (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) then
+                local found = ReadTimerFromText(object.Text, object.Name)
+
+                if found then
+                    local blob = string.lower(tostring(object.Name or "") .. " " .. tostring(object.Parent and object.Parent.Name or ""))
+                    local score = 0
+
+                    if IsGuiVisible(object) then
+                        score += 50
+                    end
+
+                    if string.find(blob, "timer", 1, true) then
+                        score += 35
+                    end
+
+                    if string.find(blob, "time", 1, true) then
+                        score += 25
+                    end
+
+                    if string.find(blob, "round", 1, true)
+                    or string.find(blob, "game", 1, true) then
+                        score += 15
+                    end
+
+                    if score > bestScore then
+                        best = found
+                        bestScore = score
+                    end
+                end
+            end
+        end
+    end
+
+    if best then
+        return best
+    end
+
     local directContainers = {
         gameGui,
         mainGui,
-        playerGui,
         ReplicatedStorage,
         workspace
     }
@@ -3209,19 +3325,35 @@ local function FireGuidedGunShot(
     and remoteFunction:IsA(
         "RemoteFunction"
     ) then
-        for _, position in ipairs(
-            samples
-        ) do
-            pcall(function()
-                remoteFunction:
-                    InvokeServer(
-                        1,
-                        position,
-                        "AH2"
-                    )
-            end)
+        local sent = {}
+        local positions = {primaryPosition}
 
-            fired = true
+        for _, position in ipairs(samples) do
+            table.insert(positions, position)
+        end
+
+        for _, position in ipairs(positions) do
+            local key = string.format(
+                "%.2f/%.2f/%.2f",
+                position.X,
+                position.Y,
+                position.Z
+            )
+
+            if not sent[key] then
+                sent[key] = true
+
+                pcall(function()
+                    remoteFunction:
+                        InvokeServer(
+                            1,
+                            position,
+                            "AH2"
+                        )
+                end)
+
+                fired = true
+            end
         end
     end
 
@@ -3888,6 +4020,9 @@ local AutoFarmResetTriggered = false
 local AutoFarmPauseCharacter = nil
 local AutoFarmPauseMap = nil
 local AutoFarmLastTravelY = nil
+local RunMM2AutoWinFromFull = nil
+local MM2AutoWinBusy = false
+local MM2AutoWinGeneration = 0
 
 local function IsAliveCharacter()
     local character, humanoid, root = GetCharacterState()
@@ -4450,7 +4585,21 @@ local function CompleteAutoFarm()
 
     StopAutoFarm(true)
 
-    if Settings.MM2AutoFarmResetOnFull
+    if Settings.MM2AutoWin
+    and RunMM2AutoWinFromFull then
+        CustomNotify(
+            "Bag full • Auto Win",
+            Color3.fromRGB(
+                100,
+                255,
+                130
+            )
+        )
+
+        task.spawn(
+            RunMM2AutoWinFromFull
+        )
+    elseif Settings.MM2AutoFarmResetOnFull
     and not AutoFarmResetTriggered then
         AutoFarmResetTriggered = true
 
@@ -4555,10 +4704,10 @@ local function PrepareAutoFarm()
     return true
 end
 
-local AutoFarmUndergroundTravelDepth = 4.85
-local AutoFarmUndergroundPickupDepth = 0.55
-local AutoFarmFallbackCoinOffset = 3.25
-local AutoFarmCoinHoldTime = 0.95
+local AutoFarmUndergroundTravelDepth = 0.75
+local AutoFarmUndergroundPickupDepth = 0.08
+local AutoFarmFallbackCoinOffset = 1.65
+local AutoFarmCoinHoldTime = 0.72
 local AutoFarmFloorCache = setmetatable({}, {__mode = "k"})
 
 local function GetCoinBasePosition(coin)
@@ -4684,13 +4833,8 @@ local function GetUndergroundYForCoin(coin, depth, currentPosition)
     local fallbackY = position.Y - AutoFarmFallbackCoinOffset
 
     if typeof(currentPosition) == "Vector3"
-    and fallbackY > currentPosition.Y + 0.65 then
-        fallbackY = currentPosition.Y + 0.65
-    end
-
-    if typeof(AutoFarmLastTravelY) == "number"
-    and fallbackY > AutoFarmLastTravelY + 0.45 then
-        fallbackY = AutoFarmLastTravelY + 0.45
+    and fallbackY > currentPosition.Y + 3.5 then
+        fallbackY = currentPosition.Y + 3.5
     end
 
     return fallbackY
@@ -4709,14 +4853,10 @@ local function GetCoinTravelPosition(coin, currentPosition)
         currentPosition
     )
 
-    if typeof(currentPosition) == "Vector3"
-    and currentPosition.Y < travelY then
-        travelY = currentPosition.Y
-    end
+    local floorY = GetCoinFloorY(coin)
 
-    if typeof(AutoFarmLastTravelY) == "number"
-    and travelY > AutoFarmLastTravelY + 0.2 then
-        travelY = AutoFarmLastTravelY + 0.2
+    if floorY and travelY >= floorY then
+        travelY = floorY - 0.2
     end
 
     AutoFarmLastTravelY = travelY
@@ -4740,13 +4880,11 @@ local function GetCoinPickupPosition(coin)
 
     local floorY = GetCoinFloorY(coin)
 
-    if floorY and pickupY > floorY - 0.35 then
-        pickupY = floorY - 0.35
-    end
-
-    if typeof(AutoFarmLastTravelY) == "number"
-    and pickupY > AutoFarmLastTravelY + 4.45 then
-        pickupY = AutoFarmLastTravelY + 4.45
+    if floorY then
+        pickupY = math.min(
+            pickupY,
+            floorY - 0.08
+        )
     end
 
     return Vector3.new(position.X, pickupY, position.Z)
@@ -4854,26 +4992,21 @@ local function CollectFarmCoin(coin)
     local serialBefore = AutoFarmCoinSerial
     local bagBefore = AutoFarmBagCoins
     local holdUntil = os.clock() + AutoFarmCoinHoldTime
-    local pickupPosition = GetCoinPickupPosition(coin)
+    local basePosition = GetCoinPickupPosition(coin)
     local lastTouch = 0
+    local offsetIndex = 1
+    local offsets = {
+        Vector3.zero,
+        Vector3.new(0.28, 0, 0),
+        Vector3.new(-0.28, 0, 0),
+        Vector3.new(0, 0, 0.28),
+        Vector3.new(0, 0, -0.28),
+        Vector3.new(0.48, 0, 0.48),
+        Vector3.new(-0.48, 0, -0.48)
+    }
 
     AutoFarmAtCoin = true
-    SetFarmPosition(pickupPosition, true)
-
-    for _ = 1, 6 do
-        TouchCoin(coin)
-        TouchCoin(coin)
-        RunService.Heartbeat:Wait()
-
-        if not IsCoinValid(coin)
-        or AutoFarmCoinSerial ~= serialBefore
-        or AutoFarmBagCoins > bagBefore then
-            AutoFarmAtCoin = false
-            AutoFarmHoldPosition = nil
-            AutoFarmSessionCollected = AutoFarmSessionCollected + 1
-            return true
-        end
-    end
+    AutoFarmHoldPosition = basePosition
 
     while Settings.MM2AutoFarmV2
     and generation == AutoFarmGeneration
@@ -4882,20 +5015,30 @@ local function CollectFarmCoin(coin)
     and AutoFarmRoot
     and AutoFarmRoot.Parent
     and os.clock() <= holdUntil do
-        pickupPosition = GetCoinPickupPosition(coin)
-        AutoFarmHoldPosition = pickupPosition
+        basePosition = GetCoinPickupPosition(coin)
+
+        local offset = offsets[offsetIndex] or Vector3.zero
+        offsetIndex += 1
+
+        if offsetIndex > #offsets then
+            offsetIndex = 1
+        end
+
+        local position = basePosition + offset
+        AutoFarmHoldPosition = position
 
         if AutoFarmRotation then
             AutoFarmRoot.Anchored = false
-            AutoFarmRoot.CFrame = CFrame.new(pickupPosition) * AutoFarmRotation
+            AutoFarmRoot.CFrame = CFrame.new(position) * AutoFarmRotation
             AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
             AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
         end
 
-        if os.clock() - lastTouch >= 0.01 then
-            TouchCoin(coin)
-            TouchCoin(coin)
-            TouchCoin(coin)
+        if os.clock() - lastTouch >= 0.006 then
+            for _ = 1, 6 do
+                TouchCoin(coin)
+            end
+
             lastTouch = os.clock()
         end
 
@@ -4946,30 +5089,33 @@ local function AutoFarmCoin(coin)
     local speed = speedValue * 4
     local currentPosition = AutoFarmRoot.Position
     local travelPosition = GetCoinTravelPosition(coin, currentPosition)
-    local descendPosition = Vector3.new(
+    local underCurrent = Vector3.new(
         currentPosition.X,
         travelPosition.Y,
         currentPosition.Z
     )
 
-    if currentPosition.Y > travelPosition.Y + 0.08 then
-        SetFarmPosition(descendPosition, true)
-        RunService.Heartbeat:Wait()
-    else
-        SetFarmPosition(descendPosition, true)
-    end
+    SetFarmPosition(underCurrent, true)
+    RunService.Heartbeat:Wait()
 
     if not Settings.MM2AutoFarmV2 then
         return false
     end
 
+    local pickupPosition = GetCoinPickupPosition(coin)
+    local targetPosition = Vector3.new(
+        pickupPosition.X,
+        pickupPosition.Y,
+        pickupPosition.Z
+    )
+
     local horizontalDistance = (
-        Vector2.new(descendPosition.X, descendPosition.Z)
-        - Vector2.new(travelPosition.X, travelPosition.Z)
+        Vector2.new(underCurrent.X, underCurrent.Z)
+        - Vector2.new(targetPosition.X, targetPosition.Z)
     ).Magnitude
 
     local arrived = TweenFarmRoot(
-        travelPosition,
+        targetPosition,
         horizontalDistance / math.max(speed, 1),
         coin
     )
@@ -4986,34 +5132,28 @@ local function AutoFarmCoin(coin)
 
     if not arrived then
         if IsCoinValid(coin) then
-            MM2CoinBlacklist[coin] = os.clock() + 0.18
+            MM2CoinBlacklist[coin] = os.clock() + 0.08
         end
 
         return false
     end
 
-    local pickupPosition = GetCoinPickupPosition(coin)
-    local liftPosition = Vector3.new(
-        travelPosition.X,
-        pickupPosition.Y,
-        travelPosition.Z
-    )
-
-    SetFarmPosition(liftPosition, true)
-    RunService.Heartbeat:Wait()
-
     local collected = CollectFarmCoin(coin)
-    local leavePosition = GetCoinTravelPosition(coin, AutoFarmRoot and AutoFarmRoot.Position or liftPosition)
 
     if AutoFarmRoot
     and AutoFarmRoot.Parent then
+        local leavePosition = GetCoinTravelPosition(
+            coin,
+            AutoFarmRoot.Position
+        )
+
         SetFarmPosition(leavePosition, true)
     end
 
     if collected then
-        MM2CoinBlacklist[coin] = os.clock() + 0.05
+        MM2CoinBlacklist[coin] = os.clock() + 0.02
     else
-        MM2CoinBlacklist[coin] = os.clock() + 0.12
+        MM2CoinBlacklist[coin] = os.clock() + 0.05
     end
 
     if IsFarmBagFull()
@@ -5023,6 +5163,7 @@ local function AutoFarmCoin(coin)
 
     return collected
 end
+
 AddConnection(RunService.Heartbeat:Connect(function()
     if not Settings.MM2AutoFarmV2
     or not AutoFarmPrepared
@@ -5199,6 +5340,115 @@ local function FlingSelectedRole()
             SetSharedTemporary("AntiFling", true)
         end
     end)
+end
+
+local function FlingMM2MurdererForAutoWin()
+    local target =
+        FindGuidedMurderer()
+        or GetPlayerByRole("Murderer")
+
+    if not target then
+        return false
+    end
+
+    local fling = getgenv().ToxFlingPlayer
+
+    if not fling then
+        return false
+    end
+
+    local restoreAntiFling = Settings.AntiFling == true
+
+    if restoreAntiFling then
+        SetSharedTemporary("AntiFling", false)
+    end
+
+    pcall(function()
+        fling(target)
+    end)
+
+    if restoreAntiFling then
+        SetSharedTemporary("AntiFling", true)
+    end
+
+    return true
+end
+
+RunMM2AutoWinFromFull = function()
+    if MM2AutoWinBusy then
+        return
+    end
+
+    MM2AutoWinBusy = true
+    MM2AutoWinGeneration += 1
+
+    local generation = MM2AutoWinGeneration
+
+    local function active()
+        return Settings.MM2AutoWin
+            and generation == MM2AutoWinGeneration
+            and not getgenv().Destroyed
+            and game.PlaceId == 142823291
+    end
+
+    task.wait(0.2)
+
+    if not active() then
+        MM2AutoWinBusy = false
+        return
+    end
+
+    local role = GetRole(Player)
+    local knife = FindNamedTool({"knife"})
+    local gun = FindNamedTool({"gun", "revolver"})
+
+    if role == "Murderer"
+    or knife then
+        KillAll()
+    else
+        if not gun then
+            GrabGun(true)
+
+            local started = os.clock()
+
+            repeat
+                task.wait(0.08)
+                gun = FindNamedTool({"gun", "revolver"})
+            until gun
+            or not active()
+            or os.clock() - started >= 3
+        end
+
+        if active() then
+            ShootMurderer(false)
+        end
+
+        local waitStarted = os.clock()
+
+        repeat
+            task.wait(0.1)
+        until not active()
+        or os.clock() - waitStarted >= 3
+
+        if active() then
+            FlingMM2MurdererForAutoWin()
+        end
+    end
+
+    if active()
+    and Settings.MM2AutoFarmResetOnFull
+    and not AutoFarmResetTriggered then
+        AutoFarmResetTriggered = true
+
+        local character = Player.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+        if humanoid and humanoid.Health > 0 then
+            humanoid.Health = 0
+        end
+    end
+
+    MM2AutoWinBusy = false
 end
 
 local MM2CurrentSection = nil
@@ -5471,6 +5721,24 @@ end, function(value)
 end, "MM2AutoFarmV2")
 
 MM2CreateToggle(
+    "Auto Win",
+    GamePage,
+    Settings.MM2AutoWin,
+    function(v)
+        Settings.MM2AutoWin =
+            v == true
+
+        if not Settings.MM2AutoWin then
+            MM2AutoWinGeneration += 1
+            MM2AutoWinBusy = false
+        end
+
+        AutoSaveConfiguration()
+    end,
+    "MM2AutoWin"
+)
+
+MM2CreateToggle(
     "Reset On Full",
     GamePage,
     Settings.MM2AutoFarmResetOnFull,
@@ -5580,6 +5848,8 @@ end, function(enabled)
     if not MM2AutoRuntime.Shoot then
         ShootSafetySerial = ShootSafetySerial + 1
         GuidedShotBusy = false
+        AutoShootLastAttempt = os.clock() + 2
+    else
         AutoShootLastAttempt = 0
     end
 
@@ -6333,6 +6603,7 @@ getgenv().ToxMM2Cleanup = function()
     getgenv().ToxMM2ModuleLoadedJobId = nil
     Settings.MM2AutoFarm = false
     Settings.MM2AutoFarmV2 = false
+    Settings.MM2AutoWin = false
     Settings.MM2RoleESP = false
     Settings.MM2SilentAimAuto = false
     Settings.MM2SilentAimAutoV2 = false
@@ -6347,6 +6618,8 @@ getgenv().ToxMM2Cleanup = function()
     MM2AutoRuntime.KillAll = false
     MM2AutoRuntime.Shoot = false
     MM2AutoRuntime.GrabGun = false
+    MM2AutoWinGeneration += 1
+    MM2AutoWinBusy = false
     ShootSafetySerial = ShootSafetySerial + 1
     GuidedShotBusy = false
     SilentAimBusy = false
@@ -6406,6 +6679,7 @@ getgenv().ToxMM2Cleanup = function()
 
     if getgenv().SyncToggleVisuals then
         getgenv().SyncToggleVisuals("MM2AutoFarmV2", false)
+        getgenv().SyncToggleVisuals("MM2AutoWin", false)
         getgenv().SyncToggleVisuals("MM2RoleESP", false)
         getgenv().SyncToggleVisuals("MM2GunESP", Settings.MM2GunESP)
         getgenv().SyncToggleVisuals("MM2SilentAimAutoV2", false)
