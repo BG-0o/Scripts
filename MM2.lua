@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-11-mm2-loadfix-autowin-2"
+    "2026-09-11-mm2-loadfix-autowin-3"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -4536,6 +4536,9 @@ function ToxMM2RunAutoWinFromFull()
     end)
 end
 
+getgenv().ToxMM2FlingMurdererForAutoWin = ToxMM2FlingMurdererForAutoWin
+getgenv().ToxMM2RunAutoWinFromFull = ToxMM2RunAutoWinFromFull
+
 local function CompleteAutoFarm()
     if AutoFarmCompleting
     or AutoFarmPausedFull then
@@ -5284,10 +5287,10 @@ local function FlingSelectedRole()
     end)
 end
 
-local MM2CurrentSection = nil
-local MM2Sections = {}
+MM2CurrentSection = nil
+MM2Sections = {}
 
-local function ApplyMM2SectionState(section)
+function ApplyMM2SectionState(section)
     if typeof(section) ~= "table" then
         return
     end
@@ -5317,7 +5320,7 @@ local function ApplyMM2SectionState(section)
     end
 end
 
-local function TrackMM2Control(object)
+function TrackMM2Control(object)
     if MM2CurrentSection
     and object
     and object:IsA("GuiObject") then
@@ -5334,37 +5337,37 @@ local function TrackMM2Control(object)
     return object
 end
 
-local function MM2CreateToggle(...)
+function MM2CreateToggle(...)
     return TrackMM2Control(
         CreateToggle(...)
     )
 end
 
-local function MM2CreateToggleWithValue(...)
+function MM2CreateToggleWithValue(...)
     return TrackMM2Control(
         CreateToggleWithValue(...)
     )
 end
 
-local function MM2CreateButton(...)
+function MM2CreateButton(...)
     return TrackMM2Control(
         CreateButton(...)
     )
 end
 
-local function MM2CreateDropdown(...)
+function MM2CreateDropdown(...)
     return TrackMM2Control(
         CreateDropdown(...)
     )
 end
 
-local function MM2CreateKeybindToggle(...)
+function MM2CreateKeybindToggle(...)
     return TrackMM2Control(
         CreateKeybindToggle(...)
     )
 end
 
-local function CreateMM2Section(
+function CreateMM2Section(
     text
 )
     Settings.MM2CollapsedSections =
@@ -6523,13 +6526,17 @@ getgenv().ToxMM2Cleanup = function()
 end
 
 if Settings.MM2RoleESP then
-    ApplyRoleESP(
-        true
-    )
+    pcall(function()
+        ApplyRoleESP(
+            true
+        )
+    end)
 end
 
 if Settings.MM2RoundTimer then
-    SetRoundTimerVisible(true)
+    pcall(function()
+        SetRoundTimerVisible(true)
+    end)
 end
 
 getgenv().ToxMM2ModuleLoadedJobId =
