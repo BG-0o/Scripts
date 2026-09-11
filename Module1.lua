@@ -4143,7 +4143,7 @@ end)
 
 MusicCloseBtn.MouseButton1Click:Connect(function() MusicGui.Visible = false end)
 
-local ToxChatGui = Instance.new("Frame")
+ToxChatGui = Instance.new("Frame")
 ToxChatGui.Name = "ToxChatFrame"
 ToxChatGui.Size = UDim2.new(0, 370, 0, 310)
 ToxChatGui.Position = UDim2.new(0.5, -185, 0.5, -155)
@@ -4154,16 +4154,16 @@ ToxChatGui.Visible = false
 ToxChatGui.Parent = Gui
 getgenv().ToxChatGui = ToxChatGui
 
-local ToxChatCorner = Instance.new("UICorner")
+ToxChatCorner = Instance.new("UICorner")
 ToxChatCorner.CornerRadius = UDim.new(0, 8)
 ToxChatCorner.Parent = ToxChatGui
 
-local ToxChatStroke = Instance.new("UIStroke")
+ToxChatStroke = Instance.new("UIStroke")
 ToxChatStroke.Color = MAIN_COLOR
 ToxChatStroke.Thickness = 2
 ToxChatStroke.Parent = ToxChatGui
 
-local ToxChatTopBar = Instance.new("Frame")
+ToxChatTopBar = Instance.new("Frame")
 ToxChatTopBar.Size = UDim2.new(1, 0, 0, 32)
 ToxChatTopBar.BackgroundColor3 = MAIN_COLOR
 ToxChatTopBar.BorderSizePixel = 0
@@ -4172,7 +4172,7 @@ getgenv().ToxChatTopBar = ToxChatTopBar
 
 MakeDraggable(ToxChatGui, ToxChatTopBar)
 
-local ToxChatTitle = Instance.new("TextLabel")
+ToxChatTitle = Instance.new("TextLabel")
 ToxChatTitle.Size = UDim2.new(1, -70, 1, 0)
 ToxChatTitle.Position = UDim2.new(0, 10, 0, 0)
 ToxChatTitle.BackgroundTransparency = 1
@@ -4183,7 +4183,7 @@ ToxChatTitle.TextSize = 13
 ToxChatTitle.TextXAlignment = Enum.TextXAlignment.Left
 ToxChatTitle.Parent = ToxChatTopBar
 
-local ToxChatCloseBtn = Instance.new("TextButton")
+ToxChatCloseBtn = Instance.new("TextButton")
 ToxChatCloseBtn.Size = UDim2.new(0, 22, 0, 20)
 ToxChatCloseBtn.Position = UDim2.new(1, -26, 0.5, -10)
 ToxChatCloseBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
@@ -4194,11 +4194,11 @@ ToxChatCloseBtn.Font = Enum.Font.GothamBold
 ToxChatCloseBtn.TextSize = 11
 ToxChatCloseBtn.Parent = ToxChatTopBar
 
-local ToxChatCloseCorner = Instance.new("UICorner")
+ToxChatCloseCorner = Instance.new("UICorner")
 ToxChatCloseCorner.CornerRadius = UDim.new(0, 4)
 ToxChatCloseCorner.Parent = ToxChatCloseBtn
 
-local ToxChatStatus = Instance.new("TextLabel")
+ToxChatStatus = Instance.new("TextLabel")
 ToxChatStatus.Size = UDim2.new(1, -16, 0, 18)
 ToxChatStatus.Position = UDim2.new(0, 8, 0, 38)
 ToxChatStatus.BackgroundTransparency = 1
@@ -4210,7 +4210,7 @@ ToxChatStatus.TextXAlignment = Enum.TextXAlignment.Left
 ToxChatStatus.Parent = ToxChatGui
 getgenv().ToxChatStatus = ToxChatStatus
 
-local ToxChatScroll = Instance.new("ScrollingFrame")
+ToxChatScroll = Instance.new("ScrollingFrame")
 ToxChatScroll.Size = UDim2.new(1, -16, 1, -110)
 ToxChatScroll.Position = UDim2.new(0, 8, 0, 60)
 ToxChatScroll.BackgroundTransparency = 1
@@ -4221,7 +4221,7 @@ ToxChatScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 ToxChatScroll.Parent = ToxChatGui
 getgenv().ToxChatScroll = ToxChatScroll
 
-local ToxChatLayout = Instance.new("UIListLayout")
+ToxChatLayout = Instance.new("UIListLayout")
 ToxChatLayout.Padding = UDim.new(0, 5)
 ToxChatLayout.SortOrder = Enum.SortOrder.LayoutOrder
 ToxChatLayout.Parent = ToxChatScroll
@@ -4231,7 +4231,7 @@ ToxChatLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     ToxChatScroll.CanvasPosition = Vector2.new(0, math.max(0, ToxChatLayout.AbsoluteContentSize.Y))
 end)
 
-local ToxChatInput = Instance.new("TextBox")
+ToxChatInput = Instance.new("TextBox")
 ToxChatInput.Size = UDim2.new(1, -88, 0, 32)
 ToxChatInput.Position = UDim2.new(0, 8, 1, -40)
 ToxChatInput.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
@@ -4246,11 +4246,11 @@ ToxChatInput.ClearTextOnFocus = false
 ToxChatInput.Parent = ToxChatGui
 getgenv().ToxChatInput = ToxChatInput
 
-local ToxChatInputCorner = Instance.new("UICorner")
+ToxChatInputCorner = Instance.new("UICorner")
 ToxChatInputCorner.CornerRadius = UDim.new(0, 4)
 ToxChatInputCorner.Parent = ToxChatInput
 
-local ToxChatSendBtn = Instance.new("TextButton")
+ToxChatSendBtn = Instance.new("TextButton")
 ToxChatSendBtn.Size = UDim2.new(0, 68, 0, 32)
 ToxChatSendBtn.Position = UDim2.new(1, -76, 1, -40)
 ToxChatSendBtn.BackgroundColor3 = MAIN_COLOR
@@ -4262,7 +4262,7 @@ ToxChatSendBtn.TextSize = 12
 ToxChatSendBtn.Parent = ToxChatGui
 getgenv().ToxChatSendBtn = ToxChatSendBtn
 
-local ToxChatSendCorner = Instance.new("UICorner")
+ToxChatSendCorner = Instance.new("UICorner")
 ToxChatSendCorner.CornerRadius = UDim.new(0, 4)
 ToxChatSendCorner.Parent = ToxChatSendBtn
 
@@ -4335,7 +4335,7 @@ ToxChatCloseBtn.MouseButton1Click:Connect(function()
     ToxChatGui.Visible = false
 end)
 
-local JoinGamesGui = Instance.new("Frame")
+JoinGamesGui = Instance.new("Frame")
 JoinGamesGui.Name = "ToxQuickJoinFrame"
 JoinGamesGui.Size = UDim2.new(0, 460, 0, 310)
 JoinGamesGui.Position = UDim2.new(0.5, -230, 0.5, -155)
@@ -4346,16 +4346,16 @@ JoinGamesGui.Visible = false
 JoinGamesGui.Parent = Gui
 getgenv().JoinGamesGui = JoinGamesGui
 
-local JoinGamesCorner = Instance.new("UICorner")
+JoinGamesCorner = Instance.new("UICorner")
 JoinGamesCorner.CornerRadius = UDim.new(0, 8)
 JoinGamesCorner.Parent = JoinGamesGui
 
-local JoinGamesStroke = Instance.new("UIStroke")
+JoinGamesStroke = Instance.new("UIStroke")
 JoinGamesStroke.Color = MAIN_COLOR
 JoinGamesStroke.Thickness = 2
 JoinGamesStroke.Parent = JoinGamesGui
 
-local JoinGamesTopBar = Instance.new("Frame")
+JoinGamesTopBar = Instance.new("Frame")
 JoinGamesTopBar.Size = UDim2.new(1, 0, 0, 32)
 JoinGamesTopBar.BackgroundColor3 = MAIN_COLOR
 JoinGamesTopBar.BorderSizePixel = 0
@@ -4363,7 +4363,7 @@ JoinGamesTopBar.Parent = JoinGamesGui
 
 MakeDraggable(JoinGamesGui, JoinGamesTopBar)
 
-local JoinGamesTitle = Instance.new("TextLabel")
+JoinGamesTitle = Instance.new("TextLabel")
 JoinGamesTitle.Size = UDim2.new(1, -70, 1, 0)
 JoinGamesTitle.Position = UDim2.new(0, 10, 0, 0)
 JoinGamesTitle.BackgroundTransparency = 1
@@ -4374,7 +4374,7 @@ JoinGamesTitle.TextSize = 13
 JoinGamesTitle.TextXAlignment = Enum.TextXAlignment.Left
 JoinGamesTitle.Parent = JoinGamesTopBar
 
-local JoinGamesCloseBtn = Instance.new("TextButton")
+JoinGamesCloseBtn = Instance.new("TextButton")
 JoinGamesCloseBtn.Size = UDim2.new(0, 22, 0, 20)
 JoinGamesCloseBtn.Position = UDim2.new(1, -26, 0.5, -10)
 JoinGamesCloseBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
@@ -4385,17 +4385,17 @@ JoinGamesCloseBtn.Font = Enum.Font.GothamBold
 JoinGamesCloseBtn.TextSize = 11
 JoinGamesCloseBtn.Parent = JoinGamesTopBar
 
-local JoinGamesCloseCorner = Instance.new("UICorner")
+JoinGamesCloseCorner = Instance.new("UICorner")
 JoinGamesCloseCorner.CornerRadius = UDim.new(0, 4)
 JoinGamesCloseCorner.Parent = JoinGamesCloseBtn
 
-local JoinGameAddArea = Instance.new("Frame")
+JoinGameAddArea = Instance.new("Frame")
 JoinGameAddArea.Size = UDim2.new(1, -16, 0, 32)
 JoinGameAddArea.Position = UDim2.new(0, 8, 0, 39)
 JoinGameAddArea.BackgroundTransparency = 1
 JoinGameAddArea.Parent = JoinGamesGui
 
-local JoinGameIdBox = Instance.new("TextBox")
+JoinGameIdBox = Instance.new("TextBox")
 JoinGameIdBox.Size = UDim2.new(1, -92, 1, 0)
 JoinGameIdBox.Position = UDim2.new(0, 0, 0, 0)
 JoinGameIdBox.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
@@ -4410,11 +4410,11 @@ JoinGameIdBox.ClearTextOnFocus = false
 JoinGameIdBox.Parent = JoinGameAddArea
 getgenv().JoinGameIdBox = JoinGameIdBox
 
-local JoinGameIdCorner = Instance.new("UICorner")
+JoinGameIdCorner = Instance.new("UICorner")
 JoinGameIdCorner.CornerRadius = UDim.new(0, 4)
 JoinGameIdCorner.Parent = JoinGameIdBox
 
-local JoinGameAddButton = Instance.new("TextButton")
+JoinGameAddButton = Instance.new("TextButton")
 JoinGameAddButton.Size = UDim2.new(0, 84, 1, 0)
 JoinGameAddButton.Position = UDim2.new(1, -84, 0, 0)
 JoinGameAddButton.BackgroundColor3 = MAIN_COLOR
@@ -4426,11 +4426,11 @@ JoinGameAddButton.TextSize = 11
 JoinGameAddButton.Parent = JoinGameAddArea
 getgenv().JoinGameAddButton = JoinGameAddButton
 
-local JoinGameAddCorner = Instance.new("UICorner")
+JoinGameAddCorner = Instance.new("UICorner")
 JoinGameAddCorner.CornerRadius = UDim.new(0, 4)
 JoinGameAddCorner.Parent = JoinGameAddButton
 
-local JoinGamesScroll = Instance.new("ScrollingFrame")
+JoinGamesScroll = Instance.new("ScrollingFrame")
 JoinGamesScroll.Size = UDim2.new(1, -16, 1, -84)
 JoinGamesScroll.Position = UDim2.new(0, 8, 0, 78)
 JoinGamesScroll.BackgroundTransparency = 1
@@ -4441,7 +4441,7 @@ JoinGamesScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 JoinGamesScroll.Parent = JoinGamesGui
 getgenv().JoinGamesScroll = JoinGamesScroll
 
-local JoinGamesLayout = Instance.new("UIListLayout")
+JoinGamesLayout = Instance.new("UIListLayout")
 JoinGamesLayout.Padding = UDim.new(0, 6)
 JoinGamesLayout.SortOrder = Enum.SortOrder.LayoutOrder
 JoinGamesLayout.Parent = JoinGamesScroll
@@ -4494,7 +4494,7 @@ getgenv().SyncToggleVisuals = function(Key, Value)
     end
 end
 
-local function RegisterSharedToggle(Key, Controller)
+function RegisterSharedToggle(Key, Controller)
     if not Key or not Controller then return end
 
     if not getgenv().SharedToggleControls[Key] then
@@ -4522,7 +4522,7 @@ getgenv().SyncValueVisuals = function(Key, Value)
     end
 end
 
-local function RegisterSharedValue(Key, Controller)
+function RegisterSharedValue(Key, Controller)
     if not Key or not Controller then return end
 
     if not getgenv().SharedValueControls[Key] then
