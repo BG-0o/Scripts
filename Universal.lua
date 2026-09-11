@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-11-nds-disaster-sections-walkfling"
+ToxUpdateVersion = "2026-09-11-nds-autowin-spawn"
 
 
 function ClearToxTable(target)
@@ -7353,17 +7353,17 @@ if getgenv().ShowToxUpdateGui then
         ToxUpdateVersion,
         {
             ADDED = {
+                "NDS Auto Win agora volta para o SPAWN quando for desativado.",
                 "NDS recebeu secoes recolhiveis igual ao MM2.",
-                "NDS recebeu Disaster Detector com notificacao de 5 segundos.",
-                "NDS Auto Win agora equipa o item 2 apenas uma vez ao ativar caso nao esteja segurando item."
+                "NDS recebeu Disaster Detector com notificacao de 5 segundos."
             },
             FIXED = {
-                "NDS Auto Win nao fica mais apertando o hotbar 2 repetidamente durante o loop.",
+                "NDS Auto Win nao reequipara o item durante o loop depois da ativacao.",
                 "NDS Walk Fling ficou mais fraco para reduzir subida e instabilidade."
             },
             CHANGED = {
-                "NDS organizado em secoes AUTO, MOVEMENT, PROTECTION e TELEPORTS.",
-                "Disaster Detector tenta ler desastre pela UI, atributos e objetos do mapa."
+                "NDS Auto Win usa o item segurado depois da ativacao sem forcar troca repetida.",
+                "NDS organizado em secoes AUTO, MOVEMENT, PROTECTION e TELEPORTS."
             },
             REMOVED = {
                 "Removido re-equipamento repetido do item no NDS Auto Win."
