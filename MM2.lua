@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-11-mm2-autofarm-coinpass-v4"
+    "2026-09-11-mm2-autofarm-round-tween-v5"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -3994,39 +3994,31 @@ if coinCollectedRemote and coinCollectedRemote:IsA("RemoteEvent") then
     end))
 end
 
-local function IsCoinValid(coin)
-    if not coin
-    or not coin.Parent
-    or not coin:IsA("BasePart")
-    or coin:GetAttribute("Collected")
-    or coin:GetAttribute("Delete") then
-        return false
-    end
-
-    if coin.Transparency < 0.98 then
-        return true
-    end
-
-    return coin:FindFirstChildWhichIsA("TouchTransmitter", true) ~= nil
-end
-
 local function GetAutoFarmMapRoot()
     local normal = workspace:FindFirstChild("Normal")
 
     if normal
-    and normal:FindFirstChild("CoinContainer", true) then
-        return normal
+    and normal ~= workspace:FindFirstChild("Lobby") then
+        local container = normal:FindFirstChild("CoinContainer", true)
+
+        if container then
+            return normal, container
+        end
     end
 
     for _, object in ipairs(workspace:GetChildren()) do
         if object ~= Player.Character
         and object.Name ~= "Lobby"
-        and object:FindFirstChild("CoinContainer", true) then
-            return object
+        and object:IsA("Model") then
+            local container = object:FindFirstChild("CoinContainer", true)
+
+            if container then
+                return object, container
+            end
         end
     end
 
-    return normal or workspace
+    return nil, nil
 end
 
 local function IsCoinTouchPart(part)
@@ -4040,25 +4032,60 @@ local function IsCoinTouchPart(part)
         return true
     end
 
-    local parent = part.Parent
-
-    if parent
-    and parent:FindFirstChild("CoinVisual", true) then
-        return true
-    end
-
     local lower = string.lower(tostring(part.Name or ""))
 
     return lower == "coin_server"
+        or lower == "coinserver"
         or string.find(lower, "coin", 1, true) ~= nil
         or string.find(lower, "token", 1, true) ~= nil
         or string.find(lower, "credit", 1, true) ~= nil
 end
 
+local function IsCoinValid(coin)
+    if not coin
+    or not coin.Parent
+    or not coin:IsA("BasePart")
+    or coin:GetAttribute("Collected")
+    or coin:GetAttribute("Delete") then
+        return false
+    end
+
+    local container = coin:FindFirstAncestor("CoinContainer")
+
+    if not container then
+        return false
+    end
+
+    local mapRoot,
+        activeContainer =
+        GetAutoFarmMapRoot()
+
+    if not mapRoot
+    or not activeContainer
+    or container ~= activeContainer then
+        return false
+    end
+
+    local lobby = workspace:FindFirstChild("Lobby")
+
+    if lobby
+    and coin:IsDescendantOf(lobby) then
+        return false
+    end
+
+    if coin.Transparency >= 1
+    and not coin:FindFirstChildWhichIsA("TouchTransmitter", true) then
+        return false
+    end
+
+    return IsCoinTouchPart(coin)
+end
+
 local function GetMM2Coins(force)
     local now = os.clock()
 
-    if not force and now - MM2CoinScanTime < 0.16 then
+    if not force
+    and now - MM2CoinScanTime < 0.1 then
         local valid = {}
 
         for _, coin in ipairs(MM2CoinCache) do
@@ -4075,22 +4102,19 @@ local function GetMM2Coins(force)
 
     local coins = {}
     local seen = {}
-    local mapRoot = GetAutoFarmMapRoot()
-    local containers = {}
+    local _, container = GetAutoFarmMapRoot()
 
-    if mapRoot then
-        for _, obj in ipairs(mapRoot:GetDescendants()) do
-            if string.lower(tostring(obj.Name or "")) == "coincontainer" then
-                table.insert(containers, obj)
-            end
-        end
+    if not container then
+        MM2CoinCache = coins
+        return coins
     end
 
-    local function addPart(part)
+    local function addCoin(part)
         if not part
         or seen[part]
-        or not IsCoinValid(part)
-        or not IsCoinTouchPart(part) then
+        or not part:IsA("BasePart")
+        or not IsCoinTouchPart(part)
+        or not IsCoinValid(part) then
             return
         end
 
@@ -4104,31 +4128,30 @@ local function GetMM2Coins(force)
         table.insert(coins, part)
     end
 
-    if #containers > 0 then
-        for _, container in ipairs(containers) do
-            for _, obj in ipairs(container:GetDescendants()) do
-                if obj:IsA("BasePart") then
-                    addPart(obj)
-                end
-            end
-
-            for _, obj in ipairs(container:GetChildren()) do
-                if obj:IsA("BasePart") then
-                    addPart(obj)
-                end
-            end
+    for _, object in ipairs(container:GetDescendants()) do
+        if object:IsA("BasePart") then
+            addCoin(object)
         end
-    elseif mapRoot then
-        for _, obj in ipairs(mapRoot:GetDescendants()) do
-            if obj:IsA("BasePart")
-            and IsCoinTouchPart(obj) then
-                addPart(obj)
-            end
+    end
+
+    for _, object in ipairs(container:GetChildren()) do
+        if object:IsA("BasePart") then
+            addCoin(object)
         end
     end
 
     MM2CoinCache = coins
     return coins
+end
+
+local function IsAutoFarmRoundActive()
+    local _, container = GetAutoFarmMapRoot()
+
+    if not container then
+        return false
+    end
+
+    return #GetMM2Coins(true) > 0
 end
 
 local function GetOtherPlayerCoinPressure(coin)
@@ -4671,7 +4694,12 @@ local function PrepareAutoFarm()
     end
 
     if AutoFarmPrepared and AutoFarmRoot == root then
-        root.Anchored = false
+        root.Anchored = true
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        humanoid.PlatformStand = false
+        humanoid.Sit = false
+        humanoid.AutoRotate = false
         return true
     end
 
@@ -4699,7 +4727,7 @@ local function PrepareAutoFarm()
     AutoFarmLastTravelY = nil
     AutoFarmSessionCollected = 0
 
-    humanoid.PlatformStand = true
+    humanoid.PlatformStand = false
     humanoid.Sit = false
     humanoid.AutoRotate = false
 
@@ -4717,10 +4745,9 @@ local function PrepareAutoFarm()
     return true
 end
 
-local AutoFarmPickupOffsetY = -0.85
-local AutoFarmSweepRadius = 1.35
-local AutoFarmCoinHoldTime = 0.42
-local AutoFarmMinTweenSpeed = 28
+local AutoFarmPickupOffsetY = 0.25
+local AutoFarmCoinHoldTime = 0.28
+local AutoFarmMinTweenSpeed = 36
 local TouchCoin = nil
 
 local function GetCoinBasePosition(coin)
@@ -4746,22 +4773,20 @@ local function GetAutoFarmYawCFrame(fromPosition, toPosition)
     return CFrame.lookAt(
         Vector3.zero,
         direction.Unit
-    ) * CFrame.Angles(math.rad(90), 0, 0)
+    )
 end
 
-local function GetCoinPassPosition(coin, side)
+local function GetCoinFarmPosition(coin)
     local position = GetCoinBasePosition(coin)
 
     if not position then
-        return Vector3.zero
+        return nil
     end
 
-    side = side or Vector3.zero
-
     return Vector3.new(
-        position.X + side.X,
+        position.X,
         position.Y + AutoFarmPickupOffsetY,
-        position.Z + side.Z
+        position.Z
     )
 end
 
@@ -4785,7 +4810,7 @@ local function SetAutoFarmCoinPosition(position, lookAt)
     AutoFarmRoot.CFrame = CFrame.new(position) * rotation
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
-    AutoFarmHumanoid.PlatformStand = true
+    AutoFarmHumanoid.PlatformStand = false
     AutoFarmHumanoid.Sit = false
     AutoFarmHumanoid.AutoRotate = false
 
@@ -4802,7 +4827,7 @@ local function TweenFarmRoot(targetPosition, duration, coin)
     local startPosition = AutoFarmRoot.Position
     local delta = targetPosition - startPosition
     local startTime = os.clock()
-    duration = math.max(duration, 0.025)
+    duration = math.max(duration, 0.035)
 
     while Settings.MM2AutoFarmV2
     and AutoFarmPrepared
@@ -4825,7 +4850,8 @@ local function TweenFarmRoot(targetPosition, duration, coin)
             1
         )
 
-        local position = startPosition + delta * alpha
+        local smooth = alpha
+        local position = startPosition + delta * smooth
 
         if not SetAutoFarmCoinPosition(position, targetPosition) then
             return false
@@ -4875,7 +4901,6 @@ function TouchCoin(coin)
                             bodyPart.CanTouch = true
                             firetouchinterest(bodyPart, coinPart, 0)
                             firetouchinterest(coinPart, bodyPart, 0)
-                            task.wait()
                             firetouchinterest(bodyPart, coinPart, 1)
                             firetouchinterest(coinPart, bodyPart, 1)
                         end)
@@ -4891,6 +4916,8 @@ function TouchCoin(coin)
 end
 
 local function RegisterFarmCoinCollected(coin, serialBefore, bagBefore)
+    RefreshFarmBagState()
+
     if not IsCoinValid(coin)
     or AutoFarmCoinSerial ~= serialBefore
     or AutoFarmBagCoins > bagBefore then
@@ -4929,62 +4956,14 @@ local function CollectFarmCoin(coin)
     local serialBefore = AutoFarmCoinSerial
     local bagBefore = AutoFarmBagCoins
     local position = GetCoinBasePosition(coin)
+    local farmPosition = GetCoinFarmPosition(coin)
 
-    if not position then
+    if not position
+    or not farmPosition then
         return false
     end
 
-    local startPosition = AutoFarmRoot.Position
-    local sideDirection = Vector3.new(
-        position.X - startPosition.X,
-        0,
-        position.Z - startPosition.Z
-    )
-
-    if sideDirection.Magnitude < 0.1 then
-        sideDirection = Vector3.new(1, 0, 0)
-    else
-        sideDirection = sideDirection.Unit
-    end
-
-    local sideA = sideDirection * -AutoFarmSweepRadius
-    local sideB = sideDirection * AutoFarmSweepRadius
-    local points = {
-        GetCoinPassPosition(coin, sideA),
-        GetCoinPassPosition(coin, Vector3.zero),
-        GetCoinPassPosition(coin, sideB),
-        GetCoinPassPosition(coin, Vector3.zero)
-    }
-
     AutoFarmAtCoin = true
-
-    for _, point in ipairs(points) do
-        if not Settings.MM2AutoFarmV2
-        or generation ~= AutoFarmGeneration
-        or not IsCoinValid(coin)
-        or IsFarmBagFull() then
-            break
-        end
-
-        SetAutoFarmCoinPosition(point, position)
-
-        for _ = 1, 5 do
-            if not Settings.MM2AutoFarmV2
-            or generation ~= AutoFarmGeneration
-            or not IsCoinValid(coin)
-            or IsFarmBagFull() then
-                break
-            end
-
-            TouchCoin(coin)
-
-            if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
-                return true
-            end
-
-            RunService.Heartbeat:Wait()
-        end
-    end
 
     local holdUntil = os.clock() + AutoFarmCoinHoldTime
 
@@ -4997,7 +4976,7 @@ local function CollectFarmCoin(coin)
     and AutoFarmHumanoid
     and AutoFarmHumanoid.Health > 0
     and os.clock() <= holdUntil do
-        SetAutoFarmCoinPosition(GetCoinPassPosition(coin), position)
+        SetAutoFarmCoinPosition(farmPosition, position)
         TouchCoin(coin)
 
         if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
@@ -5013,7 +4992,8 @@ local function CollectFarmCoin(coin)
 end
 
 local function AutoFarmCoin(coin)
-    if not IsCoinValid(coin)
+    if not IsAutoFarmRoundActive()
+    or not IsCoinValid(coin)
     or not PrepareAutoFarm() then
         return false
     end
@@ -5031,15 +5011,16 @@ local function AutoFarmCoin(coin)
         250
     )
 
-    local speed = math.max(speedValue * 5.5, AutoFarmMinTweenSpeed)
+    local speed = math.max(speedValue * 8, AutoFarmMinTweenSpeed)
     local currentPosition = AutoFarmRoot.Position
     local basePosition = GetCoinBasePosition(coin)
+    local travelPosition = GetCoinFarmPosition(coin)
 
-    if not basePosition then
+    if not basePosition
+    or not travelPosition then
         return false
     end
 
-    local travelPosition = GetCoinPassPosition(coin)
     local distance = (travelPosition - currentPosition).Magnitude
     local arrived = TweenFarmRoot(
         travelPosition,
@@ -5065,16 +5046,16 @@ local function AutoFarmCoin(coin)
     end
 
     if not arrived then
-        MM2CoinBlacklist[coin] = os.clock() + 0.08
+        MM2CoinBlacklist[coin] = os.clock() + 0.12
         return false
     end
 
     local collected = CollectFarmCoin(coin)
 
     if collected then
-        MM2CoinBlacklist[coin] = os.clock() + 0.04
+        MM2CoinBlacklist[coin] = os.clock() + 0.02
     else
-        MM2CoinBlacklist[coin] = os.clock() + 0.1
+        MM2CoinBlacklist[coin] = os.clock() + 0.16
     end
 
     RefreshFarmBagState()
@@ -5166,6 +5147,12 @@ task.spawn(function()
                 end
 
                 task.wait(0.15)
+            elseif not IsAutoFarmRoundActive() then
+                if AutoFarmPrepared then
+                    StopAutoFarm(false)
+                end
+
+                task.wait(0.25)
             elseif IsFarmBagFull() then
                 CompleteAutoFarm()
                 task.wait(0.2)
@@ -5182,15 +5169,11 @@ task.spawn(function()
                 if coin then
                     AutoFarmCoin(coin)
                 else
-                    if AutoFarmPrepared
-                    and AutoFarmRoot
-                    and AutoFarmRoot.Parent then
-                        SetFarmPosition(
-                            AutoFarmRoot.Position
-                        )
+                    if AutoFarmPrepared then
+                        StopAutoFarm(false)
                     end
 
-                    task.wait(0.08)
+                    task.wait(0.12)
                 end
             else
                 task.wait(0.06)
