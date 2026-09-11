@@ -2817,160 +2817,10 @@ getgenv().CreateTab = function(Name, Page)
 	return Button
 end
 
-local ToxTabReloadOverlay = nil
-local ToxTabReloadMenu = nil
-
-local function CloseToxTabReloadMenu()
-    if ToxTabReloadMenu then
-        ToxTabReloadMenu:Destroy()
-        ToxTabReloadMenu = nil
-    end
-
-    if ToxTabReloadOverlay then
-        ToxTabReloadOverlay:Destroy()
-        ToxTabReloadOverlay = nil
-    end
-end
-
-getgenv().ReloadToxGameModule = function(moduleInfo)
-    moduleInfo = moduleInfo or getgenv().CurrentGameModule
-
-    if typeof(moduleInfo) ~= "table"
-    or not moduleInfo.Url then
-        CustomNotify("Module reload unavailable", Color3.fromRGB(255, 120, 120), 4)
-        return false
-    end
-
-    if getgenv().ToxGameModuleReloading then
-        CustomNotify("Module reload already running", Color3.fromRGB(255, 180, 70), 3)
-        return false
-    end
-
-    getgenv().ToxGameModuleReloading = true
-
-    task.spawn(function()
-        local shortName = tostring(moduleInfo.ShortName or "Game")
-        local url = tostring(moduleInfo.Url)
-        local ok, err = pcall(function()
-            local cleanupName = "Tox" .. shortName .. "Cleanup"
-
-            if getgenv()[cleanupName] then
-                pcall(getgenv()[cleanupName])
-            end
-
-            getgenv().ToxGameModuleLoadedPage = nil
-            getgenv().ToxGameModuleLoadedUrl = nil
-            getgenv().ToxGameModuleLoadingPage = nil
-            getgenv().ToxGameModuleLoadingUrl = nil
-
-            local source = game:HttpGet(url)
-            local chunk, compileErr = loadstring(source)
-
-            if not chunk then
-                error(tostring(compileErr or "compile error"))
-            end
-
-            local runOk, runErr = pcall(chunk)
-
-            if not runOk then
-                error(tostring(runErr))
-            end
-
-            getgenv().ToxGameModuleLoadedPage = getgenv().GamePage
-            getgenv().ToxGameModuleLoadedUrl = url
-        end)
-
-        getgenv().ToxGameModuleReloading = false
-
-        if ok then
-            CustomNotify("Reloaded " .. shortName, Color3.fromRGB(100, 255, 130), 4)
-        else
-            CustomNotify(shortName .. " reload failed", Color3.fromRGB(255, 100, 100), 5)
-            warn("[ToxHub Reload Error]: " .. tostring(err))
-        end
-    end)
-
-    return true
-end
-
-local function ShowToxTabReloadMenu(tabButton, moduleInfo)
-    CloseToxTabReloadMenu()
-
-    if not tabButton
-    or not tabButton.Parent
-    or typeof(moduleInfo) ~= "table" then
-        return
-    end
-
-    local shortName = tostring(moduleInfo.ShortName or "Module")
-    local absolute = tabButton.AbsolutePosition
-    local size = tabButton.AbsoluteSize
-
-    ToxTabReloadOverlay = Instance.new("TextButton")
-    ToxTabReloadOverlay.Name = "ToxTabReloadOverlay"
-    ToxTabReloadOverlay.Size = UDim2.new(1, 0, 1, 0)
-    ToxTabReloadOverlay.Position = UDim2.new(0, 0, 0, 0)
-    ToxTabReloadOverlay.BackgroundTransparency = 1
-    ToxTabReloadOverlay.Text = ""
-    ToxTabReloadOverlay.AutoButtonColor = false
-    ToxTabReloadOverlay.ZIndex = 198
-    ToxTabReloadOverlay.Parent = Gui
-
-    ToxTabReloadMenu = Instance.new("Frame")
-    ToxTabReloadMenu.Name = "ToxTabReloadMenu"
-    ToxTabReloadMenu.Size = UDim2.new(0, 132, 0, 36)
-    ToxTabReloadMenu.Position = UDim2.new(0, absolute.X, 0, absolute.Y + size.Y + 4)
-    ToxTabReloadMenu.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
-    ToxTabReloadMenu.BorderSizePixel = 0
-    ToxTabReloadMenu.ZIndex = 200
-    ToxTabReloadMenu.Parent = Gui
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 5)
-    corner.Parent = ToxTabReloadMenu
-
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = MAIN_COLOR
-    stroke.Thickness = 1
-    stroke.Transparency = 0.15
-    stroke.Parent = ToxTabReloadMenu
-
-    local reload = Instance.new("TextButton")
-    reload.Size = UDim2.new(1, -8, 1, -8)
-    reload.Position = UDim2.new(0, 4, 0, 4)
-    reload.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
-    reload.BorderSizePixel = 0
-    reload.Text = "Reload " .. shortName
-    reload.TextColor3 = Color3.fromRGB(245, 245, 245)
-    reload.Font = Enum.Font.GothamBold
-    reload.TextSize = 11
-    reload.AutoButtonColor = false
-    reload.ZIndex = 201
-    reload.Parent = ToxTabReloadMenu
-
-    local reloadCorner = Instance.new("UICorner")
-    reloadCorner.CornerRadius = UDim.new(0, 4)
-    reloadCorner.Parent = reload
-
-    ToxTabReloadOverlay.MouseButton1Click:Connect(CloseToxTabReloadMenu)
-    ToxTabReloadOverlay.MouseButton2Click:Connect(CloseToxTabReloadMenu)
-
-    reload.MouseButton1Click:Connect(function()
-        CloseToxTabReloadMenu()
-        getgenv().ReloadToxGameModule(moduleInfo)
-    end)
-end
-
 local GameTab = nil
 
 if GamePage and DetectedGameModule then
     GameTab = CreateTab(DetectedGameModule.ShortName, GamePage)
-
-    if GameTab then
-        GameTab.MouseButton2Click:Connect(function()
-            ShowToxTabReloadMenu(GameTab, DetectedGameModule)
-        end)
-    end
 end
 
 local CombatTab = CreateTab("COMBAT", CombatPage)
@@ -5358,7 +5208,7 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     AutoLabel.Size = UDim2.new(0, 38, 1, 0)
     AutoLabel.Position = UDim2.new(1, -84, 0, 0)
     AutoLabel.BackgroundTransparency = 1
-    AutoLabel.Text = "AUTO"
+    AutoLabel.Text = Name == "Silent Aim" and "" or "AUTO"
     AutoLabel.TextColor3 = Color3.fromRGB(175, 175, 190)
     AutoLabel.TextSize = 9
     AutoLabel.Font = Enum.Font.GothamBold
