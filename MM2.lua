@@ -737,50 +737,135 @@ local function GetSelectedKnifeTargets()
     return targets
 end
 
-local function TouchKnifeTarget(knife, target)
-    if not knife or not target or not target.Character then
+local function TouchKnifeTarget(
+    knife,
+    target,
+    activateKnife
+)
+    if not knife
+    or not target
+    or not target.Character then
         return false
     end
 
-    local targetHumanoid = target.Character:FindFirstChildOfClass("Humanoid")
-    local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
-    local targetHead = target.Character:FindFirstChild("Head")
-    local handle = knife:FindFirstChild("Handle")
+    local targetHumanoid =
+        target.Character:
+            FindFirstChildOfClass(
+                "Humanoid"
+            )
 
-    if not targetHumanoid or targetHumanoid.Health <= 0 or not handle then
+    local targetRoot =
+        target.Character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+    local targetHead =
+        target.Character:
+            FindFirstChild(
+                "Head"
+            )
+
+    local handle =
+        knife:
+            FindFirstChild(
+                "Handle"
+            )
+
+    if not targetHumanoid
+    or targetHumanoid.Health <= 0
+    or not handle then
         return false
     end
 
     local touched = false
 
+    if activateKnife ~= false then
+        pcall(function()
+            knife:
+                Activate()
+        end)
+    end
+
     if firetouchinterest then
-        for _, part in ipairs({targetRoot, targetHead}) do
+        for _, part in ipairs({
+            targetRoot,
+            targetHead
+        }) do
             if part then
                 pcall(function()
-                    knife:Activate()
-                    firetouchinterest(part, handle, 0)
-                    firetouchinterest(part, handle, 1)
-                    firetouchinterest(handle, part, 0)
-                    firetouchinterest(handle, part, 1)
+                    firetouchinterest(
+                        handle,
+                        part,
+                        0
+                    )
+
+                    firetouchinterest(
+                        part,
+                        handle,
+                        0
+                    )
+
+                    firetouchinterest(
+                        handle,
+                        part,
+                        1
+                    )
+
+                    firetouchinterest(
+                        part,
+                        handle,
+                        1
+                    )
                 end)
+
                 touched = true
             end
         end
     end
 
-    if not touched and targetRoot then
-        local _, humanoid, root = GetCharacterState()
+    if not touched
+    and targetRoot then
+        local _,
+            humanoid,
+            root =
+            GetCharacterState()
 
-        if humanoid and humanoid.Health > 0 and root then
-            local oldCFrame = root.CFrame
-            local allow = getgenv().AllowToxTeleport
+        if humanoid
+        and humanoid.Health > 0
+        and root then
+            local oldCFrame =
+                root.CFrame
 
-            if allow then allow(0.4) end
+            local allow =
+                getgenv().AllowToxTeleport
 
-            root.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 1.5)
-            knife:Activate()
-            task.wait(0.04)
-            root.CFrame = oldCFrame
+            if allow then
+                allow(
+                    0.4
+                )
+            end
+
+            root.CFrame =
+                targetRoot.CFrame
+                * CFrame.new(
+                    0,
+                    0,
+                    1.5
+                )
+
+            if activateKnife ~= false then
+                knife:
+                    Activate()
+            end
+
+            task.wait(
+                0.04
+            )
+
+            root.CFrame =
+                oldCFrame
+
             touched = true
         end
     end
@@ -834,12 +919,15 @@ local function AttackKnifeTargetUntilDone(
         else
             if TouchKnifeTarget(
                 knife,
-                target
+                target,
+                true
             ) then
                 attacked = true
             end
 
-            task.wait(0.035)
+            task.wait(
+                0.035
+            )
         end
     end
 
@@ -849,36 +937,247 @@ local function AttackKnifeTargetUntilDone(
         )
 end
 
-local function KillAll()
-    if ActionBusy then
+local function OneSlashTargets(
+    knife,
+    targets
+)
+    if not knife
+    or not knife.Parent
+    or typeof(targets)
+        ~= "table" then
+        return false
+    end
+
+    local handle =
+        knife:
+            FindFirstChild(
+                "Handle"
+            )
+
+    if not handle
+    or not firetouchinterest then
+        return false
+    end
+
+    pcall(function()
+        knife:
+            Activate()
+    end)
+
+    local touchedAny = false
+
+    for pass = 1, 4 do
+        for _, target in ipairs(
+            targets
+        ) do
+            if target
+            and target.Parent == Players
+            and not IsWhitelisted(
+                target
+            )
+            and KnifeTargetAlive(
+                target
+            ) then
+                if TouchKnifeTarget(
+                    knife,
+                    target,
+                    false
+                ) then
+                    touchedAny = true
+                end
+            end
+        end
+
+        if pass < 4 then
+            task.wait(
+                0.012
+            )
+        end
+    end
+
+    return touchedAny
+end
+
+local function KillSingleTarget(
+    target
+)
+    if ActionBusy
+    or not target
+    or target == Player
+    or IsWhitelisted(
+        target
+    ) then
         return
     end
 
-    local knife = FindNamedTool({"knife"})
+    local knife =
+        FindNamedTool({
+            "knife"
+        })
 
     if not knife then
-        CustomNotify("Kill All requires the Knife", Color3.fromRGB(255, 100, 100))
+        CustomNotify(
+            "Kill requires the Knife",
+            Color3.fromRGB(
+                255,
+                100,
+                100
+            )
+        )
+
         return
     end
 
-    if not EquipTool(knife) then
-        CustomNotify("Could not equip Knife", Color3.fromRGB(255, 100, 100))
+    if not EquipTool(
+        knife
+    ) then
+        CustomNotify(
+            "Could not equip Knife",
+            Color3.fromRGB(
+                255,
+                100,
+                100
+            )
+        )
+
         return
     end
 
     ActionBusy = true
 
     task.spawn(function()
-        for _, target in ipairs(Players:GetPlayers()) do
-            if target ~= Player
-            and not IsWhitelisted(target) then
+        OneSlashTargets(
+            knife,
+            {
+                target
+            }
+        )
+
+        task.wait(
+            0.12
+        )
+
+        if KnifeTargetAlive(
+            target
+        ) then
+            AttackKnifeTargetUntilDone(
+                knife,
+                target,
+                2.5
+            )
+        end
+
+        ActionBusy = false
+    end)
+end
+
+local function KillAll()
+    if ActionBusy then
+        return
+    end
+
+    local knife =
+        FindNamedTool({
+            "knife"
+        })
+
+    if not knife then
+        CustomNotify(
+            "Kill All requires the Knife",
+            Color3.fromRGB(
+                255,
+                100,
+                100
+            )
+        )
+
+        return
+    end
+
+    if not EquipTool(
+        knife
+    ) then
+        CustomNotify(
+            "Could not equip Knife",
+            Color3.fromRGB(
+                255,
+                100,
+                100
+            )
+        )
+
+        return
+    end
+
+    local targets = {}
+
+    for _, target in ipairs(
+        Players:
+            GetPlayers()
+    ) do
+        if target ~= Player
+        and not IsWhitelisted(
+            target
+        )
+        and KnifeTargetAlive(
+            target
+        ) then
+            table.insert(
+                targets,
+                target
+            )
+        end
+    end
+
+    if #targets == 0 then
+        return
+    end
+
+    ActionBusy = true
+
+    task.spawn(function()
+        local oneSlash =
+            OneSlashTargets(
+                knife,
+                targets
+            )
+
+        if not oneSlash then
+            for _, target in ipairs(
+                targets
+            ) do
+                if getgenv().Destroyed then
+                    break
+                end
+
                 AttackKnifeTargetUntilDone(
                     knife,
                     target,
-                    3.5
+                    2.5
                 )
+            end
+        else
+            task.wait(
+                0.2
+            )
 
-                task.wait(0.015)
+            for _, target in ipairs(
+                targets
+            ) do
+                if getgenv().Destroyed then
+                    break
+                end
+
+                if KnifeTargetAlive(
+                    target
+                )
+                and knife.Enabled ~= false then
+                    TouchKnifeTarget(
+                        knife,
+                        target,
+                        false
+                    )
+                end
             end
         end
 
@@ -891,51 +1190,77 @@ local function KillSelectedTargets()
         return
     end
 
-    local knife = FindNamedTool({"knife"})
+    local knife =
+        FindNamedTool({
+            "knife"
+        })
 
     if not knife then
         CustomNotify(
             "Kill Selected requires the Knife",
-            Color3.fromRGB(255, 100, 100)
+            Color3.fromRGB(
+                255,
+                100,
+                100
+            )
         )
+
         return
     end
 
-    local targets = GetSelectedKnifeTargets()
+    local targets =
+        GetSelectedKnifeTargets()
 
     if #targets == 0 then
         CustomNotify(
             "No selected players available",
-            Color3.fromRGB(255, 180, 70)
+            Color3.fromRGB(
+                255,
+                180,
+                70
+            )
         )
+
         return
     end
 
-    if not EquipTool(knife) then
+    if not EquipTool(
+        knife
+    ) then
         CustomNotify(
             "Could not equip Knife",
-            Color3.fromRGB(255, 100, 100)
+            Color3.fromRGB(
+                255,
+                100,
+                100
+            )
         )
+
         return
     end
 
     ActionBusy = true
 
     task.spawn(function()
-        for _, target in ipairs(targets) do
-            if getgenv().Destroyed then
-                break
-            end
+        local oneSlash =
+            OneSlashTargets(
+                knife,
+                targets
+            )
 
-            if target.Parent == Players
-            and not IsWhitelisted(target) then
+        if not oneSlash then
+            for _, target in ipairs(
+                targets
+            ) do
+                if getgenv().Destroyed then
+                    break
+                end
+
                 AttackKnifeTargetUntilDone(
                     knife,
                     target,
-                    3.5
+                    2.5
                 )
-
-                task.wait(0.015)
             end
         end
 
@@ -1023,60 +1348,270 @@ local function RefreshPlayerSelector()
         userLabel.TextXAlignment = Enum.TextXAlignment.Left
         userLabel.Parent = row
 
-        local selectButton = Instance.new("TextButton")
-        selectButton.Size = UDim2.new(0, 86, 0, 24)
-        selectButton.Position = UDim2.new(1, -94, 0.5, -12)
+        local selectButton =
+            Instance.new(
+                "TextButton"
+            )
+
+        local killButton = nil
+
+        if PlayerSelectorMode
+            == "targets" then
+            selectButton.Size =
+                UDim2.new(
+                    0,
+                    72,
+                    0,
+                    24
+                )
+
+            selectButton.Position =
+                UDim2.new(
+                    1,
+                    -136,
+                    0.5,
+                    -12
+                )
+
+            killButton =
+                Instance.new(
+                    "TextButton"
+                )
+
+            killButton.Size =
+                UDim2.new(
+                    0,
+                    52,
+                    0,
+                    24
+                )
+
+            killButton.Position =
+                UDim2.new(
+                    1,
+                    -60,
+                    0.5,
+                    -12
+                )
+
+            killButton.BorderSizePixel = 0
+            killButton.Text = "KILL"
+
+            killButton.TextColor3 =
+                Color3.fromRGB(
+                    255,
+                    255,
+                    255
+                )
+
+            killButton.Font =
+                Enum.Font.GothamBold
+
+            killButton.TextSize = 9
+            killButton.Parent = row
+
+            local killCorner =
+                Instance.new(
+                    "UICorner"
+                )
+
+            killCorner.CornerRadius =
+                UDim.new(
+                    0,
+                    4
+                )
+
+            killCorner.Parent =
+                killButton
+        else
+            selectButton.Size =
+                UDim2.new(
+                    0,
+                    86,
+                    0,
+                    24
+                )
+
+            selectButton.Position =
+                UDim2.new(
+                    1,
+                    -94,
+                    0.5,
+                    -12
+                )
+        end
+
         selectButton.BorderSizePixel = 0
         selectButton.Font = Enum.Font.GothamBold
         selectButton.TextSize = 10
-        selectButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+        selectButton.TextColor3 =
+            Color3.fromRGB(
+                255,
+                255,
+                255
+            )
+
         selectButton.Parent = row
 
-        local selectCorner = Instance.new("UICorner")
-        selectCorner.CornerRadius = UDim.new(0, 4)
-        selectCorner.Parent = selectButton
+        local selectCorner =
+            Instance.new(
+                "UICorner"
+            )
 
-        local whitelisted = IsWhitelisted(target)
+        selectCorner.CornerRadius =
+            UDim.new(
+                0,
+                4
+            )
 
-        if PlayerSelectorMode == "whitelist" then
+        selectCorner.Parent =
+            selectButton
+
+        local whitelisted =
+            IsWhitelisted(
+                target
+            )
+
+        if PlayerSelectorMode
+            == "whitelist" then
             if whitelisted then
                 selectButton.Text = "SAFE"
-                selectButton.BackgroundColor3 = MAIN_COLOR
+                selectButton.BackgroundColor3 =
+                    MAIN_COLOR
             else
-                selectButton.Text = "Whitelist"
-                selectButton.BackgroundColor3 = Color3.fromRGB(55, 55, 75)
+                selectButton.Text =
+                    "Whitelist"
+
+                selectButton.BackgroundColor3 =
+                    Color3.fromRGB(
+                        55,
+                        55,
+                        75
+                    )
             end
         else
             if whitelisted then
                 selectButton.Text = "SAFE"
-                selectButton.BackgroundColor3 = MAIN_COLOR
-            elseif KnifeTargetIds[target.UserId] then
-                selectButton.Text = "SELECTED"
-                selectButton.BackgroundColor3 = MAIN_COLOR
+                selectButton.BackgroundColor3 =
+                    MAIN_COLOR
+
+                if killButton then
+                    killButton.BackgroundColor3 =
+                        Color3.fromRGB(
+                            45,
+                            45,
+                            55
+                        )
+
+                    killButton.TextColor3 =
+                        Color3.fromRGB(
+                            130,
+                            130,
+                            145
+                        )
+                end
+            elseif KnifeTargetIds[
+                target.UserId
+            ] then
+                selectButton.Text =
+                    "SELECTED"
+
+                selectButton.BackgroundColor3 =
+                    MAIN_COLOR
+
+                if killButton then
+                    killButton.BackgroundColor3 =
+                        Color3.fromRGB(
+                            155,
+                            40,
+                            48
+                        )
+                end
             else
                 selectButton.Text = "Select"
-                selectButton.BackgroundColor3 = Color3.fromRGB(55, 55, 75)
+
+                selectButton.BackgroundColor3 =
+                    Color3.fromRGB(
+                        55,
+                        55,
+                        75
+                    )
+
+                if killButton then
+                    killButton.BackgroundColor3 =
+                        Color3.fromRGB(
+                            155,
+                            40,
+                            48
+                        )
+                end
             end
         end
 
-        selectButton.MouseButton1Click:Connect(function()
-            if PlayerSelectorMode == "whitelist" then
-                SetWhitelisted(target, not IsWhitelisted(target))
-            else
-                if IsWhitelisted(target) then
-                    CustomNotify(
-                        target.Name .. " is whitelisted",
-                        Color3.fromRGB(255, 180, 70)
+        if killButton then
+            killButton.MouseButton1Click:
+                Connect(function()
+                    if IsWhitelisted(
+                        target
+                    ) then
+                        CustomNotify(
+                            target.Name
+                            .. " is whitelisted",
+                            Color3.fromRGB(
+                                255,
+                                180,
+                                70
+                            )
+                        )
+
+                        return
+                    end
+
+                    KillSingleTarget(
+                        target
                     )
-                    return
+                end)
+        end
+
+        selectButton.MouseButton1Click:
+            Connect(function()
+                if PlayerSelectorMode
+                    == "whitelist" then
+                    SetWhitelisted(
+                        target,
+                        not IsWhitelisted(
+                            target
+                        )
+                    )
+                else
+                    if IsWhitelisted(
+                        target
+                    ) then
+                        CustomNotify(
+                            target.Name
+                            .. " is whitelisted",
+                            Color3.fromRGB(
+                                255,
+                                180,
+                                70
+                            )
+                        )
+
+                        return
+                    end
+
+                    KnifeTargetIds[
+                        target.UserId
+                    ] =
+                        not KnifeTargetIds[
+                            target.UserId
+                        ]
+                        or nil
                 end
 
-                KnifeTargetIds[target.UserId] =
-                    not KnifeTargetIds[target.UserId] or nil
-            end
-
-            RefreshPlayerSelector()
-        end)
+                RefreshPlayerSelector()
+            end)
     end
 
     UpdateSelectorActionText()
@@ -1955,6 +2490,10 @@ local function GetGuidedTargetPart(
     return
         character:
             FindFirstChild(
+                "Head"
+            )
+        or character:
+            FindFirstChild(
                 "UpperTorso"
             )
         or character:
@@ -1967,7 +2506,83 @@ local function GetGuidedTargetPart(
             )
 end
 
-local function GetGuidedTargetPosition(
+local function GetGuidedVelocity(
+    target
+)
+    local character =
+        target
+        and target.Character
+
+    local root =
+        character
+        and character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+    if not root then
+        return Vector3.zero
+    end
+
+    local velocity =
+        root.AssemblyLinearVelocity
+
+    local history =
+        TargetMotionHistory[
+            target
+        ]
+
+    if history
+    and typeof(
+        history.Velocity
+    ) == "Vector3" then
+        velocity =
+            velocity:
+                Lerp(
+                    history.Velocity,
+                    0.35
+                )
+    end
+
+    local horizontal =
+        Vector3.new(
+            velocity.X,
+            0,
+            velocity.Z
+        )
+
+    horizontal =
+        ClampVectorMagnitude(
+            horizontal,
+            42
+        )
+
+    return
+        Vector3.new(
+            horizontal.X,
+            math.clamp(
+                velocity.Y,
+                -55,
+                55
+            ),
+            horizontal.Z
+        )
+end
+
+local function GetGuidedLeadTime()
+    local ping =
+        GetPredictionPing()
+
+    return
+        math.clamp(
+            0.028
+            + ping * 0.78,
+            0.035,
+            0.125
+        )
+end
+
+local function BuildGuidedTargetSamples(
     target
 )
     local targetPart =
@@ -1977,32 +2592,107 @@ local function GetGuidedTargetPosition(
 
     if not targetPart
     or not targetPart.Parent then
-        return nil
+        return {}
     end
 
-    return
+    local basePosition =
         targetPart.Position
+
+    local velocity =
+        GetGuidedVelocity(
+            target
+        )
+
+    local horizontalSpeed =
+        Vector3.new(
+            velocity.X,
+            0,
+            velocity.Z
+        ).Magnitude
+
+    if horizontalSpeed < 1.5
+    and math.abs(
+        velocity.Y
+    ) < 2 then
+        return {
+            basePosition
+        }
+    end
+
+    local lead =
+        GetGuidedLeadTime()
+
+    local times = {
+        math.max(
+            0.02,
+            lead * 0.60
+        ),
+        lead,
+        math.min(
+            0.16,
+            lead * 1.40
+        )
+    }
+
+    local samples = {}
+
+    table.insert(
+        samples,
+        basePosition
+    )
+
+    for _, timeValue in ipairs(
+        times
+    ) do
+        local predicted =
+            basePosition
+            + velocity
+                * timeValue
+
+        if math.abs(
+            velocity.Y
+        ) > 2 then
+            predicted +=
+                Vector3.new(
+                    0,
+                    -0.5
+                    * workspace.Gravity
+                    * timeValue
+                    * timeValue,
+                    0
+                )
+        end
+
+        table.insert(
+            samples,
+            predicted
+        )
+    end
+
+    return samples
 end
 
 local function FireGuidedGunShot(
     gun,
     target
 )
-    local fired = false
-
-    local function livePosition()
-        return
-            GetGuidedTargetPosition(
-                target
-            )
-    end
-
-    local targetPosition =
-        livePosition()
-
-    if not targetPosition then
+    if not gun
+    or not gun.Parent
+    or not target
+    or not target.Parent then
         return false
     end
+
+    local samples =
+        BuildGuidedTargetSamples(
+            target
+        )
+
+    if #samples == 0 then
+        return false
+    end
+
+    local fired = false
 
     local shootRemote =
         gun:
@@ -2015,20 +2705,63 @@ local function FireGuidedGunShot(
                 true
             )
 
+    local knifeLocal =
+        gun:
+            FindFirstChild(
+                "KnifeLocal"
+            )
+        or gun:
+            FindFirstChild(
+                "KnifeLocal",
+                true
+            )
+
+    local createBeam =
+        knifeLocal
+        and (
+            knifeLocal:
+                FindFirstChild(
+                    "CreateBeam"
+                )
+            or knifeLocal:
+                FindFirstChild(
+                    "CreateBeam",
+                    true
+                )
+        )
+
+    local remoteFunction =
+        createBeam
+        and (
+            createBeam:
+                FindFirstChild(
+                    "RemoteFunction"
+                )
+            or createBeam:
+                FindFirstChildWhichIsA(
+                    "RemoteFunction",
+                    true
+                )
+        )
+
+    local primaryPosition =
+        samples[
+            math.min(
+                3,
+                #samples
+            )
+        ]
+
     if shootRemote
     and shootRemote:IsA(
         "RemoteEvent"
     ) then
         local ok =
             pcall(function()
-                local currentPosition =
-                    livePosition()
-                    or targetPosition
-
                 shootRemote:
                     FireServer(
                         CFrame.new(
-                            currentPosition
+                            primaryPosition
                             + Vector3.new(
                                 0,
                                 0.5,
@@ -2036,7 +2769,7 @@ local function FireGuidedGunShot(
                             )
                         ),
                         CFrame.new(
-                            currentPosition
+                            primaryPosition
                         )
                     )
             end)
@@ -2046,115 +2779,89 @@ local function FireGuidedGunShot(
         end
     end
 
-    local remoteFunction = nil
-
-    pcall(function()
-        local knifeLocal =
-            gun:
-                FindFirstChild(
-                    "KnifeLocal"
-                )
-            or gun:
-                FindFirstChild(
-                    "KnifeLocal",
-                    true
-                )
-
-        local createBeam =
-            knifeLocal
-            and (
-                knifeLocal:
-                    FindFirstChild(
-                        "CreateBeam"
-                    )
-                or knifeLocal:
-                    FindFirstChild(
-                        "CreateBeam",
-                        true
-                    )
-            )
-
-        remoteFunction =
-            createBeam
-            and (
-                createBeam:
-                    FindFirstChild(
-                        "RemoteFunction"
-                    )
-                or createBeam:
-                    FindFirstChildWhichIsA(
-                        "RemoteFunction",
-                        true
-                    )
-            )
-
-        if remoteFunction
-        and remoteFunction:IsA(
-            "RemoteFunction"
-        ) then
-            local currentPosition =
-                livePosition()
-                or targetPosition
-
-            remoteFunction:
-                InvokeServer(
-                    1,
-                    currentPosition,
-                    "AH2"
-                )
-
-            fired = true
-        end
-    end)
-
     if remoteFunction
     and remoteFunction:IsA(
         "RemoteFunction"
     ) then
-        task.spawn(function()
-            local started =
-                os.clock()
+        for _, position in ipairs(
+            samples
+        ) do
+            pcall(function()
+                remoteFunction:
+                    InvokeServer(
+                        1,
+                        position,
+                        "AH2"
+                    )
+            end)
 
-            for _ = 1, 2 do
+            fired = true
+        end
+    end
+
+    if shootRemote
+    and shootRemote:IsA(
+        "RemoteEvent"
+    )
+    and #samples > 1 then
+        task.spawn(function()
+            for index = 2, #samples do
                 task.wait(
-                    0.025
+                    0.012
                 )
 
                 if getgenv().Destroyed
                 or not gun
                 or not gun.Parent
                 or not target
-                or target.Parent
-                    ~= Players
-                or os.clock() - started
-                    > 0.08 then
+                or not target.Parent then
                     break
                 end
 
-                local humanoid =
-                    target.Character
-                    and target.Character:
-                        FindFirstChildOfClass(
-                            "Humanoid"
+                local liveSamples =
+                    BuildGuidedTargetSamples(
+                        target
+                    )
+
+                local position =
+                    liveSamples[
+                        math.min(
+                            index,
+                            #liveSamples
                         )
+                    ]
 
-                if not humanoid
-                or humanoid.Health <= 0 then
-                    break
-                end
-
-                local currentPosition =
-                    livePosition()
-
-                if currentPosition then
+                if position then
                     pcall(function()
-                        remoteFunction:
-                            InvokeServer(
-                                1,
-                                currentPosition,
-                                "AH2"
+                        shootRemote:
+                            FireServer(
+                                CFrame.new(
+                                    position
+                                    + Vector3.new(
+                                        0,
+                                        0.5,
+                                        0
+                                    )
+                                ),
+                                CFrame.new(
+                                    position
+                                )
                             )
                     end)
+
+                    if remoteFunction
+                    and remoteFunction:IsA(
+                        "RemoteFunction"
+                    ) then
+                        pcall(function()
+                            remoteFunction:
+                                InvokeServer(
+                                    1,
+                                    position,
+                                    "AH2"
+                                )
+                        end)
+                    end
                 end
             end
         end)
@@ -4009,6 +4716,550 @@ end)
 CreateButton("Whitelist", GamePage, function()
     OpenPlayerSelector("whitelist")
 end)
+
+local function GetMM2ActiveMapRoot()
+    local normal =
+        workspace:
+            FindFirstChild(
+                "Normal"
+            )
+
+    if normal then
+        return normal
+    end
+
+    local best = nil
+    local bestCount = 0
+
+    for _, candidate in ipairs(
+        workspace:
+            GetChildren()
+    ) do
+        if candidate:IsA(
+            "Model"
+        )
+        and not Players:
+            GetPlayerFromCharacter(
+                candidate
+            ) then
+            local lower =
+                string.lower(
+                    candidate.Name
+                )
+
+            if not string.find(
+                lower,
+                "lobby",
+                1,
+                true
+            ) then
+                local count = 0
+
+                for _, object in ipairs(
+                    candidate:
+                        GetDescendants()
+                ) do
+                    if object:IsA(
+                        "BasePart"
+                    ) then
+                        count += 1
+                    end
+                end
+
+                if count > bestCount then
+                    best = candidate
+                    bestCount = count
+                end
+            end
+        end
+    end
+
+    return best
+end
+
+local function GetPartTopCFrame(
+    part
+)
+    if not part
+    or not part:IsA(
+        "BasePart"
+    ) then
+        return nil
+    end
+
+    return
+        CFrame.new(
+            part.Position
+            + Vector3.new(
+                0,
+                part.Size.Y * 0.5
+                    + 4,
+                0
+            )
+        )
+end
+
+local function FindNamedSpawnIn(
+    root
+)
+    if not root then
+        return nil
+    end
+
+    local preferred = nil
+
+    for _, object in ipairs(
+        root:
+            GetDescendants()
+    ) do
+        if object:IsA(
+            "SpawnLocation"
+        ) then
+            return
+                GetPartTopCFrame(
+                    object
+                )
+        end
+
+        if object:IsA(
+            "BasePart"
+        ) then
+            local lower =
+                string.lower(
+                    object.Name
+                )
+
+            if string.find(
+                lower,
+                "spawn",
+                1,
+                true
+            )
+            or string.find(
+                lower,
+                "start",
+                1,
+                true
+            ) then
+                preferred =
+                    preferred
+                    or object
+            end
+        end
+    end
+
+    return
+        GetPartTopCFrame(
+            preferred
+        )
+end
+
+local function GetRootBounds(
+    root
+)
+    if not root then
+        return nil
+    end
+
+    if root:IsA(
+        "Model"
+    ) then
+        local ok,
+            cframe,
+            size =
+            pcall(function()
+                return
+                    root:
+                        GetBoundingBox()
+            end)
+
+        if ok then
+            return
+                cframe,
+                size
+        end
+    end
+
+    local minimum = nil
+    local maximum = nil
+
+    for _, object in ipairs(
+        root:
+            GetDescendants()
+    ) do
+        if object:IsA(
+            "BasePart"
+        ) then
+            local half =
+                object.Size * 0.5
+
+            local low =
+                object.Position
+                - half
+
+            local high =
+                object.Position
+                + half
+
+            minimum =
+                minimum
+                and Vector3.new(
+                    math.min(
+                        minimum.X,
+                        low.X
+                    ),
+                    math.min(
+                        minimum.Y,
+                        low.Y
+                    ),
+                    math.min(
+                        minimum.Z,
+                        low.Z
+                    )
+                )
+                or low
+
+            maximum =
+                maximum
+                and Vector3.new(
+                    math.max(
+                        maximum.X,
+                        high.X
+                    ),
+                    math.max(
+                        maximum.Y,
+                        high.Y
+                    ),
+                    math.max(
+                        maximum.Z,
+                        high.Z
+                    )
+                )
+                or high
+        end
+    end
+
+    if minimum
+    and maximum then
+        local size =
+            maximum
+            - minimum
+
+        local center =
+            minimum
+            + size * 0.5
+
+        return
+            CFrame.new(
+                center
+            ),
+            size
+    end
+
+    return nil
+end
+
+local function GetSafeMapCFrame()
+    local mapRoot =
+        GetMM2ActiveMapRoot()
+
+    if not mapRoot then
+        return nil
+    end
+
+    local named =
+        FindNamedSpawnIn(
+            mapRoot
+        )
+
+    if named then
+        return named
+    end
+
+    local bounds,
+        size =
+        GetRootBounds(
+            mapRoot
+        )
+
+    if not bounds
+    or not size then
+        return nil
+    end
+
+    local params =
+        RaycastParams.new()
+
+    params.FilterType =
+        Enum.RaycastFilterType.Include
+
+    params.FilterDescendantsInstances = {
+        mapRoot
+    }
+
+    local origin =
+        bounds.Position
+        + Vector3.new(
+            0,
+            size.Y * 0.5
+                + 150,
+            0
+        )
+
+    local result =
+        workspace:
+            Raycast(
+                origin,
+                Vector3.new(
+                    0,
+                    -(size.Y + 500),
+                    0
+                ),
+                params
+            )
+
+    if result then
+        return
+            CFrame.new(
+                result.Position
+                + Vector3.new(
+                    0,
+                    4,
+                    0
+                )
+            )
+    end
+
+    local bestPart = nil
+    local bestScore = math.huge
+
+    for _, object in ipairs(
+        mapRoot:
+            GetDescendants()
+    ) do
+        if object:IsA(
+            "BasePart"
+        )
+        and object.CanCollide
+        and object.Transparency < 0.95
+        and object.Size.X >= 4
+        and object.Size.Z >= 4 then
+            local flatDistance =
+                Vector2.new(
+                    object.Position.X
+                        - bounds.Position.X,
+                    object.Position.Z
+                        - bounds.Position.Z
+                ).Magnitude
+
+            local score =
+                flatDistance
+                - object.Size.X * 0.15
+                - object.Size.Z * 0.15
+
+            if score < bestScore then
+                bestScore = score
+                bestPart = object
+            end
+        end
+    end
+
+    return
+        GetPartTopCFrame(
+            bestPart
+        )
+end
+
+local function GetLobbySpawnCFrame()
+    local mapRoot =
+        GetMM2ActiveMapRoot()
+
+    local lobby =
+        workspace:
+            FindFirstChild(
+                "Lobby"
+            )
+
+    if lobby then
+        local named =
+            FindNamedSpawnIn(
+                lobby
+            )
+
+        if named then
+            return named
+        end
+    end
+
+    for _, object in ipairs(
+        workspace:
+            GetDescendants()
+    ) do
+        if object:IsA(
+            "SpawnLocation"
+        )
+        and (
+            not mapRoot
+            or not object:
+                IsDescendantOf(
+                    mapRoot
+                )
+        ) then
+            return
+                GetPartTopCFrame(
+                    object
+                )
+        end
+    end
+
+    if lobby then
+        local bounds,
+            size =
+            GetRootBounds(
+                lobby
+            )
+
+        if bounds
+        and size then
+            local params =
+                RaycastParams.new()
+
+            params.FilterType =
+                Enum.RaycastFilterType.Include
+
+            params.FilterDescendantsInstances = {
+                lobby
+            }
+
+            local result =
+                workspace:
+                    Raycast(
+                        bounds.Position
+                        + Vector3.new(
+                            0,
+                            size.Y * 0.5
+                                + 100,
+                            0
+                        ),
+                        Vector3.new(
+                            0,
+                            -(size.Y + 300),
+                            0
+                        ),
+                        params
+                    )
+
+            if result then
+                return
+                    CFrame.new(
+                        result.Position
+                        + Vector3.new(
+                            0,
+                            4,
+                            0
+                        )
+                    )
+            end
+        end
+    end
+
+    return nil
+end
+
+local function TeleportMM2To(
+    cframe,
+    label
+)
+    if typeof(cframe)
+        ~= "CFrame" then
+        CustomNotify(
+            label
+            .. " location unavailable",
+            Color3.fromRGB(
+                255,
+                180,
+                70
+            )
+        )
+
+        return
+    end
+
+    local character =
+        Player.Character
+
+    local humanoid =
+        character
+        and character:
+            FindFirstChildOfClass(
+                "Humanoid"
+            )
+
+    local root =
+        character
+        and character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+    if not root
+    or not humanoid
+    or humanoid.Health <= 0 then
+        return
+    end
+
+    if getgenv().AllowToxTeleport then
+        getgenv().AllowToxTeleport(
+            1.5
+        )
+    end
+
+    root.AssemblyLinearVelocity =
+        Vector3.zero
+
+    root.AssemblyAngularVelocity =
+        Vector3.zero
+
+    root.CFrame =
+        cframe
+
+    CustomNotify(
+        "Teleported to "
+        .. label,
+        Color3.fromRGB(
+            100,
+            255,
+            130
+        )
+    )
+end
+
+CreateMM2Section(
+    "TELEPORTS"
+)
+
+CreateButton(
+    "SPAWN",
+    GamePage,
+    function()
+        TeleportMM2To(
+            GetLobbySpawnCFrame(),
+            "SPAWN"
+        )
+    end
+)
+
+CreateButton(
+    "MAP",
+    GamePage,
+    function()
+        TeleportMM2To(
+            GetSafeMapCFrame(),
+            "MAP"
+        )
+    end
+)
+
 
 local AutoKnifeLastAttempt = 0
 local AutoShootLastAttempt = 0
