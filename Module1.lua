@@ -205,7 +205,10 @@ getgenv().Settings = {
     ADMINRocketAll = false,
     ADMINKickTarget = "",
 
-    ToxLastChangelogVersion = ""
+    ToxLastChangelogVersion = "",
+    ToxQuickActionsVisible = false,
+    ToxServerInfoVisible = false,
+    ToxServerInfoMode = "FPS/Ping/Players"
 }
 
 local PersistedSettingKeys = {}
@@ -1185,7 +1188,21 @@ local function LoadConfiguration()
     end)
 end
 
+
+local function DisableUnsupportedGameActions()
+    if getgenv().CurrentGameModule then
+        return
+    end
+
+    for key, value in pairs(Settings) do
+        if typeof(value) == "boolean" then
+            Settings[key] = false
+        end
+    end
+end
+
 LoadConfiguration()
+DisableUnsupportedGameActions()
 
 getgenv().SavedWaypointsByPlace =
     typeof(getgenv().SavedWaypointsByPlace) == "table"
@@ -2810,7 +2827,12 @@ local ToxSearchAliasMap = {
     esp = {"esp", "chams", "tracers", "names", "distance"},
     fly = {"fly", "air walk", "car fly", "water fly"},
     noclip = {"noclip", "clip"},
-    config = {"config", "keybind", "gui", "search", "changelog", "compatibility"}
+    config = {"config", "keybind", "gui", "search", "changelog", "compatibility", "quick actions", "server info"},
+    quick = {"quick actions", "return", "search", "server info", "compatibility", "fps"},
+    server = {"server info", "players", "ping", "fps", "jobid", "placeid"},
+    timer = {"round timer", "timer", "round"},
+    history = {"target history", "target", "select", "kill"},
+    lock = {"target lock", "target"}
 }
 
 local function GetToxPageName(page)
@@ -3173,7 +3195,9 @@ getgenv().ShowToxUpdateGui = function(version, changes)
     topBar.BorderSizePixel = 0
     topBar.Parent = frame
 
-    MakeDraggable(frame, topBar)
+    if MakeDraggable then
+        MakeDraggable(frame, topBar)
+    end
 
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, -20, 1, 0)
