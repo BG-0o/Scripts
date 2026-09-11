@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-11-mm2-autofarm-nosky-1"
+ToxUpdateVersion = "2026-09-11-mm2-autofarm-coinpass-v4"
 
 
 function ClearToxTable(target)
@@ -7265,30 +7265,21 @@ if getgenv().ShowToxUpdateGui then
         ToxUpdateVersion,
         {
             ADDED = {
-                "Auto Win no MM2 em cima de Reset On Full.",
-                "Server Hop com selecao Low, Medium e High.",
-                "Changelog expandido com categorias."
+                "Auto Farm do MM2 agora usa movimento de passagem rente a moeda.",
+                "Auto Win do MM2 so executa a rotina quando a mochila estiver cheia."
             },
             FIXED = {
-                "Auto Farm do MM2 nao sobe mais para o ceu entre moedas.",
-                "Auto Farm do MM2 fica travado na altura da coin durante o tween.",
-                "Auto Farm do MM2 coleta mais perto da moeda sem descer do alto.",
-                "Auto Farm do MM2 prioriza a moeda mais proxima.",
-                "Auto Farm do MM2 escolhe uma moeda aleatoria a cada 10 coletas.",
-                "Auto Shoot do MM2 cancela melhor ao desativar.",
-                "Shoot Murderer no C recebeu ajuste de mira guiada.",
-                "Round Timer do MM2 tenta detectar mais fontes de tempo.",
-                "Resize bloqueado quando a UI principal esta minimizada."
+                "Auto Farm do MM2 so trabalha enquanto o personagem estiver vivo.",
+                "Auto Farm do MM2 nao usa mais queda/subida do ceu para buscar moedas.",
+                "Auto Farm do MM2 filtra melhor moedas reais do CoinContainer.",
+                "Auto Farm do MM2 nao dispara Auto Win ou Reset por contagem falsa sem mochila cheia."
             },
             CHANGED = {
-                "Server Hop Low busca servidores com 1 ou 2 players.",
-                "Server Hop Medium busca servidores perto da metade da lotacao.",
-                "Server Hop High busca servidores quase cheios.",
-                "Auto Farm do MM2 nao usa mais o metodo subterraneo forcado que travava embaixo da coin."
+                "Auto Farm do MM2 prioriza moeda mais proxima e escolhe uma aleatoria a cada 10 coletas.",
+                "Coleta do MM2 ficou mais proxima da moeda usando touch repetido e passagem curta."
             },
             REMOVED = {
-                "Menu de Reload pelo botao direito do TAB.",
-                "Texto AUTO no Silent Aim."
+                "Metodo antigo do Auto Farm que prendia ou jogava o personagem para cima."
             }
         }
     )
