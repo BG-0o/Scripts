@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-11-serverhop-modes-1"
+ToxUpdateVersion = "2026-09-11-serverhop-ranges-1"
 
 
 function ClearToxTable(target)
@@ -2988,7 +2988,7 @@ local function CloseServerHopMenu()
     end
 end
 
-local function GetServerHopScore(server, mode)
+local function GetServerHopInfo(server, mode)
     if typeof(server) ~= "table" then
         return nil
     end
@@ -3000,19 +3000,45 @@ local function GetServerHopScore(server, mode)
     if serverId == ""
     or serverId == game.JobId
     or maxPlayers <= 0
+    or playing <= 0
     or playing >= maxPlayers then
         return nil
     end
 
+    if mode == "Low" then
+        if playing >= 1
+        and playing <= math.min(2, maxPlayers - 1) then
+            return playing, true
+        end
+
+        return nil
+    end
+
     if mode == "High" then
-        return -playing
+        local wanted = math.max(1, maxPlayers - 2)
+
+        if maxPlayers == 12 then
+            wanted = 10
+        end
+
+        if playing >= wanted
+        and playing <= maxPlayers - 1 then
+            return -playing, true
+        end
+
+        return nil
     end
 
-    if mode == "Medium" then
-        return math.abs(playing - (maxPlayers * 0.5))
+    local target = maxPlayers * 0.5
+    local low = math.max(1, math.floor(target - 1))
+    local high = math.min(maxPlayers - 1, math.ceil(target + 1))
+
+    if playing >= low
+    and playing <= high then
+        return math.abs(playing - target), true
     end
 
-    return playing
+    return nil
 end
 
 local function FetchServerHopPage(cursor, order)
@@ -3060,8 +3086,9 @@ local function FindServerHopTarget(mode)
     local cursor = nil
     local selected = nil
     local selectedScore = nil
+    local maxPages = mode == "Medium" and 18 or 10
 
-    for _ = 1, 5 do
+    for _ = 1, maxPages do
         local data = FetchServerHopPage(cursor, order)
 
         if not data
@@ -3070,7 +3097,7 @@ local function FindServerHopTarget(mode)
         end
 
         for _, server in ipairs(data.data) do
-            local score = GetServerHopScore(server, mode)
+            local score = GetServerHopInfo(server, mode)
 
             if score
             and (
@@ -3082,14 +3109,27 @@ local function FindServerHopTarget(mode)
             end
         end
 
+        if selected
+        and mode == "High" then
+            break
+        end
+
+        if selected
+        and mode == "Low"
+        and selectedScore == 1 then
+            break
+        end
+
+        if selected
+        and mode == "Medium"
+        and selectedScore <= 0.5 then
+            break
+        end
+
         cursor = data.nextPageCursor
 
         if not cursor
         or cursor == "" then
-            break
-        end
-
-        if selected and mode ~= "Medium" then
             break
         end
     end
@@ -7225,7 +7265,9 @@ if getgenv().ShowToxUpdateGui then
         ToxUpdateVersion,
         {
             ADDED = {
-                "Server Hop agora abre opcoes Low, Medium e High.",
+                "Server Hop Low busca servidores com 1 ou 2 players.",
+                "Server Hop Medium busca servidores perto da metade da lotacao.",
+                "Server Hop High busca servidores quase cheios.",
                 "Changelog expandido com categorias.",
                 "Reload do modulo pelo botao direito no tab do jogo.",
                 "Secoes recolhiveis no MM2."
@@ -7235,7 +7277,7 @@ if getgenv().ShowToxUpdateGui then
                 "Auto Farm do MM2 nao restaura colisao enquanto ainda esta ativo sem moeda."
             },
             CHANGED = {
-                "Server Hop agora escolhe servidor por quantidade de players.",
+                "Server Hop agora filtra Low, Medium e High por faixas reais de players.",
                 "Menu de update agora separa Added, Fixed, Changed e Removed.",
                 "Auto Farm do MM2 agora anda por baixo do mapa e coleta moedas por baixo."
             }
