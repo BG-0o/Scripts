@@ -44,7 +44,7 @@ or not CreateButton then
 end
 
 local NDSModuleVersion =
-    "2026-09-11-disaster-sections-1"
+    "2026-09-11-autowin-spawn-1"
 
 if getgenv().ToxNDSModuleLoadedJobId
     == game.JobId
@@ -319,12 +319,8 @@ local function ClickAutoWinTool(tool)
         tool = equipped
         AutoWinTool = equipped
         AutoWinToolName = equipped.Name
-    elseif tool and tool:IsA("Tool") then
-        pcall(function()
-            humanoid:EquipTool(tool)
-        end)
-
-        task.wait(0.04)
+    else
+        return false
     end
 
     if not tool
@@ -375,10 +371,33 @@ local function ClickAutoWinTool(tool)
     return true
 end
 
-local function StopAutoWin()
+local function StopAutoWin(returnToSpawn)
     if AutoWinConnection then
         AutoWinConnection:Disconnect()
         AutoWinConnection = nil
+    end
+
+    if returnToSpawn then
+        local _, humanoid, root = GetCharacterState()
+
+        if humanoid
+        and humanoid.Health > 0
+        and root then
+            AllowToxTeleport(1.5, "NDS Auto Win OFF")
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+            root.CFrame = SpawnCFrame
+
+            if Settings.NDSNoTP then
+                NoTPAnchorCFrame = SpawnCFrame
+                NoTPLastObservedCFrame = SpawnCFrame
+            end
+
+            CustomNotify(
+                "Auto Win OFF • Spawn",
+                Color3.fromRGB(100, 255, 100)
+            )
+        end
     end
 
     if AutoWinPreviousNoclip ~= nil then
@@ -449,23 +468,21 @@ local function StartAutoWin()
             end
         end
 
-        local tool = FindAutoWinTool()
+        local tool = character:FindFirstChildOfClass("Tool")
 
-        if not tool then
+        if tool then
+            AutoWinTool = tool
+            AutoWinToolName = tool.Name
+        else
+            tool = AutoWinTool
+        end
+
+        if not tool
+        or tool.Parent ~= character then
             return
         end
 
-        if tool.Parent ~= character then
-            pcall(function()
-                currentHumanoid:EquipTool(tool)
-            end)
-
-            task.wait(0.04)
-        end
-
-        if tool
-        and tool.Parent
-        and tick() - AutoWinLastActivate >= 0.85 then
+        if tick() - AutoWinLastActivate >= 0.85 then
             AutoWinLastActivate = tick()
             ClickAutoWinTool(tool)
         end
@@ -1610,7 +1627,7 @@ NDSCreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
     if v then
         StartAutoWin()
     else
-        StopAutoWin()
+        StopAutoWin(true)
     end
 end, "NDSAutoWin")
 
