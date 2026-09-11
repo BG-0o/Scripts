@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-11-rest-pack-2"
+    "2026-09-11-ui-cleanup-1"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -121,8 +121,8 @@ Settings.MM2AutoFarmSpeed = math.clamp(
 )
 Settings.MM2Whitelist = typeof(Settings.MM2Whitelist) == "table" and Settings.MM2Whitelist or {}
 Settings.MM2TargetHistory = typeof(Settings.MM2TargetHistory) == "table" and Settings.MM2TargetHistory or {}
-Settings.MM2TargetLock = Settings.MM2TargetLock == true
-Settings.MM2AutoClearTarget = Settings.MM2AutoClearTarget ~= false
+Settings.MM2TargetLock = false
+Settings.MM2AutoClearTarget = true
 Settings.MM2RoundTimer = Settings.MM2RoundTimer == true
 
 local ActionBusy = false
@@ -769,10 +769,8 @@ local function FindTargetByUserId(userId)
 end
 
 local function CleanKnifeTargets()
-    if Settings.MM2TargetLock
-    or not Settings.MM2AutoClearTarget then
-        return
-    end
+    Settings.MM2AutoClearTarget = true
+    Settings.MM2TargetLock = false
 
     for userId in pairs(KnifeTargetIds) do
         local target = FindTargetByUserId(userId)
@@ -1916,10 +1914,7 @@ AddConnection(Players.PlayerAdded:Connect(function()
 end))
 
 AddConnection(Players.PlayerRemoving:Connect(function(target)
-    if not Settings.MM2TargetLock
-    and Settings.MM2AutoClearTarget then
-        KnifeTargetIds[target.UserId] = nil
-    end
+    KnifeTargetIds[target.UserId] = nil
 
     if PlayerSelectorFrame and PlayerSelectorFrame.Visible then
         task.defer(RefreshPlayerSelector)
@@ -1935,27 +1930,27 @@ AddConnection(RunService.Heartbeat:Connect(function()
 
     LastTargetAutoClear = os.clock()
 
-    if Settings.MM2AutoClearTarget
-    and not Settings.MM2TargetLock then
-        local before = 0
+    local before = 0
 
-        for _ in pairs(KnifeTargetIds) do
-            before = before + 1
-        end
+    Settings.MM2AutoClearTarget = true
+    Settings.MM2TargetLock = false
 
-        CleanKnifeTargets()
+    for _ in pairs(KnifeTargetIds) do
+        before = before + 1
+    end
 
-        local after = 0
+    CleanKnifeTargets()
 
-        for _ in pairs(KnifeTargetIds) do
-            after = after + 1
-        end
+    local after = 0
 
-        if before ~= after
-        and PlayerSelectorFrame
-        and PlayerSelectorFrame.Visible then
-            RefreshPlayerSelector()
-        end
+    for _ in pairs(KnifeTargetIds) do
+        after = after + 1
+    end
+
+    if before ~= after
+    and PlayerSelectorFrame
+    and PlayerSelectorFrame.Visible then
+        RefreshPlayerSelector()
     end
 end))
 
@@ -1964,27 +1959,115 @@ local RoundTimerFrame = nil
 local RoundTimerLabel = nil
 local LastRoundTimerUpdate = 0
 
-local function FindMM2RoundTimerText()
-    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+local function FormatRoundSeconds(value)
+    local number = tonumber(value)
 
-    if not playerGui then
-        return "N/A"
+    if not number then
+        return nil
     end
 
-    for _, object in ipairs(playerGui:GetDescendants()) do
-        if object:IsA("TextLabel")
-        or object:IsA("TextButton") then
-            local text = tostring(object.Text or "")
-            local direct = string.match(text, "^%s*(%d+:%d%d)%s*$")
-            local inside = string.match(text, "(%d+:%d%d)")
+    number = math.max(0, math.floor(number + 0.5))
 
-            if direct then
-                return direct
-            end
+    if number > 9999 then
+        return nil
+    end
 
-            if inside then
-                return inside
+    local minutes = math.floor(number / 60)
+    local seconds = number % 60
+
+    return string.format("%d:%02d", minutes, seconds)
+end
+
+local function ReadTimerFromText(text, name)
+    text = tostring(text or "")
+    name = string.lower(tostring(name or ""))
+
+    local direct = string.match(text, "^%s*(%d+:%d%d)%s*$")
+    local inside = string.match(text, "(%d+:%d%d)")
+
+    if direct then
+        return direct
+    end
+
+    if inside then
+        return inside
+    end
+
+    if string.find(name, "timer", 1, true)
+    or string.find(name, "time", 1, true)
+    or string.find(name, "round", 1, true)
+    or string.find(string.lower(text), "time", 1, true)
+    or string.find(string.lower(text), "round", 1, true)
+    or string.find(string.lower(text), "intermission", 1, true) then
+        local number = string.match(text, "(%d+)")
+        return FormatRoundSeconds(number)
+    end
+
+    return nil
+end
+
+local function ScanRoundTimerContainer(container)
+    if not container then
+        return nil
+    end
+
+    local ownGui = getgenv().Gui
+
+    for _, object in ipairs(container:GetDescendants()) do
+        if not ownGui
+        or not object:IsDescendantOf(ownGui) then
+            if object:IsA("TextLabel")
+            or object:IsA("TextButton")
+            or object:IsA("TextBox") then
+                local found = ReadTimerFromText(object.Text, object.Name)
+
+                if found then
+                    return found
+                end
+            elseif object:IsA("StringValue") then
+                local found = ReadTimerFromText(object.Value, object.Name)
+
+                if found then
+                    return found
+                end
+            elseif object:IsA("IntValue")
+            or object:IsA("NumberValue") then
+                local lowerName = string.lower(object.Name)
+
+                if string.find(lowerName, "timer", 1, true)
+                or string.find(lowerName, "time", 1, true)
+                or string.find(lowerName, "round", 1, true) then
+                    local found = FormatRoundSeconds(object.Value)
+
+                    if found then
+                        return found
+                    end
+                end
             end
+        end
+    end
+
+    return nil
+end
+
+local function FindMM2RoundTimerText()
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+    local mainGui = playerGui and playerGui:FindFirstChild("MainGUI")
+    local gameGui = mainGui and mainGui:FindFirstChild("Game")
+
+    local directContainers = {
+        gameGui,
+        mainGui,
+        playerGui,
+        ReplicatedStorage,
+        workspace
+    }
+
+    for _, container in ipairs(directContainers) do
+        local found = ScanRoundTimerContainer(container)
+
+        if found then
+            return found
         end
     end
 
@@ -4918,6 +5001,11 @@ CreateMM2Section(
     "TARGETING"
 )
 
+CreateToggle("Round Timer", GamePage, Settings.MM2RoundTimer, function(v)
+    SetRoundTimerVisible(v)
+    AutoSaveConfiguration()
+end, "MM2RoundTimer")
+
 CreateDropdown("Fling Target", {"Murderer", "Sheriff"}, GamePage, Settings.MM2FlingTarget, function(value)
     Settings.MM2FlingTarget = value
     AutoSaveConfiguration()
@@ -4928,23 +5016,6 @@ CreateButton("Fling", GamePage, FlingSelectedRole)
 CreateButton("Target", GamePage, function()
     OpenPlayerSelector("targets")
 end)
-
-CreateToggle("Target Lock", GamePage, Settings.MM2TargetLock, function(v)
-    Settings.MM2TargetLock = v == true
-    AutoSaveConfiguration()
-end, "MM2TargetLock")
-
-CreateToggle("Auto Clear Target", GamePage, Settings.MM2AutoClearTarget, function(v)
-    Settings.MM2AutoClearTarget = v == true
-    CleanKnifeTargets()
-    RefreshPlayerSelector()
-    AutoSaveConfiguration()
-end, "MM2AutoClearTarget")
-
-CreateToggle("Round Timer", GamePage, Settings.MM2RoundTimer, function(v)
-    SetRoundTimerVisible(v)
-    AutoSaveConfiguration()
-end, "MM2RoundTimer")
 
 function GetMM2ActiveMapRoot()
     local normal =
