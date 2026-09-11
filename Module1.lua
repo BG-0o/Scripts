@@ -206,7 +206,6 @@ getgenv().Settings = {
     ADMINKickTarget = "",
 
     ToxLastChangelogVersion = "",
-    ToxQuickActionsVisible = false,
     ToxServerInfoVisible = false,
     ToxServerInfoMode = "FPS/Ping/Players"
 }
@@ -666,7 +665,7 @@ local function LoadSharedMusicIDs()
             ) do
                 local normalized =
                     tostring(path)
-                        :gsub("\\", "/")
+                        :gsub("\", "/")
 
                 if string.match(
                     normalized,
@@ -816,7 +815,7 @@ local function LoadSharedJoinGames()
             ) do
                 local normalized =
                     tostring(path)
-                        :gsub("\\", "/")
+                        :gsub("\", "/")
 
                 if string.match(
                     normalized,
@@ -2816,8 +2815,8 @@ getgenv().ToxPageNamesByPage = getgenv().ToxPageNamesByPage or {}
 getgenv().ToxSearchControls = {}
 
 local ToxSearchAliasMap = {
-    tp = {"teleport", "return", "ctrl click", "no tp", "spawn", "map", "island", "waypoint"},
-    teleport = {"teleport", "return", "ctrl click", "no tp", "spawn", "map", "island", "waypoint"},
+    tp = {"teleport", "ctrl click", "no tp", "spawn", "map", "island", "waypoint"},
+    teleport = {"teleport", "ctrl click", "no tp", "spawn", "map", "island", "waypoint"},
     fps = {"fps booster", "performance", "restore", "texture"},
     perf = {"fps booster", "performance", "restore", "texture"},
     gun = {"gun esp", "grab gun", "shoot murderer"},
@@ -2825,16 +2824,19 @@ local ToxSearchAliasMap = {
     target = {"target", "murderer", "sheriff", "kill", "fling"},
     alvo = {"target", "murderer", "sheriff", "kill", "fling"},
     esp = {"esp", "chams", "tracers", "names", "distance"},
+    trace = {"tracers", "tracer", "traces"},
+    traces = {"tracers", "tracer", "traces"},
+    tracer = {"tracers", "tracer", "traces"},
+    name = {"names", "name type", "display"},
+    names = {"names", "name type", "display"},
+    nome = {"names", "name type", "display"},
     fly = {"fly", "air walk", "car fly", "water fly"},
     noclip = {"noclip", "clip"},
-    config = {"config", "keybind", "gui", "search", "changelog", "compatibility", "quick actions", "server info"},
-    quick = {"quick actions", "return", "search", "server info", "compatibility", "fps"},
+    config = {"config", "keybind", "gui", "search", "changelog", "server info"},
     server = {"server info", "players", "ping", "fps", "jobid", "placeid"},
     timer = {"round timer", "timer", "round"},
-    history = {"target history", "target", "select", "kill"},
-    lock = {"target lock", "target"}
+    history = {"target history", "target", "select", "kill"}
 }
-
 local function GetToxPageName(page)
     if not page then
         return ""
@@ -2889,10 +2891,10 @@ getgenv().RegisterToxSearchControl = function(name, page, object, aliases)
     )
 end
 
-local SearchFrame = nil
 local SearchInput = nil
 local SearchScroll = nil
 local SearchLayout = nil
+local SearchIcon = nil
 
 local function HighlightSearchResult(object)
     if not object
@@ -2919,7 +2921,7 @@ local function ControlMatchesSearch(item, query)
     local haystack = string.lower(tostring(item.Name or "") .. " " .. pageName)
 
     for _, alias in ipairs(item.Aliases or {}) do
-        haystack ..= " " .. string.lower(tostring(alias))
+        haystack = haystack .. " " .. string.lower(tostring(alias))
     end
 
     if string.find(haystack, query, 1, true) then
@@ -2967,34 +2969,37 @@ local function RebuildSearchResults()
     )
 
     if query == "" then
-        query = " "
+        SearchScroll.Visible = false
+        return
     end
 
+    SearchScroll.Visible = true
     local shown = 0
 
     for _, item in ipairs(getgenv().ToxSearchControls or {}) do
         if item.Object
         and item.Object.Parent
-        and (query == " " or ControlMatchesSearch(item, query)) then
-            shown += 1
+        and ControlMatchesSearch(item, query) then
+            shown = shown + 1
 
-            if shown > 40 then
+            if shown > 20 then
                 break
             end
 
             local result = Instance.new("TextButton")
-            result.Size = UDim2.new(1, -4, 0, 32)
+            result.Size = UDim2.new(1, -4, 0, 30)
             result.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
             result.BorderSizePixel = 0
             result.Text = GetToxPageName(item.Page) .. " • " .. item.Name
             result.TextColor3 = Color3.fromRGB(245, 245, 245)
-            result.TextSize = 11
+            result.TextSize = 10
             result.Font = Enum.Font.GothamMedium
             result.TextXAlignment = Enum.TextXAlignment.Left
+            result.ZIndex = 41
             result.Parent = SearchScroll
 
             local resultPadding = Instance.new("UIPadding")
-            resultPadding.PaddingLeft = UDim.new(0, 8)
+            resultPadding.PaddingLeft = UDim.new(0, 7)
             resultPadding.Parent = result
 
             local resultCorner = Instance.new("UICorner")
@@ -3002,6 +3007,7 @@ local function RebuildSearchResults()
             resultCorner.Parent = result
 
             result.MouseButton1Click:Connect(function()
+                SearchScroll.Visible = false
                 getgenv().ToxOpenPage(item.Page)
 
                 task.defer(function()
@@ -3028,133 +3034,132 @@ local function RebuildSearchResults()
 
     if shown == 0 then
         local empty = Instance.new("TextLabel")
-        empty.Size = UDim2.new(1, -4, 0, 32)
+        empty.Size = UDim2.new(1, -4, 0, 30)
         empty.BackgroundTransparency = 1
         empty.Text = "No options found"
         empty.TextColor3 = Color3.fromRGB(170, 170, 185)
-        empty.TextSize = 11
+        empty.TextSize = 10
         empty.Font = Enum.Font.Gotham
+        empty.ZIndex = 41
         empty.Parent = SearchScroll
     end
 end
 
-getgenv().OpenToxSearch = function()
-    if SearchFrame and SearchFrame.Parent then
-        SearchFrame.Visible = not SearchFrame.Visible
-
-        if SearchFrame.Visible then
-            RebuildSearchResults()
-        end
-
+local function CreateToxInlineSearch()
+    if SearchInput and SearchInput.Parent then
         return
     end
 
-    SearchFrame = Instance.new("Frame")
-    SearchFrame.Name = "ToxSearchFrame"
-    SearchFrame.Size = UDim2.new(0, 360, 0, 320)
-    SearchFrame.Position = UDim2.new(0.5, -180, 0.5, -160)
-    SearchFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
-    SearchFrame.BorderSizePixel = 0
-    SearchFrame.Visible = true
-    SearchFrame.Active = true
-    SearchFrame.ClipsDescendants = true
-    SearchFrame.Parent = Gui
-
-    if getgenv().RegisterToxLinkedSubGui then
-        getgenv().RegisterToxLinkedSubGui("Search", SearchFrame)
-    end
-
-    if getgenv().RegisterToxSubGuiMinimize then
-        getgenv().RegisterToxSubGuiMinimize(SearchFrame, -52)
-    end
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = SearchFrame
-
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = MAIN_COLOR
-    stroke.Thickness = 2
-    stroke.Parent = SearchFrame
-
-    local topBar = Instance.new("Frame")
-    topBar.Size = UDim2.new(1, 0, 0, 32)
-    topBar.BackgroundColor3 = MAIN_COLOR
-    topBar.BorderSizePixel = 0
-    topBar.Parent = SearchFrame
-
-    MakeDraggable(SearchFrame, topBar)
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -44, 1, 0)
-    title.Position = UDim2.new(0, 10, 0, 0)
-    title.BackgroundTransparency = 1
-    title.Text = "Tox Search"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 13
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = topBar
-
-    local close = Instance.new("TextButton")
-    close.Size = UDim2.new(0, 22, 0, 20)
-    close.Position = UDim2.new(1, -26, 0.5, -10)
-    close.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
-    close.BorderSizePixel = 0
-    close.Text = "X"
-    close.TextColor3 = Color3.fromRGB(220, 220, 230)
-    close.TextSize = 11
-    close.Font = Enum.Font.GothamBold
-    close.Parent = topBar
-
-    local closeCorner = Instance.new("UICorner")
-    closeCorner.CornerRadius = UDim.new(0, 4)
-    closeCorner.Parent = close
-
-    close.MouseButton1Click:Connect(function()
-        SearchFrame.Visible = false
-    end)
+    Tabs.Size = UDim2.new(1, -156, 0, 34)
 
     SearchInput = Instance.new("TextBox")
-    SearchInput.Size = UDim2.new(1, -16, 0, 30)
-    SearchInput.Position = UDim2.new(0, 8, 0, 40)
-    SearchInput.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+    SearchInput.Name = "ToxInlineSearch"
+    SearchInput.Size = UDim2.new(0, 120, 0, 27)
+    SearchInput.Position = UDim2.new(1, -126, 0, 47)
+    SearchInput.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
     SearchInput.BorderSizePixel = 0
     SearchInput.Text = ""
-    SearchInput.PlaceholderText = "Search: tp, fps, gun, target, esp..."
+    SearchInput.PlaceholderText = "🔎"
     SearchInput.TextColor3 = Color3.fromRGB(245, 245, 245)
-    SearchInput.PlaceholderColor3 = Color3.fromRGB(130, 130, 150)
-    SearchInput.Font = Enum.Font.Gotham
-    SearchInput.TextSize = 11
+    SearchInput.PlaceholderColor3 = Color3.fromRGB(170, 170, 185)
+    SearchInput.Font = Enum.Font.GothamMedium
+    SearchInput.TextSize = 12
     SearchInput.ClearTextOnFocus = false
-    SearchInput.Parent = SearchFrame
+    SearchInput.ZIndex = 41
+    SearchInput.Parent = Main
 
     local inputCorner = Instance.new("UICorner")
     inputCorner.CornerRadius = UDim.new(0, 4)
     inputCorner.Parent = SearchInput
 
+    local inputPadding = Instance.new("UIPadding")
+    inputPadding.PaddingLeft = UDim.new(0, 8)
+    inputPadding.PaddingRight = UDim.new(0, 5)
+    inputPadding.Parent = SearchInput
+
+    SearchIcon = Instance.new("TextButton")
+    SearchIcon.Name = "ToxInlineSearchIcon"
+    SearchIcon.Size = UDim2.new(0, 27, 0, 27)
+    SearchIcon.Position = UDim2.new(1, -154, 0, 47)
+    SearchIcon.BackgroundColor3 = MAIN_COLOR
+    SearchIcon.BorderSizePixel = 0
+    SearchIcon.Text = "🔎"
+    SearchIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SearchIcon.Font = Enum.Font.GothamBold
+    SearchIcon.TextSize = 13
+    SearchIcon.ZIndex = 41
+    SearchIcon.Parent = Main
+
+    local iconCorner = Instance.new("UICorner")
+    iconCorner.CornerRadius = UDim.new(0, 4)
+    iconCorner.Parent = SearchIcon
+
     SearchScroll = Instance.new("ScrollingFrame")
-    SearchScroll.Size = UDim2.new(1, -16, 1, -82)
-    SearchScroll.Position = UDim2.new(0, 8, 0, 76)
-    SearchScroll.BackgroundTransparency = 1
+    SearchScroll.Name = "ToxInlineSearchResults"
+    SearchScroll.Size = UDim2.new(0, 148, 0, 170)
+    SearchScroll.Position = UDim2.new(1, -154, 0, 80)
+    SearchScroll.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+    SearchScroll.BackgroundTransparency = 0.03
     SearchScroll.BorderSizePixel = 0
     SearchScroll.ScrollBarThickness = 3
     SearchScroll.ScrollBarImageColor3 = MAIN_COLOR
     SearchScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    SearchScroll.Parent = SearchFrame
+    SearchScroll.Visible = false
+    SearchScroll.ZIndex = 40
+    SearchScroll.ClipsDescendants = true
+    SearchScroll.Parent = Main
+
+    local scrollCorner = Instance.new("UICorner")
+    scrollCorner.CornerRadius = UDim.new(0, 5)
+    scrollCorner.Parent = SearchScroll
+
+    local scrollStroke = Instance.new("UIStroke")
+    scrollStroke.Color = MAIN_COLOR
+    scrollStroke.Thickness = 1
+    scrollStroke.Transparency = 0.25
+    scrollStroke.Parent = SearchScroll
 
     SearchLayout = Instance.new("UIListLayout")
     SearchLayout.SortOrder = Enum.SortOrder.LayoutOrder
     SearchLayout.Padding = UDim.new(0, 5)
     SearchLayout.Parent = SearchScroll
 
+    local scrollPadding = Instance.new("UIPadding")
+    scrollPadding.PaddingTop = UDim.new(0, 5)
+    scrollPadding.PaddingLeft = UDim.new(0, 4)
+    scrollPadding.PaddingRight = UDim.new(0, 4)
+    scrollPadding.Parent = SearchScroll
+
     SearchLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        SearchScroll.CanvasSize = UDim2.new(0, 0, 0, SearchLayout.AbsoluteContentSize.Y + 8)
+        SearchScroll.CanvasSize = UDim2.new(0, 0, 0, SearchLayout.AbsoluteContentSize.Y + 10)
     end)
 
     SearchInput:GetPropertyChangedSignal("Text"):Connect(RebuildSearchResults)
-    RebuildSearchResults()
+
+    SearchInput.FocusLost:Connect(function()
+        task.delay(0.15, function()
+            if SearchInput and SearchInput.Text == "" and SearchScroll then
+                SearchScroll.Visible = false
+            end
+        end)
+    end)
+
+    SearchIcon.MouseButton1Click:Connect(function()
+        SearchInput:CaptureFocus()
+        RebuildSearchResults()
+    end)
 end
+
+getgenv().OpenToxSearch = function()
+    CreateToxInlineSearch()
+
+    if SearchInput then
+        SearchInput:CaptureFocus()
+        RebuildSearchResults()
+    end
+end
+
+CreateToxInlineSearch()
 
 getgenv().ShowToxUpdateGui = function(version, changes)
     version = tostring(version or "")
