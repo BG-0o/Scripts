@@ -2298,6 +2298,43 @@ local function InitToxControlGui()
     local rejoinLoopButton = nil
     local flingLoopButton = nil
 
+    local function PlaceButton(
+        text,
+        xScale,
+        xOffset,
+        y,
+        widthScale,
+        widthOffset,
+        callback
+    )
+        local button =
+            MakeButton(
+                text,
+                0,
+                y,
+                1,
+                callback
+            )
+
+        button.Position =
+            UDim2.new(
+                xScale,
+                xOffset,
+                0,
+                y
+            )
+
+        button.Size =
+            UDim2.new(
+                widthScale,
+                widthOffset,
+                0,
+                32
+            )
+
+        return button
+    end
+
     local actionsTitle =
         Instance.new(
             "TextLabel"
@@ -2321,6 +2358,7 @@ local function InitToxControlGui()
 
     actionsTitle.BackgroundTransparency = 1
     actionsTitle.Text = "ACTIONS"
+
     actionsTitle.TextColor3 =
         Color3.fromRGB(
             145,
@@ -2332,17 +2370,20 @@ local function InitToxControlGui()
         Enum.Font.GothamBold
 
     actionsTitle.TextSize = 9
+
     actionsTitle.TextXAlignment =
         Enum.TextXAlignment.Left
 
     actionsTitle.Parent =
         controlGui
 
-    MakeButton(
+    PlaceButton(
         "RESET",
+        0,
         10,
         144,
-        128,
+        0.29,
+        -6,
         function()
             Remote(
                 "reset"
@@ -2351,11 +2392,13 @@ local function InitToxControlGui()
     )
 
     resetLoopButton =
-        MakeButton(
+        PlaceButton(
             "LOOP",
-            142,
+            0.29,
+            8,
             144,
-            62,
+            0.16,
+            -7,
             function()
                 local target =
                     RefreshTarget()
@@ -2387,11 +2430,13 @@ local function InitToxControlGui()
             end
         )
 
-    MakeButton(
+    PlaceButton(
         "FREEZE / UNFREEZE",
-        216,
+        0.45,
+        8,
         144,
-        204,
+        0.55,
+        -18,
         function()
             Remote(
                 "freeze"
@@ -2399,11 +2444,13 @@ local function InitToxControlGui()
         end
     )
 
-    MakeButton(
+    PlaceButton(
         "BRING",
+        0,
         10,
         182,
-        128,
+        0.29,
+        -6,
         function()
             Remote(
                 "bring"
@@ -2412,11 +2459,13 @@ local function InitToxControlGui()
     )
 
     bringLoopButton =
-        MakeButton(
+        PlaceButton(
             "LOOP",
-            142,
+            0.29,
+            8,
             182,
-            62,
+            0.16,
+            -7,
             function()
                 local target =
                     RefreshTarget()
@@ -2448,11 +2497,13 @@ local function InitToxControlGui()
             end
         )
 
-    MakeButton(
+    PlaceButton(
         "GOTO",
-        216,
+        0.45,
+        8,
         182,
-        128,
+        0.30,
+        -8,
         function()
             local target =
                 RefreshTarget()
@@ -2466,11 +2517,13 @@ local function InitToxControlGui()
     )
 
     gotoLoopButton =
-        MakeButton(
+        PlaceButton(
             "LOOP",
-            348,
+            0.75,
+            6,
             182,
-            72,
+            0.25,
+            -16,
             function()
                 local target =
                     RefreshTarget()
@@ -2498,11 +2551,13 @@ local function InitToxControlGui()
             end
         )
 
-    MakeButton(
+    PlaceButton(
         "REJOIN",
+        0,
         10,
         220,
-        128,
+        0.29,
+        -6,
         function()
             Remote(
                 "rejoin"
@@ -2511,11 +2566,13 @@ local function InitToxControlGui()
     )
 
     rejoinLoopButton =
-        MakeButton(
+        PlaceButton(
             "LOOP",
-            142,
+            0.29,
+            8,
             220,
-            62,
+            0.16,
+            -7,
             function()
                 local target =
                     RefreshTarget()
@@ -2547,11 +2604,13 @@ local function InitToxControlGui()
             end
         )
 
-    MakeButton(
+    PlaceButton(
         "KICK",
-        216,
+        0.45,
+        8,
         220,
-        204,
+        0.55,
+        -18,
         function()
             Remote(
                 "kick"
@@ -2577,11 +2636,12 @@ local function InitToxControlGui()
             0,
             10,
             0,
-            248
+            258
         )
 
     messageTitle.BackgroundTransparency = 1
     messageTitle.Text = "MESSAGE"
+
     messageTitle.TextColor3 =
         Color3.fromRGB(
             145,
@@ -2593,6 +2653,7 @@ local function InitToxControlGui()
         Enum.Font.GothamBold
 
     messageTitle.TextSize = 9
+
     messageTitle.TextXAlignment =
         Enum.TextXAlignment.Left
 
@@ -2600,12 +2661,14 @@ local function InitToxControlGui()
         controlGui
 
     local chatBox =
-        Instance.new("TextBox")
+        Instance.new(
+            "TextBox"
+        )
 
     chatBox.Size =
         UDim2.new(
-            1,
-            -102,
+            0.78,
+            -12,
             0,
             32
         )
@@ -2615,7 +2678,7 @@ local function InitToxControlGui()
             0,
             10,
             0,
-            270
+            280
         )
 
     chatBox.BackgroundColor3 =
@@ -2656,11 +2719,13 @@ local function InitToxControlGui()
         5
     )
 
-    MakeButton(
+    PlaceButton(
         "SEND",
-        338,
-        270,
-        82,
+        0.78,
+        2,
+        280,
+        0.22,
+        -12,
         function()
             local message =
                 Trim(
@@ -2694,11 +2759,12 @@ local function InitToxControlGui()
             0,
             10,
             0,
-            286
+            318
         )
 
     flingTitle.BackgroundTransparency = 1
     flingTitle.Text = "FLING TARGET"
+
     flingTitle.TextColor3 =
         Color3.fromRGB(
             145,
@@ -2710,6 +2776,7 @@ local function InitToxControlGui()
         Enum.Font.GothamBold
 
     flingTitle.TextSize = 9
+
     flingTitle.TextXAlignment =
         Enum.TextXAlignment.Left
 
@@ -2717,12 +2784,14 @@ local function InitToxControlGui()
         controlGui
 
     local flingBox =
-        Instance.new("TextBox")
+        Instance.new(
+            "TextBox"
+        )
 
     flingBox.Size =
         UDim2.new(
-            0,
-            234,
+            0.56,
+            -12,
             0,
             32
         )
@@ -2732,7 +2801,7 @@ local function InitToxControlGui()
             0,
             10,
             0,
-            308
+            340
         )
 
     flingBox.BackgroundColor3 =
@@ -2773,11 +2842,13 @@ local function InitToxControlGui()
         5
     )
 
-    MakeButton(
+    PlaceButton(
         "FLING",
-        248,
-        308,
-        82,
+        0.56,
+        2,
+        340,
+        0.20,
+        -8,
         function()
             local flingTarget =
                 ResolvePlayer(
@@ -2800,11 +2871,13 @@ local function InitToxControlGui()
     )
 
     flingLoopButton =
-        MakeButton(
+        PlaceButton(
             "LOOP",
-            334,
-            308,
-            86,
+            0.76,
+            0,
+            340,
+            0.24,
+            -10,
             function()
                 local controllerTarget =
                     RefreshTarget()
@@ -2848,14 +2921,16 @@ local function InitToxControlGui()
         )
 
     local examples =
-        Instance.new("TextLabel")
+        Instance.new(
+            "TextLabel"
+        )
 
     examples.Size =
         UDim2.new(
             1,
             -20,
             0,
-            48
+            28
         )
 
     examples.Position =
@@ -2863,13 +2938,13 @@ local function InitToxControlGui()
             0,
             10,
             0,
-            350
+            378
         )
 
     examples.BackgroundTransparency = 1
+
     examples.Text =
-        "CHAT: .c NICK command  •  HIDDEN: private relay\n"
-        .. "LOOP: reset / bring / goto / rejoin / fling"
+        "CHAT: .c NICK command  •  HIDDEN: private relay  •  LOOP: reset / bring / goto / rejoin / fling"
 
     examples.TextColor3 =
         Color3.fromRGB(
@@ -2883,13 +2958,15 @@ local function InitToxControlGui()
 
     examples.TextSize = 9
     examples.TextWrapped = true
+
     examples.TextXAlignment =
         Enum.TextXAlignment.Left
 
     examples.TextYAlignment =
         Enum.TextYAlignment.Top
 
-    examples.Parent = controlGui
+    examples.Parent =
+        controlGui
 
     local locked =
         Instance.new("Frame")
@@ -3175,18 +3252,24 @@ local function InitToxControlGui()
         )
     end
 
-    CreateButton(
-        "Tox Control",
-        FlingPage,
-        function()
-            RefreshLock()
-            RefreshMode()
-            RefreshTarget()
+    local controlPageButton =
+        CreateButton(
+            "Tox Control",
+            FlingPage,
+            function()
+                RefreshLock()
+                RefreshMode()
+                RefreshTarget()
 
-            controlGui.Visible =
-                not controlGui.Visible
-        end
-    )
+                controlGui.Visible =
+                    not controlGui.Visible
+            end
+        )
+
+    if controlPageButton then
+        controlPageButton.LayoutOrder =
+            990
+    end
 
     RefreshRole()
     RefreshMode()
