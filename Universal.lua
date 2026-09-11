@@ -2810,22 +2810,330 @@ local function ServerHop()
     end)
 end
 
-local function BoostFPS()
+local FPSObjectDefaults =
+    setmetatable(
+        {},
+        {
+            __mode = "k"
+        }
+    )
+
+local FPSLightingDefaults = nil
+local FPSWorkspaceConnection = nil
+local FPSLightingConnection = nil
+
+local function CaptureFPSObject(
+    object
+)
+    if FPSObjectDefaults[
+        object
+    ] then
+        return
+    end
+
+    if object:IsA(
+        "BasePart"
+    ) then
+        FPSObjectDefaults[
+            object
+        ] = {
+            Kind = "BasePart",
+            Material =
+                object.Material,
+            Reflectance =
+                object.Reflectance,
+            CastShadow =
+                object.CastShadow
+        }
+    elseif object:IsA(
+        "Decal"
+    )
+    or object:IsA(
+        "Texture"
+    ) then
+        FPSObjectDefaults[
+            object
+        ] = {
+            Kind = "Texture",
+            Transparency =
+                object.Transparency
+        }
+    elseif object:IsA(
+        "ParticleEmitter"
+    )
+    or object:IsA(
+        "Trail"
+    )
+    or object:IsA(
+        "Beam"
+    )
+    or object:IsA(
+        "Smoke"
+    )
+    or object:IsA(
+        "Fire"
+    )
+    or object:IsA(
+        "Sparkles"
+    )
+    or object:IsA(
+        "BloomEffect"
+    )
+    or object:IsA(
+        "BlurEffect"
+    )
+    or object:IsA(
+        "ColorCorrectionEffect"
+    )
+    or object:IsA(
+        "DepthOfFieldEffect"
+    )
+    or object:IsA(
+        "SunRaysEffect"
+    ) then
+        FPSObjectDefaults[
+            object
+        ] = {
+            Kind = "Enabled",
+            Enabled =
+                object.Enabled
+        }
+    end
+end
+
+local function ApplyFPSObject(
+    object
+)
+    CaptureFPSObject(
+        object
+    )
+
+    if object:IsA(
+        "BasePart"
+    ) then
+        object.Material =
+            Enum.Material.SmoothPlastic
+
+        object.Reflectance = 0
+        object.CastShadow = false
+    elseif object:IsA(
+        "Decal"
+    )
+    or object:IsA(
+        "Texture"
+    ) then
+        object.Transparency = 1
+    elseif object:IsA(
+        "ParticleEmitter"
+    )
+    or object:IsA(
+        "Trail"
+    )
+    or object:IsA(
+        "Beam"
+    )
+    or object:IsA(
+        "Smoke"
+    )
+    or object:IsA(
+        "Fire"
+    )
+    or object:IsA(
+        "Sparkles"
+    )
+    or object:IsA(
+        "BloomEffect"
+    )
+    or object:IsA(
+        "BlurEffect"
+    )
+    or object:IsA(
+        "ColorCorrectionEffect"
+    )
+    or object:IsA(
+        "DepthOfFieldEffect"
+    )
+    or object:IsA(
+        "SunRaysEffect"
+    ) then
+        object.Enabled = false
+    end
+end
+
+local function RestoreFPSObject(
+    object,
+    data
+)
+    if not object
+    or not object.Parent
+    or typeof(data)
+        ~= "table" then
+        return
+    end
+
     pcall(function()
+        if data.Kind
+            == "BasePart" then
+            object.Material =
+                data.Material
+
+            object.Reflectance =
+                data.Reflectance
+
+            object.CastShadow =
+                data.CastShadow
+        elseif data.Kind
+            == "Texture" then
+            object.Transparency =
+                data.Transparency
+        elseif data.Kind
+            == "Enabled" then
+            object.Enabled =
+                data.Enabled
+        end
+    end)
+end
+
+local function SetFPSBooster(
+    enabled,
+    silent
+)
+    enabled =
+        enabled == true
+
+    Settings.FPSBooster =
+        enabled
+
+    if enabled then
+        if not FPSLightingDefaults then
+            FPSLightingDefaults = {
+                GlobalShadows =
+                    Lighting.GlobalShadows,
+                FogEnd =
+                    Lighting.FogEnd
+            }
+        end
+
         Lighting.GlobalShadows = false
         Lighting.FogEnd = 9e9
-        for _, v in ipairs(workspace:GetDescendants()) do
-            if v:IsA("BasePart") then
-                v.Material = Enum.Material.SmoothPlastic
-                v.Reflectance = 0
-            elseif v:IsA("Decal") or v:IsA("Texture") then
-                v:Destroy()
-            elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
-                v.Enabled = false
-            end
+
+        for _, object in ipairs(
+            workspace:
+                GetDescendants()
+        ) do
+            pcall(
+                ApplyFPSObject,
+                object
+            )
         end
-        CustomNotify("FPS Boosted!", Color3.fromRGB(100, 255, 100))
-    end)
+
+        for _, object in ipairs(
+            Lighting:
+                GetDescendants()
+        ) do
+            pcall(
+                ApplyFPSObject,
+                object
+            )
+        end
+
+        if FPSWorkspaceConnection then
+            FPSWorkspaceConnection:
+                Disconnect()
+        end
+
+        if FPSLightingConnection then
+            FPSLightingConnection:
+                Disconnect()
+        end
+
+        FPSWorkspaceConnection =
+            workspace.DescendantAdded:
+                Connect(function(object)
+                    if Settings.FPSBooster then
+                        task.defer(function()
+                            pcall(
+                                ApplyFPSObject,
+                                object
+                            )
+                        end)
+                    end
+                end)
+
+        FPSLightingConnection =
+            Lighting.DescendantAdded:
+                Connect(function(object)
+                    if Settings.FPSBooster then
+                        task.defer(function()
+                            pcall(
+                                ApplyFPSObject,
+                                object
+                            )
+                        end)
+                    end
+                end)
+
+        if not silent then
+            CustomNotify(
+                "FPS Booster Enabled",
+                Color3.fromRGB(
+                    100,
+                    255,
+                    100
+                )
+            )
+        end
+    else
+        if FPSWorkspaceConnection then
+            FPSWorkspaceConnection:
+                Disconnect()
+
+            FPSWorkspaceConnection = nil
+        end
+
+        if FPSLightingConnection then
+            FPSLightingConnection:
+                Disconnect()
+
+            FPSLightingConnection = nil
+        end
+
+        if FPSLightingDefaults then
+            Lighting.GlobalShadows =
+                FPSLightingDefaults.GlobalShadows
+
+            Lighting.FogEnd =
+                FPSLightingDefaults.FogEnd
+
+            FPSLightingDefaults = nil
+        end
+
+        for object, data in pairs(
+            FPSObjectDefaults
+        ) do
+            RestoreFPSObject(
+                object,
+                data
+            )
+
+            FPSObjectDefaults[
+                object
+            ] = nil
+        end
+
+        if not silent then
+            CustomNotify(
+                "FPS Booster Disabled",
+                Color3.fromRGB(
+                    255,
+                    180,
+                    70
+                )
+            )
+        end
+    end
+
+    return true
 end
 
 local LastSafeCFrame = nil
@@ -3829,15 +4137,22 @@ CreateToggleWithValue("Jump", PlayerPage, Settings.Jump, Settings.JumpValue, fun
         RestoreJump()
     end
 end, function(val) Settings.JumpValue = val end)
-CreateToggle("Air Walk (Platform)", PlayerPage, Settings.AirWalk, function(v) Settings.AirWalk = v UpdateAirWalk() end)
-CreateToggleWithValue("Smooth Fly", PlayerPage, Settings.SmoothFly, Settings.FlySpeed, function(v)
+
+CreateToggle("Noclip", PlayerPage, Settings.Noclip, function(v)
     if getgenv().ToxSetSharedOption then
-        getgenv().ToxSetSharedOption("SmoothFly", v)
-    else
-        Settings.SmoothFly = v
-        if v then Settings.NormalFly = false end
+        getgenv().ToxSetSharedOption("Noclip", v)
     end
-end, function(val) Settings.FlySpeed = val end, "SmoothFly")
+end, "Noclip")
+
+CreateToggle("Infinite Jump", PlayerPage, Settings.InfiniteJump, function(v)
+    Settings.InfiniteJump = v
+end)
+
+CreateToggle("Air Walk (E Up / Q Down)", PlayerPage, Settings.AirWalk, function(v)
+    Settings.AirWalk = v
+    UpdateAirWalk()
+end)
+
 CreateToggleWithValue("Normal Fly", PlayerPage, Settings.NormalFly, Settings.FlySpeed, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("NormalFly", v)
@@ -3846,21 +4161,41 @@ CreateToggleWithValue("Normal Fly", PlayerPage, Settings.NormalFly, Settings.Fly
         if v then Settings.SmoothFly = false end
     end
 end, function(val) Settings.FlySpeed = val end, "NormalFly")
-CreateToggle("Noclip", PlayerPage, Settings.Noclip, function(v)
+
+CreateToggleWithValue("Smooth Fly", PlayerPage, Settings.SmoothFly, Settings.FlySpeed, function(v)
     if getgenv().ToxSetSharedOption then
-        getgenv().ToxSetSharedOption("Noclip", v)
+        getgenv().ToxSetSharedOption("SmoothFly", v)
+    else
+        Settings.SmoothFly = v
+        if v then Settings.NormalFly = false end
     end
-end, "Noclip")
-CreateToggle("Infinite Jump", PlayerPage, Settings.InfiniteJump, function(v) Settings.InfiniteJump = v end)
-CreateToggleWithValue("Bhop (Auto Jump)", PlayerPage, Settings.Bhop, Settings.BhopInterval, function(v) Settings.Bhop = v end, function(val) Settings.BhopInterval = math.max(0.05, val) end)
-CreateToggleWithValue("Car Speed", PlayerPage, Settings.CarSpeed, Settings.CarSpeedValue, function(v) Settings.CarSpeed = v end, function(val) Settings.CarSpeedValue = val end)
+end, function(val) Settings.FlySpeed = val end, "SmoothFly")
+
+CreateToggleWithValue("Bhop (Auto Jump)", PlayerPage, Settings.Bhop, Settings.BhopInterval, function(v)
+    Settings.Bhop = v
+end, function(val)
+    Settings.BhopInterval =
+        math.max(
+            0.05,
+            val
+        )
+end)
+
+CreateToggleWithValue("Car Speed", PlayerPage, Settings.CarSpeed, Settings.CarSpeedValue, function(v)
+    Settings.CarSpeed = v
+end, function(val)
+    Settings.CarSpeedValue = val
+end)
+
 CreateToggleWithValue("Car Fly", PlayerPage, Settings.CarFly, Settings.CarFlySpeed, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("CarFly", v)
     else
         Settings.CarFly = v
     end
-end, function(val) Settings.CarFlySpeed = val end, "CarFly")
+end, function(val)
+    Settings.CarFlySpeed = val
+end, "CarFly")
 
 CreateToggle("ESP", VisualsPage, Settings.ESPEnabled, function(v)
     if getgenv().ToxSetSharedOption then
@@ -3869,6 +4204,7 @@ CreateToggle("ESP", VisualsPage, Settings.ESPEnabled, function(v)
         Settings.ESPEnabled = v
     end
 end, "ESPEnabled")
+
 CreateToggle("Charms", VisualsPage, Settings.Chams, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("Chams", v)
@@ -3876,6 +4212,15 @@ CreateToggle("Charms", VisualsPage, Settings.Chams, function(v)
         Settings.Chams = v
     end
 end, "Chams")
+
+CreateToggle("Tracers", VisualsPage, Settings.ESPTracers, function(v)
+    Settings.ESPTracers = v
+end)
+
+CreateDropdown("Tracer Mode", {"DOWN", "UP", "MOUSE"}, VisualsPage, Settings.TracerOrigin, function(v)
+    Settings.TracerOrigin = v
+end)
+
 CreateToggle("Names", VisualsPage, Settings.ESPNames, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("ESPNames", v)
@@ -3883,13 +4228,23 @@ CreateToggle("Names", VisualsPage, Settings.ESPNames, function(v)
         Settings.ESPNames = v
     end
 end, "ESPNames")
+
 CreateDropdown("Name Type", {"Name", "Display", "Name + Display"}, VisualsPage, Settings.ESPNameMode or "Display", function(v)
     Settings.ESPNameMode = v
 end)
-CreateToggle("Distance", VisualsPage, Settings.ESPDistance, function(v) Settings.ESPDistance = v end)
-CreateToggle("2D Box ESP", VisualsPage, Settings.ESPBox, function(v) Settings.ESPBox = v end)
-CreateToggle("Head Dot ESP", VisualsPage, Settings.ESPHeadDot, function(v) Settings.ESPHeadDot = v end)
-CreateToggle("Tracers", VisualsPage, Settings.ESPTracers, function(v) Settings.ESPTracers = v end)
+
+CreateToggle("Distance", VisualsPage, Settings.ESPDistance, function(v)
+    Settings.ESPDistance = v
+end)
+
+CreateToggle("2D Box ESP", VisualsPage, Settings.ESPBox, function(v)
+    Settings.ESPBox = v
+end)
+
+CreateToggle("Head Dot ESP", VisualsPage, Settings.ESPHeadDot, function(v)
+    Settings.ESPHeadDot = v
+end)
+
 CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("ESPTeamColors", v)
@@ -3897,7 +4252,7 @@ CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
         Settings.ESPTeamColors = v
     end
 end, "ESPTeamColors")
-CreateDropdown("Tracer Mode", {"DOWN", "UP", "MOUSE"}, VisualsPage, Settings.TracerOrigin, function(v) Settings.TracerOrigin = v end)
+
 CreateToggleWithValue("Camera FOV", VisualsPage, Settings.FOVEnabled, Settings.FOVValue, function(v)
     if v then
         CaptureFOVDefault()
@@ -4452,6 +4807,14 @@ end
 CreateToggle("Ctrl Click TP", FlingPage, Settings.CtrlClickTP, function(v)
     if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("CtrlClickTP", v) end
 end, "CtrlClickTP")
+CreateToggle("Walk Fling", FlingPage, Settings.WalkFling, function(v)
+    if getgenv().ToxSetSharedOption then
+        getgenv().ToxSetSharedOption(
+            "WalkFling",
+            v
+        )
+    end
+end, "WalkFling")
 CreateToggle("No Fall Damage", FlingPage, Settings.NoFallDamage, function(v)
     if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("NoFallDamage", v) end
 end, "NoFallDamage")
@@ -4474,14 +4837,7 @@ CreateToggle("Force Shift Lock", FlingPage, Settings.ForceShiftLock, function(v)
     end
 end)
 CreateDropdown("Shift Lock Key", {"Shift", "Ctrl"}, FlingPage, Settings.ShiftLockKey, function(v) Settings.ShiftLockKey = v end)
-CreateToggle("Walk Fling", FlingPage, Settings.WalkFling, function(v)
-    if getgenv().ToxSetSharedOption then
-        getgenv().ToxSetSharedOption(
-            "WalkFling",
-            v
-        )
-    end
-end, "WalkFling")
+
 local LoopFlingInput = nil
 local LoopFlingGeneration = 0
 
@@ -4673,43 +5029,13 @@ CreateButton("Bundle Edit", ScriptsPage, function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/All/refs/heads/main/BundleEdit.lua"))()
 end)
 
-CreateToggle("Anti AFK", ConfigPage, Settings.AntiAFK, function(v) Settings.AntiAFK = v end)
-CreateToggle("Chat Logs", ConfigPage, Settings.ChatLogs, function(v) Settings.ChatLogs = v ChatLogGui.Visible = v end)
-
-CreateDropdown(
-    "3D Background",
-    {
-        "WHITE",
-        "BLACK",
-        "RED",
-        "BLUE"
-    },
-    ConfigPage,
-    Settings.Render3DColor,
-    function(value)
-        SetRender3DColor(
-            value
-        )
-
-        AutoSaveConfiguration()
-    end
-)
+CreateToggle("Chat Logs", ConfigPage, Settings.ChatLogs, function(v)
+    Settings.ChatLogs = v
+    ChatLogGui.Visible = v
+end)
 
 CreateToggle(
-    "3D Rendering",
-    ConfigPage,
-    Settings.Render3D == false,
-    function(v)
-        SetRender3DEnabled(
-            not v
-        )
-
-        AutoSaveConfiguration()
-    end
-)
-
-CreateToggle(
-    "Anti Kick",
+    "Kick Bypass",
     ConfigPage,
     Settings.AntiKick,
     function(v)
@@ -4720,7 +5046,7 @@ CreateToggle(
 
         if Settings.AntiKick then
             CustomNotify(
-                "Anti Kick Enabled • auto rejoin on disconnect",
+                "Kick Bypass Enabled • auto rejoin on disconnect",
                 Color3.fromRGB(
                     100,
                     255,
@@ -4732,6 +5058,10 @@ CreateToggle(
     end,
     "AntiKick"
 )
+
+CreateToggle("Anti AFK", ConfigPage, Settings.AntiAFK, function(v)
+    Settings.AntiAFK = v
+end)
 
 CreateToggle("Auto Execute", ConfigPage, Settings.AutoExecute, function(v)
     Settings.AutoExecute = v == true
@@ -4757,6 +5087,53 @@ CreateToggle("Auto Execute", ConfigPage, Settings.AutoExecute, function(v)
         )
     end
 end)
+
+CreateToggle(
+    "FPS Booster",
+    ConfigPage,
+    Settings.FPSBooster,
+    function(v)
+        SetFPSBooster(
+            v
+        )
+
+        AutoSaveConfiguration()
+    end,
+    "FPSBooster"
+)
+
+CreateToggle(
+    "3D Rendering",
+    ConfigPage,
+    Settings.Render3D == false,
+    function(v)
+        SetRender3DEnabled(
+            not v
+        )
+
+        AutoSaveConfiguration()
+    end
+)
+
+CreateDropdown(
+    "3D Background",
+    {
+        "WHITE",
+        "BLACK",
+        "RED",
+        "BLUE"
+    },
+    ConfigPage,
+    Settings.Render3DColor,
+    function(value)
+        SetRender3DColor(
+            value
+        )
+
+        AutoSaveConfiguration()
+    end
+)
+
 CreateDropdown(
     "GUI Color",
     {
@@ -4794,7 +5171,6 @@ CreateKeybindButton("GUI Keybind", ConfigPage, Settings.GUIKeybind, function(key
         getgenv().AutoSaveConfiguration()
     end
 end)
-CreateConfirmButton("FPS Booster", ConfigPage, function() BoostFPS() end)
 CreateConfirmButton("Server Hop", ConfigPage, function() ServerHop() end)
 CreateConfirmButton("Rejoin Server", ConfigPage, function()
 	if #Players:GetPlayers() <= 1 then TeleportService:Teleport(game.PlaceId, Player)
@@ -4837,6 +5213,11 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
             getgenv().SetNDSNoTP(false, true)
         end)
     end
+
+    SetFPSBooster(
+        false,
+        true
+    )
 
     for key, value in pairs(Settings) do
         if typeof(value) == "boolean" then
@@ -5989,5 +6370,12 @@ if Minimize then
 end
 
 if Settings.AntiVoid then StartAntiVoid() end
+
+if Settings.FPSBooster then
+    SetFPSBooster(
+        true,
+        true
+    )
+end
 
 getgenv().ToxUniversalLoaded = true
