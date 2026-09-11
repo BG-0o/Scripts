@@ -4375,12 +4375,36 @@ local function PrepareAutoFarm()
     return true
 end
 
-local function GetCoinTravelPosition(coin)
+local AutoFarmUndergroundTravelOffset = 5
+local AutoFarmUndergroundPickupOffset = 2.5
+
+local function GetCoinBasePosition(coin)
+    if not coin
+    or not coin:IsA("BasePart") then
+        return nil
+    end
+
     return coin.Position
 end
 
+local function GetCoinTravelPosition(coin)
+    local position = GetCoinBasePosition(coin)
+
+    if not position then
+        return Vector3.zero
+    end
+
+    return position - Vector3.new(0, AutoFarmUndergroundTravelOffset, 0)
+end
+
 local function GetCoinPickupPosition(coin)
-    return coin.Position
+    local position = GetCoinBasePosition(coin)
+
+    if not position then
+        return Vector3.zero
+    end
+
+    return position - Vector3.new(0, AutoFarmUndergroundPickupOffset, 0)
 end
 
 local function TweenFarmRoot(targetPosition, duration, coin)
@@ -4442,18 +4466,8 @@ local function TouchCoin(coin)
     end
 
     if firetouchinterest then
-        local parts = {
-            root,
-            character:FindFirstChild("UpperTorso"),
-            character:FindFirstChild("Torso"),
-            character:FindFirstChild("RightFoot"),
-            character:FindFirstChild("LeftFoot"),
-            character:FindFirstChild("Right Leg"),
-            character:FindFirstChild("Left Leg")
-        }
-
-        for _, part in ipairs(parts) do
-            if part and part:IsA("BasePart") then
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
                 pcall(function()
                     firetouchinterest(part, coin, 0)
                     firetouchinterest(part, coin, 1)
@@ -4670,8 +4684,12 @@ task.spawn(function()
                 if coin then
                     AutoFarmCoin(coin)
                 else
-                    if AutoFarmPrepared then
-                        StopAutoFarm(false)
+                    if AutoFarmPrepared
+                    and AutoFarmRoot
+                    and AutoFarmRoot.Parent then
+                        SetFarmPosition(
+                            AutoFarmRoot.Position
+                        )
                     end
 
                     task.wait(0.12)
