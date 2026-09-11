@@ -6278,7 +6278,9 @@ AddConnection(RunService.Stepped:Connect(function()
     if Settings.Fullbright then UpdateFullbright() end
 end))
 
-local FlyBV, FlyBG
+local FlyBV = nil
+local FlyBG = nil
+
 function DisableNormalFlyPhysics()
     local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
     if FlyBV then FlyBV:Destroy() FlyBV = nil end
