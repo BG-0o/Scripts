@@ -16,6 +16,7 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GuiService = game:GetService("GuiService")
 local CoreGui = game:GetService("CoreGui")
+local StatsService = game:GetService("Stats")
 
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -43,7 +44,22 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-local ToxUpdateVersion = "2026-09-11-mini-pack-1"
+local ToxUpdateVersion = "2026-09-11-rest-pack-1"
+
+
+local function ClearToxTable(target)
+    if typeof(target) ~= "table" then
+        return
+    end
+
+    for key in pairs(target) do
+        target[key] = nil
+    end
+end
+
+Settings.ToxQuickActionsVisible = Settings.ToxQuickActionsVisible == true
+Settings.ToxServerInfoVisible = Settings.ToxServerInfoVisible == true
+Settings.ToxServerInfoMode = Settings.ToxServerInfoMode or "FPS/Ping/Players"
 
 local function GetCurrentPlaceKey()
     return tostring(game.PlaceId)
@@ -1056,6 +1072,7 @@ end
 
 local ReturnButtonCleanupPayload = [[
 local CoreGui = game:GetService("CoreGui")
+local StatsService = game:GetService("Stats")
 
 local function hideReturnObject(obj)
     if not obj then
@@ -3313,7 +3330,7 @@ local function SetFPSBooster(enabled, silent)
             FPSObjectDefaults[object] = nil
         end
 
-        table.clear(FPSObjectDefaults)
+        ClearToxTable(FPSObjectDefaults)
 
         if not silent then
             CustomNotify(
@@ -3620,7 +3637,7 @@ local function RestoreWalkFlingCollisions()
         end
     end
 
-    table.clear(
+    ClearToxTable(
         WalkFlingCollisionDefaults
     )
 end
@@ -5357,6 +5374,415 @@ CreateToggle(
     "FPSBooster"
 )
 
+
+local ServerInfoFrame = nil
+local ServerInfoText = nil
+local ServerInfoFrameCount = 0
+local ServerInfoLastClock = os.clock()
+local ServerInfoFPS = 0
+local ServerInfoModes = {
+    "FPS",
+    "FPS/Ping",
+    "FPS/Ping/Players"
+}
+
+RunService.RenderStepped:Connect(function()
+    ServerInfoFrameCount = ServerInfoFrameCount + 1
+
+    local now = os.clock()
+
+    if now - ServerInfoLastClock >= 0.5 then
+        ServerInfoFPS = math.floor((ServerInfoFrameCount / (now - ServerInfoLastClock)) + 0.5)
+        ServerInfoFrameCount = 0
+        ServerInfoLastClock = now
+    end
+end)
+
+local function GetServerPingText()
+    local ok, value = pcall(function()
+        local network = StatsService and StatsService:FindFirstChild("Network")
+        local serverStats = network and network:FindFirstChild("ServerStatsItem")
+        local ping = serverStats and serverStats:FindFirstChild("Data Ping")
+
+        if ping and ping.GetValueString then
+            return ping:GetValueString()
+        end
+
+        return "N/A"
+    end)
+
+    if ok and value then
+        return tostring(value)
+    end
+
+    return "N/A"
+end
+
+local function NormalizeServerInfoMode(value)
+    value = tostring(value or "")
+
+    for _, mode in ipairs(ServerInfoModes) do
+        if value == mode then
+            return mode
+        end
+    end
+
+    return "FPS/Ping/Players"
+end
+
+local function BuildServerInfoLines()
+    local mode = NormalizeServerInfoMode(Settings.ToxServerInfoMode)
+    local lines = {}
+
+    table.insert(lines, "FPS: " .. tostring(ServerInfoFPS))
+
+    if mode == "FPS/Ping"
+    or mode == "FPS/Ping/Players" then
+        table.insert(lines, "Ping: " .. GetServerPingText())
+    end
+
+    if mode == "FPS/Ping/Players" then
+        table.insert(lines, "Players: " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers))
+    end
+
+    return lines
+end
+
+local function RefreshServerInfoSize()
+    if not ServerInfoFrame then
+        return
+    end
+
+    local lineCount = #BuildServerInfoLines()
+    ServerInfoFrame.Size = UDim2.new(0, 190, 0, 34 + lineCount * 20)
+end
+
+local function CreateServerInfoFrame()
+    if ServerInfoFrame and ServerInfoFrame.Parent then
+        return
+    end
+
+    local gui = getgenv().Gui
+
+    if not gui then
+        return
+    end
+
+    ServerInfoFrame = Instance.new("Frame")
+    ServerInfoFrame.Name = "ToxServerInfoFrame"
+    ServerInfoFrame.Size = UDim2.new(0, 190, 0, 94)
+    ServerInfoFrame.Position = UDim2.new(1, -210, 0, 110)
+    ServerInfoFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+    ServerInfoFrame.BackgroundTransparency = 0.35
+    ServerInfoFrame.BorderSizePixel = 0
+    ServerInfoFrame.Active = true
+    ServerInfoFrame.Visible = false
+    ServerInfoFrame.Parent = gui
+
+    if getgenv().RegisterToxLinkedSubGui then
+        getgenv().RegisterToxLinkedSubGui("ServerInfo", ServerInfoFrame)
+    end
+
+    if getgenv().RegisterToxSubGuiMinimize then
+        getgenv().RegisterToxSubGuiMinimize(ServerInfoFrame, -52)
+    end
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = ServerInfoFrame
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = MAIN_COLOR
+    stroke.Thickness = 1
+    stroke.Transparency = 0.2
+    stroke.Parent = ServerInfoFrame
+
+    local topBar = Instance.new("Frame")
+    topBar.Size = UDim2.new(1, 0, 0, 26)
+    topBar.BackgroundColor3 = MAIN_COLOR
+    topBar.BackgroundTransparency = 0.15
+    topBar.BorderSizePixel = 0
+    topBar.Parent = ServerInfoFrame
+
+    if MakeDraggable then
+        MakeDraggable(ServerInfoFrame, topBar)
+    end
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -58, 1, 0)
+    title.Position = UDim2.new(0, 8, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "SERVER"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 11
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = topBar
+
+    local modeButton = Instance.new("TextButton")
+    modeButton.Size = UDim2.new(0, 24, 0, 18)
+    modeButton.Position = UDim2.new(1, -52, 0.5, -9)
+    modeButton.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
+    modeButton.BorderSizePixel = 0
+    modeButton.Text = "3"
+    modeButton.TextColor3 = Color3.fromRGB(230, 230, 240)
+    modeButton.Font = Enum.Font.GothamBold
+    modeButton.TextSize = 10
+    modeButton.Parent = topBar
+
+    local modeCorner = Instance.new("UICorner")
+    modeCorner.CornerRadius = UDim.new(0, 4)
+    modeCorner.Parent = modeButton
+
+    local closeButton = Instance.new("TextButton")
+    closeButton.Size = UDim2.new(0, 22, 0, 18)
+    closeButton.Position = UDim2.new(1, -25, 0.5, -9)
+    closeButton.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
+    closeButton.BorderSizePixel = 0
+    closeButton.Text = "X"
+    closeButton.TextColor3 = Color3.fromRGB(230, 230, 240)
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.TextSize = 10
+    closeButton.Parent = topBar
+
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 4)
+    closeCorner.Parent = closeButton
+
+    ServerInfoText = Instance.new("TextLabel")
+    ServerInfoText.Size = UDim2.new(1, -16, 1, -34)
+    ServerInfoText.Position = UDim2.new(0, 8, 0, 31)
+    ServerInfoText.BackgroundTransparency = 1
+    ServerInfoText.Text = ""
+    ServerInfoText.TextColor3 = Color3.fromRGB(240, 240, 245)
+    ServerInfoText.Font = Enum.Font.GothamMedium
+    ServerInfoText.TextSize = 12
+    ServerInfoText.TextXAlignment = Enum.TextXAlignment.Left
+    ServerInfoText.TextYAlignment = Enum.TextYAlignment.Top
+    ServerInfoText.Parent = ServerInfoFrame
+
+    closeButton.MouseButton1Click:Connect(function()
+        Settings.ToxServerInfoVisible = false
+        ServerInfoFrame.Visible = false
+
+        if getgenv().SyncToggleVisuals then
+            getgenv().SyncToggleVisuals("ToxServerInfoVisible", false)
+        end
+
+        AutoSaveConfiguration()
+    end)
+
+    modeButton.MouseButton1Click:Connect(function()
+        local mode = NormalizeServerInfoMode(Settings.ToxServerInfoMode)
+        local index = 1
+
+        for i, item in ipairs(ServerInfoModes) do
+            if item == mode then
+                index = i
+                break
+            end
+        end
+
+        index = index + 1
+
+        if index > #ServerInfoModes then
+            index = 1
+        end
+
+        Settings.ToxServerInfoMode = ServerInfoModes[index]
+        modeButton.Text = tostring(index)
+        RefreshServerInfoSize()
+        AutoSaveConfiguration()
+    end)
+
+    task.spawn(function()
+        while ServerInfoFrame and ServerInfoFrame.Parent and not getgenv().Destroyed do
+            if ServerInfoFrame.Visible and ServerInfoText then
+                local lines = BuildServerInfoLines()
+                ServerInfoText.Text = table.concat(lines, "\n")
+                RefreshServerInfoSize()
+            end
+
+            task.wait(0.5)
+        end
+    end)
+end
+
+local function SetServerInfoVisible(enabled)
+    Settings.ToxServerInfoVisible = enabled == true
+    CreateServerInfoFrame()
+
+    if ServerInfoFrame then
+        ServerInfoFrame.Visible = Settings.ToxServerInfoVisible
+        RefreshServerInfoSize()
+    end
+end
+
+getgenv().OpenToxServerInfo = function()
+    SetServerInfoVisible(not Settings.ToxServerInfoVisible)
+
+    if getgenv().SyncToggleVisuals then
+        getgenv().SyncToggleVisuals("ToxServerInfoVisible", Settings.ToxServerInfoVisible)
+    end
+
+    AutoSaveConfiguration()
+end
+
+local QuickActionsFrame = nil
+
+local function CreateQuickActionsFrame()
+    if QuickActionsFrame and QuickActionsFrame.Parent then
+        return
+    end
+
+    local gui = getgenv().Gui
+
+    if not gui then
+        return
+    end
+
+    QuickActionsFrame = Instance.new("Frame")
+    QuickActionsFrame.Name = "ToxQuickActionsFrame"
+    QuickActionsFrame.Size = UDim2.new(0, 292, 0, 94)
+    QuickActionsFrame.Position = UDim2.new(0.5, -146, 1, -125)
+    QuickActionsFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+    QuickActionsFrame.BackgroundTransparency = 0.28
+    QuickActionsFrame.BorderSizePixel = 0
+    QuickActionsFrame.Active = true
+    QuickActionsFrame.Visible = false
+    QuickActionsFrame.Parent = gui
+
+    if getgenv().RegisterToxLinkedSubGui then
+        getgenv().RegisterToxLinkedSubGui("QuickActions", QuickActionsFrame)
+    end
+
+    if getgenv().RegisterToxSubGuiMinimize then
+        getgenv().RegisterToxSubGuiMinimize(QuickActionsFrame, -52)
+    end
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = QuickActionsFrame
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = MAIN_COLOR
+    stroke.Thickness = 1
+    stroke.Transparency = 0.2
+    stroke.Parent = QuickActionsFrame
+
+    local topBar = Instance.new("Frame")
+    topBar.Size = UDim2.new(1, 0, 0, 26)
+    topBar.BackgroundColor3 = MAIN_COLOR
+    topBar.BackgroundTransparency = 0.15
+    topBar.BorderSizePixel = 0
+    topBar.Parent = QuickActionsFrame
+
+    if MakeDraggable then
+        MakeDraggable(QuickActionsFrame, topBar)
+    end
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -36, 1, 0)
+    title.Position = UDim2.new(0, 8, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "QUICK ACTIONS"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 11
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = topBar
+
+    local closeButton = Instance.new("TextButton")
+    closeButton.Size = UDim2.new(0, 22, 0, 18)
+    closeButton.Position = UDim2.new(1, -25, 0.5, -9)
+    closeButton.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
+    closeButton.BorderSizePixel = 0
+    closeButton.Text = "X"
+    closeButton.TextColor3 = Color3.fromRGB(230, 230, 240)
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.TextSize = 10
+    closeButton.Parent = topBar
+
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 4)
+    closeCorner.Parent = closeButton
+
+    closeButton.MouseButton1Click:Connect(function()
+        Settings.ToxQuickActionsVisible = false
+        QuickActionsFrame.Visible = false
+
+        if getgenv().SyncToggleVisuals then
+            getgenv().SyncToggleVisuals("ToxQuickActionsVisible", false)
+        end
+
+        AutoSaveConfiguration()
+    end)
+
+    local actions = {
+        {"Return", function() ReturnToLastTeleport() end},
+        {"Search", function() if getgenv().OpenToxSearch then getgenv().OpenToxSearch() end end},
+        {"Waypoints", function() WaypointsGui.Visible = not WaypointsGui.Visible end},
+        {"Server", function() if getgenv().OpenToxServerInfo then getgenv().OpenToxServerInfo() end end},
+        {"FPS", function() SetFPSBooster(not Settings.FPSBooster) if getgenv().SyncToggleVisuals then getgenv().SyncToggleVisuals("FPSBooster", Settings.FPSBooster) end AutoSaveConfiguration() end},
+        {"Compat", function() if getgenv().OpenToxCompatibility then getgenv().OpenToxCompatibility() end end}
+    }
+
+    for index, item in ipairs(actions) do
+        local button = Instance.new("TextButton")
+        button.Size = UDim2.new(0, 88, 0, 25)
+        button.Position = UDim2.new(0, 8 + ((index - 1) % 3) * 94, 0, 34 + math.floor((index - 1) / 3) * 29)
+        button.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+        button.BackgroundTransparency = 0.05
+        button.BorderSizePixel = 0
+        button.Text = item[1]
+        button.TextColor3 = Color3.fromRGB(245, 245, 245)
+        button.Font = Enum.Font.GothamBold
+        button.TextSize = 11
+        button.Parent = QuickActionsFrame
+
+        local buttonCorner = Instance.new("UICorner")
+        buttonCorner.CornerRadius = UDim.new(0, 5)
+        buttonCorner.Parent = button
+
+        button.MouseButton1Click:Connect(item[2])
+    end
+end
+
+local function SetQuickActionsVisible(enabled)
+    Settings.ToxQuickActionsVisible = enabled == true
+    CreateQuickActionsFrame()
+
+    if QuickActionsFrame then
+        QuickActionsFrame.Visible = Settings.ToxQuickActionsVisible
+    end
+end
+
+getgenv().OpenToxQuickActions = function()
+    SetQuickActionsVisible(not Settings.ToxQuickActionsVisible)
+
+    if getgenv().SyncToggleVisuals then
+        getgenv().SyncToggleVisuals("ToxQuickActionsVisible", Settings.ToxQuickActionsVisible)
+    end
+
+    AutoSaveConfiguration()
+end
+
+CreateToggle("Quick Actions", ConfigPage, Settings.ToxQuickActionsVisible, function(v)
+    SetQuickActionsVisible(v)
+    AutoSaveConfiguration()
+end, "ToxQuickActionsVisible")
+
+CreateToggle("Server Info", ConfigPage, Settings.ToxServerInfoVisible, function(v)
+    SetServerInfoVisible(v)
+    AutoSaveConfiguration()
+end, "ToxServerInfoVisible")
+
+CreateDropdown("Server Info Options", ServerInfoModes, ConfigPage, NormalizeServerInfoMode(Settings.ToxServerInfoMode), function(value)
+    Settings.ToxServerInfoMode = NormalizeServerInfoMode(value)
+    RefreshServerInfoSize()
+    AutoSaveConfiguration()
+end)
+
 CreateButton("Tox Search", ConfigPage, function()
     if getgenv().OpenToxSearch then
         getgenv().OpenToxSearch()
@@ -6670,6 +7096,14 @@ if Settings.FPSBooster then
     )
 end
 
+if Settings.ToxServerInfoVisible then
+    SetServerInfoVisible(true)
+end
+
+if Settings.ToxQuickActionsVisible then
+    SetQuickActionsVisible(true)
+end
+
 if getgenv().UpdateToxCompatibilityIndicator then
     task.spawn(function()
         while not getgenv().Destroyed do
@@ -6688,7 +7122,9 @@ if getgenv().ShowToxUpdateGui then
             "FPS Booster agora salva snapshot e restaura textura/material/lighting ao desligar.",
             "FPS Booster ignora objetos importantes como players, armas, drops e UI.",
             "Adicionado Return TP, Search, Compatibility indicator e ESP Max Dist por jogo.",
-            "No TP agora reconhece teleports internos do ToxHub pela whitelist."
+            "No TP agora reconhece teleports internos do ToxHub pela whitelist.",
+            "Adicionado Quick Actions e Server Info movivel/transparente com 1, 2 ou 3 informacoes.",
+            "Jogos sem modulo conhecido iniciam com todas as funcoes desligadas."
         }
     )
 end
