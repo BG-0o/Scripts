@@ -665,7 +665,7 @@ local function LoadSharedMusicIDs()
             ) do
                 local normalized =
                     tostring(path)
-                        :gsub("\", "/")
+                        :gsub("\\", "/")
 
                 if string.match(
                     normalized,
@@ -815,7 +815,7 @@ local function LoadSharedJoinGames()
             ) do
                 local normalized =
                     tostring(path)
-                        :gsub("\", "/")
+                        :gsub("\\", "/")
 
                 if string.match(
                     normalized,
