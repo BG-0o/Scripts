@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-11-mm2-loadfix-autowin-3"
+    "2026-09-11-mm2-autofarm-tween-random"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -3891,6 +3891,7 @@ local AutoFarmResetTriggered = false
 local AutoFarmPauseCharacter = nil
 local AutoFarmPauseMap = nil
 local AutoFarmLastTravelY = nil
+local AutoFarmRandomNextCoin = false
 getgenv().ToxMM2AutoWinBusy = false
 getgenv().ToxMM2AutoWinGeneration = getgenv().ToxMM2AutoWinGeneration or 0
 
@@ -4146,6 +4147,7 @@ end
 
 local function GetBestCoin(origin, competitionAware)
     local coins = GetMM2Coins(false)
+    local candidates = {}
     local bestCoin = nil
     local bestDistance = math.huge
     local now = os.clock()
@@ -4158,14 +4160,15 @@ local function GetBestCoin(origin, competitionAware)
 
     for _, coin in ipairs(coins) do
         if IsCoinValid(coin) and not MM2CoinBlacklist[coin] then
-            local distance
+            table.insert(candidates, coin)
+
+            local distance = 0
 
             if typeof(origin) == "Vector3" then
-                local a = Vector2.new(origin.X, origin.Z)
-                local b = Vector2.new(coin.Position.X, coin.Position.Z)
-                distance = (a - b).Magnitude
-            else
-                distance = 0
+                distance = (
+                    Vector2.new(origin.X, origin.Z)
+                    - Vector2.new(coin.Position.X, coin.Position.Z)
+                ).Magnitude
             end
 
             if distance < bestDistance then
@@ -4175,6 +4178,12 @@ local function GetBestCoin(origin, competitionAware)
         end
     end
 
+    if AutoFarmRandomNextCoin and #candidates > 1 then
+        AutoFarmRandomNextCoin = false
+        return candidates[math.random(1, #candidates)]
+    end
+
+    AutoFarmRandomNextCoin = false
     return bestCoin
 end
 function ToxMM2GetCoinTouchParts(coin)
@@ -4642,7 +4651,7 @@ local function PrepareAutoFarm()
     AutoFarmReturnCFrame = character:GetPivot()
 
     local _, farmYaw, _ = root.CFrame:ToOrientation()
-    AutoFarmRotation = CFrame.Angles(0, farmYaw, 0) * CFrame.Angles(math.rad(90), 0, 0)
+    AutoFarmRotation = CFrame.Angles(0, farmYaw, 0)
 
     AutoFarmOriginalAnchored = root.Anchored
     AutoFarmOriginalAutoRotate = humanoid.AutoRotate
@@ -4656,7 +4665,7 @@ local function PrepareAutoFarm()
     AutoFarmLastTravelY = nil
     AutoFarmSessionCollected = 0
 
-    humanoid.PlatformStand = true
+    humanoid.PlatformStand = false
     humanoid.Sit = false
     humanoid.AutoRotate = false
 
@@ -4674,10 +4683,10 @@ local function PrepareAutoFarm()
     return true
 end
 
-local AutoFarmUndergroundTravelDepth = 1.35
-local AutoFarmUndergroundPickupDepth = 0.10
-local AutoFarmFallbackCoinOffset = 1.10
-local AutoFarmCoinHoldTime = 1.2
+local AutoFarmUndergroundTravelDepth = -2.75
+local AutoFarmUndergroundPickupDepth = -2.55
+local AutoFarmFallbackCoinOffset = -0.35
+local AutoFarmCoinHoldTime = 0.55
 local AutoFarmFloorCache = setmetatable({}, {__mode = "k"})
 
 local function GetCoinBasePosition(coin)
@@ -4817,21 +4826,15 @@ local function GetCoinTravelPosition(coin, currentPosition)
         return Vector3.zero
     end
 
-    local travelY = GetUndergroundYForCoin(
-        coin,
-        AutoFarmUndergroundTravelDepth,
-        currentPosition
-    )
-
+    local targetY = position.Y + 0.15
     local floorY = GetCoinFloorY(coin)
 
     if floorY then
-        travelY = math.min(travelY, floorY - 0.45)
+        targetY = math.max(targetY, floorY + 2.35)
     end
 
-    AutoFarmLastTravelY = travelY
-
-    return Vector3.new(position.X, travelY, position.Z)
+    AutoFarmLastTravelY = targetY
+    return Vector3.new(position.X, targetY, position.Z)
 end
 
 local function GetCoinPickupPosition(coin)
@@ -4841,20 +4844,14 @@ local function GetCoinPickupPosition(coin)
         return Vector3.zero
     end
 
-    local currentPosition = AutoFarmRoot and AutoFarmRoot.Position or nil
-    local pickupY = GetUndergroundYForCoin(
-        coin,
-        AutoFarmUndergroundPickupDepth,
-        currentPosition
-    )
-
+    local targetY = position.Y + 0.05
     local floorY = GetCoinFloorY(coin)
 
     if floorY then
-        pickupY = math.min(pickupY, floorY - AutoFarmUndergroundPickupDepth)
+        targetY = math.max(targetY, floorY + 2.2)
     end
 
-    return Vector3.new(position.X, pickupY, position.Z)
+    return Vector3.new(position.X, targetY, position.Z)
 end
 
 local function TweenFarmRoot(targetPosition, duration, coin)
@@ -4998,6 +4995,11 @@ local function CollectFarmCoin(coin)
             AutoFarmHoldPosition = nil
             AutoFarmSessionCollected = AutoFarmSessionCollected + 1
 
+            if AutoFarmSessionCollected > 0
+            and AutoFarmSessionCollected % 10 == 0 then
+                AutoFarmRandomNextCoin = true
+            end
+
             if AutoFarmCoinSerial == serialBefore
             and AutoFarmBagCoins <= bagBefore
             and not AutoFarmBagKnown then
@@ -5130,7 +5132,7 @@ AddConnection(RunService.Heartbeat:Connect(function()
     if AutoFarmHumanoid
     and AutoFarmHumanoid.Parent
     and AutoFarmHumanoid.Health > 0 then
-        AutoFarmHumanoid.PlatformStand = true
+        AutoFarmHumanoid.PlatformStand = false
         AutoFarmHumanoid.Sit = false
         AutoFarmHumanoid.AutoRotate = false
     end
