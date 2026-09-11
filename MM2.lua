@@ -4083,43 +4083,44 @@ end
 
 function ToxMM2GetCharacterTouchParts(character, root)
     local parts = {}
+    local seen = {}
 
-    if root then
-        table.insert(parts, root)
+    local function add(part)
+        if part
+        and part:IsA("BasePart")
+        and not seen[part] then
+            seen[part] = true
+            table.insert(parts, part)
+        end
     end
 
+    add(root)
+
     if character then
-        local names = {
+        local priority = {
+            "HumanoidRootPart",
             "UpperTorso",
             "LowerTorso",
             "Torso",
-            "HumanoidRootPart",
+            "Head",
             "LeftFoot",
             "RightFoot",
             "Left Leg",
             "Right Leg",
             "LeftLowerLeg",
-            "RightLowerLeg"
+            "RightLowerLeg",
+            "LeftHand",
+            "RightHand",
+            "Left Arm",
+            "Right Arm"
         }
 
-        for _, name in ipairs(names) do
-            local part = character:FindFirstChild(name, true)
+        for _, name in ipairs(priority) do
+            add(character:FindFirstChild(name, true))
+        end
 
-            if part
-            and part:IsA("BasePart") then
-                local exists = false
-
-                for _, saved in ipairs(parts) do
-                    if saved == part then
-                        exists = true
-                        break
-                    end
-                end
-
-                if not exists then
-                    table.insert(parts, part)
-                end
-            end
+        for _, object in ipairs(character:GetDescendants()) do
+            add(object)
         end
     end
 
@@ -4432,9 +4433,10 @@ local function PrepareAutoFarm()
     return true
 end
 
-local AutoFarmUndergroundTravelOffset = 7.25
-local AutoFarmUndergroundPickupOffset = 3.15
-local AutoFarmCoinHoldTime = 1.45
+local AutoFarmUndergroundTravelDepth = 5.25
+local AutoFarmUndergroundPickupDepth = 2.25
+local AutoFarmFallbackCoinOffset = 4.25
+local AutoFarmCoinHoldTime = 0.72
 local AutoFarmFloorCache = setmetatable({}, {__mode = "k"})
 
 local function GetCoinBasePosition(coin)
@@ -4446,6 +4448,32 @@ local function GetCoinBasePosition(coin)
     return coin.Position
 end
 
+local function IsCoinNamedObject(object)
+    if not object then
+        return false
+    end
+
+    local lower = string.lower(tostring(object.Name or ""))
+
+    return string.find(lower, "coin", 1, true) ~= nil
+        or string.find(lower, "token", 1, true) ~= nil
+        or string.find(lower, "credit", 1, true) ~= nil
+end
+
+local function AddUniqueIgnore(list, object)
+    if not object then
+        return
+    end
+
+    for _, saved in ipairs(list) do
+        if saved == object then
+            return
+        end
+    end
+
+    table.insert(list, object)
+end
+
 local function GetCoinFloorY(coin)
     if not coin
     or not coin.Parent then
@@ -4455,41 +4483,79 @@ local function GetCoinFloorY(coin)
     local cached = AutoFarmFloorCache[coin]
 
     if cached
-    and os.clock() - cached.Time < 0.75 then
+    and os.clock() - cached.Time < 0.45 then
         return cached.Y
     end
-
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
 
     local ignore = {}
 
     if Player.Character then
-        table.insert(ignore, Player.Character)
+        AddUniqueIgnore(ignore, Player.Character)
     end
 
-    if coin.Parent then
-        table.insert(ignore, coin.Parent)
+    AddUniqueIgnore(ignore, coin)
+
+    local parent = coin.Parent
+
+    if parent
+    and parent ~= workspace
+    and IsCoinNamedObject(parent) then
+        AddUniqueIgnore(ignore, parent)
     end
 
-    params.FilterDescendantsInstances = ignore
+    local result = nil
 
-    local result = workspace:Raycast(
-        coin.Position + Vector3.new(0, 4, 0),
-        Vector3.new(0, -35, 0),
-        params
-    )
+    for _ = 1, 5 do
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = ignore
 
-    if result then
-        AutoFarmFloorCache[coin] = {
-            Y = result.Position.Y,
-            Time = os.clock()
-        }
+        result = workspace:Raycast(
+            coin.Position + Vector3.new(0, 9, 0),
+            Vector3.new(0, -85, 0),
+            params
+        )
 
-        return result.Position.Y
+        if not result
+        or not result.Instance then
+            break
+        end
+
+        if result.Position.Y <= coin.Position.Y + 0.25
+        and not IsCoinNamedObject(result.Instance)
+        and (
+            not parent
+            or result.Instance.Parent ~= parent
+            or not IsCoinNamedObject(parent)
+        ) then
+            AutoFarmFloorCache[coin] = {
+                Y = result.Position.Y,
+                Time = os.clock()
+            }
+
+            return result.Position.Y
+        end
+
+        AddUniqueIgnore(ignore, result.Instance)
     end
 
     return nil
+end
+
+local function GetUndergroundYForCoin(coin, depth)
+    local position = GetCoinBasePosition(coin)
+
+    if not position then
+        return 0
+    end
+
+    local floorY = GetCoinFloorY(coin)
+
+    if floorY then
+        return floorY - depth
+    end
+
+    return position.Y - AutoFarmFallbackCoinOffset
 end
 
 local function GetCoinTravelPosition(coin, currentPosition)
@@ -4499,19 +4565,19 @@ local function GetCoinTravelPosition(coin, currentPosition)
         return Vector3.zero
     end
 
-    local floorY = GetCoinFloorY(coin)
-    local travelY = position.Y - AutoFarmUndergroundTravelOffset
+    local travelY = GetUndergroundYForCoin(
+        coin,
+        AutoFarmUndergroundTravelDepth
+    )
 
-    if floorY then
-        travelY = math.min(travelY, floorY - 2.85)
+    if typeof(currentPosition) == "Vector3"
+    and currentPosition.Y < travelY then
+        travelY = currentPosition.Y
     end
 
-    if typeof(currentPosition) == "Vector3" then
-        travelY = math.min(travelY, currentPosition.Y)
-    end
-
-    if typeof(AutoFarmLastTravelY) == "number" then
-        travelY = math.min(travelY, AutoFarmLastTravelY + 0.35)
+    if typeof(AutoFarmLastTravelY) == "number"
+    and travelY > AutoFarmLastTravelY + 0.2 then
+        travelY = AutoFarmLastTravelY + 0.2
     end
 
     AutoFarmLastTravelY = travelY
@@ -4526,15 +4592,19 @@ local function GetCoinPickupPosition(coin)
         return Vector3.zero
     end
 
-    local floorY = GetCoinFloorY(coin)
-    local pickupY = position.Y - AutoFarmUndergroundPickupOffset
+    local pickupY = GetUndergroundYForCoin(
+        coin,
+        AutoFarmUndergroundPickupDepth
+    )
 
-    if floorY then
-        pickupY = math.min(pickupY, floorY - 0.65)
+    if typeof(AutoFarmLastTravelY) == "number"
+    and pickupY > AutoFarmLastTravelY + 3 then
+        pickupY = AutoFarmLastTravelY + 3
     end
 
     return Vector3.new(position.X, pickupY, position.Z)
 end
+
 local function TweenFarmRoot(targetPosition, duration, coin)
     if not AutoFarmRoot
     or not AutoFarmRoot.Parent then
@@ -4545,7 +4615,7 @@ local function TweenFarmRoot(targetPosition, duration, coin)
     local startPosition = AutoFarmRoot.Position
     local delta = targetPosition - startPosition
     local startTime = os.clock()
-    duration = math.max(duration, 0.025)
+    duration = math.max(duration, 0.018)
 
     while Settings.MM2AutoFarmV2
     and AutoFarmPrepared
@@ -4601,12 +4671,19 @@ local function TouchCoin(coin)
         for _, coinPart in ipairs(coinParts) do
             if coinPart
             and coinPart.Parent then
+                pcall(function()
+                    coinPart.CanTouch = true
+                end)
+
                 for _, bodyPart in ipairs(characterParts) do
                     if bodyPart
                     and bodyPart.Parent then
                         pcall(function()
+                            bodyPart.CanTouch = true
                             firetouchinterest(bodyPart, coinPart, 0)
                             firetouchinterest(bodyPart, coinPart, 1)
+                            firetouchinterest(coinPart, bodyPart, 0)
+                            firetouchinterest(coinPart, bodyPart, 1)
                         end)
 
                         touched = true
@@ -4631,11 +4708,24 @@ local function CollectFarmCoin(coin)
     local bagBefore = AutoFarmBagCoins
     local holdUntil = os.clock() + AutoFarmCoinHoldTime
     local pickupPosition = GetCoinPickupPosition(coin)
-    local retouchAt = 0
+    local lastTouch = 0
 
     AutoFarmAtCoin = true
     SetFarmPosition(pickupPosition, true)
-    RunService.Heartbeat:Wait()
+
+    for _ = 1, 4 do
+        TouchCoin(coin)
+        RunService.Heartbeat:Wait()
+
+        if not IsCoinValid(coin)
+        or AutoFarmCoinSerial ~= serialBefore
+        or AutoFarmBagCoins > bagBefore then
+            AutoFarmAtCoin = false
+            AutoFarmHoldPosition = nil
+            AutoFarmSessionCollected = AutoFarmSessionCollected + 1
+            return true
+        end
+    end
 
     while Settings.MM2AutoFarmV2
     and generation == AutoFarmGeneration
@@ -4654,9 +4744,9 @@ local function CollectFarmCoin(coin)
             AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
         end
 
-        if os.clock() >= retouchAt then
+        if os.clock() - lastTouch >= 0.018 then
             TouchCoin(coin)
-            retouchAt = os.clock() + 0.08
+            lastTouch = os.clock()
         end
 
         if not IsCoinValid(coin)
@@ -4678,13 +4768,14 @@ local function CollectFarmCoin(coin)
             return true
         end
 
-        task.wait(0.025)
+        RunService.Heartbeat:Wait()
     end
 
     AutoFarmAtCoin = false
     AutoFarmHoldPosition = nil
     return false
 end
+
 local function AutoFarmCoin(coin)
     if not IsCoinValid(coin) or not PrepareAutoFarm() then
         return false
@@ -4711,30 +4802,27 @@ local function AutoFarmCoin(coin)
         currentPosition.Z
     )
 
-    local arrived = true
-
-    if math.abs(currentPosition.Y - travelPosition.Y) > 0.15 then
-        arrived = TweenFarmRoot(
-            descendPosition,
-            math.abs(currentPosition.Y - travelPosition.Y) / speed,
-            coin
-        )
+    if currentPosition.Y > travelPosition.Y + 0.08 then
+        SetFarmPosition(descendPosition, true)
+        RunService.Heartbeat:Wait()
     else
         SetFarmPosition(descendPosition, true)
     end
 
-    if arrived then
-        local horizontalDistance = (
-            Vector2.new(descendPosition.X, descendPosition.Z)
-            - Vector2.new(travelPosition.X, travelPosition.Z)
-        ).Magnitude
-
-        arrived = TweenFarmRoot(
-            travelPosition,
-            horizontalDistance / speed,
-            coin
-        )
+    if not Settings.MM2AutoFarmV2 then
+        return false
     end
+
+    local horizontalDistance = (
+        Vector2.new(descendPosition.X, descendPosition.Z)
+        - Vector2.new(travelPosition.X, travelPosition.Z)
+    ).Magnitude
+
+    local arrived = TweenFarmRoot(
+        travelPosition,
+        horizontalDistance / math.max(speed, 1),
+        coin
+    )
 
     if not Settings.MM2AutoFarmV2 then
         return false
@@ -4748,29 +4836,34 @@ local function AutoFarmCoin(coin)
 
     if not arrived then
         if IsCoinValid(coin) then
-            MM2CoinBlacklist[coin] = os.clock() + 0.45
+            MM2CoinBlacklist[coin] = os.clock() + 0.18
         end
 
         return false
     end
 
     local pickupPosition = GetCoinPickupPosition(coin)
-    local pickupDistance = (AutoFarmRoot.Position - pickupPosition).Magnitude
+    local liftPosition = Vector3.new(
+        travelPosition.X,
+        math.min(pickupPosition.Y, GetUndergroundYForCoin(coin, AutoFarmUndergroundPickupDepth)),
+        travelPosition.Z
+    )
 
-    if pickupDistance > 0.12 then
-        TweenFarmRoot(
-            pickupPosition,
-            pickupDistance / math.max(speed * 0.75, 1),
-            coin
-        )
-    end
+    SetFarmPosition(liftPosition, true)
+    RunService.Heartbeat:Wait()
 
     local collected = CollectFarmCoin(coin)
+    local leavePosition = GetCoinTravelPosition(coin, AutoFarmRoot and AutoFarmRoot.Position or liftPosition)
+
+    if AutoFarmRoot
+    and AutoFarmRoot.Parent then
+        SetFarmPosition(leavePosition, true)
+    end
 
     if collected then
-        MM2CoinBlacklist[coin] = os.clock() + 0.08
+        MM2CoinBlacklist[coin] = os.clock() + 0.05
     else
-        MM2CoinBlacklist[coin] = os.clock() + 0.22
+        MM2CoinBlacklist[coin] = os.clock() + 0.12
     end
 
     if IsFarmBagFull()
@@ -4864,7 +4957,14 @@ task.spawn(function()
                 CompleteAutoFarm()
                 task.wait(0.2)
             elseif not ActionBusy then
-                local coin = GetBestCoin(root.Position, false)
+                local origin = root and root.Position or nil
+
+                if AutoFarmRoot
+                and AutoFarmRoot.Parent then
+                    origin = AutoFarmRoot.Position
+                end
+
+                local coin = GetBestCoin(origin, false)
 
                 if coin then
                     AutoFarmCoin(coin)
@@ -4877,10 +4977,10 @@ task.spawn(function()
                         )
                     end
 
-                    task.wait(0.12)
+                    task.wait(0.08)
                 end
             else
-                task.wait(0.08)
+                task.wait(0.06)
             end
         else
             if AutoFarmPrepared then
@@ -4905,7 +5005,6 @@ task.spawn(function()
         end
     end
 end)
-
 
 local function ApplyRoleESP(enabled)
     Settings.MM2RoleESP = enabled == true
