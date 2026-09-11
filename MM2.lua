@@ -31,6 +31,11 @@ local SyncValueVisuals = getgenv().SyncValueVisuals
 local MAIN_COLOR = getgenv().MAIN_COLOR or Color3.fromRGB(9, 0, 136)
 local MakeDraggable = getgenv().MakeDraggable
 
+local function ToxScriptReady()
+    return getgenv().ScriptLoaded == true
+    or ScriptLoaded == true
+end
+
 if not Settings
 or not GamePage
 or not CreateToggle
@@ -2269,7 +2274,8 @@ local function SetRoundTimerVisible(enabled)
 end
 
 AddConnection(RunService.Heartbeat:Connect(function()
-    if not Settings.MM2RoundTimer
+    if not ToxScriptReady()
+    or not Settings.MM2RoundTimer
     or os.clock() - LastRoundTimerUpdate < 0.5 then
         return
     end
@@ -4791,6 +4797,15 @@ end))
 
 task.spawn(function()
     while not getgenv().Destroyed and game.PlaceId == 142823291 do
+        if not ToxScriptReady() then
+            if AutoFarmPrepared then
+                StopAutoFarm(false)
+            end
+
+            task.wait(0.1)
+            continue
+        end
+
         if Settings.MM2AutoFarmV2 then
             RefreshFarmBagState()
 
@@ -5901,6 +5916,11 @@ AutoGrabAttemptedDrops = setmetatable({}, {__mode = "k"})
 
 task.spawn(function()
     while not getgenv().Destroyed and game.PlaceId == 142823291 do
+        if not ToxScriptReady() then
+            task.wait(0.1)
+            continue
+        end
+
         local knife = FindNamedTool({"knife"})
         local gun = FindNamedTool({"gun", "revolver"})
         local character = Player.Character
@@ -5988,7 +6008,8 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed
     or UserInputService:GetFocusedTextBox()
     or input.UserInputType ~= Enum.UserInputType.Keyboard
-    or getgenv().Destroyed then
+    or getgenv().Destroyed
+    or not ToxScriptReady() then
         return
     end
 
@@ -6134,19 +6155,35 @@ getgenv().ToxMM2Cleanup = function()
     end
 end
 
-if Settings.MM2RoleESP then
-    pcall(function()
-        ApplyRoleESP(
-            true
-        )
-    end)
+local function ApplyMM2SavedOptionsAfterLoad()
+    if getgenv().Destroyed
+    or not ToxScriptReady() then
+        return
+    end
+
+    if Settings.MM2RoleESP then
+        pcall(function()
+            ApplyRoleESP(
+                true
+            )
+        end)
+    end
+
+    if Settings.MM2RoundTimer then
+        pcall(function()
+            SetRoundTimerVisible(true)
+        end)
+    end
 end
 
-if Settings.MM2RoundTimer then
-    pcall(function()
-        SetRoundTimerVisible(true)
-    end)
-end
+task.spawn(function()
+    while not getgenv().Destroyed
+    and not ToxScriptReady() do
+        task.wait(0.05)
+    end
+
+    ApplyMM2SavedOptionsAfterLoad()
+end)
 
 getgenv().ToxMM2ModuleLoadedJobId =
     game.JobId
