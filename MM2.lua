@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-11-rest-pack-1"
+    "2026-09-11-rest-pack-2"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -4721,9 +4721,9 @@ local function CreateMM2Section(
     return label
 end
 
-local AutoFarmHighSpeedWarningShown = false
+AutoFarmHighSpeedWarningShown = false
 
-local function WarnAutoFarmSpeed(
+function WarnAutoFarmSpeed(
     speed
 )
     speed =
@@ -4879,7 +4879,7 @@ CreateMM2Section(
     "COMBAT"
 )
 
-local MM2AutoRuntime = {
+MM2AutoRuntime = {
     KillAll = Settings.MM2KillAllAutoV2 == true,
     Shoot = Settings.MM2ShootMurderAutoV2 == true,
     GrabGun = Settings.MM2GrabGunAutoV2 == true
@@ -4946,7 +4946,7 @@ CreateToggle("Round Timer", GamePage, Settings.MM2RoundTimer, function(v)
     AutoSaveConfiguration()
 end, "MM2RoundTimer")
 
-local function GetMM2ActiveMapRoot()
+function GetMM2ActiveMapRoot()
     local normal =
         workspace:
             FindFirstChild(
@@ -5006,7 +5006,7 @@ local function GetMM2ActiveMapRoot()
     return best
 end
 
-local function GetPartTopCFrame(
+function GetPartTopCFrame(
     part
 )
     if not part
@@ -5028,7 +5028,7 @@ local function GetPartTopCFrame(
         )
 end
 
-local function FindNamedSpawnIn(
+function FindNamedSpawnIn(
     root
 )
     if not root then
@@ -5083,7 +5083,7 @@ local function FindNamedSpawnIn(
         )
 end
 
-local function GetRootBounds(
+function GetRootBounds(
     root
 )
     if not root then
@@ -5188,7 +5188,7 @@ local function GetRootBounds(
     return nil
 end
 
-local function GetSafeMapCFrame()
+function GetSafeMapCFrame()
     local mapRoot = GetMM2ActiveMapRoot()
 
     if not mapRoot then
@@ -5277,7 +5277,7 @@ local function GetSafeMapCFrame()
     return nil
 end
 
-local function GetLobbySpawnCFrame()
+function GetLobbySpawnCFrame()
     local mapRoot =
         GetMM2ActiveMapRoot()
 
@@ -5373,7 +5373,7 @@ local function GetLobbySpawnCFrame()
     return nil
 end
 
-local function TeleportMM2To(
+function TeleportMM2To(
     cframe,
     label
 )
@@ -5473,9 +5473,9 @@ CreateButton(
 )
 
 
-local AutoKnifeLastAttempt = 0
-local AutoShootLastAttempt = 0
-local AutoGrabAttemptedDrops = setmetatable({}, {__mode = "k"})
+AutoKnifeLastAttempt = 0
+AutoShootLastAttempt = 0
+AutoGrabAttemptedDrops = setmetatable({}, {__mode = "k"})
 
 task.spawn(function()
     while not getgenv().Destroyed and game.PlaceId == 142823291 do
@@ -5562,7 +5562,7 @@ task.spawn(function()
 end)
 
 
-local LastManualShootInput = 0
+LastManualShootInput = 0
 
 AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed
