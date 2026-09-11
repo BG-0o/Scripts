@@ -598,10 +598,16 @@ getgenv().RegisterToxLinkedSubGui = function(key, gui)
     end
 end
 
-for _, page in pairs(Pages) do
-    for _, child in ipairs(page:GetChildren()) do
-        if child:IsA("Frame") or child:IsA("TextButton") then
-            child:Destroy()
+local ToxPages = getgenv().Pages
+
+if typeof(ToxPages) == "table" then
+    for _, page in pairs(ToxPages) do
+        if page and page.GetChildren then
+            for _, child in ipairs(page:GetChildren()) do
+                if child:IsA("Frame") or child:IsA("TextButton") then
+                    child:Destroy()
+                end
+            end
         end
     end
 end
