@@ -1989,6 +1989,7 @@ local function ReadTimerFromText(text, name)
     text = tostring(text or "")
     name = string.lower(tostring(name or ""))
 
+    local lowerText = string.lower(text)
     local direct = string.match(text, "^%s*(%d+:%d%d)%s*$")
     local inside = string.match(text, "(%d+:%d%d)")
 
@@ -2000,14 +2001,100 @@ local function ReadTimerFromText(text, name)
         return inside
     end
 
-    if string.find(name, "timer", 1, true)
-    or string.find(name, "time", 1, true)
-    or string.find(name, "round", 1, true)
-    or string.find(string.lower(text), "time", 1, true)
-    or string.find(string.lower(text), "round", 1, true)
-    or string.find(string.lower(text), "intermission", 1, true) then
+    local hasTimerName =
+        string.find(name, "timer", 1, true)
+        or string.find(name, "time", 1, true)
+        or string.find(name, "round", 1, true)
+        or string.find(name, "count", 1, true)
+        or string.find(name, "intermission", 1, true)
+
+    local hasTimerText =
+        string.find(lowerText, "time", 1, true)
+        or string.find(lowerText, "round", 1, true)
+        or string.find(lowerText, "intermission", 1, true)
+        or string.find(lowerText, "seconds", 1, true)
+        or string.find(lowerText, "starting", 1, true)
+
+    if hasTimerName or hasTimerText then
         local number = string.match(text, "(%d+)")
         return FormatRoundSeconds(number)
+    end
+
+    return nil
+end
+
+local function ReadTimerFromObject(object)
+    if not object then
+        return nil
+    end
+
+    if object:IsA("TextLabel")
+    or object:IsA("TextButton")
+    or object:IsA("TextBox") then
+        local found = ReadTimerFromText(object.Text, object.Name)
+
+        if found then
+            return found
+        end
+
+        local contentText = nil
+
+        pcall(function()
+            contentText = object.ContentText
+        end)
+
+        if contentText then
+            found = ReadTimerFromText(contentText, object.Name)
+
+            if found then
+                return found
+            end
+        end
+    elseif object:IsA("StringValue") then
+        local found = ReadTimerFromText(object.Value, object.Name)
+
+        if found then
+            return found
+        end
+    elseif object:IsA("IntValue")
+    or object:IsA("NumberValue") then
+        local lowerName = string.lower(object.Name)
+
+        if string.find(lowerName, "timer", 1, true)
+        or string.find(lowerName, "time", 1, true)
+        or string.find(lowerName, "round", 1, true)
+        or string.find(lowerName, "count", 1, true) then
+            local found = FormatRoundSeconds(object.Value)
+
+            if found then
+                return found
+            end
+        end
+    end
+
+    local attributes = object:GetAttributes()
+
+    for attributeName, attributeValue in pairs(attributes) do
+        local lowerName = string.lower(tostring(attributeName))
+
+        if string.find(lowerName, "timer", 1, true)
+        or string.find(lowerName, "time", 1, true)
+        or string.find(lowerName, "round", 1, true)
+        or string.find(lowerName, "count", 1, true) then
+            if typeof(attributeValue) == "number" then
+                local found = FormatRoundSeconds(attributeValue)
+
+                if found then
+                    return found
+                end
+            elseif typeof(attributeValue) == "string" then
+                local found = ReadTimerFromText(attributeValue, attributeName)
+
+                if found then
+                    return found
+                end
+            end
+        end
     end
 
     return nil
@@ -2019,37 +2106,23 @@ local function ScanRoundTimerContainer(container)
     end
 
     local ownGui = getgenv().Gui
+    local direct = ReadTimerFromObject(container)
+
+    if direct
+    and (
+        not ownGui
+        or not container:IsDescendantOf(ownGui)
+    ) then
+        return direct
+    end
 
     for _, object in ipairs(container:GetDescendants()) do
         if not ownGui
         or not object:IsDescendantOf(ownGui) then
-            if object:IsA("TextLabel")
-            or object:IsA("TextButton")
-            or object:IsA("TextBox") then
-                local found = ReadTimerFromText(object.Text, object.Name)
+            local found = ReadTimerFromObject(object)
 
-                if found then
-                    return found
-                end
-            elseif object:IsA("StringValue") then
-                local found = ReadTimerFromText(object.Value, object.Name)
-
-                if found then
-                    return found
-                end
-            elseif object:IsA("IntValue")
-            or object:IsA("NumberValue") then
-                local lowerName = string.lower(object.Name)
-
-                if string.find(lowerName, "timer", 1, true)
-                or string.find(lowerName, "time", 1, true)
-                or string.find(lowerName, "round", 1, true) then
-                    local found = FormatRoundSeconds(object.Value)
-
-                    if found then
-                        return found
-                    end
-                end
+            if found then
+                return found
             end
         end
     end
@@ -2057,10 +2130,57 @@ local function ScanRoundTimerContainer(container)
     return nil
 end
 
+local function FindByPath(root, path)
+    local current = root
+
+    for _, name in ipairs(path) do
+        if not current then
+            return nil
+        end
+
+        current = current:FindFirstChild(name)
+    end
+
+    return current
+end
+
+local function FindLikelyRoundState(mainGui, gameGui)
+    if gameGui and gameGui.Visible then
+        return "In Game"
+    end
+
+    local lobby = mainGui and mainGui:FindFirstChild("Lobby")
+
+    if lobby and lobby.Visible then
+        return "Lobby"
+    end
+
+    return "N/A"
+end
+
 local function FindMM2RoundTimerText()
     local playerGui = Player:FindFirstChildOfClass("PlayerGui")
     local mainGui = playerGui and playerGui:FindFirstChild("MainGUI")
     local gameGui = mainGui and mainGui:FindFirstChild("Game")
+
+    local preferredPaths = {
+        {"MainGUI", "Game", "Timer", "Container", "Timer"},
+        {"MainGUI", "Game", "Timer", "Timer"},
+        {"MainGUI", "Game", "Timer"},
+        {"MainGUI", "Game", "RoundTimer"},
+        {"MainGUI", "Lobby", "Timer"},
+        {"MainGUI", "Lobby", "Screens", "Timer"},
+        {"MainGUI", "Lobby", "Intermission", "Timer"}
+    }
+
+    for _, path in ipairs(preferredPaths) do
+        local object = FindByPath(playerGui, path)
+        local found = ScanRoundTimerContainer(object)
+
+        if found then
+            return found
+        end
+    end
 
     local directContainers = {
         gameGui,
@@ -2078,7 +2198,7 @@ local function FindMM2RoundTimerText()
         end
     end
 
-    return "N/A"
+    return FindLikelyRoundState(mainGui, gameGui)
 end
 
 local function CreateRoundTimerFrame()
@@ -3051,7 +3171,8 @@ local function FireGuidedGunShot(
         )
 
     local primaryPosition =
-        samples[
+        GetPredictedTargetPosition(target)
+        or samples[
             math.min(
                 3,
                 #samples
@@ -3062,26 +3183,25 @@ local function FireGuidedGunShot(
     and shootRemote:IsA(
         "RemoteEvent"
     ) then
-        local ok =
-            pcall(function()
-                shootRemote:
-                    FireServer(
-                        CFrame.new(
-                            primaryPosition
-                            + Vector3.new(
-                                0,
-                                0.5,
-                                0
-                            )
-                        ),
-                        CFrame.new(
-                            primaryPosition
-                        )
-                    )
-            end)
+        local origin = GetShotOrigin()
+        local direction = primaryPosition - origin
 
-        if ok then
-            fired = true
+        if direction.Magnitude > 0.1 then
+            local ok =
+                pcall(function()
+                    shootRemote:
+                        FireServer(
+                            CFrame.lookAt(origin, primaryPosition),
+                            CFrame.lookAt(
+                                primaryPosition,
+                                primaryPosition + direction.Unit
+                            )
+                        )
+                end)
+
+            if ok then
+                fired = true
+            end
         end
     end
 
@@ -3110,6 +3230,8 @@ local function FireGuidedGunShot(
         "RemoteEvent"
     )
     and #samples > 1 then
+        local burstSerial = ShootSafetySerial
+
         task.spawn(function()
             for index = 2, #samples do
                 task.wait(
@@ -3117,6 +3239,7 @@ local function FireGuidedGunShot(
                 )
 
                 if getgenv().Destroyed
+                or burstSerial ~= ShootSafetySerial
                 or not gun
                 or not gun.Parent
                 or not target
@@ -3138,22 +3261,21 @@ local function FireGuidedGunShot(
                     ]
 
                 if position then
-                    pcall(function()
-                        shootRemote:
-                            FireServer(
-                                CFrame.new(
-                                    position
-                                    + Vector3.new(
-                                        0,
-                                        0.5,
-                                        0
+                    local origin = GetShotOrigin()
+                    local direction = position - origin
+
+                    if direction.Magnitude > 0.1 then
+                        pcall(function()
+                            shootRemote:
+                                FireServer(
+                                    CFrame.lookAt(origin, position),
+                                    CFrame.lookAt(
+                                        position,
+                                        position + direction.Unit
                                     )
-                                ),
-                                CFrame.new(
-                                    position
                                 )
-                            )
-                    end)
+                        end)
+                    end
 
                     if remoteFunction
                     and remoteFunction:IsA(
@@ -4433,10 +4555,10 @@ local function PrepareAutoFarm()
     return true
 end
 
-local AutoFarmUndergroundTravelDepth = 5.25
-local AutoFarmUndergroundPickupDepth = 2.25
-local AutoFarmFallbackCoinOffset = 4.25
-local AutoFarmCoinHoldTime = 0.72
+local AutoFarmUndergroundTravelDepth = 4.85
+local AutoFarmUndergroundPickupDepth = 0.55
+local AutoFarmFallbackCoinOffset = 3.25
+local AutoFarmCoinHoldTime = 0.95
 local AutoFarmFloorCache = setmetatable({}, {__mode = "k"})
 
 local function GetCoinBasePosition(coin)
@@ -4542,10 +4664,14 @@ local function GetCoinFloorY(coin)
     return nil
 end
 
-local function GetUndergroundYForCoin(coin, depth)
+local function GetUndergroundYForCoin(coin, depth, currentPosition)
     local position = GetCoinBasePosition(coin)
 
     if not position then
+        if typeof(currentPosition) == "Vector3" then
+            return currentPosition.Y
+        end
+
         return 0
     end
 
@@ -4555,7 +4681,19 @@ local function GetUndergroundYForCoin(coin, depth)
         return floorY - depth
     end
 
-    return position.Y - AutoFarmFallbackCoinOffset
+    local fallbackY = position.Y - AutoFarmFallbackCoinOffset
+
+    if typeof(currentPosition) == "Vector3"
+    and fallbackY > currentPosition.Y + 0.65 then
+        fallbackY = currentPosition.Y + 0.65
+    end
+
+    if typeof(AutoFarmLastTravelY) == "number"
+    and fallbackY > AutoFarmLastTravelY + 0.45 then
+        fallbackY = AutoFarmLastTravelY + 0.45
+    end
+
+    return fallbackY
 end
 
 local function GetCoinTravelPosition(coin, currentPosition)
@@ -4567,7 +4705,8 @@ local function GetCoinTravelPosition(coin, currentPosition)
 
     local travelY = GetUndergroundYForCoin(
         coin,
-        AutoFarmUndergroundTravelDepth
+        AutoFarmUndergroundTravelDepth,
+        currentPosition
     )
 
     if typeof(currentPosition) == "Vector3"
@@ -4592,14 +4731,22 @@ local function GetCoinPickupPosition(coin)
         return Vector3.zero
     end
 
+    local currentPosition = AutoFarmRoot and AutoFarmRoot.Position or nil
     local pickupY = GetUndergroundYForCoin(
         coin,
-        AutoFarmUndergroundPickupDepth
+        AutoFarmUndergroundPickupDepth,
+        currentPosition
     )
 
+    local floorY = GetCoinFloorY(coin)
+
+    if floorY and pickupY > floorY - 0.35 then
+        pickupY = floorY - 0.35
+    end
+
     if typeof(AutoFarmLastTravelY) == "number"
-    and pickupY > AutoFarmLastTravelY + 3 then
-        pickupY = AutoFarmLastTravelY + 3
+    and pickupY > AutoFarmLastTravelY + 4.45 then
+        pickupY = AutoFarmLastTravelY + 4.45
     end
 
     return Vector3.new(position.X, pickupY, position.Z)
@@ -4713,7 +4860,8 @@ local function CollectFarmCoin(coin)
     AutoFarmAtCoin = true
     SetFarmPosition(pickupPosition, true)
 
-    for _ = 1, 4 do
+    for _ = 1, 6 do
+        TouchCoin(coin)
         TouchCoin(coin)
         RunService.Heartbeat:Wait()
 
@@ -4744,7 +4892,9 @@ local function CollectFarmCoin(coin)
             AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
         end
 
-        if os.clock() - lastTouch >= 0.018 then
+        if os.clock() - lastTouch >= 0.01 then
+            TouchCoin(coin)
+            TouchCoin(coin)
             TouchCoin(coin)
             lastTouch = os.clock()
         end
@@ -4845,7 +4995,7 @@ local function AutoFarmCoin(coin)
     local pickupPosition = GetCoinPickupPosition(coin)
     local liftPosition = Vector3.new(
         travelPosition.X,
-        math.min(pickupPosition.Y, GetUndergroundYForCoin(coin, AutoFarmUndergroundPickupDepth)),
+        pickupPosition.Y,
         travelPosition.Z
     )
 
@@ -5405,6 +5555,12 @@ MM2CreateKeybindToggle("Silent Aim", GamePage, Settings.MM2SilentAimKey, MM2Auto
 end, function(enabled)
     MM2AutoRuntime.SilentAim = enabled == true
     Settings.MM2SilentAimAutoV2 = MM2AutoRuntime.SilentAim
+
+    if not MM2AutoRuntime.SilentAim then
+        SilentAimBusy = false
+    end
+
+    AutoSaveConfiguration()
 end, "MM2SilentAimAutoV2")
 
 MM2CreateKeybindToggle("Kill All", GamePage, Settings.MM2KillAllKey, MM2AutoRuntime.KillAll, function(key)
@@ -5412,6 +5568,7 @@ MM2CreateKeybindToggle("Kill All", GamePage, Settings.MM2KillAllKey, MM2AutoRunt
 end, function(enabled)
     MM2AutoRuntime.KillAll = enabled == true
     Settings.MM2KillAllAutoV2 = MM2AutoRuntime.KillAll
+    AutoSaveConfiguration()
 end, "MM2KillAllAutoV2")
 
 MM2CreateKeybindToggle("Shoot Murderer", GamePage, Settings.MM2ShootMurderKey, MM2AutoRuntime.Shoot, function(key)
@@ -5422,7 +5579,11 @@ end, function(enabled)
 
     if not MM2AutoRuntime.Shoot then
         ShootSafetySerial = ShootSafetySerial + 1
+        GuidedShotBusy = false
+        AutoShootLastAttempt = 0
     end
+
+    AutoSaveConfiguration()
 end, "MM2ShootMurderAutoV2")
 
 MM2CreateKeybindToggle("Grab Gun", GamePage, Settings.MM2GrabGunKey, MM2AutoRuntime.GrabGun, function(key)
@@ -5430,6 +5591,7 @@ MM2CreateKeybindToggle("Grab Gun", GamePage, Settings.MM2GrabGunKey, MM2AutoRunt
 end, function(enabled)
     MM2AutoRuntime.GrabGun = enabled == true
     Settings.MM2GrabGunAutoV2 = MM2AutoRuntime.GrabGun
+    AutoSaveConfiguration()
 end, "MM2GrabGunAutoV2")
 
 CreateMM2Section(
@@ -6071,10 +6233,16 @@ task.spawn(function()
                 AutoShootLastAttempt =
                     os.clock()
 
+                local shootSerial = ShootSafetySerial
+
                 task.spawn(function()
-                    ShootMurderer(
-                        false
-                    )
+                    if MM2AutoRuntime.Shoot
+                    and Settings.MM2ShootMurderAutoV2
+                    and shootSerial == ShootSafetySerial then
+                        ShootMurderer(
+                            false
+                        )
+                    end
                 end)
             end
         end
