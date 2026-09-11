@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-11-serverhop-ranges-1"
+ToxUpdateVersion = "2026-09-11-mm2-autofarm-nosky-1"
 
 
 function ClearToxTable(target)
@@ -7265,21 +7265,30 @@ if getgenv().ShowToxUpdateGui then
         ToxUpdateVersion,
         {
             ADDED = {
+                "Auto Win no MM2 em cima de Reset On Full.",
+                "Server Hop com selecao Low, Medium e High.",
+                "Changelog expandido com categorias."
+            },
+            FIXED = {
+                "Auto Farm do MM2 nao sobe mais para o ceu entre moedas.",
+                "Auto Farm do MM2 fica travado na altura da coin durante o tween.",
+                "Auto Farm do MM2 coleta mais perto da moeda sem descer do alto.",
+                "Auto Farm do MM2 prioriza a moeda mais proxima.",
+                "Auto Farm do MM2 escolhe uma moeda aleatoria a cada 10 coletas.",
+                "Auto Shoot do MM2 cancela melhor ao desativar.",
+                "Shoot Murderer no C recebeu ajuste de mira guiada.",
+                "Round Timer do MM2 tenta detectar mais fontes de tempo.",
+                "Resize bloqueado quando a UI principal esta minimizada."
+            },
+            CHANGED = {
                 "Server Hop Low busca servidores com 1 ou 2 players.",
                 "Server Hop Medium busca servidores perto da metade da lotacao.",
                 "Server Hop High busca servidores quase cheios.",
-                "Changelog expandido com categorias.",
-                "Reload do modulo pelo botao direito no tab do jogo.",
-                "Secoes recolhiveis no MM2."
+                "Auto Farm do MM2 nao usa mais o metodo subterraneo forcado que travava embaixo da coin."
             },
-            FIXED = {
-                "Resize bloqueado quando a UI principal esta minimizada.",
-                "Auto Farm do MM2 nao restaura colisao enquanto ainda esta ativo sem moeda."
-            },
-            CHANGED = {
-                "Server Hop agora filtra Low, Medium e High por faixas reais de players.",
-                "Menu de update agora separa Added, Fixed, Changed e Removed.",
-                "Auto Farm do MM2 agora anda por baixo do mapa e coleta moedas por baixo."
+            REMOVED = {
+                "Menu de Reload pelo botao direito do TAB.",
+                "Texto AUTO no Silent Aim."
             }
         }
     )
