@@ -49,7 +49,7 @@ or not CreateButton then
 end
 
 local NDSModuleVersion =
-    "2026-09-11-disaster-pre-map-1"
+    "2026-09-11-disaster-once-per-map-1"
 
 if getgenv().ToxNDSModuleLoadedJobId
     == game.JobId
@@ -119,6 +119,10 @@ local LastDisasterNotifyTime = 0
 local LastDisasterScanTime = 0
 local LastNDSMapKey = nil
 local DisasterNotifiedMapKey = nil
+local DisasterRoundActive = false
+local DisasterRoundNotified = false
+local DisasterRoundStartTime = 0
+local DisasterMapMissingSince = 0
 
 local NoTPConnection = nil
 local NoTPCharacterConnection = nil
@@ -1618,38 +1622,77 @@ local function StartNDSDisasterDetector()
             return
         end
 
-        if tick() - LastDisasterScanTime < 0.35 then
+        local now = tick()
+
+        if now - LastDisasterScanTime < 0.35 then
             return
         end
 
-        LastDisasterScanTime = tick()
+        LastDisasterScanTime = now
 
-        local mapKey = GetNDSMapKey()
+        local map = GetNDSCurrentMapRoot()
+        local mapKey = map and GetNDSMapKey() or nil
 
         if not mapKey then
-            LastNDSMapKey = nil
-            DisasterNotifiedMapKey = nil
-            LastDisasterNotified = nil
+            if DisasterRoundActive then
+                if DisasterMapMissingSince == 0 then
+                    DisasterMapMissingSince = now
+                end
+
+                if now - DisasterMapMissingSince >= 2.5 then
+                    DisasterRoundActive = false
+                    DisasterRoundNotified = false
+                    DisasterRoundStartTime = 0
+                    DisasterMapMissingSince = 0
+                    LastNDSMapKey = nil
+                    DisasterNotifiedMapKey = nil
+                    LastDisasterNotified = nil
+                    LastDisasterNotifyTime = 0
+                end
+            end
+
             return
         end
 
-        if mapKey ~= LastNDSMapKey then
+        DisasterMapMissingSince = 0
+
+        if not DisasterRoundActive then
+            DisasterRoundActive = true
+            DisasterRoundNotified = false
+            DisasterRoundStartTime = now
             LastNDSMapKey = mapKey
             DisasterNotifiedMapKey = nil
             LastDisasterNotified = nil
             LastDisasterNotifyTime = 0
+            return
         end
 
-        if DisasterNotifiedMapKey == mapKey then
+        if not DisasterRoundNotified
+        and mapKey ~= LastNDSMapKey then
+            LastNDSMapKey = mapKey
+            DisasterRoundStartTime = now
+            DisasterNotifiedMapKey = nil
+            LastDisasterNotified = nil
+            LastDisasterNotifyTime = 0
+            return
+        end
+
+        if DisasterRoundNotified
+        or DisasterNotifiedMapKey == LastNDSMapKey then
+            return
+        end
+
+        if now - DisasterRoundStartTime < 1.2 then
             return
         end
 
         local disaster = FindNDSDisaster()
 
         if disaster then
+            DisasterRoundNotified = true
             LastDisasterNotified = disaster
-            LastDisasterNotifyTime = tick()
-            DisasterNotifiedMapKey = mapKey
+            LastDisasterNotifyTime = now
+            DisasterNotifiedMapKey = LastNDSMapKey
 
             CustomNotify(
                 "Disaster incoming: " .. disaster,
@@ -1675,6 +1718,10 @@ getgenv().SetNDSDisasterDetector = function(Value, Silent)
         LastDisasterNotified = nil
         LastNDSMapKey = nil
         DisasterNotifiedMapKey = nil
+        DisasterRoundActive = false
+        DisasterRoundNotified = false
+        DisasterRoundStartTime = 0
+        DisasterMapMissingSince = 0
     end
 
     if SyncToggleVisuals then
