@@ -2663,7 +2663,7 @@ getgenv().Minimize = Minimize
 
 local Tabs = Instance.new("ScrollingFrame")
 Tabs.Size = UDim2.new(1, -10, 0, 34)
-Tabs.Position = UDim2.new(0, 5, 0, 44)
+Tabs.Position = UDim2.new(0, 5, 0, 82)
 Tabs.BackgroundTransparency = 1
 Tabs.BorderSizePixel = 0
 Tabs.ScrollBarThickness = 2
@@ -2690,8 +2690,8 @@ getgenv().Pages = Pages
 getgenv().CreatePage = function(Name)
 	local Page = Instance.new("ScrollingFrame")
 	Page.Name = Name
-	Page.Size = UDim2.new(1, -16, 1, -88)
-	Page.Position = UDim2.new(0, 8, 0, 84)
+	Page.Size = UDim2.new(1, -16, 1, -126)
+	Page.Position = UDim2.new(0, 8, 0, 122)
 	Page.BackgroundTransparency = 1
 	Page.BorderSizePixel = 0
 	Page.ScrollBarThickness = 4
@@ -3050,16 +3050,16 @@ local function CreateToxInlineSearch()
         return
     end
 
-    Tabs.Size = UDim2.new(1, -156, 0, 34)
+    Tabs.Size = UDim2.new(1, -10, 0, 34)
 
     SearchInput = Instance.new("TextBox")
     SearchInput.Name = "ToxInlineSearch"
-    SearchInput.Size = UDim2.new(0, 120, 0, 27)
-    SearchInput.Position = UDim2.new(1, -126, 0, 47)
+    SearchInput.Size = UDim2.new(1, -50, 0, 28)
+    SearchInput.Position = UDim2.new(0, 42, 0, 46)
     SearchInput.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
     SearchInput.BorderSizePixel = 0
     SearchInput.Text = ""
-    SearchInput.PlaceholderText = "🔎"
+    SearchInput.PlaceholderText = "Search"
     SearchInput.TextColor3 = Color3.fromRGB(245, 245, 245)
     SearchInput.PlaceholderColor3 = Color3.fromRGB(170, 170, 185)
     SearchInput.Font = Enum.Font.GothamMedium
@@ -3079,8 +3079,8 @@ local function CreateToxInlineSearch()
 
     SearchIcon = Instance.new("TextButton")
     SearchIcon.Name = "ToxInlineSearchIcon"
-    SearchIcon.Size = UDim2.new(0, 27, 0, 27)
-    SearchIcon.Position = UDim2.new(1, -154, 0, 47)
+    SearchIcon.Size = UDim2.new(0, 28, 0, 28)
+    SearchIcon.Position = UDim2.new(0, 8, 0, 46)
     SearchIcon.BackgroundColor3 = MAIN_COLOR
     SearchIcon.BorderSizePixel = 0
     SearchIcon.Text = "🔎"
@@ -3096,8 +3096,8 @@ local function CreateToxInlineSearch()
 
     SearchScroll = Instance.new("ScrollingFrame")
     SearchScroll.Name = "ToxInlineSearchResults"
-    SearchScroll.Size = UDim2.new(0, 148, 0, 170)
-    SearchScroll.Position = UDim2.new(1, -154, 0, 80)
+    SearchScroll.Size = UDim2.new(1, -16, 0, 170)
+    SearchScroll.Position = UDim2.new(0, 8, 0, 78)
     SearchScroll.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
     SearchScroll.BackgroundTransparency = 0.03
     SearchScroll.BorderSizePixel = 0
