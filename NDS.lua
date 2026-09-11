@@ -49,7 +49,7 @@ or not CreateButton then
 end
 
 local NDSModuleVersion =
-    "2026-09-11-autowin-spawn-1"
+    "2026-09-11-disaster-pre-map-1"
 
 if getgenv().ToxNDSModuleLoadedJobId
     == game.JobId
@@ -117,6 +117,8 @@ local DisasterConnection = nil
 local LastDisasterNotified = nil
 local LastDisasterNotifyTime = 0
 local LastDisasterScanTime = 0
+local LastNDSMapKey = nil
+local DisasterNotifiedMapKey = nil
 
 local NoTPConnection = nil
 local NoTPCharacterConnection = nil
@@ -1380,36 +1382,217 @@ local function ReadNDSAttributeDisaster(object)
     return nil
 end
 
+local function CountNDSParts(root)
+    if not root then
+        return 0
+    end
+
+    local count = 0
+
+    for _, object in ipairs(root:GetDescendants()) do
+        if object:IsA("BasePart") then
+            count += 1
+
+            if count >= 20 then
+                return count
+            end
+        end
+    end
+
+    return count
+end
+
+local function GetNDSCurrentMapRoot()
+    local structure = workspace:FindFirstChild("Structure")
+
+    if structure
+    and CountNDSParts(structure) >= 5 then
+        return structure
+    end
+
+    for _, name in ipairs({"Map", "CurrentMap", "DisasterMap", "GameMap"}) do
+        local candidate = workspace:FindFirstChild(name)
+
+        if candidate
+        and CountNDSParts(candidate) >= 5 then
+            return candidate
+        end
+    end
+
+    local best = nil
+    local bestCount = 0
+
+    for _, object in ipairs(workspace:GetChildren()) do
+        local lower = string.lower(tostring(object.Name or ""))
+
+        if object ~= Player.Character
+        and object ~= workspace.CurrentCamera
+        and object.Name ~= "Terrain"
+        and lower ~= "lobby"
+        and lower ~= "island"
+        and lower ~= "clouds"
+        and lower ~= "baseplate"
+        and (object:IsA("Model") or object:IsA("Folder"))
+        and not Players:GetPlayerFromCharacter(object) then
+            local count = CountNDSParts(object)
+
+            if count > bestCount then
+                best = object
+                bestCount = count
+            end
+        end
+    end
+
+    if best
+    and bestCount >= 10 then
+        return best
+    end
+
+    return nil
+end
+
+local function GetNDSMapKey()
+    local map = GetNDSCurrentMapRoot()
+
+    if not map then
+        return nil
+    end
+
+    local partCount = 0
+    local sample = {}
+
+    for _, object in ipairs(map:GetDescendants()) do
+        if object:IsA("BasePart") then
+            partCount += 1
+
+            if #sample < 8 then
+                table.insert(sample, object.Name)
+            end
+        end
+    end
+
+    if partCount < 5 then
+        return nil
+    end
+
+    return tostring(map) .. "|" .. tostring(partCount) .. "|" .. table.concat(sample, ",")
+end
+
+local function MatchNDSDisasterGuiObject(object)
+    if not object
+    or not (
+        object:IsA("TextLabel")
+        or object:IsA("TextButton")
+        or object:IsA("TextBox")
+    ) then
+        return nil
+    end
+
+    local text = tostring(object.Text or "")
+    local matched = MatchNDSDisasterText(text)
+
+    if not matched then
+        return nil
+    end
+
+    local blob = string.lower(text .. " " .. tostring(object.Name or ""))
+    local parent = object.Parent
+
+    for _ = 1, 5 do
+        if not parent then
+            break
+        end
+
+        blob = blob .. " " .. string.lower(tostring(parent.Name or ""))
+        parent = parent.Parent
+    end
+
+    if string.find(blob, "disaster", 1, true)
+    or string.find(blob, "warning", 1, true)
+    or string.find(blob, "survival", 1, true)
+    or string.find(blob, "message", 1, true)
+    or text == matched then
+        return matched
+    end
+
+    return nil
+end
+
+local function HasNDSDisasterContext(object)
+    if not object then
+        return false
+    end
+
+    local blob = ""
+    local current = object
+
+    for _ = 1, 5 do
+        if not current then
+            break
+        end
+
+        blob = blob .. " " .. string.lower(tostring(current.Name or ""))
+        current = current.Parent
+    end
+
+    return string.find(blob, "disaster", 1, true) ~= nil
+        or string.find(blob, "warning", 1, true) ~= nil
+        or string.find(blob, "current", 1, true) ~= nil
+        or string.find(blob, "chosen", 1, true) ~= nil
+        or string.find(blob, "selected", 1, true) ~= nil
+end
+
 local function FindNDSDisaster()
     local gui = Player:FindFirstChildOfClass("PlayerGui")
 
     if gui then
         for _, object in ipairs(gui:GetDescendants()) do
-            if object:IsA("TextLabel")
-            or object:IsA("TextButton")
-            or object:IsA("TextBox") then
-                local matched = MatchNDSDisasterText(object.Text)
+            local matched = MatchNDSDisasterGuiObject(object)
+
+            if matched then
+                return matched
+            end
+        end
+    end
+
+    local replicatedStorage = game:GetService("ReplicatedStorage")
+
+    for _, container in ipairs({workspace, replicatedStorage}) do
+        local matched = ReadNDSAttributeDisaster(container)
+
+        if matched then
+            return matched
+        end
+
+        for _, object in ipairs(container:GetDescendants()) do
+            matched = ReadNDSAttributeDisaster(object)
+
+            if matched then
+                return matched
+            end
+
+            if object:IsA("StringValue")
+            and HasNDSDisasterContext(object) then
+                matched = MatchNDSDisasterText(object.Value)
 
                 if matched then
                     return matched
                 end
             end
-        end
-    end
 
-    for _, object in ipairs({workspace, game:GetService("ReplicatedStorage")}) do
-        local matched = ReadNDSAttributeDisaster(object)
+            local lowerName = string.lower(tostring(object.Name or ""))
 
-        if matched then
-            return matched
-        end
-    end
+            if string.find(lowerName, "disaster", 1, true)
+            or string.find(lowerName, "warning", 1, true)
+            or string.find(lowerName, "current", 1, true)
+            or string.find(lowerName, "chosen", 1, true)
+            or string.find(lowerName, "selected", 1, true) then
+                matched = MatchNDSDisasterText(object.Name)
 
-    for _, object in ipairs(workspace:GetDescendants()) do
-        local matched = MatchNDSDisasterText(object.Name)
-
-        if matched then
-            return matched
+                if matched then
+                    return matched
+                end
+            end
         end
     end
 
@@ -1435,24 +1618,41 @@ local function StartNDSDisasterDetector()
             return
         end
 
-        if tick() - LastDisasterScanTime < 1 then
+        if tick() - LastDisasterScanTime < 0.35 then
             return
         end
 
         LastDisasterScanTime = tick()
 
+        local mapKey = GetNDSMapKey()
+
+        if not mapKey then
+            LastNDSMapKey = nil
+            DisasterNotifiedMapKey = nil
+            LastDisasterNotified = nil
+            return
+        end
+
+        if mapKey ~= LastNDSMapKey then
+            LastNDSMapKey = mapKey
+            DisasterNotifiedMapKey = nil
+            LastDisasterNotified = nil
+            LastDisasterNotifyTime = 0
+        end
+
+        if DisasterNotifiedMapKey == mapKey then
+            return
+        end
+
         local disaster = FindNDSDisaster()
 
-        if disaster
-        and (
-            disaster ~= LastDisasterNotified
-            or tick() - LastDisasterNotifyTime > 28
-        ) then
+        if disaster then
             LastDisasterNotified = disaster
             LastDisasterNotifyTime = tick()
+            DisasterNotifiedMapKey = mapKey
 
             CustomNotify(
-                "Disaster: " .. disaster,
+                "Disaster incoming: " .. disaster,
                 Color3.fromRGB(
                     255,
                     190,
@@ -1460,8 +1660,6 @@ local function StartNDSDisasterDetector()
                 ),
                 5
             )
-        elseif not disaster then
-            LastDisasterNotified = nil
         end
     end))
 end
@@ -1475,6 +1673,8 @@ getgenv().SetNDSDisasterDetector = function(Value, Silent)
     else
         StopNDSDisasterDetector()
         LastDisasterNotified = nil
+        LastNDSMapKey = nil
+        DisasterNotifiedMapKey = nil
     end
 
     if SyncToggleVisuals then
