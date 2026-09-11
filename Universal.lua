@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-11-mm2-shoot-ref-farm-standard-v3"
+ToxUpdateVersion = "2026-09-11-nds-disaster-sections-walkfling"
 
 
 function ClearToxTable(target)
@@ -4089,12 +4089,12 @@ local function StartWalkFling()
 
             local multiplier =
                 game.PlaceId == NDSPlaceId
-                and 900
+                and 450
                 or 2500
 
             local verticalBoost =
                 game.PlaceId == NDSPlaceId
-                and 600
+                and 180
                 or 1500
 
             root.Velocity =
@@ -7353,21 +7353,20 @@ if getgenv().ShowToxUpdateGui then
         ToxUpdateVersion,
         {
             ADDED = {
-                "Shoot Murderer do MM2 atualizado usando o metodo do script de referencia."
+                "NDS recebeu secoes recolhiveis igual ao MM2.",
+                "NDS recebeu Disaster Detector com notificacao de 5 segundos.",
+                "NDS Auto Win agora equipa o item 2 apenas uma vez ao ativar caso nao esteja segurando item."
             },
             FIXED = {
-                "Auto Farm do MM2 voltou para tween padrao direto ate a moeda real da partida.",
-                "Auto Farm do MM2 nao ancora o root nem força PivotTo continuo, evitando levar so a alma.",
-                "Auto Farm do MM2 respeita melhor o speed configurado.",
-                "Shoot Murderer manual no C dispara uma vez usando posicao prevista do Murderer.",
-                "Shoot Murderer automatico cancela quando desativado."
+                "NDS Auto Win nao fica mais apertando o hotbar 2 repetidamente durante o loop.",
+                "NDS Walk Fling ficou mais fraco para reduzir subida e instabilidade."
             },
             CHANGED = {
-                "Auto Farm do MM2 so roda vivo e dentro da partida com CoinContainer valido.",
-                "Auto Farm do MM2 prioriza a moeda mais proxima e usa moeda aleatoria a cada 10 coletas."
+                "NDS organizado em secoes AUTO, MOVEMENT, PROTECTION e TELEPORTS.",
+                "Disaster Detector tenta ler desastre pela UI, atributos e objetos do mapa."
             },
             REMOVED = {
-                "Removido movimento de Auto Farm que prendia, subia ou pivotava o personagem continuamente."
+                "Removido re-equipamento repetido do item no NDS Auto Win."
             }
         }
     )
