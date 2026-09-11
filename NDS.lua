@@ -26,6 +26,11 @@ local Camera = workspace.CurrentCamera
 
 local Settings = getgenv().Settings
 local GamePage = getgenv().GamePage
+
+local function ToxScriptReady()
+    return getgenv().ScriptLoaded == true
+    or ScriptLoaded == true
+end
 local CreateToggle = getgenv().CreateToggle
 local CreateToggleWithValue = getgenv().CreateToggleWithValue
 local CreateButton = getgenv().CreateButton
@@ -413,6 +418,10 @@ local function StopAutoWin(returnToSpawn)
 end
 
 local function StartAutoWin()
+    if not ToxScriptReady() then
+        return
+    end
+
     if AutoWinConnection then
         AutoWinConnection:Disconnect()
         AutoWinConnection = nil
@@ -591,6 +600,10 @@ local function StopWaterFly()
 end
 
 local function StartWaterFly()
+    if not ToxScriptReady() then
+        return
+    end
+
     StopWaterFly()
 
     SetShared(
@@ -714,6 +727,10 @@ getgenv().SetNDSWaterFly = function(Value, Silent)
 end
 
 local function StartNDSNoFall()
+    if not ToxScriptReady() then
+        return
+    end
+
     NoFallGeneration += 1
     local generation = NoFallGeneration
 
@@ -1407,6 +1424,10 @@ local function StopNDSDisasterDetector()
 end
 
 local function StartNDSDisasterDetector()
+    if not ToxScriptReady() then
+        return
+    end
+
     StopNDSDisasterDetector()
 
     DisasterConnection = AddConnection(RunService.Heartbeat:Connect(function()
@@ -1472,6 +1493,23 @@ getgenv().SetNDSNoTP = function(Value, Silent)
         and game.PlaceId == NDSPlaceId
 
     Settings.NDSNoTP = enabled
+
+    if enabled
+    and not ToxScriptReady() then
+        if SyncToggleVisuals then
+            SyncToggleVisuals(
+                "NDSNoTP",
+                enabled
+            )
+        end
+
+        if not Silent
+        and AutoSaveConfiguration then
+            AutoSaveConfiguration()
+        end
+
+        return
+    end
 
     if enabled then
         StartNoTP()
@@ -1707,31 +1745,47 @@ NDSCreateButton("ISLAND", GamePage, function()
     TeleportTo(IslandCFrame, "ISLAND")
 end)
 
-if Settings.NDSAutoWin then
-    StartAutoWin()
+local function ApplyNDSSavedOptionsAfterLoad()
+    if getgenv().Destroyed
+    or not ToxScriptReady() then
+        return
+    end
+
+    if Settings.NDSAutoWin then
+        StartAutoWin()
+    end
+
+    if Settings.NoFallDamage
+    or Settings.WalkFling then
+        StartNDSNoFall()
+    end
+
+    if Settings.NDSWaterFly then
+        StartWaterFly()
+    end
+
+    if Settings.NDSNoTP then
+        getgenv().SetNDSNoTP(
+            true,
+            true
+        )
+    else
+        StopNoTP()
+    end
+
+    if Settings.NDSDisasterDetector then
+        StartNDSDisasterDetector()
+    end
 end
 
-if Settings.NoFallDamage
-or Settings.WalkFling then
-    StartNDSNoFall()
-end
+task.spawn(function()
+    while not getgenv().Destroyed
+    and not ToxScriptReady() do
+        task.wait(0.05)
+    end
 
-if Settings.NDSWaterFly then
-    StartWaterFly()
-end
-
-if Settings.NDSNoTP then
-    getgenv().SetNDSNoTP(
-        true,
-        true
-    )
-else
-    StopNoTP()
-end
-
-if Settings.NDSDisasterDetector then
-    StartNDSDisasterDetector()
-end
+    ApplyNDSSavedOptionsAfterLoad()
+end)
 
 getgenv().ToxNDSCleanup =
     function()
