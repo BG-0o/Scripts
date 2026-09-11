@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-11-ui-cleanup-1"
+    "2026-09-11-changelog-reload-sections-1"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -79,6 +79,11 @@ for _, child in ipairs(
             Destroy()
     end
 end
+
+Settings.MM2CollapsedSections =
+    typeof(Settings.MM2CollapsedSections) == "table"
+    and Settings.MM2CollapsedSections
+    or {}
 
 Settings.MM2SilentAimKey = Settings.MM2SilentAimKey or Enum.KeyCode.E
 Settings.MM2SilentAimAutoV2 = Settings.MM2SilentAimAutoV2 == true or Settings.MM2SilentAimAuto == true
@@ -4744,15 +4749,112 @@ local function FlingSelectedRole()
     end)
 end
 
+local MM2CurrentSection = nil
+local MM2Sections = {}
+
+local function ApplyMM2SectionState(section)
+    if typeof(section) ~= "table" then
+        return
+    end
+
+    Settings.MM2CollapsedSections =
+        typeof(Settings.MM2CollapsedSections) == "table"
+        and Settings.MM2CollapsedSections
+        or {}
+
+    local collapsed =
+        Settings.MM2CollapsedSections[section.Key] == true
+
+    if section.Header
+    and section.Header.Parent then
+        section.Header.Text =
+            collapsed
+            and "  > " .. section.Name
+            or "  v " .. section.Name
+    end
+
+    for _, object in ipairs(section.Controls) do
+        if object
+        and object.Parent
+        and object:IsA("GuiObject") then
+            object.Visible = not collapsed
+        end
+    end
+end
+
+local function TrackMM2Control(object)
+    if MM2CurrentSection
+    and object
+    and object:IsA("GuiObject") then
+        table.insert(
+            MM2CurrentSection.Controls,
+            object
+        )
+
+        ApplyMM2SectionState(
+            MM2CurrentSection
+        )
+    end
+
+    return object
+end
+
+local function MM2CreateToggle(...)
+    return TrackMM2Control(
+        CreateToggle(...)
+    )
+end
+
+local function MM2CreateToggleWithValue(...)
+    return TrackMM2Control(
+        CreateToggleWithValue(...)
+    )
+end
+
+local function MM2CreateButton(...)
+    return TrackMM2Control(
+        CreateButton(...)
+    )
+end
+
+local function MM2CreateDropdown(...)
+    return TrackMM2Control(
+        CreateDropdown(...)
+    )
+end
+
+local function MM2CreateKeybindToggle(...)
+    return TrackMM2Control(
+        CreateKeybindToggle(...)
+    )
+end
+
 local function CreateMM2Section(
     text
 )
-    local label =
-        Instance.new(
-            "TextLabel"
+    Settings.MM2CollapsedSections =
+        typeof(Settings.MM2CollapsedSections) == "table"
+        and Settings.MM2CollapsedSections
+        or {}
+
+    local name =
+        tostring(
+            text
         )
 
-    label.Size =
+    local key =
+        string.gsub(
+            name,
+            "%s+",
+            ""
+        )
+
+    local button =
+        Instance.new(
+            "TextButton"
+        )
+
+    button.Size =
         UDim2.new(
             1,
             -5,
@@ -4760,35 +4862,30 @@ local function CreateMM2Section(
             26
         )
 
-    label.BackgroundColor3 =
+    button.BackgroundColor3 =
         Color3.fromRGB(
             13,
             13,
             21
         )
 
-    label.BorderSizePixel = 0
-    label.Text =
-        "  "
-        .. tostring(
-            text
-        )
-
-    label.TextColor3 =
+    button.BorderSizePixel = 0
+    button.TextColor3 =
         Color3.fromRGB(
             255,
             255,
             255
         )
 
-    label.Font =
+    button.Font =
         Enum.Font.GothamBold
 
-    label.TextSize = 11
-    label.TextXAlignment =
+    button.TextSize = 11
+    button.TextXAlignment =
         Enum.TextXAlignment.Left
 
-    label.Parent =
+    button.AutoButtonColor = false
+    button.Parent =
         GamePage
 
     local corner =
@@ -4801,9 +4898,39 @@ local function CreateMM2Section(
         )
 
     corner.Parent =
-        label
+        button
 
-    return label
+    local section = {
+        Name = name,
+        Key = key,
+        Header = button,
+        Controls = {}
+    }
+
+    table.insert(
+        MM2Sections,
+        section
+    )
+
+    MM2CurrentSection =
+        section
+
+    button.MouseButton1Click:Connect(function()
+        Settings.MM2CollapsedSections[key] =
+            not Settings.MM2CollapsedSections[key]
+
+        ApplyMM2SectionState(
+            section
+        )
+
+        AutoSaveConfiguration()
+    end)
+
+    ApplyMM2SectionState(
+        section
+    )
+
+    return button
 end
 
 AutoFarmHighSpeedWarningShown = false
@@ -4839,7 +4966,7 @@ CreateMM2Section(
     "FARM"
 )
 
-CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarmV2, Settings.MM2AutoFarmSpeed, function(v)
+MM2CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarmV2, Settings.MM2AutoFarmSpeed, function(v)
     if v then
         Settings.MM2AutoFarmV2 = true
         ResetAutoFarmFullPause()
@@ -4891,7 +5018,7 @@ end, function(value)
     AutoSaveConfiguration()
 end, "MM2AutoFarmV2")
 
-CreateToggle(
+MM2CreateToggle(
     "Reset On Full",
     GamePage,
     Settings.MM2AutoFarmResetOnFull,
@@ -4912,11 +5039,11 @@ CreateMM2Section(
     "PLAYER"
 )
 
-CreateToggle("Role ESP", GamePage, Settings.MM2RoleESP, function(v)
+MM2CreateToggle("Role ESP", GamePage, Settings.MM2RoleESP, function(v)
     ApplyRoleESP(v)
 end, "MM2RoleESP")
 
-CreateToggle(
+MM2CreateToggle(
     "Gun ESP",
     GamePage,
     Settings.MM2GunESP,
@@ -4942,7 +5069,7 @@ CreateToggle(
     "MM2GunESP"
 )
 
-CreateToggleWithValue("Speed", GamePage, Settings.Speed, Settings.SpeedValue, function(v)
+MM2CreateToggleWithValue("Speed", GamePage, Settings.Speed, Settings.SpeedValue, function(v)
     SetShared("Speed", v)
 end, function(value)
     Settings.SpeedValue = math.clamp(tonumber(value) or 16, 1, 250)
@@ -4952,11 +5079,11 @@ end, function(value)
     end
 end, "Speed")
 
-CreateToggle("Noclip", GamePage, Settings.Noclip, function(v)
+MM2CreateToggle("Noclip", GamePage, Settings.Noclip, function(v)
     SetShared("Noclip", v)
 end, "Noclip")
 
-CreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
+MM2CreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
     SetShared("AntiFling", v)
 end, "AntiFling")
 
@@ -4971,21 +5098,21 @@ MM2AutoRuntime = {
     GrabGun = Settings.MM2GrabGunAutoV2 == true
 }
 
-CreateKeybindToggle("Silent Aim", GamePage, Settings.MM2SilentAimKey, MM2AutoRuntime.SilentAim, function(key)
+MM2CreateKeybindToggle("Silent Aim", GamePage, Settings.MM2SilentAimKey, MM2AutoRuntime.SilentAim, function(key)
     Settings.MM2SilentAimKey = key
 end, function(enabled)
     MM2AutoRuntime.SilentAim = enabled == true
     Settings.MM2SilentAimAutoV2 = MM2AutoRuntime.SilentAim
 end, "MM2SilentAimAutoV2")
 
-CreateKeybindToggle("Kill All", GamePage, Settings.MM2KillAllKey, MM2AutoRuntime.KillAll, function(key)
+MM2CreateKeybindToggle("Kill All", GamePage, Settings.MM2KillAllKey, MM2AutoRuntime.KillAll, function(key)
     Settings.MM2KillAllKey = key
 end, function(enabled)
     MM2AutoRuntime.KillAll = enabled == true
     Settings.MM2KillAllAutoV2 = MM2AutoRuntime.KillAll
 end, "MM2KillAllAutoV2")
 
-CreateKeybindToggle("Shoot Murderer", GamePage, Settings.MM2ShootMurderKey, MM2AutoRuntime.Shoot, function(key)
+MM2CreateKeybindToggle("Shoot Murderer", GamePage, Settings.MM2ShootMurderKey, MM2AutoRuntime.Shoot, function(key)
     Settings.MM2ShootMurderKey = key
 end, function(enabled)
     MM2AutoRuntime.Shoot = enabled == true
@@ -4996,7 +5123,7 @@ end, function(enabled)
     end
 end, "MM2ShootMurderAutoV2")
 
-CreateKeybindToggle("Grab Gun", GamePage, Settings.MM2GrabGunKey, MM2AutoRuntime.GrabGun, function(key)
+MM2CreateKeybindToggle("Grab Gun", GamePage, Settings.MM2GrabGunKey, MM2AutoRuntime.GrabGun, function(key)
     Settings.MM2GrabGunKey = key
 end, function(enabled)
     MM2AutoRuntime.GrabGun = enabled == true
@@ -5007,19 +5134,19 @@ CreateMM2Section(
     "TARGETING"
 )
 
-CreateToggle("Round Timer", GamePage, Settings.MM2RoundTimer, function(v)
+MM2CreateToggle("Round Timer", GamePage, Settings.MM2RoundTimer, function(v)
     SetRoundTimerVisible(v)
     AutoSaveConfiguration()
 end, "MM2RoundTimer")
 
-CreateDropdown("Fling Target", {"Murderer", "Sheriff"}, GamePage, Settings.MM2FlingTarget, function(value)
+MM2CreateDropdown("Fling Target", {"Murderer", "Sheriff"}, GamePage, Settings.MM2FlingTarget, function(value)
     Settings.MM2FlingTarget = value
     AutoSaveConfiguration()
 end)
 
-CreateButton("Fling", GamePage, FlingSelectedRole)
+MM2CreateButton("Fling", GamePage, FlingSelectedRole)
 
-CreateButton("Target", GamePage, function()
+MM2CreateButton("Target", GamePage, function()
     OpenPlayerSelector("targets")
 end)
 
@@ -5527,7 +5654,7 @@ CreateMM2Section(
     "TELEPORTS"
 )
 
-CreateButton(
+MM2CreateButton(
     "SPAWN",
     GamePage,
     function()
@@ -5538,7 +5665,7 @@ CreateButton(
     end
 )
 
-CreateButton(
+MM2CreateButton(
     "MAP",
     GamePage,
     function()
