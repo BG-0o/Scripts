@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-11-mm2-fling-shoot-farm-fix"
+ToxUpdateVersion = "2026-09-11-mm2-shoot-ref-farm-standard-v3"
 
 
 function ClearToxTable(target)
@@ -7353,21 +7353,21 @@ if getgenv().ShowToxUpdateGui then
         ToxUpdateVersion,
         {
             ADDED = {
-                "Fling agora ignora alvo morto, instavel ou ja sendo flingado."
+                "Shoot Murderer do MM2 atualizado usando o metodo do script de referencia."
             },
             FIXED = {
-                "Auto Farm do MM2 voltou para tween padrao levando o personagem inteiro ate a moeda.",
-                "Auto Farm do MM2 respeita melhor a velocidade configurada.",
-                "Silent Aim nao fica mais em loop automatico.",
-                "Shoot Murderer automatico cancela melhor quando desativado.",
-                "Shoot Murderer manual no C usa disparo guiado com mais amostras."
+                "Auto Farm do MM2 voltou para tween padrao direto ate a moeda real da partida.",
+                "Auto Farm do MM2 nao ancora o root nem força PivotTo continuo, evitando levar so a alma.",
+                "Auto Farm do MM2 respeita melhor o speed configurado.",
+                "Shoot Murderer manual no C dispara uma vez usando posicao prevista do Murderer.",
+                "Shoot Murderer automatico cancela quando desativado."
             },
             CHANGED = {
-                "Silent Aim ativado libera o uso da tecla E e desativado bloqueia a tecla E.",
-                "Auto Farm do MM2 continua priorizando moeda mais proxima e alternando uma aleatoria a cada 10 coletas."
+                "Auto Farm do MM2 so roda vivo e dentro da partida com CoinContainer valido.",
+                "Auto Farm do MM2 prioriza a moeda mais proxima e usa moeda aleatoria a cada 10 coletas."
             },
             REMOVED = {
-                "Removido loop automatico do Silent Aim."
+                "Removido movimento de Auto Farm que prendia, subia ou pivotava o personagem continuamente."
             }
         }
     )
