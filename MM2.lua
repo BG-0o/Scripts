@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-11-mm2-autofarm-round-tween-v5"
+    "2026-09-11-mm2-shoot-farm-fling-fix"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -126,7 +126,7 @@ end
 
 Settings.MM2AutoFarmSpeed = math.clamp(
     configuredAutoFarmSpeed,
-    5,
+    1,
     250
 )
 Settings.MM2Whitelist = typeof(Settings.MM2Whitelist) == "table" and Settings.MM2Whitelist or {}
@@ -3196,37 +3196,30 @@ local function FireGuidedGunShot(
                 )
         )
 
-    local primaryPosition =
-        GetPredictedTargetPosition(target)
-        or samples[
-            math.min(
-                3,
-                #samples
-            )
-        ]
-
     if shootRemote
     and shootRemote:IsA(
         "RemoteEvent"
     ) then
-        local origin = GetShotOrigin()
-        local direction = primaryPosition - origin
+        for _, position in ipairs(samples) do
+            local origin = GetShotOrigin()
+            local direction = position - origin
 
-        if direction.Magnitude > 0.1 then
-            local ok =
-                pcall(function()
-                    shootRemote:
-                        FireServer(
-                            CFrame.lookAt(origin, primaryPosition),
-                            CFrame.lookAt(
-                                primaryPosition,
-                                primaryPosition + direction.Unit
+            if direction.Magnitude > 0.1 then
+                local ok =
+                    pcall(function()
+                        shootRemote:
+                            FireServer(
+                                CFrame.lookAt(origin, position),
+                                CFrame.lookAt(
+                                    position,
+                                    position + direction.Unit
+                                )
                             )
-                        )
-                end)
+                    end)
 
-            if ok then
-                fired = true
+                if ok then
+                    fired = true
+                end
             end
         end
     end
@@ -3507,20 +3500,10 @@ local function SilentAimShot()
         return false
     end
 
-    local targetPosition =
-        GetPredictedTargetPosition(
-            murderer
-        )
-
-    if not targetPosition then
-        SilentAimBusy = false
-        return false
-    end
-
     local fired =
-        FireNormalDirectionalShot(
+        FireGuidedGunShot(
             gun,
-            targetPosition
+            murderer
         )
 
     task.spawn(function()
@@ -4408,7 +4391,7 @@ local function SetFarmPosition(position, hold)
     local character = Player.Character
     local cframe = CFrame.new(position) * AutoFarmRotation
 
-    AutoFarmRoot.Anchored = false
+    AutoFarmRoot.Anchored = true
 
     if character and character.Parent then
         character:PivotTo(cframe)
@@ -4548,9 +4531,17 @@ function ToxMM2FlingMurdererForAutoWin()
             SetSharedTemporary("AntiFling", false)
         end
 
-        pcall(function()
-            fling(target)
-        end)
+        local ok, result =
+            pcall(function()
+                return fling(target)
+            end)
+
+        if ok and result == false then
+            CustomNotify(
+                "Fling skipped",
+                Color3.fromRGB(255, 180, 70)
+            )
+        end
 
         if restoreAntiFling then
             SetSharedTemporary("AntiFling", true)
@@ -4726,7 +4717,7 @@ local function PrepareAutoFarm()
     end
 
     if AutoFarmPrepared and AutoFarmRoot == root then
-        root.Anchored = false
+        root.Anchored = true
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
         humanoid.PlatformStand = false
@@ -4770,16 +4761,16 @@ local function PrepareAutoFarm()
 
     SetFarmCollision(false)
 
-    root.Anchored = false
+    root.Anchored = true
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
     return true
 end
 
-local AutoFarmPickupOffsetY = 0
-local AutoFarmCoinHoldTime = 0.55
-local AutoFarmMinTweenSpeed = 32
+local AutoFarmPickupOffsetY = 2.55
+local AutoFarmCoinHoldTime = 0.38
+local AutoFarmMinTweenSpeed = 8
 local TouchCoin = nil
 
 local function GetCoinBasePosition(coin)
@@ -4815,9 +4806,14 @@ local function GetCoinFarmPosition(coin)
         return nil
     end
 
+    local yOffset = math.max(
+        AutoFarmPickupOffsetY,
+        coin.Size.Y * 0.5 + 1.9
+    )
+
     return Vector3.new(
         position.X,
-        position.Y + AutoFarmPickupOffsetY,
+        position.Y + yOffset,
         position.Z
     )
 end
@@ -4841,7 +4837,7 @@ local function SetAutoFarmCoinPosition(position, lookAt)
     local cframe = CFrame.new(position) * rotation
 
     AutoFarmHoldPosition = position
-    AutoFarmRoot.Anchored = false
+    AutoFarmRoot.Anchored = true
 
     if character and character.Parent then
         character:PivotTo(cframe)
@@ -5053,11 +5049,11 @@ local function AutoFarmCoin(coin)
 
     local speedValue = math.clamp(
         tonumber(Settings.MM2AutoFarmSpeed) or 5,
-        5,
+        1,
         250
     )
 
-    local speed = math.max(speedValue * 6.5, AutoFarmMinTweenSpeed)
+    local speed = math.max(speedValue * 2.2, AutoFarmMinTweenSpeed)
     local currentPosition = AutoFarmRoot.Position
     local basePosition = GetCoinBasePosition(coin)
     local travelPosition = GetCoinFarmPosition(coin)
@@ -5127,7 +5123,7 @@ AddConnection(RunService.Heartbeat:Connect(function()
         return
     end
 
-    AutoFarmRoot.Anchored = false
+    AutoFarmRoot.Anchored = true
 
     if AutoFarmRotation then
         local character = Player.Character
@@ -5558,7 +5554,7 @@ end, function(value)
         math.clamp(
             tonumber(value)
             or 5,
-            5,
+            1,
             250
         )
 
@@ -6288,38 +6284,6 @@ task.spawn(function()
             )
         end
 
-        if MM2AutoRuntime.SilentAim
-        and Settings.MM2SilentAimAutoV2
-        and not Settings.MM2AutoFarmV2
-        and gun
-        and alive
-        and not ActionBusy
-        and not SilentAimBusy
-        and gun.Enabled ~= false then
-            local murderer =
-                FindGuidedMurderer()
-
-            local murderHumanoid =
-                murderer
-                and murderer.Character
-                and murderer.Character:
-                    FindFirstChildOfClass(
-                        "Humanoid"
-                    )
-
-            if murderer
-            and murderHumanoid
-            and murderHumanoid.Health > 0
-            and os.clock() - AutoSilentAimLastAttempt
-                >= 0.08 then
-                AutoSilentAimLastAttempt =
-                    os.clock()
-
-                task.spawn(
-                    SilentAimShot
-                )
-            end
-        end
 
         if MM2AutoRuntime.Shoot
         and Settings.MM2ShootMurderAutoV2
@@ -6377,6 +6341,7 @@ task.spawn(function()
 end)
 
 
+LastManualSilentAimInput = 0
 LastManualShootInput = 0
 
 AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -6389,8 +6354,21 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 
     if Settings.MM2SilentAimKey
     and input.KeyCode == Settings.MM2SilentAimKey then
+        if not MM2AutoRuntime.SilentAim
+        and not Settings.MM2SilentAimAutoV2 then
+            return
+        end
+
+        if os.clock() - LastManualSilentAimInput < 0.16 then
+            return
+        end
+
+        LastManualSilentAimInput = os.clock()
+
         task.defer(function()
-            if not getgenv().Destroyed then
+            if not getgenv().Destroyed
+            and MM2AutoRuntime.SilentAim
+            and Settings.MM2SilentAimAutoV2 then
                 SilentAimShot()
             end
         end)
