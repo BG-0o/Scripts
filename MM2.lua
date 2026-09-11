@@ -4346,7 +4346,10 @@ local function PrepareAutoFarm()
     AutoFarmRoot = root
     AutoFarmHumanoid = humanoid
     AutoFarmReturnCFrame = character:GetPivot()
-    AutoFarmRotation = root.CFrame.Rotation
+
+    local _, farmYaw, _ = root.CFrame:ToOrientation()
+    AutoFarmRotation = CFrame.Angles(0, farmYaw, 0) * CFrame.Angles(math.rad(90), 0, 0)
+
     AutoFarmOriginalAnchored = root.Anchored
     AutoFarmOriginalAutoRotate = humanoid.AutoRotate
     AutoFarmOriginalPlatformStand = humanoid.PlatformStand
@@ -4376,7 +4379,8 @@ local function PrepareAutoFarm()
 end
 
 local AutoFarmUndergroundTravelOffset = 5
-local AutoFarmUndergroundPickupOffset = 2.5
+local AutoFarmUndergroundPickupOffset = 3.25
+local AutoFarmCoinHoldTime = 0.55
 
 local function GetCoinBasePosition(coin)
     if not coin
@@ -4490,27 +4494,29 @@ local function CollectFarmCoin(coin)
     local serialBefore = AutoFarmCoinSerial
     local bagBefore = AutoFarmBagCoins
     local pickupPosition = GetCoinPickupPosition(coin)
-    local travelPosition = GetCoinTravelPosition(coin)
+    local holdUntil = os.clock() + AutoFarmCoinHoldTime
 
     AutoFarmAtCoin = true
 
-    for _ = 1, 3 do
-        if not Settings.MM2AutoFarmV2
-        or generation ~= AutoFarmGeneration
-        or IsFarmBagFull()
-        or not IsCoinValid(coin) then
-            break
+    SetFarmPosition(pickupPosition)
+    RunService.Heartbeat:Wait()
+
+    while Settings.MM2AutoFarmV2
+    and generation == AutoFarmGeneration
+    and not IsFarmBagFull()
+    and IsCoinValid(coin)
+    and AutoFarmRoot
+    and AutoFarmRoot.Parent
+    and os.clock() <= holdUntil do
+        if (AutoFarmRoot.Position - pickupPosition).Magnitude > 1.25 then
+            SetFarmPosition(pickupPosition)
+        else
+            AutoFarmRoot.CFrame = CFrame.new(pickupPosition) * AutoFarmRotation
+            AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+            AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
         end
 
-        SetFarmPosition(pickupPosition)
-
         TouchCoin(coin)
-        RunService.Heartbeat:Wait()
-        TouchCoin(coin)
-        task.wait(0.035)
-
-        SetFarmPosition(travelPosition)
-        RunService.Heartbeat:Wait()
 
         if not IsCoinValid(coin)
         or AutoFarmCoinSerial ~= serialBefore
@@ -4529,10 +4535,8 @@ local function CollectFarmCoin(coin)
 
             return true
         end
-    end
 
-    if AutoFarmRoot and AutoFarmRoot.Parent then
-        SetFarmPosition(travelPosition)
+        RunService.Heartbeat:Wait()
     end
 
     AutoFarmAtCoin = false
@@ -4610,6 +4614,11 @@ AddConnection(RunService.Heartbeat:Connect(function()
     end
 
     AutoFarmRoot.Anchored = false
+
+    if AutoFarmRotation then
+        AutoFarmRoot.CFrame = CFrame.new(AutoFarmRoot.Position) * AutoFarmRotation
+    end
+
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
 
