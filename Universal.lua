@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-11-ui-cleanup-1"
+ToxUpdateVersion = "2026-09-11-changelog-reload-sections-1"
 
 
 function ClearToxTable(target)
@@ -6859,6 +6859,7 @@ task.spawn(ShowCenterLoadSequence)
 SubGuisPreMinimizedState = {}
 Minimize = getgenv().Minimize
 Minimized = false
+getgenv().ToxMainMinimized = false
 MainExpandedSize =
     (
         getgenv().GetSavedGuiSize
@@ -6912,10 +6913,20 @@ if Minimize then
     Minimize.MouseButton1Click:Connect(function()
         Minimized = not Minimized
 
+        getgenv().ToxMainMinimized = Minimized
+
+        local resizeHandle = Main and Main:FindFirstChild("ToxResizeHandle")
+
+        if resizeHandle then
+            resizeHandle.Visible = not Minimized
+            resizeHandle.Active = not Minimized
+        end
+
         if Minimized then
-            if Main.Size.Y.Offset > 38 then
+            if Main.Size.Y.Offset > 44 then
                 MainExpandedSize =
                     Main.Size
+                getgenv().ToxMainExpandedSize = MainExpandedSize
             end
 
             Main.Size =
@@ -6938,6 +6949,7 @@ if Minimize then
 
             MainExpandedSize =
                 savedSize
+            getgenv().ToxMainExpandedSize = MainExpandedSize
 
             Main.Size =
                 MainExpandedSize
@@ -6987,10 +6999,17 @@ if getgenv().ShowToxUpdateGui then
     getgenv().ShowToxUpdateGui(
         ToxUpdateVersion,
         {
-            "Removido Return TP, Quick Actions e Compatibility indicator.",
-            "Tox Search agora fica na barra dos tabs com lupa e campo de pesquisa.",
-            "Server Info manteve o botao principal e muda FPS/Ping/Players na propria janela.",
-            "Tracers e Names agora ficam com seus modos na mesma opcao."
+            ADDED = {
+                "Changelog expandido com categorias.",
+                "Reload do modulo pelo botao direito no tab do jogo.",
+                "Secoes recolhiveis no MM2."
+            },
+            FIXED = {
+                "Resize bloqueado quando a UI principal esta minimizada."
+            },
+            CHANGED = {
+                "Menu de update agora separa Added, Fixed, Changed e Removed."
+            }
         }
     )
 end
