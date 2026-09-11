@@ -38,6 +38,48 @@ if game.PlaceId ~= NDSPlaceId then
 end
 
 Settings.WalkFling = Settings.WalkFling == true
+Settings.EspMaxDistanceByPlace =
+    typeof(Settings.EspMaxDistanceByPlace) == "table"
+    and Settings.EspMaxDistanceByPlace
+    or {}
+
+local ToxUpdateVersion = "2026-09-11-mini-pack-1"
+
+local function GetCurrentPlaceKey()
+    return tostring(game.PlaceId)
+end
+
+local function GetCurrentESPMAX()
+    local placeKey = GetCurrentPlaceKey()
+    local saved = tonumber(
+        Settings.EspMaxDistanceByPlace[placeKey]
+    )
+
+    if saved then
+        return saved
+    end
+
+    return tonumber(Settings.EspMaxDistance) or 1000
+end
+
+local function SetCurrentESPMAX(value)
+    local number = math.clamp(
+        math.floor((tonumber(value) or 1000) + 0.5),
+        0,
+        100000
+    )
+
+    Settings.EspMaxDistance = number
+    Settings.EspMaxDistanceByPlace[GetCurrentPlaceKey()] = number
+
+    if getgenv().AutoSaveConfiguration then
+        getgenv().AutoSaveConfiguration()
+    end
+
+    return number
+end
+
+Settings.EspMaxDistance = GetCurrentESPMAX()
 
 local HumanoidDefaults = setmetatable({}, {__mode = "k"})
 local NoclipDefaults = setmetatable({}, {__mode = "k"})
@@ -2288,6 +2330,144 @@ getgenv().ToxFlingBypassUntil =
 
 getgenv().ToxFlingPlayer = SkidFling
 
+local LastTeleportReturnCFrame =
+    typeof(getgenv().ToxLastTeleportReturnCFrame) == "CFrame"
+    and getgenv().ToxLastTeleportReturnCFrame
+    or nil
+
+local function GetLocalRoot()
+    return Player.Character
+        and Player.Character:FindFirstChild("HumanoidRootPart")
+end
+
+local function RecordTeleportReturn()
+    local root = GetLocalRoot()
+
+    if root then
+        LastTeleportReturnCFrame = root.CFrame
+        getgenv().ToxLastTeleportReturnCFrame = root.CFrame
+        return true
+    end
+
+    return false
+end
+
+getgenv().RecordToxTeleportReturn = RecordTeleportReturn
+
+local function ResolveSafeGroundCFrame(cframe)
+    if typeof(cframe) ~= "CFrame" then
+        return nil
+    end
+
+    local origin =
+        cframe.Position
+        + Vector3.new(0, 95, 0)
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+
+    local excluded = {}
+
+    if Player.Character then
+        table.insert(excluded, Player.Character)
+    end
+
+    if getgenv().Gui then
+        table.insert(excluded, getgenv().Gui)
+    end
+
+    params.FilterDescendantsInstances = excluded
+
+    local result = workspace:Raycast(
+        origin,
+        Vector3.new(0, -220, 0),
+        params
+    )
+
+    if result
+    and result.Instance
+    and result.Instance.CanCollide then
+        local _, y, _ = cframe:ToOrientation()
+        return CFrame.new(
+            result.Position + Vector3.new(0, 4, 0)
+        ) * CFrame.Angles(0, y, 0)
+    end
+
+    return cframe
+end
+
+getgenv().ToxSafeTeleportToCFrame = function(cframe, useGround, reason)
+    local root = GetLocalRoot()
+    local humanoid = Player.Character
+        and Player.Character:FindFirstChildOfClass("Humanoid")
+
+    if typeof(cframe) ~= "CFrame"
+    or not root
+    or not humanoid
+    or humanoid.Health <= 0 then
+        return false
+    end
+
+    RecordTeleportReturn()
+
+    if getgenv().AllowToxTeleport then
+        getgenv().AllowToxTeleport(1.5, reason or "ToxHub")
+    end
+
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
+    root.CFrame = useGround and ResolveSafeGroundCFrame(cframe) or cframe
+
+    if getgenv().SetNDSNoTPAnchor then
+        pcall(function()
+            getgenv().SetNDSNoTPAnchor(root.CFrame, true)
+        end)
+    end
+
+    return true
+end
+
+local function ReturnToLastTeleport()
+    local cframe =
+        LastTeleportReturnCFrame
+        or getgenv().ToxLastTeleportReturnCFrame
+
+    if typeof(cframe) ~= "CFrame" then
+        CustomNotify(
+            "No return position saved",
+            Color3.fromRGB(255, 180, 70)
+        )
+        return
+    end
+
+    local root = GetLocalRoot()
+
+    if not root then
+        return
+    end
+
+    if getgenv().AllowToxTeleport then
+        getgenv().AllowToxTeleport(1.5, "Return TP")
+    end
+
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
+    root.CFrame = cframe
+
+    if getgenv().SetNDSNoTPAnchor then
+        pcall(function()
+            getgenv().SetNDSNoTPAnchor(cframe, true)
+        end)
+    end
+
+    CustomNotify(
+        "Returned to last position",
+        Color3.fromRGB(100, 255, 100)
+    )
+end
+
+getgenv().ToxReturnToLastTeleport = ReturnToLastTeleport
+
 local function ExecuteFling(TargetInput)
     if not TargetInput or TargetInput == "" then
         return CustomNotify("Enter username or 'all'", Color3.fromRGB(255, 100, 100))
@@ -2356,8 +2536,23 @@ local function ExecuteTeleport(TargetInput, mode)
         local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
         if mode == "TP" then
             if Root then
-                if getgenv().AllowToxTeleport then getgenv().AllowToxTeleport(1.25) end
-                Root.CFrame = tHrp.CFrame * CFrame.new(0, 0, -3)
+                if getgenv().ToxSafeTeleportToCFrame then
+                    getgenv().ToxSafeTeleportToCFrame(
+                        tHrp.CFrame * CFrame.new(0, 0, -3),
+                        false,
+                        "Player TP"
+                    )
+                else
+                    if getgenv().RecordToxTeleportReturn then
+                        getgenv().RecordToxTeleportReturn()
+                    end
+
+                    if getgenv().AllowToxTeleport then
+                        getgenv().AllowToxTeleport(1.25, "Player TP")
+                    end
+
+                    Root.CFrame = tHrp.CFrame * CFrame.new(0, 0, -3)
+                end
             end
             CustomNotify("Teleported to " .. targetObj.DisplayName, Color3.fromRGB(100, 255, 100))
         elseif mode == "LOOP" then
@@ -2810,325 +3005,320 @@ local function ServerHop()
     end)
 end
 
-local FPSObjectDefaults =
-    setmetatable(
-        {},
-        {
-            __mode = "k"
-        }
-    )
-
+local FPSObjectDefaults = {}
 local FPSLightingDefaults = nil
 local FPSWorkspaceConnection = nil
 local FPSLightingConnection = nil
 
-local function CaptureFPSObject(
-    object
-)
-    if FPSObjectDefaults[
-        object
-    ] then
+local FPSImportantNames = {
+    GunDrop = true,
+    Gun = true,
+    Knife = true,
+    Revolver = true,
+    Handle = true,
+    HumanoidRootPart = true
+}
+
+local function IsPlayerCharacterObject(object)
+    for _, target in ipairs(Players:GetPlayers()) do
+        local character = target.Character
+
+        if character
+        and object:IsDescendantOf(character) then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function HasImportantFPSAncestor(object)
+    local current = object
+
+    while current do
+        if current:IsA("Tool")
+        or current:IsA("Backpack")
+        or current:IsA("Humanoid")
+        or current:IsA("Highlight")
+        or current:IsA("BillboardGui")
+        or current:IsA("ScreenGui")
+        or FPSImportantNames[current.Name] then
+            return true
+        end
+
+        local lower = string.lower(tostring(current.Name or ""))
+
+        if string.find(lower, "gundrop", 1, true)
+        or string.find(lower, "weapon", 1, true)
+        or string.find(lower, "knife", 1, true)
+        or string.find(lower, "revolver", 1, true)
+        or string.find(lower, "sheriff", 1, true)
+        or string.find(lower, "murderer", 1, true)
+        or string.find(lower, "tox", 1, true) then
+            return true
+        end
+
+        current = current.Parent
+    end
+
+    return false
+end
+
+local function ShouldIgnoreFPSObject(object)
+    if not object
+    or not object.Parent then
+        return true
+    end
+
+    if object == Camera
+    or object:IsDescendantOf(CoreGui) then
+        return true
+    end
+
+    if getgenv().Gui
+    and object:IsDescendantOf(getgenv().Gui) then
+        return true
+    end
+
+    if IsPlayerCharacterObject(object)
+    or HasImportantFPSAncestor(object) then
+        return true
+    end
+
+    return false
+end
+
+local function CaptureFPSObject(object)
+    if ShouldIgnoreFPSObject(object)
+    or FPSObjectDefaults[object] then
         return
     end
 
-    if object:IsA(
-        "BasePart"
-    ) then
-        FPSObjectDefaults[
-            object
-        ] = {
+    local data = nil
+
+    if object:IsA("BasePart") then
+        data = {
             Kind = "BasePart",
-            Material =
-                object.Material,
-            Reflectance =
-                object.Reflectance,
-            CastShadow =
-                object.CastShadow
+            Material = object.Material,
+            MaterialVariant = object.MaterialVariant,
+            Reflectance = object.Reflectance,
+            CastShadow = object.CastShadow,
+            Color = object.Color,
+            Transparency = object.Transparency,
+            LocalTransparencyModifier = object.LocalTransparencyModifier
         }
-    elseif object:IsA(
-        "Decal"
-    )
-    or object:IsA(
-        "Texture"
-    ) then
-        FPSObjectDefaults[
-            object
-        ] = {
+    elseif object:IsA("Decal")
+    or object:IsA("Texture") then
+        data = {
             Kind = "Texture",
-            Transparency =
-                object.Transparency
+            Transparency = object.Transparency,
+            Color3 = object.Color3,
+            Texture = object.Texture
         }
-    elseif object:IsA(
-        "ParticleEmitter"
-    )
-    or object:IsA(
-        "Trail"
-    )
-    or object:IsA(
-        "Beam"
-    )
-    or object:IsA(
-        "Smoke"
-    )
-    or object:IsA(
-        "Fire"
-    )
-    or object:IsA(
-        "Sparkles"
-    )
-    or object:IsA(
-        "BloomEffect"
-    )
-    or object:IsA(
-        "BlurEffect"
-    )
-    or object:IsA(
-        "ColorCorrectionEffect"
-    )
-    or object:IsA(
-        "DepthOfFieldEffect"
-    )
-    or object:IsA(
-        "SunRaysEffect"
-    ) then
-        FPSObjectDefaults[
-            object
-        ] = {
+    elseif object:IsA("ParticleEmitter") then
+        data = {
+            Kind = "ParticleEmitter",
+            Enabled = object.Enabled,
+            Rate = object.Rate
+        }
+    elseif object:IsA("Trail")
+    or object:IsA("Beam") then
+        data = {
             Kind = "Enabled",
-            Enabled =
-                object.Enabled
+            Enabled = object.Enabled
         }
+    elseif object:IsA("Smoke")
+    or object:IsA("Fire")
+    or object:IsA("Sparkles") then
+        data = {
+            Kind = "Enabled",
+            Enabled = object.Enabled
+        }
+    elseif object:IsA("BloomEffect")
+    or object:IsA("BlurEffect")
+    or object:IsA("ColorCorrectionEffect")
+    or object:IsA("DepthOfFieldEffect")
+    or object:IsA("SunRaysEffect") then
+        data = {
+            Kind = "Enabled",
+            Enabled = object.Enabled
+        }
+    end
+
+    if data then
+        FPSObjectDefaults[object] = data
     end
 end
 
-local function ApplyFPSObject(
-    object
-)
-    CaptureFPSObject(
-        object
-    )
+local function ApplyFPSObject(object)
+    if ShouldIgnoreFPSObject(object) then
+        return
+    end
 
-    if object:IsA(
-        "BasePart"
-    ) then
-        object.Material =
-            Enum.Material.SmoothPlastic
+    CaptureFPSObject(object)
 
+    if object:IsA("BasePart") then
+        object.Material = Enum.Material.SmoothPlastic
+        object.MaterialVariant = ""
         object.Reflectance = 0
         object.CastShadow = false
-    elseif object:IsA(
-        "Decal"
-    )
-    or object:IsA(
-        "Texture"
-    ) then
+    elseif object:IsA("Decal")
+    or object:IsA("Texture") then
         object.Transparency = 1
-    elseif object:IsA(
-        "ParticleEmitter"
-    )
-    or object:IsA(
-        "Trail"
-    )
-    or object:IsA(
-        "Beam"
-    )
-    or object:IsA(
-        "Smoke"
-    )
-    or object:IsA(
-        "Fire"
-    )
-    or object:IsA(
-        "Sparkles"
-    )
-    or object:IsA(
-        "BloomEffect"
-    )
-    or object:IsA(
-        "BlurEffect"
-    )
-    or object:IsA(
-        "ColorCorrectionEffect"
-    )
-    or object:IsA(
-        "DepthOfFieldEffect"
-    )
-    or object:IsA(
-        "SunRaysEffect"
-    ) then
+    elseif object:IsA("ParticleEmitter") then
+        object.Enabled = false
+        object.Rate = 0
+    elseif object:IsA("Trail")
+    or object:IsA("Beam")
+    or object:IsA("Smoke")
+    or object:IsA("Fire")
+    or object:IsA("Sparkles")
+    or object:IsA("BloomEffect")
+    or object:IsA("BlurEffect")
+    or object:IsA("ColorCorrectionEffect")
+    or object:IsA("DepthOfFieldEffect")
+    or object:IsA("SunRaysEffect") then
         object.Enabled = false
     end
 end
 
-local function RestoreFPSObject(
-    object,
-    data
-)
+local function RestoreFPSObject(object, data)
     if not object
     or not object.Parent
-    or typeof(data)
-        ~= "table" then
+    or typeof(data) ~= "table" then
         return
     end
 
     pcall(function()
-        if data.Kind
-            == "BasePart" then
-            object.Material =
-                data.Material
-
-            object.Reflectance =
-                data.Reflectance
-
-            object.CastShadow =
-                data.CastShadow
-        elseif data.Kind
-            == "Texture" then
-            object.Transparency =
-                data.Transparency
-        elseif data.Kind
-            == "Enabled" then
-            object.Enabled =
-                data.Enabled
+        if data.Kind == "BasePart" then
+            object.Material = data.Material
+            object.MaterialVariant = data.MaterialVariant or ""
+            object.Reflectance = data.Reflectance
+            object.CastShadow = data.CastShadow
+            object.Color = data.Color
+            object.Transparency = data.Transparency
+            object.LocalTransparencyModifier = data.LocalTransparencyModifier or 0
+        elseif data.Kind == "Texture" then
+            object.Transparency = data.Transparency
+            object.Color3 = data.Color3
+            object.Texture = data.Texture
+        elseif data.Kind == "ParticleEmitter" then
+            object.Enabled = data.Enabled
+            object.Rate = data.Rate
+        elseif data.Kind == "Enabled" then
+            object.Enabled = data.Enabled
         end
     end)
 end
 
-local function SetFPSBooster(
-    enabled,
-    silent
-)
-    enabled =
-        enabled == true
+local function CaptureFPSLighting()
+    if FPSLightingDefaults then
+        return
+    end
 
-    Settings.FPSBooster =
-        enabled
+    FPSLightingDefaults = {
+        GlobalShadows = Lighting.GlobalShadows,
+        FogEnd = Lighting.FogEnd,
+        Ambient = Lighting.Ambient,
+        OutdoorAmbient = Lighting.OutdoorAmbient,
+        Brightness = Lighting.Brightness,
+        ExposureCompensation = Lighting.ExposureCompensation,
+        EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
+        EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale
+    }
+end
+
+local function RestoreFPSLighting()
+    if not FPSLightingDefaults then
+        return
+    end
+
+    pcall(function()
+        Lighting.GlobalShadows = FPSLightingDefaults.GlobalShadows
+        Lighting.FogEnd = FPSLightingDefaults.FogEnd
+        Lighting.Ambient = FPSLightingDefaults.Ambient
+        Lighting.OutdoorAmbient = FPSLightingDefaults.OutdoorAmbient
+        Lighting.Brightness = FPSLightingDefaults.Brightness
+        Lighting.ExposureCompensation = FPSLightingDefaults.ExposureCompensation
+        Lighting.EnvironmentDiffuseScale = FPSLightingDefaults.EnvironmentDiffuseScale
+        Lighting.EnvironmentSpecularScale = FPSLightingDefaults.EnvironmentSpecularScale
+    end)
+
+    FPSLightingDefaults = nil
+end
+
+local function SetFPSBooster(enabled, silent)
+    enabled = enabled == true
+    Settings.FPSBooster = enabled
 
     if enabled then
-        if not FPSLightingDefaults then
-            FPSLightingDefaults = {
-                GlobalShadows =
-                    Lighting.GlobalShadows,
-                FogEnd =
-                    Lighting.FogEnd
-            }
-        end
+        CaptureFPSLighting()
 
         Lighting.GlobalShadows = false
         Lighting.FogEnd = 9e9
 
-        for _, object in ipairs(
-            workspace:
-                GetDescendants()
-        ) do
-            pcall(
-                ApplyFPSObject,
-                object
-            )
+        for _, object in ipairs(workspace:GetDescendants()) do
+            pcall(ApplyFPSObject, object)
         end
 
-        for _, object in ipairs(
-            Lighting:
-                GetDescendants()
-        ) do
-            pcall(
-                ApplyFPSObject,
-                object
-            )
+        for _, object in ipairs(Lighting:GetDescendants()) do
+            pcall(ApplyFPSObject, object)
         end
 
         if FPSWorkspaceConnection then
-            FPSWorkspaceConnection:
-                Disconnect()
+            FPSWorkspaceConnection:Disconnect()
         end
 
         if FPSLightingConnection then
-            FPSLightingConnection:
-                Disconnect()
+            FPSLightingConnection:Disconnect()
         end
 
-        FPSWorkspaceConnection =
-            workspace.DescendantAdded:
-                Connect(function(object)
-                    if Settings.FPSBooster then
-                        task.defer(function()
-                            pcall(
-                                ApplyFPSObject,
-                                object
-                            )
-                        end)
-                    end
+        FPSWorkspaceConnection = workspace.DescendantAdded:Connect(function(object)
+            if Settings.FPSBooster then
+                task.defer(function()
+                    pcall(ApplyFPSObject, object)
                 end)
+            end
+        end)
 
-        FPSLightingConnection =
-            Lighting.DescendantAdded:
-                Connect(function(object)
-                    if Settings.FPSBooster then
-                        task.defer(function()
-                            pcall(
-                                ApplyFPSObject,
-                                object
-                            )
-                        end)
-                    end
+        FPSLightingConnection = Lighting.DescendantAdded:Connect(function(object)
+            if Settings.FPSBooster then
+                task.defer(function()
+                    pcall(ApplyFPSObject, object)
                 end)
+            end
+        end)
 
         if not silent then
             CustomNotify(
                 "FPS Booster Enabled",
-                Color3.fromRGB(
-                    100,
-                    255,
-                    100
-                )
+                Color3.fromRGB(100, 255, 100)
             )
         end
     else
         if FPSWorkspaceConnection then
-            FPSWorkspaceConnection:
-                Disconnect()
-
+            FPSWorkspaceConnection:Disconnect()
             FPSWorkspaceConnection = nil
         end
 
         if FPSLightingConnection then
-            FPSLightingConnection:
-                Disconnect()
-
+            FPSLightingConnection:Disconnect()
             FPSLightingConnection = nil
         end
 
-        if FPSLightingDefaults then
-            Lighting.GlobalShadows =
-                FPSLightingDefaults.GlobalShadows
+        RestoreFPSLighting()
 
-            Lighting.FogEnd =
-                FPSLightingDefaults.FogEnd
-
-            FPSLightingDefaults = nil
+        for object, data in pairs(FPSObjectDefaults) do
+            RestoreFPSObject(object, data)
+            FPSObjectDefaults[object] = nil
         end
 
-        for object, data in pairs(
-            FPSObjectDefaults
-        ) do
-            RestoreFPSObject(
-                object,
-                data
-            )
-
-            FPSObjectDefaults[
-                object
-            ] = nil
-        end
+        table.clear(FPSObjectDefaults)
 
         if not silent then
             CustomNotify(
-                "FPS Booster Disabled",
-                Color3.fromRGB(
-                    255,
-                    180,
-                    70
-                )
+                "FPS Booster Restored",
+                Color3.fromRGB(255, 180, 70)
             )
         end
     end
@@ -3256,7 +3446,7 @@ local function RescueFromVoid(
         getgenv().AllowToxTeleport
 
     if allow then
-        allow(1.5)
+        allow(1.5, "Anti Void Restore")
     end
 
     if getgenv().SetNDSNoTPAnchor then
@@ -4265,7 +4455,9 @@ CreateToggleWithValue("Camera FOV", VisualsPage, Settings.FOVEnabled, Settings.F
     end
 end, function(val) Settings.FOVValue = val end)
 
-CreateToggleWithValue("ESP Max Dist", VisualsPage, true, Settings.EspMaxDistance, function(v) end, function(val) Settings.EspMaxDistance = val end)
+CreateToggleWithValue("ESP Max Dist", VisualsPage, true, GetCurrentESPMAX(), function(v) end, function(val)
+    SetCurrentESPMAX(val)
+end, "EspMaxDistance")
 CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", "Magenta", "Orange", "Purple", "Lime", "Pink", "Gold"}, VisualsPage, Settings.EspColorName, function(v)
     Settings.EspColorName = v
     Settings.EspColor = ColorMap[v] or Color3.fromRGB(255, 255, 255)
@@ -5006,6 +5198,9 @@ CreateInputWithTwoButtons(
 )
 
 CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
+CreateButton("Return TP", FlingPage, function()
+    ReturnToLastTeleport()
+end)
 CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
 CreateButton("Tox Waypoints", FlingPage, function() WaypointsGui.Visible = not WaypointsGui.Visible end)
 
@@ -5028,6 +5223,66 @@ end)
 CreateButton("Bundle Edit", ScriptsPage, function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/All/refs/heads/main/BundleEdit.lua"))()
 end)
+
+local CompatibilityButton = nil
+
+local function GetToxCompatibilityIssues()
+    local issues = {}
+
+    if Settings.SmoothFly and Settings.NormalFly then
+        table.insert(issues, "Normal Fly and Smooth Fly should not be enabled together.")
+    end
+
+    if Settings.WalkFling and Settings.NDSNoTP then
+        table.insert(issues, "Walk Fling and NDS No TP can fight each other during strong physics impulses.")
+    end
+
+    if Settings.AntiVoid and Settings.NDSNoTP then
+        table.insert(issues, "Anti Void and NDS No TP both control safe positions. ToxHub teleports are whitelisted, but external teleports can still be blocked.")
+    end
+
+    if Settings.FPSBooster and Settings.MM2GunESP then
+        table.insert(issues, "FPS Booster is active. Important MM2 objects are ignored so Gun ESP should keep working.")
+    end
+
+    return issues
+end
+
+getgenv().UpdateToxCompatibilityIndicator = function()
+    if not CompatibilityButton
+    or not CompatibilityButton.Parent then
+        return
+    end
+
+    local issues = GetToxCompatibilityIssues()
+
+    if #issues == 0 then
+        CompatibilityButton.Text = "Compatibility: OK"
+        CompatibilityButton.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+    else
+        CompatibilityButton.Text = "Compatibility: " .. tostring(#issues) .. " warning(s)"
+        CompatibilityButton.BackgroundColor3 = Color3.fromRGB(80, 58, 24)
+    end
+end
+
+getgenv().OpenToxCompatibility = function()
+    local issues = GetToxCompatibilityIssues()
+
+    if #issues == 0 then
+        CustomNotify(
+            "Compatibility OK",
+            Color3.fromRGB(100, 255, 100),
+            3
+        )
+        return
+    end
+
+    CustomNotify(
+        issues[1],
+        Color3.fromRGB(255, 190, 70),
+        7
+    )
+end
 
 CreateToggle("Chat Logs", ConfigPage, Settings.ChatLogs, function(v)
     Settings.ChatLogs = v
@@ -5101,6 +5356,24 @@ CreateToggle(
     end,
     "FPSBooster"
 )
+
+CreateButton("Tox Search", ConfigPage, function()
+    if getgenv().OpenToxSearch then
+        getgenv().OpenToxSearch()
+    else
+        CustomNotify("Search is not ready", Color3.fromRGB(255, 180, 70))
+    end
+end)
+
+CompatibilityButton = CreateButton("Compatibility: OK", ConfigPage, function()
+    if getgenv().OpenToxCompatibility then
+        getgenv().OpenToxCompatibility()
+    end
+end)
+
+if getgenv().UpdateToxCompatibilityIndicator then
+    getgenv().UpdateToxCompatibilityIndicator()
+end
 
 CreateToggle(
     "3D Rendering",
@@ -5408,8 +5681,27 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
             local mouse = Player:GetMouse()
             local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
             if mouse and mouse.Hit and Root then
-                if getgenv().AllowToxTeleport then getgenv().AllowToxTeleport(1.25) end
-                Root.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0, 3, 0))
+                local targetCFrame = CFrame.new(
+                    mouse.Hit.Position + Vector3.new(0, 3, 0)
+                )
+
+                if getgenv().ToxSafeTeleportToCFrame then
+                    getgenv().ToxSafeTeleportToCFrame(
+                        targetCFrame,
+                        true,
+                        "Ctrl Click TP"
+                    )
+                else
+                    if getgenv().RecordToxTeleportReturn then
+                        getgenv().RecordToxTeleportReturn()
+                    end
+
+                    if getgenv().AllowToxTeleport then
+                        getgenv().AllowToxTeleport(1.25, "Ctrl Click TP")
+                    end
+
+                    Root.CFrame = targetCFrame
+                end
             end
         end
     end
@@ -5616,7 +5908,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
     end
 
     if Settings.LoopTPTarget and Settings.LoopTPTarget.Character and Settings.LoopTPTarget.Character:FindFirstChild("HumanoidRootPart") and Root then
-        if getgenv().AllowToxTeleport then getgenv().AllowToxTeleport(0.2) end
+        if getgenv().AllowToxTeleport then getgenv().AllowToxTeleport(0.2, "Loop TP") end
         Root.CFrame = Settings.LoopTPTarget.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3)
     end
 
@@ -6375,6 +6667,29 @@ if Settings.FPSBooster then
     SetFPSBooster(
         true,
         true
+    )
+end
+
+if getgenv().UpdateToxCompatibilityIndicator then
+    task.spawn(function()
+        while not getgenv().Destroyed do
+            getgenv().UpdateToxCompatibilityIndicator()
+            task.wait(0.75)
+        end
+    end)
+end
+
+if getgenv().ShowToxUpdateGui then
+    getgenv().ShowToxUpdateGui(
+        ToxUpdateVersion,
+        {
+            "MM2 Target agora usa uma janela unica com Whitelist / Select / Kill.",
+            "MAP TP do MM2 tenta escolher chao seguro em vez de teto/topo do mapa.",
+            "FPS Booster agora salva snapshot e restaura textura/material/lighting ao desligar.",
+            "FPS Booster ignora objetos importantes como players, armas, drops e UI.",
+            "Adicionado Return TP, Search, Compatibility indicator e ESP Max Dist por jogo.",
+            "No TP agora reconhece teleports internos do ToxHub pela whitelist."
+        }
     )
 end
 
