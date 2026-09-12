@@ -49,7 +49,7 @@ or not CreateButton then
 end
 
 local NDSModuleVersion =
-    "2026-09-11-disaster-once-per-map-1"
+    "2026-09-11-autowin-item2-reequip-1"
 
 if getgenv().ToxNDSModuleLoadedJobId
     == game.JobId
@@ -222,7 +222,7 @@ local function PressHotbarTwo()
     end)
 end
 
-local function EquipAndGetHotbarTwo()
+local function EquipAndGetHotbarTwo(force)
     local character, humanoid = GetCharacterState()
 
     if not character
@@ -233,19 +233,63 @@ local function EquipAndGetHotbarTwo()
 
     local equipped = character:FindFirstChildOfClass("Tool")
 
-    if equipped then
+    if equipped
+    and not force then
         return equipped
     end
 
-    if AutoWinInitialEquipDone then
-        return nil
+    local backpack = Player:FindFirstChildOfClass("Backpack")
+
+    if AutoWinTool
+    and AutoWinTool.Parent == backpack then
+        pcall(function()
+            humanoid:EquipTool(AutoWinTool)
+        end)
+
+        task.wait(0.06)
+
+        if AutoWinTool.Parent == character then
+            return AutoWinTool
+        end
+    end
+
+    if AutoWinToolName
+    and backpack then
+        local cached = backpack:FindFirstChild(AutoWinToolName)
+
+        if cached
+        and cached:IsA("Tool") then
+            AutoWinTool = cached
+
+            pcall(function()
+                humanoid:EquipTool(cached)
+            end)
+
+            task.wait(0.06)
+
+            if cached.Parent == character then
+                return cached
+            end
+        end
+    end
+
+    if tick() - AutoWinLastEquip < 0.35 then
+        return character:FindFirstChildOfClass("Tool")
     end
 
     AutoWinInitialEquipDone = true
+    AutoWinLastEquip = tick()
     PressHotbarTwo()
     task.wait(0.08)
 
-    return character:FindFirstChildOfClass("Tool")
+    local newEquipped = character:FindFirstChildOfClass("Tool")
+
+    if newEquipped then
+        AutoWinTool = newEquipped
+        AutoWinToolName = newEquipped.Name
+    end
+
+    return newEquipped
 end
 
 local FindAppleByName
@@ -274,13 +318,31 @@ FindAppleByName = function()
 end
 
 local function FindAutoWinTool()
-    local character = Player.Character
+    local character, humanoid = GetCharacterState()
     local backpack = Player:FindFirstChildOfClass("Backpack")
 
     if AutoWinTool
     and AutoWinTool.Parent
     and AutoWinTool:IsA("Tool") then
-        return AutoWinTool
+        if character
+        and AutoWinTool.Parent == character then
+            return AutoWinTool
+        end
+
+        if humanoid
+        and humanoid.Health > 0
+        and backpack
+        and AutoWinTool.Parent == backpack then
+            pcall(function()
+                humanoid:EquipTool(AutoWinTool)
+            end)
+
+            task.wait(0.05)
+
+            if AutoWinTool.Parent == character then
+                return AutoWinTool
+            end
+        end
     end
 
     local equipped = character
@@ -292,14 +354,6 @@ local function FindAutoWinTool()
         return equipped
     end
 
-    local hotbarTwo = EquipAndGetHotbarTwo()
-
-    if hotbarTwo then
-        AutoWinTool = hotbarTwo
-        AutoWinToolName = hotbarTwo.Name
-        return hotbarTwo
-    end
-
     if AutoWinToolName then
         local cached =
             (character and character:FindFirstChild(AutoWinToolName))
@@ -307,8 +361,29 @@ local function FindAutoWinTool()
 
         if cached and cached:IsA("Tool") then
             AutoWinTool = cached
-            return cached
+
+            if humanoid
+            and humanoid.Health > 0
+            and cached.Parent == backpack then
+                pcall(function()
+                    humanoid:EquipTool(cached)
+                end)
+
+                task.wait(0.05)
+            end
+
+            if cached.Parent == character then
+                return cached
+            end
         end
+    end
+
+    local hotbarTwo = EquipAndGetHotbarTwo(true)
+
+    if hotbarTwo then
+        AutoWinTool = hotbarTwo
+        AutoWinToolName = hotbarTwo.Name
+        return hotbarTwo
     end
 
     return nil
@@ -326,6 +401,10 @@ local function ClickAutoWinTool(tool)
     local equipped =
         character:FindFirstChildOfClass("Tool")
 
+    if not equipped then
+        equipped = FindAutoWinTool()
+    end
+
     if equipped then
         tool = equipped
         AutoWinTool = equipped
@@ -335,7 +414,7 @@ local function ClickAutoWinTool(tool)
     end
 
     if not tool
-    or not tool.Parent then
+    or tool.Parent ~= character then
         return false
     end
 
@@ -343,37 +422,7 @@ local function ClickAutoWinTool(tool)
         tool:Activate()
     end)
 
-    pcall(function()
-        local camera = workspace.CurrentCamera
-        local x = camera
-            and camera.ViewportSize.X * 0.5
-            or 400
-        local y = camera
-            and camera.ViewportSize.Y * 0.5
-            or 300
-
-        VirtualInputManager:SendMouseButtonEvent(
-            x,
-            y,
-            0,
-            true,
-            game,
-            0
-        )
-
-        task.wait(0.035)
-
-        VirtualInputManager:SendMouseButtonEvent(
-            x,
-            y,
-            0,
-            false,
-            game,
-            0
-        )
-    end)
-
-    task.wait(0.025)
+    task.wait(0.04)
 
     pcall(function()
         tool:Activate()
@@ -489,7 +538,7 @@ local function StartAutoWin()
             AutoWinTool = tool
             AutoWinToolName = tool.Name
         else
-            tool = AutoWinTool
+            tool = FindAutoWinTool()
         end
 
         if not tool
