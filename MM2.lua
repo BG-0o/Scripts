@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-11-mm2-walkfling-1"
+    "2026-09-11-mm2-shoot-overhead-timer-fix"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -1981,7 +1981,11 @@ local function FormatRoundSeconds(value)
         return nil
     end
 
-    number = math.max(0, math.floor(number + 0.5))
+    if number < 0 then
+        return nil
+    end
+
+    number = math.floor(number + 0.5)
 
     if number > 9999 then
         return nil
@@ -2167,6 +2171,41 @@ local function FindLikelyRoundState(mainGui, gameGui)
 end
 
 local function FindMM2RoundTimerText()
+    local timerPart = workspace:FindFirstChild("RoundTimerPart", true)
+
+    if timerPart then
+        local attributes = {
+            "Time",
+            "RoundTime",
+            "Timer",
+            "Value"
+        }
+
+        for _, attributeName in ipairs(attributes) do
+            local value = timerPart:GetAttribute(attributeName)
+
+            if typeof(value) == "number" then
+                local found = FormatRoundSeconds(value)
+
+                if found then
+                    return found
+                end
+            elseif typeof(value) == "string" then
+                local found = ReadTimerFromText(value, attributeName)
+
+                if found then
+                    return found
+                end
+            end
+        end
+
+        local found = ScanRoundTimerContainer(timerPart)
+
+        if found then
+            return found
+        end
+    end
+
     local playerGui = Player:FindFirstChildOfClass("PlayerGui")
     local mainGui = playerGui and playerGui:FindFirstChild("MainGUI")
     local gameGui = mainGui and mainGui:FindFirstChild("Game")
@@ -2175,10 +2214,7 @@ local function FindMM2RoundTimerText()
         {"MainGUI", "Game", "Timer", "Container", "Timer"},
         {"MainGUI", "Game", "Timer", "Timer"},
         {"MainGUI", "Game", "Timer"},
-        {"MainGUI", "Game", "RoundTimer"},
-        {"MainGUI", "Lobby", "Timer"},
-        {"MainGUI", "Lobby", "Screens", "Timer"},
-        {"MainGUI", "Lobby", "Intermission", "Timer"}
+        {"MainGUI", "Game", "RoundTimer"}
     }
 
     for _, path in ipairs(preferredPaths) do
@@ -2190,23 +2226,24 @@ local function FindMM2RoundTimerText()
         end
     end
 
-    local directContainers = {
-        gameGui,
-        mainGui,
-        playerGui,
-        ReplicatedStorage,
-        workspace
-    }
-
-    for _, container in ipairs(directContainers) do
-        local found = ScanRoundTimerContainer(container)
+    if gameGui then
+        local found = ScanRoundTimerContainer(gameGui)
 
         if found then
             return found
         end
     end
 
-    return FindLikelyRoundState(mainGui, gameGui)
+    local replicatedTimer = ReplicatedStorage:FindFirstChild("RoundTimerPart", true)
+        or ReplicatedStorage:FindFirstChild("RoundTimer", true)
+
+    local replicatedFound = ScanRoundTimerContainer(replicatedTimer)
+
+    if replicatedFound then
+        return replicatedFound
+    end
+
+    return "N/A"
 end
 
 local function CreateRoundTimerFrame()
@@ -2946,25 +2983,36 @@ local function FireGuidedGunShot(
     if not gun
     or not gun.Parent
     or not target
-    or not target.Parent then
+    or not target.Parent
+    or not target.Character then
         return false
     end
 
     local character = Player.Character
-    local predicted = GetPredictedTargetPosition(target)
 
-    if not character
-    or not predicted then
+    if not character then
         return false
     end
 
-    local originPart = character:FindFirstChild("RightHand")
-        or character:FindFirstChild("Right Arm")
-        or character:FindFirstChild("HumanoidRootPart")
+    local targetCharacter = target.Character
+    local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+    local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
+        or targetCharacter:FindFirstChild("UpperTorso")
+        or targetCharacter:FindFirstChild("Torso")
 
-    if not originPart then
+    if not targetHumanoid
+    or targetHumanoid.Health <= 0
+    or not targetRoot then
         return false
     end
+
+    local shotTarget = targetRoot.Position
+
+    local shotOrigin = Vector3.new(
+        shotTarget.X,
+        shotTarget.Y + 1.05,
+        shotTarget.Z
+    )
 
     local shootRemote = gun:FindFirstChild("Shoot")
         or gun:FindFirstChild("Shoot", true)
@@ -2973,8 +3021,8 @@ local function FireGuidedGunShot(
     and shootRemote:IsA("RemoteEvent") then
         local ok = pcall(function()
             shootRemote:FireServer(
-                CFrame.new(originPart.Position),
-                CFrame.new(predicted)
+                CFrame.new(shotOrigin),
+                CFrame.new(shotTarget)
             )
         end)
 
@@ -2997,7 +3045,7 @@ local function FireGuidedGunShot(
     if remoteFunction
     and remoteFunction:IsA("RemoteFunction") then
         local ok = pcall(function()
-            remoteFunction:InvokeServer(1, predicted, "AH2")
+            remoteFunction:InvokeServer(1, shotTarget, "AH2")
         end)
 
         return ok
@@ -5938,37 +5986,7 @@ local function GetMM2RoleNoticeMapKey()
 end
 
 local function NotifyMM2LocalRole(role, mapKey)
-    if not role then
-        return
-    end
-
-    local notifyRole = role
-
-    if notifyRole == "Hero" then
-        notifyRole = "Sheriff"
-    end
-
-    local key = tostring(mapKey or "") .. "|" .. tostring(notifyRole)
-
-    if MM2LastRoleNoticeKey == key then
-        return
-    end
-
-    MM2LastRoleNoticeKey = key
-
-    local color = Color3.fromRGB(100, 255, 130)
-
-    if notifyRole == "Murderer" then
-        color = Color3.fromRGB(255, 70, 70)
-    elseif notifyRole == "Sheriff" then
-        color = Color3.fromRGB(70, 160, 255)
-    end
-
-    CustomNotify(
-        "You are " .. notifyRole,
-        color,
-        5
-    )
+    return
 end
 
 
@@ -5990,13 +6008,6 @@ task.spawn(function()
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         local alive = humanoid and humanoid.Health > 0
         local localRole = alive and GetRole(Player) or nil
-        local roleMapKey = GetMM2RoleNoticeMapKey()
-
-        if not roleMapKey then
-            MM2LastRoleNoticeKey = nil
-        elseif localRole then
-            NotifyMM2LocalRole(localRole, roleMapKey)
-        end
 
         if MM2AutoRuntime.KillAll
         and not Settings.MM2AutoFarmV2
