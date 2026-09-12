@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-11-nds-mm2-serverinfo"
+ToxUpdateVersion = "2026-09-11-mm2-shoot-overhead-timer-fix"
 
 
 function ClearToxTable(target)
@@ -7588,20 +7588,18 @@ local function ShowUniversalUpdateAfterLoad()
             ToxUpdateVersion,
             {
                 ADDED = {
-                    "NDS Disaster Detector now waits for the map to load and warns once per map.",
-                    "MM2 now notifies your role when the round role is detected.",
-                    "Server Info now has a server page with region, JobId, JoinId and copy support."
+                    "MM2 Shoot Murderer now uses the overhead shot style from the provided reference script."
                 },
                 FIXED = {
-                    "Server Info sizing was adjusted so the text no longer cuts off.",
-                    "NDS Disaster Detector no longer repeats the same disaster every few seconds."
+                    "MM2 Round Timer now prioritizes the real match timer instead of lobby or unrelated UI text.",
+                    "MM2 Shoot Murderer no longer uses the direct line shot style for the C key."
                 },
                 CHANGED = {
-                    "Server Info uses a wider layout when showing server details.",
-                    "Disaster notifications now say Disaster incoming and last 5 seconds."
+                    "MM2 role notifications were disabled.",
+                    "Round Timer now shows N/A when no valid match timer is available."
                 },
                 REMOVED = {
-                    "Repeated disaster notices during the same map."
+                    "Automatic MM2 notifications saying You are Innocent, Sheriff, or Murderer."
                 }
             }
         )
