@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-11-role-notify-1"
+    "2026-09-11-mm2-walkfling-1"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -5302,6 +5302,10 @@ end, "Speed")
 MM2CreateToggle("Noclip", GamePage, Settings.Noclip, function(v)
     SetShared("Noclip", v)
 end, "Noclip")
+
+MM2CreateToggle("Walk Fling", GamePage, Settings.WalkFling, function(v)
+    SetShared("WalkFling", v)
+end, "WalkFling")
 
 MM2CreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
     SetShared("AntiFling", v)
