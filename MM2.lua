@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-12-mm2-clicktp-grab-kill-shoot-v2"
+    "2026-09-13-save-clicktp-fix"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -97,7 +97,7 @@ Settings.MM2KillAllKey = Settings.MM2KillAllKey or Enum.KeyCode.K
 Settings.MM2KillAllAutoV2 = Settings.MM2KillAllAutoV2 == true or Settings.MM2KillAllAuto == true
 Settings.MM2KillAllAuto = false
 Settings.MM2ShootMurderKey = Settings.MM2ShootMurderKey or Enum.KeyCode.C
-Settings.MM2ShootMurderAutoV2 = false
+Settings.MM2ShootMurderAutoV2 = Settings.MM2ShootMurderAutoV2 == true or Settings.MM2ShootMurderAuto == true
 Settings.MM2ShootMurderAuto = false
 Settings.MM2GrabGunKey = Settings.MM2GrabGunKey or Enum.KeyCode.G
 Settings.MM2GrabGunAutoV2 = Settings.MM2GrabGunAutoV2 == true or Settings.MM2GrabGunAuto == true
@@ -115,7 +115,8 @@ getgenv().__ToxAntiKickResume = nil
 getgenv().__ToxAntiKickResumeFarm = nil
 
 Settings.MM2AutoFarmV2 =
-    ResumeAutoFarmAfterAntiKick
+    Settings.MM2AutoFarmV2 == true
+    or ResumeAutoFarmAfterAntiKick
 
 Settings.MM2AutoFarmResetOnFull =
     Settings.MM2AutoFarmResetOnFull == true
@@ -5527,7 +5528,7 @@ CreateMM2Section(
 MM2AutoRuntime = {
     SilentAim = Settings.MM2SilentAimAutoV2 == true,
     KillAll = Settings.MM2KillAllAutoV2 == true,
-    Shoot = false,
+    Shoot = Settings.MM2ShootMurderAutoV2 == true,
     GrabGun = Settings.MM2GrabGunAutoV2 == true
 }
 
@@ -6319,6 +6320,21 @@ end))
 
 
 getgenv().ToxMM2Cleanup = function()
+    local preservedMM2Settings = {
+        MM2AutoFarm = Settings.MM2AutoFarm,
+        MM2AutoFarmV2 = Settings.MM2AutoFarmV2,
+        MM2AutoWin = Settings.MM2AutoWin,
+        MM2RoleESP = Settings.MM2RoleESP,
+        MM2SilentAimAuto = Settings.MM2SilentAimAuto,
+        MM2SilentAimAutoV2 = Settings.MM2SilentAimAutoV2,
+        MM2KillAllAuto = Settings.MM2KillAllAuto,
+        MM2KillAllAutoV2 = Settings.MM2KillAllAutoV2,
+        MM2ShootMurderAuto = Settings.MM2ShootMurderAuto,
+        MM2ShootMurderAutoV2 = Settings.MM2ShootMurderAutoV2,
+        MM2GrabGunAuto = Settings.MM2GrabGunAuto,
+        MM2GrabGunAutoV2 = Settings.MM2GrabGunAutoV2
+    }
+
     getgenv().ToxMM2ModuleLoadedJobId = nil
     Settings.MM2AutoFarm = false
     Settings.MM2AutoFarmV2 = false
@@ -6407,6 +6423,10 @@ getgenv().ToxMM2Cleanup = function()
         getgenv().SyncToggleVisuals("MM2KillAllAutoV2", false)
         getgenv().SyncToggleVisuals("MM2ShootMurderAutoV2", false)
         getgenv().SyncToggleVisuals("MM2GrabGunAutoV2", false)
+    end
+
+    for key, value in pairs(preservedMM2Settings) do
+        Settings[key] = value
     end
 end
 
