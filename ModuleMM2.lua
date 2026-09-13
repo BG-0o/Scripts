@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 MM2ModuleVersion =
-    "2026-09-13-mm2-split-loader-config-fix"
+    "2026-09-13-mm2-target-refresh-fix"
 
 Players = game:GetService("Players")
 UserInputService = game:GetService("UserInputService")
@@ -770,6 +770,78 @@ PlayerSelectorTitle = nil
 PlayerSelectorInput = nil
 PlayerSelectorAction = nil
 PlayerSelectorMode = "targets"
+MM2TargetLeaveKeepSeconds = 180
+RecentLeftMM2Targets = {}
+PlayerSelectorRefreshQueued = false
+
+function PruneRecentLeftTargets()
+    local changed = false
+    local now = os.clock()
+
+    for userId, item in pairs(RecentLeftMM2Targets) do
+        if typeof(item) ~= "table"
+        or not tonumber(item.LeftAt)
+        or now - item.LeftAt >= MM2TargetLeaveKeepSeconds then
+            RecentLeftMM2Targets[userId] = nil
+            KnifeTargetIds[userId] = nil
+            changed = true
+        end
+    end
+
+    return changed
+end
+
+function RememberLeftTarget(target)
+    if not target
+    or target == Player then
+        return
+    end
+
+    local userId = tonumber(target.UserId)
+
+    if not userId then
+        return
+    end
+
+    RecentLeftMM2Targets[userId] = {
+        UserId = userId,
+        Name = target.Name,
+        DisplayName = target.DisplayName,
+        LeftAt = os.clock()
+    }
+
+    AddTargetToHistory(target)
+
+    task.delay(MM2TargetLeaveKeepSeconds + 0.2, function()
+        local changed = PruneRecentLeftTargets()
+        CleanTargetHistory()
+
+        if changed
+        and PlayerSelectorFrame
+        and PlayerSelectorFrame.Visible then
+            RefreshPlayerSelector()
+        end
+    end)
+end
+
+function RequestPlayerSelectorRefresh()
+    if not PlayerSelectorFrame
+    or not PlayerSelectorFrame.Visible
+    or PlayerSelectorRefreshQueued then
+        return
+    end
+
+    PlayerSelectorRefreshQueued = true
+
+    task.delay(0.12, function()
+        PlayerSelectorRefreshQueued = false
+
+        if PlayerSelectorFrame
+        and PlayerSelectorFrame.Visible then
+            RefreshPlayerSelector()
+        end
+    end)
+end
 
 function IsWhitelisted(target)
     if not target then
@@ -870,12 +942,14 @@ end
 function CleanKnifeTargets()
     Settings.MM2AutoClearTarget = true
     Settings.MM2TargetLock = false
+    PruneRecentLeftTargets()
 
     for userId in pairs(KnifeTargetIds) do
         local target = FindTargetByUserId(userId)
 
-        if not target
-        or not IsTargetAlive(target) then
+        if target and IsWhitelisted(target) then
+            KnifeTargetIds[userId] = nil
+        elseif not target and not RecentLeftMM2Targets[tonumber(userId)] then
             KnifeTargetIds[userId] = nil
         end
     end
@@ -918,13 +992,21 @@ end
 
 function CleanTargetHistory()
     Settings.MM2TargetHistory = typeof(Settings.MM2TargetHistory) == "table" and Settings.MM2TargetHistory or {}
+    PruneRecentLeftTargets()
 
     for index = #Settings.MM2TargetHistory, 1, -1 do
         local item = Settings.MM2TargetHistory[index]
+        local userId = typeof(item) == "table" and tonumber(item.UserId) or nil
 
-        if typeof(item) ~= "table"
-        or not tonumber(item.UserId) then
+        if not userId then
             table.remove(Settings.MM2TargetHistory, index)
+        else
+            local current = FindTargetByUserId(userId)
+            local recentLeft = RecentLeftMM2Targets[userId]
+
+            if not current and not recentLeft then
+                table.remove(Settings.MM2TargetHistory, index)
+            end
         end
     end
 
@@ -1517,8 +1599,14 @@ function UpdateSelectorActionText()
     if PlayerSelectorMode == "targets" then
         local count = 0
 
-        for _ in pairs(KnifeTargetIds) do
-            count = count + 1
+        for userId in pairs(KnifeTargetIds) do
+            local target = FindTargetByUserId(userId)
+
+            if target
+            and not IsWhitelisted(target)
+            and IsTargetAlive(target) then
+                count = count + 1
+            end
         end
 
         PlayerSelectorAction.Text = "Kill Selected (" .. tostring(count) .. ")"
@@ -1532,6 +1620,7 @@ function RefreshPlayerSelector()
         return
     end
 
+    PlayerSelectorRefreshQueued = false
     CleanKnifeTargets()
 
     for _, child in ipairs(PlayerSelectorScroll:GetChildren()) do
@@ -1583,7 +1672,8 @@ function RefreshPlayerSelector()
 
             local userId = tonumber(item.UserId)
             local target = FindTargetByUserId(userId)
-            local status = target and GetTargetStatusText(target) or "Left"
+            local recentLeft = userId and RecentLeftMM2Targets[userId] or nil
+            local status = target and GetTargetStatusText(target) or (recentLeft and "Left" or "Left")
             local row = Instance.new("Frame")
             row.Size = UDim2.new(1, -4, 0, 36)
             row.BackgroundColor3 = Color3.fromRGB(15, 15, 24)
@@ -2074,24 +2164,23 @@ function OpenPlayerSelector(mode)
     RefreshPlayerSelector()
 end
 
-AddConnection(Players.PlayerAdded:Connect(function()
-    if PlayerSelectorFrame and PlayerSelectorFrame.Visible then
-        task.defer(RefreshPlayerSelector)
+AddConnection(Players.PlayerAdded:Connect(function(target)
+    if target then
+        RecentLeftMM2Targets[target.UserId] = nil
     end
+
+    RequestPlayerSelectorRefresh()
 end))
 
 AddConnection(Players.PlayerRemoving:Connect(function(target)
-    KnifeTargetIds[target.UserId] = nil
-
-    if PlayerSelectorFrame and PlayerSelectorFrame.Visible then
-        task.defer(RefreshPlayerSelector)
-    end
+    RememberLeftTarget(target)
+    RequestPlayerSelectorRefresh()
 end))
 
 LastTargetAutoClear = 0
 
 AddConnection(RunService.Heartbeat:Connect(function()
-    if os.clock() - LastTargetAutoClear < 1 then
+    if os.clock() - LastTargetAutoClear < 5 then
         return
     end
 
@@ -2099,14 +2188,12 @@ AddConnection(RunService.Heartbeat:Connect(function()
 
     local before = 0
 
-    Settings.MM2AutoClearTarget = true
-    Settings.MM2TargetLock = false
-
     for _ in pairs(KnifeTargetIds) do
         before = before + 1
     end
 
     CleanKnifeTargets()
+    CleanTargetHistory()
 
     local after = 0
 
@@ -2114,10 +2201,8 @@ AddConnection(RunService.Heartbeat:Connect(function()
         after = after + 1
     end
 
-    if before ~= after
-    and PlayerSelectorFrame
-    and PlayerSelectorFrame.Visible then
-        RefreshPlayerSelector()
+    if before ~= after then
+        RequestPlayerSelectorRefresh()
     end
 end))
 
@@ -2477,15 +2562,6 @@ AddConnection(RunService.Heartbeat:Connect(function()
     end
 end))
 
-task.spawn(function()
-    while not getgenv().Destroyed and game.PlaceId == 142823291 do
-        if PlayerSelectorFrame and PlayerSelectorFrame.Visible then
-            RefreshPlayerSelector()
-        end
-
-        task.wait(0.75)
-    end
-end)
 
 function NormalGunClick()
     local viewport = Camera.ViewportSize
