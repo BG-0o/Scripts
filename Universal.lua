@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-13-save-clicktp-fix"
+ToxUpdateVersion = "2026-09-13-save-defaults-pergame"
 
 
 function ClearToxTable(target)
@@ -4640,7 +4640,7 @@ local function GetClosestPlayerToMouse()
 end
 
 CreateToggle("Aimbot (Right Click)", CombatPage, Settings.Aimbot, function(v) Settings.Aimbot = v end)
-CreateToggleWithValue("Aim Smoothness", CombatPage, true, Settings.AimbotSmoothness, function(v) end, function(val) Settings.AimbotSmoothness = val end)
+CreateToggleWithValue("Aim Smoothness", CombatPage, false, Settings.AimbotSmoothness, function(v) end, function(val) Settings.AimbotSmoothness = val end)
 CreateDropdown("Aim Part", {"Head", "HumanoidRootPart", "Torso"}, CombatPage, Settings.AimPart, function(v) Settings.AimPart = v end)
 CreateToggle("Aim Wall Check", CombatPage, Settings.AimWallCheck, function(v) Settings.AimWallCheck = v end)
 CreateToggleWithValue("Show FOV Circle", CombatPage, Settings.ShowFOV, Settings.FOVRadius, function(v) Settings.ShowFOV = v end, function(val) Settings.FOVRadius = val end)
@@ -4930,7 +4930,7 @@ CreateToggleWithValue("Camera FOV", VisualsPage, Settings.FOVEnabled, Settings.F
     end
 end, function(val) Settings.FOVValue = val end)
 
-CreateToggleWithValue("ESP Max Dist", VisualsPage, true, GetCurrentESPMAX(), function(v) end, function(val)
+CreateToggleWithValue("ESP Max Dist", VisualsPage, false, GetCurrentESPMAX(), function(v) end, function(val)
     SetCurrentESPMAX(val)
 end, "EspMaxDistance")
 CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", "Magenta", "Orange", "Purple", "Lime", "Pink", "Gold"}, VisualsPage, Settings.EspColorName, function(v)
@@ -6236,10 +6236,12 @@ CreateToggle("Server Info", ConfigPage, Settings.ToxServerInfoVisible, function(
 end, "ToxServerInfoVisible")
 
 
+SetRender3DEnabled(true)
+
 CreateToggle(
     "3D Rendering",
     ConfigPage,
-    Settings.Render3D == false,
+    false,
     function(v)
         SetRender3DEnabled(
             not v
@@ -7725,14 +7727,15 @@ local function ShowUniversalUpdateAfterLoad()
             ToxUpdateVersion,
             {
                 ADDED = {
-                    "Save protection now keeps game-specific settings when switching between games."
+                    "Game-specific saves are preserved separately for every supported game you play."
                 },
                 FIXED = {
-                    "MM2 saved toggles no longer reset when leaving another game and returning to MM2.",
-                    "Ctrl Click TP now searches for a valid ground point from the click instead of failing on walls or map edges."
+                    "Aim Smoothness and ESP Max Dist no longer appear as enabled toggles by default.",
+                    "3D Rendering no longer appears enabled on startup.",
+                    "Unsupported games no longer overwrite supported-game saved toggles."
                 },
                 CHANGED = {
-                    "Ctrl Click TP is less strict while still avoiding barriers, invisible kill parts and void parts."
+                    "Only Anti AFK and Anti Fling are forced on at startup."
                 },
                 REMOVED = {}
             }
