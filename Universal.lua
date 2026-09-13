@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-11-mm2-shoot-overhead-timer-fix"
+ToxUpdateVersion = "2026-09-12-mm2-clicktp-grab-kill-shoot-v2"
 
 
 function ClearToxTable(target)
@@ -2510,9 +2510,16 @@ getgenv().ToxSafeTeleportToCFrame = function(cframe, useGround, reason)
         getgenv().AllowToxTeleport(1.5, reason or "ToxHub")
     end
 
+    local targetCFrame = useGround and ResolveSafeGroundCFrame(cframe) or cframe
+
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
-    root.CFrame = useGround and ResolveSafeGroundCFrame(cframe) or cframe
+
+    if Player.Character then
+        Player.Character:PivotTo(targetCFrame)
+    else
+        root.CFrame = targetCFrame
+    end
 
     if getgenv().SetNDSNoTPAnchor then
         pcall(function()
@@ -6529,20 +6536,103 @@ end))
 
 SubGuisPreKeyHiddenState = {}
 
+local function IsBadCtrlClickTeleportPart(part)
+    if not part
+    or not part:IsA("BasePart") then
+        return true
+    end
+
+    local lower = string.lower(tostring(part.Name or "") .. " " .. tostring(part.Parent and part.Parent.Name or ""))
+
+    if part.Transparency >= 0.95
+    or string.find(lower, "barrier", 1, true)
+    or string.find(lower, "invisible", 1, true)
+    or string.find(lower, "wall", 1, true)
+    or string.find(lower, "kill", 1, true)
+    or string.find(lower, "void", 1, true) then
+        return true
+    end
+
+    return false
+end
+
+local function GetCtrlClickTeleportCFrame()
+    local mouse = Player:GetMouse()
+    local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+
+    if not mouse
+    or not mouse.Hit
+    or not root then
+        return nil
+    end
+
+    local excluded = {}
+
+    if Player.Character then
+        table.insert(excluded, Player.Character)
+    end
+
+    if getgenv().Gui then
+        table.insert(excluded, getgenv().Gui)
+    end
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = excluded
+    params.IgnoreWater = false
+
+    local camera = workspace.CurrentCamera or Camera
+    local result = nil
+
+    if camera then
+        local ray = camera:ScreenPointToRay(mouse.X, mouse.Y)
+        result = workspace:Raycast(ray.Origin, ray.Direction * 5000, params)
+    end
+
+    if not result then
+        local target = mouse.Target
+
+        if IsBadCtrlClickTeleportPart(target) then
+            return nil
+        end
+
+        return CFrame.new(mouse.Hit.Position + Vector3.new(0, 3, 0))
+    end
+
+    if IsBadCtrlClickTeleportPart(result.Instance) then
+        return nil
+    end
+
+    if result.Normal.Y < 0.45 then
+        local down = workspace:Raycast(
+            result.Position + Vector3.new(0, 12, 0),
+            Vector3.new(0, -90, 0),
+            params
+        )
+
+        if not down
+        or down.Normal.Y < 0.45
+        or IsBadCtrlClickTeleportPart(down.Instance) then
+            return nil
+        end
+
+        result = down
+    end
+
+    return CFrame.new(result.Position + Vector3.new(0, 3, 0))
+end
+
 AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and Settings.CtrlClickTP and input.UserInputType == Enum.UserInputType.MouseButton1 then
         if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
-            local mouse = Player:GetMouse()
             local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-            if mouse and mouse.Hit and Root then
-                local targetCFrame = CFrame.new(
-                    mouse.Hit.Position + Vector3.new(0, 3, 0)
-                )
+            local targetCFrame = GetCtrlClickTeleportCFrame()
 
+            if targetCFrame and Root then
                 if getgenv().ToxSafeTeleportToCFrame then
                     getgenv().ToxSafeTeleportToCFrame(
                         targetCFrame,
-                        true,
+                        false,
                         "Ctrl Click TP"
                     )
                 else
@@ -6554,7 +6644,14 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
                         getgenv().AllowToxTeleport(1.25, "Ctrl Click TP")
                     end
 
-                    Root.CFrame = targetCFrame
+                    Root.AssemblyLinearVelocity = Vector3.zero
+                    Root.AssemblyAngularVelocity = Vector3.zero
+
+                    if Player.Character then
+                        Player.Character:PivotTo(targetCFrame)
+                    else
+                        Root.CFrame = targetCFrame
+                    end
                 end
             end
         end
@@ -7588,18 +7685,20 @@ local function ShowUniversalUpdateAfterLoad()
             ToxUpdateVersion,
             {
                 ADDED = {
-                    "MM2 Shoot Murderer now uses the overhead shot style from the provided reference script."
+                    "MM2 Target now has a TP Target button."
                 },
                 FIXED = {
-                    "MM2 Round Timer now prioritizes the real match timer instead of lobby or unrelated UI text.",
-                    "MM2 Shoot Murderer no longer uses the direct line shot style for the C key."
+                    "Ctrl Click TP now rejects barriers, invisible parts and wall hits instead of sending you above maps.",
+                    "MM2 Grab Gun is faster and retries dropped gun pickups instead of giving up after one attempt.",
+                    "MM2 Kill All attacks fast or airborne players with stronger instant touch passes.",
+                    "MM2 Shoot Murderer no longer turns itself off when the murderer dies or disappears."
                 },
                 CHANGED = {
-                    "MM2 role notifications were disabled.",
-                    "Round Timer now shows N/A when no valid match timer is available."
+                    "MM2 Shoot Murderer keeps the overhead shot style from the provided reference script.",
+                    "MM2 Auto Farm moves the full character during coin tween instead of moving only the root."
                 },
                 REMOVED = {
-                    "Automatic MM2 notifications saying You are Innocent, Sheriff, or Murderer."
+                    "MM2 Round Timer option."
                 }
             }
         )
