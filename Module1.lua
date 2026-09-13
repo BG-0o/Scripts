@@ -171,6 +171,14 @@ if HasRunningToxHub() then
     getgenv().ToxUniversalLoaded = nil
     getgenv().ToxNDSModuleLoadedJobId = nil
     getgenv().ToxMM2ModuleLoadedJobId = nil
+    getgenv().ToxMM2ModuleVersion = nil
+    getgenv().ToxMM2ModulePage = nil
+    getgenv().ToxMM2CoreReady = nil
+    getgenv().ToxMM2CoreVersion = nil
+    getgenv().ToxGameModuleLoadedUrl = nil
+    getgenv().ToxGameModuleLoadedPage = nil
+    getgenv().ToxGameModuleLoadingUrl = nil
+    getgenv().ToxGameModuleLoadingPage = nil
 
     if getgenv().ToxADMINCleanup then
         pcall(getgenv().ToxADMINCleanup)
@@ -225,7 +233,8 @@ getgenv().GameModuleRegistry = {
     },
     [142823291] = {
         ShortName = "MM2",
-        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/MM2.lua",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/MM2.lua?toxv=2026-09-13-mm2-split-loader-config-fix",
+        CoreUrl = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ModuleMM2.lua?toxv=2026-09-13-mm2-split-loader-config-fix",
         Ready = true
     },
     [4522347649] = {
