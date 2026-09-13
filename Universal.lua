@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-13-save-defaults-pergame"
+ToxUpdateVersion = "2026-09-13-serverinfo-all-copy"
 
 
 function ClearToxTable(target)
@@ -5921,15 +5921,7 @@ function GetServerRegionText()
 end
 
 function BuildServerJoinText()
-    local lines = {
-        "PlaceId: " .. tostring(game.PlaceId),
-        "JobId: " .. tostring(game.JobId ~= "" and game.JobId or "N/A"),
-        "JoinId: " .. tostring(game.JobId ~= "" and game.JobId or "N/A"),
-        "Players: " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers),
-        "Region: " .. GetServerRegionText()
-    }
-
-    return table.concat(lines, "\n")
+    return tostring(game.JobId ~= "" and game.JobId or "N/A")
 end
 
 function CopyServerJoinId()
@@ -5955,7 +5947,7 @@ function CopyServerJoinId()
 
     if copied then
         CustomNotify(
-            "Server info copied",
+            "JoinId copied",
             Color3.fromRGB(100, 255, 130),
             3
         )
@@ -5983,13 +5975,14 @@ end
 function BuildServerInfoLines()
     local mode = NormalizeServerInfoMode(Settings.ToxServerInfoMode)
     local lines = {}
+    local fullJobId = tostring(game.JobId ~= "" and game.JobId or "N/A")
 
     if mode == "Server" then
         table.insert(lines, "Region: " .. GetServerRegionText())
         table.insert(lines, "Players: " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers))
         table.insert(lines, "PlaceId: " .. tostring(game.PlaceId))
-        table.insert(lines, "JobId: " .. GetShortServerId(game.JobId))
-        table.insert(lines, "JoinId: " .. GetShortServerId(game.JobId))
+        table.insert(lines, "JobId: " .. fullJobId)
+        table.insert(lines, "JoinId: " .. fullJobId)
         return lines
     end
 
@@ -6003,6 +5996,9 @@ function BuildServerInfoLines()
     if mode == "FPS/Ping/Players" then
         table.insert(lines, "Players: " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers))
         table.insert(lines, "Region: " .. GetServerRegionText())
+        table.insert(lines, "PlaceId: " .. tostring(game.PlaceId))
+        table.insert(lines, "JobId: " .. fullJobId)
+        table.insert(lines, "JoinId: " .. fullJobId)
     end
 
     return lines
@@ -6013,13 +6009,20 @@ function RefreshServerInfoSize()
         return
     end
 
+    local mode = NormalizeServerInfoMode(Settings.ToxServerInfoMode)
     local lineCount = #BuildServerInfoLines()
-    local width = NormalizeServerInfoMode(Settings.ToxServerInfoMode) == "Server" and 320 or 250
-    local height = math.max(92, 38 + lineCount * 20)
+    local width = 250
+
+    if mode == "Server"
+    or mode == "FPS/Ping/Players" then
+        width = 430
+    end
+
+    local height = math.max(92, 40 + lineCount * 19)
     ServerInfoFrame.Size = UDim2.new(0, width, 0, height)
 
     if ServerInfoText then
-        ServerInfoText.Size = UDim2.new(1, -16, 1, -36)
+        ServerInfoText.Size = UDim2.new(1, -16, 1, -34)
     end
 end
 
@@ -6052,7 +6055,7 @@ function CreateServerInfoFrame()
 
     ServerInfoFrame = Instance.new("Frame")
     ServerInfoFrame.Name = "ToxServerInfoFrame"
-    ServerInfoFrame.Size = UDim2.new(0, 250, 0, 98)
+    ServerInfoFrame.Size = UDim2.new(0, 430, 0, 174)
     ServerInfoFrame.Position = UDim2.new(1, -340, 0, 110)
     ServerInfoFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
     ServerInfoFrame.BackgroundTransparency = 0.35
@@ -6154,7 +6157,8 @@ function CreateServerInfoFrame()
     ServerInfoText.TextColor3 = Color3.fromRGB(240, 240, 245)
     ServerInfoText.Font = Enum.Font.GothamMedium
     ServerInfoText.TextSize = 12
-    ServerInfoText.TextWrapped = true
+    ServerInfoText.TextWrapped = false
+    ServerInfoText.TextTruncate = Enum.TextTruncate.None
     ServerInfoText.TextXAlignment = Enum.TextXAlignment.Left
     ServerInfoText.TextYAlignment = Enum.TextYAlignment.Top
     ServerInfoText.Parent = ServerInfoFrame
@@ -7726,16 +7730,13 @@ local function ShowUniversalUpdateAfterLoad()
         getgenv().ShowToxUpdateGui(
             ToxUpdateVersion,
             {
-                ADDED = {
-                    "Game-specific saves are preserved separately for every supported game you play."
-                },
+                ADDED = {},
                 FIXED = {
-                    "Aim Smoothness and ESP Max Dist no longer appear as enabled toggles by default.",
-                    "3D Rendering no longer appears enabled on startup.",
-                    "Unsupported games no longer overwrite supported-game saved toggles."
+                    "Server Info ALL mode now shows FPS, ping, players, region, PlaceId, JobId and JoinId.",
+                    "Server Info size was increased to stop cutting long server ids."
                 },
                 CHANGED = {
-                    "Only Anti AFK and Anti Fling are forced on at startup."
+                    "Server Info COPY now copies only the JoinId."
                 },
                 REMOVED = {}
             }
