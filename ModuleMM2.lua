@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 MM2ModuleVersion =
-    "2026-09-13-mm2-target-refresh-fix"
+    "2026-09-13-mm2-killall-still-knife"
 
 Players = game:GetService("Players")
 UserInputService = game:GetService("UserInputService")
@@ -1101,18 +1101,6 @@ function TouchKnifeTarget(
         return false
     end
 
-    local targetCharacter = target.Character
-    local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
-    local targetRoot = GetKnifeTargetRoot(target)
-    local handle = knife:FindFirstChild("Handle") or knife:FindFirstChildWhichIsA("BasePart", true)
-
-    if not targetHumanoid
-    or targetHumanoid.Health <= 0
-    or not targetRoot
-    or not handle then
-        return false
-    end
-
     local character, humanoid, root = GetCharacterState()
 
     if not character
@@ -1122,7 +1110,13 @@ function TouchKnifeTarget(
         return false
     end
 
-    local oldCFrame = character:GetPivot()
+    local handle = knife:FindFirstChild("Handle")
+        or knife:FindFirstChildWhichIsA("BasePart", true)
+
+    if not handle then
+        return false
+    end
+
     local touched = false
     local targetParts = {}
     local seen = {}
@@ -1133,49 +1127,60 @@ function TouchKnifeTarget(
         and part.Parent
         and not seen[part] then
             seen[part] = true
+
             pcall(function()
                 part.CanTouch = true
             end)
+
             table.insert(targetParts, part)
         end
     end
 
-    for _, name in ipairs({
-        "HumanoidRootPart",
-        "UpperTorso",
-        "LowerTorso",
-        "Torso",
-        "Head",
-        "LeftUpperLeg",
-        "RightUpperLeg",
-        "LeftLowerLeg",
-        "RightLowerLeg",
-        "LeftFoot",
-        "RightFoot",
-        "Left Leg",
-        "Right Leg",
-        "LeftUpperArm",
-        "RightUpperArm",
-        "LeftLowerArm",
-        "RightLowerArm",
-        "LeftHand",
-        "RightHand",
-        "Left Arm",
-        "Right Arm"
-    }) do
-        addPart(targetCharacter:FindFirstChild(name, true))
-    end
+    local function refreshParts()
+        targetParts = {}
+        seen = {}
 
-    for _, object in ipairs(targetCharacter:GetDescendants()) do
-        if #targetParts >= 24 then
-            break
+        local targetCharacter = target.Character
+
+        if not targetCharacter then
+            return false
         end
 
-        addPart(object)
-    end
+        for _, name in ipairs({
+            "HumanoidRootPart",
+            "UpperTorso",
+            "LowerTorso",
+            "Torso",
+            "Head",
+            "LeftUpperLeg",
+            "RightUpperLeg",
+            "LeftLowerLeg",
+            "RightLowerLeg",
+            "LeftFoot",
+            "RightFoot",
+            "Left Leg",
+            "Right Leg",
+            "LeftUpperArm",
+            "RightUpperArm",
+            "LeftLowerArm",
+            "RightLowerArm",
+            "LeftHand",
+            "RightHand",
+            "Left Arm",
+            "Right Arm"
+        }) do
+            addPart(targetCharacter:FindFirstChild(name, true))
+        end
 
-    if #targetParts == 0 then
-        return false
+        for _, object in ipairs(targetCharacter:GetDescendants()) do
+            if #targetParts >= 28 then
+                break
+            end
+
+            addPart(object)
+        end
+
+        return #targetParts > 0
     end
 
     local function activate()
@@ -1186,40 +1191,10 @@ function TouchKnifeTarget(
         end
     end
 
-    local function touchParts()
-        if not firetouchinterest then
-            return
-        end
-
-        pcall(function()
-            handle.CanTouch = true
-            handle.CanCollide = false
-        end)
-
-        for _, part in ipairs(targetParts) do
-            if part and part.Parent then
-                pcall(function()
-                    firetouchinterest(handle, part, 0)
-                    firetouchinterest(part, handle, 0)
-                    firetouchinterest(handle, part, 1)
-                    firetouchinterest(part, handle, 1)
-                end)
-
-                touched = true
-            end
-        end
-    end
-
-    local allow = getgenv().AllowToxTeleport
-
-    if allow then
-        allow(0.22, "MM2 Knife Attack")
-    end
-
     local function predictedPoint(mult)
-        targetCharacter = target.Character
-        targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
-        targetRoot = GetKnifeTargetRoot(target)
+        local targetCharacter = target.Character
+        local targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
+        local targetRoot = GetKnifeTargetRoot(target)
 
         if not targetCharacter
         or not targetHumanoid
@@ -1231,75 +1206,128 @@ function TouchKnifeTarget(
         local velocity = targetRoot.AssemblyLinearVelocity or Vector3.zero
         local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
 
-        if horizontal.Magnitude > 150 then
-            horizontal = horizontal.Unit * 150
+        if horizontal.Magnitude > 180 then
+            horizontal = horizontal.Unit * 180
         end
 
-        local moveBoost = targetHumanoid.MoveDirection * math.max(targetHumanoid.WalkSpeed * 0.1, 2)
-        local vertical = math.clamp(velocity.Y, -100, 100)
+        local moveDirection = targetHumanoid.MoveDirection or Vector3.zero
+        local vertical = math.clamp(velocity.Y, -120, 120)
 
         return targetRoot.Position
             + horizontal * mult
-            + moveBoost
-            + Vector3.new(0, vertical * math.clamp(mult * 0.5, 0.03, 0.12), 0)
+            + moveDirection * math.max(targetHumanoid.WalkSpeed * 0.08, 1.5)
+            + Vector3.new(0, vertical * math.clamp(mult * 0.45, 0.02, 0.1), 0)
+    end
+
+    local function fireRemoteAt(point)
+        if typeof(point) ~= "Vector3" then
+            return
+        end
+
+        local origin = root.Position
+
+        for _, remote in ipairs(knife:GetDescendants()) do
+            if remote:IsA("RemoteEvent") then
+                local lower = string.lower(tostring(remote.Name or ""))
+                local parent = remote.Parent
+
+                if parent then
+                    lower = lower .. " " .. string.lower(tostring(parent.Name or ""))
+                end
+
+                if string.find(lower, "stab", 1, true)
+                or string.find(lower, "slash", 1, true)
+                or string.find(lower, "hit", 1, true)
+                or string.find(lower, "damage", 1, true)
+                or string.find(lower, "melee", 1, true) then
+                    pcall(function()
+                        remote:FireServer(CFrame.new(origin), CFrame.new(point))
+                    end)
+
+                    pcall(function()
+                        remote:FireServer(point)
+                    end)
+
+                    pcall(function()
+                        remote:FireServer(target.Character, GetKnifeTargetRoot(target), point)
+                    end)
+                end
+            end
+        end
+    end
+
+    local function touchAt(point)
+        if not refreshParts() then
+            return false
+        end
+
+        pcall(function()
+            handle.CanTouch = true
+            handle.CanCollide = false
+        end)
+
+        local oldHandleCFrame = handle.CFrame
+
+        if typeof(point) == "Vector3" then
+            pcall(function()
+                handle.CFrame = CFrame.lookAt(point, root.Position)
+            end)
+        end
+
+        if firetouchinterest then
+            for _, part in ipairs(targetParts) do
+                if part
+                and part.Parent then
+                    pcall(function()
+                        firetouchinterest(handle, part, 0)
+                        firetouchinterest(part, handle, 0)
+                        firetouchinterest(handle, part, 1)
+                        firetouchinterest(part, handle, 1)
+                    end)
+
+                    touched = true
+                end
+            end
+        end
+
+        fireRemoteAt(point or (GetKnifeTargetRoot(target) and GetKnifeTargetRoot(target).Position))
+
+        pcall(function()
+            if oldHandleCFrame then
+                handle.CFrame = oldHandleCFrame
+            end
+        end)
+
+        return true
     end
 
     activate()
-    touchParts()
 
-    for pass = 1, 3 do
+    for pass = 1, 8 do
         if getgenv().Destroyed
         or not KnifeTargetAlive(target) then
             break
         end
 
-        local aim = predictedPoint(0.08 + pass * 0.04)
+        local point = predictedPoint(0.025 + pass * 0.018)
 
-        if not aim then
+        if not point then
             break
         end
 
-        local currentRoot = GetKnifeTargetRoot(target)
-        local right = currentRoot and currentRoot.CFrame.RightVector or Vector3.new(1, 0, 0)
-        local look = currentRoot and currentRoot.CFrame.LookVector or Vector3.new(0, 0, -1)
-
-        local positions = {
-            aim + Vector3.new(0, 0.65, 0),
-            aim - look * 1.15 + Vector3.new(0, 0.9, 0),
-            aim + look * 1.15 + Vector3.new(0, 0.9, 0),
-            aim + right * 1.35 + Vector3.new(0, 0.45, 0),
-            aim - right * 1.35 + Vector3.new(0, 0.45, 0),
-            aim + Vector3.new(0, 1.85, 0),
-            aim + Vector3.new(0, -0.8, 0)
-        }
-
-        for _, position in ipairs(positions) do
-            if getgenv().Destroyed
-            or not targetRoot
-            or not targetRoot.Parent
-            or not KnifeTargetAlive(target) then
-                break
-            end
-
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.AssemblyAngularVelocity = Vector3.zero
-            character:PivotTo(CFrame.lookAt(position, targetRoot.Position))
+        if pass == 1
+        or pass == 4
+        or pass == 7 then
             activate()
-            touchParts()
+        end
+
+        touchAt(point)
+
+        if pass % 2 == 0 then
+            RunService.Heartbeat:Wait()
+        else
             task.wait()
         end
-    end
-
-    if oldCFrame
-    and character
-    and character.Parent
-    and root
-    and root.Parent
-    and humanoid
-    and humanoid.Health > 0 then
-        root.AssemblyLinearVelocity = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
-        character:PivotTo(oldCFrame)
     end
 
     return touched
