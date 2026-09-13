@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 MM2ModuleVersion =
-    "2026-09-13-mm2-split-github-names"
+    "2026-09-13-mm2-split-loader-config-fix"
 
 Players = game:GetService("Players")
 UserInputService = game:GetService("UserInputService")
@@ -55,16 +55,6 @@ function ClearToxTable(target)
     for key in pairs(target) do
         target[key] = nil
     end
-end
-
-if getgenv().ToxMM2ModuleLoadedJobId
-    == game.JobId
-and getgenv().ToxMM2ModuleVersion
-    == MM2ModuleVersion
-and getgenv().ToxMM2ModulePage
-    == GamePage
-and not getgenv().Destroyed then
-    return
 end
 
 if getgenv().ToxMM2Cleanup then
@@ -963,7 +953,7 @@ function GetSelectedKnifeTargets()
     return targets
 end
 
-KnifeTargetAlive
+KnifeTargetAlive = nil
 
 function GetKnifeTargetRoot(target)
     local character = target and target.Character
