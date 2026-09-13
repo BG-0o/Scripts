@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-12-mm2-clicktp-grab-kill-shoot-v2"
+ToxUpdateVersion = "2026-09-13-save-clicktp-fix"
 
 
 function ClearToxTable(target)
@@ -6544,16 +6544,45 @@ local function IsBadCtrlClickTeleportPart(part)
 
     local lower = string.lower(tostring(part.Name or "") .. " " .. tostring(part.Parent and part.Parent.Name or ""))
 
-    if part.Transparency >= 0.95
-    or string.find(lower, "barrier", 1, true)
+    if string.find(lower, "barrier", 1, true)
     or string.find(lower, "invisible", 1, true)
-    or string.find(lower, "wall", 1, true)
     or string.find(lower, "kill", 1, true)
-    or string.find(lower, "void", 1, true) then
+    or string.find(lower, "void", 1, true)
+    or string.find(lower, "death", 1, true) then
+        return true
+    end
+
+    if part.Transparency >= 0.985
+    and not part.CanCollide then
         return true
     end
 
     return false
+end
+
+local function GetCtrlClickGroundFrom(position, params)
+    if typeof(position) ~= "Vector3" then
+        return nil
+    end
+
+    local heights = {8, 24, 60, 140, 260}
+
+    for _, height in ipairs(heights) do
+        local result = workspace:Raycast(
+            position + Vector3.new(0, height, 0),
+            Vector3.new(0, -(height + 320), 0),
+            params
+        )
+
+        if result
+        and result.Instance
+        and result.Normal.Y >= 0.25
+        and not IsBadCtrlClickTeleportPart(result.Instance) then
+            return result
+        end
+    end
+
+    return nil
 end
 
 local function GetCtrlClickTeleportCFrame()
@@ -6561,7 +6590,6 @@ local function GetCtrlClickTeleportCFrame()
     local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
 
     if not mouse
-    or not mouse.Hit
     or not root then
         return nil
     end
@@ -6583,43 +6611,55 @@ local function GetCtrlClickTeleportCFrame()
 
     local camera = workspace.CurrentCamera or Camera
     local result = nil
+    local hitPosition = nil
 
     if camera then
         local ray = camera:ScreenPointToRay(mouse.X, mouse.Y)
         result = workspace:Raycast(ray.Origin, ray.Direction * 5000, params)
-    end
 
-    if not result then
-        local target = mouse.Target
-
-        if IsBadCtrlClickTeleportPart(target) then
-            return nil
+        if result then
+            hitPosition = result.Position
         end
-
-        return CFrame.new(mouse.Hit.Position + Vector3.new(0, 3, 0))
     end
 
-    if IsBadCtrlClickTeleportPart(result.Instance) then
+    if not hitPosition and mouse.Hit then
+        hitPosition = mouse.Hit.Position
+    end
+
+    if not hitPosition then
         return nil
     end
 
-    if result.Normal.Y < 0.45 then
-        local down = workspace:Raycast(
-            result.Position + Vector3.new(0, 12, 0),
-            Vector3.new(0, -90, 0),
-            params
-        )
+    local finalResult = nil
 
-        if not down
-        or down.Normal.Y < 0.45
-        or IsBadCtrlClickTeleportPart(down.Instance) then
-            return nil
-        end
-
-        result = down
+    if result
+    and result.Instance
+    and result.Normal.Y >= 0.25
+    and not IsBadCtrlClickTeleportPart(result.Instance) then
+        finalResult = result
+    else
+        finalResult = GetCtrlClickGroundFrom(hitPosition, params)
     end
 
-    return CFrame.new(result.Position + Vector3.new(0, 3, 0))
+    local _, yaw, _ = root.CFrame:ToOrientation()
+
+    if finalResult
+    and finalResult.Instance then
+        return CFrame.new(
+            finalResult.Position + Vector3.new(0, 3, 0)
+        ) * CFrame.Angles(0, yaw, 0)
+    end
+
+    local target = mouse.Target
+
+    if target
+    and not IsBadCtrlClickTeleportPart(target) then
+        return CFrame.new(
+            hitPosition + Vector3.new(0, 3, 0)
+        ) * CFrame.Angles(0, yaw, 0)
+    end
+
+    return nil
 end
 
 AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -7685,21 +7725,16 @@ local function ShowUniversalUpdateAfterLoad()
             ToxUpdateVersion,
             {
                 ADDED = {
-                    "MM2 Target now has a TP Target button."
+                    "Save protection now keeps game-specific settings when switching between games."
                 },
                 FIXED = {
-                    "Ctrl Click TP now rejects barriers, invisible parts and wall hits instead of sending you above maps.",
-                    "MM2 Grab Gun is faster and retries dropped gun pickups instead of giving up after one attempt.",
-                    "MM2 Kill All attacks fast or airborne players with stronger instant touch passes.",
-                    "MM2 Shoot Murderer no longer turns itself off when the murderer dies or disappears."
+                    "MM2 saved toggles no longer reset when leaving another game and returning to MM2.",
+                    "Ctrl Click TP now searches for a valid ground point from the click instead of failing on walls or map edges."
                 },
                 CHANGED = {
-                    "MM2 Shoot Murderer keeps the overhead shot style from the provided reference script.",
-                    "MM2 Auto Farm moves the full character during coin tween instead of moving only the root."
+                    "Ctrl Click TP is less strict while still avoiding barriers, invisible kill parts and void parts."
                 },
-                REMOVED = {
-                    "MM2 Round Timer option."
-                }
+                REMOVED = {}
             }
         )
     end
