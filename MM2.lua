@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-11-mm2-shoot-overhead-timer-fix"
+    "2026-09-12-mm2-clicktp-grab-kill-shoot-v2"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -97,7 +97,7 @@ Settings.MM2KillAllKey = Settings.MM2KillAllKey or Enum.KeyCode.K
 Settings.MM2KillAllAutoV2 = Settings.MM2KillAllAutoV2 == true or Settings.MM2KillAllAuto == true
 Settings.MM2KillAllAuto = false
 Settings.MM2ShootMurderKey = Settings.MM2ShootMurderKey or Enum.KeyCode.C
-Settings.MM2ShootMurderAutoV2 = Settings.MM2ShootMurderAutoV2 == true or Settings.MM2ShootMurderAuto == true
+Settings.MM2ShootMurderAutoV2 = false
 Settings.MM2ShootMurderAuto = false
 Settings.MM2GrabGunKey = Settings.MM2GrabGunKey or Enum.KeyCode.G
 Settings.MM2GrabGunAutoV2 = Settings.MM2GrabGunAutoV2 == true or Settings.MM2GrabGunAuto == true
@@ -138,7 +138,20 @@ Settings.MM2Whitelist = typeof(Settings.MM2Whitelist) == "table" and Settings.MM
 Settings.MM2TargetHistory = typeof(Settings.MM2TargetHistory) == "table" and Settings.MM2TargetHistory or {}
 Settings.MM2TargetLock = false
 Settings.MM2AutoClearTarget = true
-Settings.MM2RoundTimer = Settings.MM2RoundTimer == true
+Settings.MM2RoundTimer = false
+
+task.defer(function()
+    local gui = getgenv().Gui
+
+    if gui then
+        local oldTimer = gui:FindFirstChild("ToxMM2RoundTimerFrame")
+
+        if oldTimer then
+            oldTimer:Destroy()
+        end
+    end
+end)
+Settings.MM2RoundTimer = false
 
 local ActionBusy = false
 
@@ -880,75 +893,113 @@ local function TouchKnifeTarget(
         return false
     end
 
-    local targetHumanoid =
-        target.Character:
-            FindFirstChildOfClass(
-                "Humanoid"
-            )
-
-    local targetRoot =
-        target.Character:
-            FindFirstChild(
-                "HumanoidRootPart"
-            )
-
-    local targetHead =
-        target.Character:
-            FindFirstChild(
-                "Head"
-            )
-
-    local handle =
-        knife:
-            FindFirstChild(
-                "Handle"
-            )
+    local targetCharacter = target.Character
+    local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+    local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
+        or targetCharacter:FindFirstChild("UpperTorso")
+        or targetCharacter:FindFirstChild("Torso")
+    local handle = knife:FindFirstChild("Handle")
 
     if not targetHumanoid
     or targetHumanoid.Health <= 0
+    or not targetRoot
     or not handle then
         return false
     end
 
     local touched = false
+    local targetParts = {}
+    local seen = {}
+
+    local function addPart(part)
+        if part
+        and part:IsA("BasePart")
+        and part.Parent
+        and not seen[part] then
+            seen[part] = true
+            table.insert(targetParts, part)
+        end
+    end
+
+    for _, name in ipairs({
+        "HumanoidRootPart",
+        "UpperTorso",
+        "LowerTorso",
+        "Torso",
+        "Head",
+        "LeftUpperLeg",
+        "RightUpperLeg",
+        "LeftLowerLeg",
+        "RightLowerLeg",
+        "Left Leg",
+        "Right Leg",
+        "LeftUpperArm",
+        "RightUpperArm",
+        "Left Arm",
+        "Right Arm"
+    }) do
+        addPart(targetCharacter:FindFirstChild(name, true))
+    end
+
+    for _, object in ipairs(targetCharacter:GetDescendants()) do
+        if #targetParts >= 18 then
+            break
+        end
+
+        addPart(object)
+    end
 
     if activateKnife ~= false then
         pcall(function()
-            knife:
-                Activate()
+            knife:Activate()
         end)
     end
 
-    if firetouchinterest then
-        for _, part in ipairs({
-            targetRoot,
-            targetHead
-        }) do
-            if part then
+    local character, humanoid, root = GetCharacterState()
+    local oldCFrame = root and root.CFrame
+    local velocity = targetRoot.AssemblyLinearVelocity
+    local horizontalVelocity = Vector3.new(velocity.X, 0, velocity.Z)
+
+    if horizontalVelocity.Magnitude > 90 then
+        horizontalVelocity = horizontalVelocity.Unit * 90
+    end
+
+    local verticalVelocity = math.clamp(velocity.Y, -80, 80)
+    local moveBoost = targetHumanoid.MoveDirection * math.max(targetHumanoid.WalkSpeed * 0.08, 2)
+    local predicted = targetRoot.Position
+        + horizontalVelocity * 0.11
+        + moveBoost
+        + Vector3.new(0, verticalVelocity * 0.05, 0)
+    local predictedFar = targetRoot.Position
+        + horizontalVelocity * 0.2
+        + moveBoost * 1.35
+        + Vector3.new(0, verticalVelocity * 0.08, 0)
+
+    local positions = {
+        CFrame.new(targetRoot.Position + Vector3.new(0, 0.65, 0), targetRoot.Position),
+        CFrame.new(targetRoot.Position + targetRoot.CFrame.LookVector * -1.25 + Vector3.new(0, 0.85, 0), targetRoot.Position),
+        CFrame.new(predicted + targetRoot.CFrame.RightVector * 1.75, predicted),
+        CFrame.new(predicted - targetRoot.CFrame.RightVector * 1.75, predicted),
+        CFrame.new(predicted + Vector3.new(0, 2.1, 0), predicted),
+        CFrame.new(predictedFar + targetRoot.CFrame.RightVector * 2.25, predictedFar),
+        CFrame.new(predictedFar - targetRoot.CFrame.RightVector * 2.25, predictedFar),
+        CFrame.new(predictedFar + Vector3.new(0, -1.15, 0), predictedFar)
+    }
+
+    local function touchParts()
+        if not firetouchinterest then
+            return
+        end
+
+        for _, part in ipairs(targetParts) do
+            if part and part.Parent then
                 pcall(function()
-                    firetouchinterest(
-                        handle,
-                        part,
-                        0
-                    )
-
-                    firetouchinterest(
-                        part,
-                        handle,
-                        0
-                    )
-
-                    firetouchinterest(
-                        handle,
-                        part,
-                        1
-                    )
-
-                    firetouchinterest(
-                        part,
-                        handle,
-                        1
-                    )
+                    part.CanTouch = true
+                    handle.CanTouch = true
+                    firetouchinterest(handle, part, 0)
+                    firetouchinterest(part, handle, 0)
+                    firetouchinterest(handle, part, 1)
+                    firetouchinterest(part, handle, 1)
                 end)
 
                 touched = true
@@ -956,50 +1007,45 @@ local function TouchKnifeTarget(
         end
     end
 
-    if not touched
-    and targetRoot then
-        local _,
-            humanoid,
-            root =
-            GetCharacterState()
+    touchParts()
 
-        if humanoid
-        and humanoid.Health > 0
-        and root then
-            local oldCFrame =
-                root.CFrame
+    if character
+    and humanoid
+    and humanoid.Health > 0
+    and root
+    and root.Parent then
+        local allow = getgenv().AllowToxTeleport
 
-            local allow =
-                getgenv().AllowToxTeleport
+        if allow then
+            allow(0.18, "MM2 Knife Attack")
+        end
 
-            if allow then
-                allow(
-                    0.4,
-                    "MM2 Target Attack"
-                )
+        for _, cframe in ipairs(positions) do
+            if not targetRoot.Parent
+            or not KnifeTargetAlive(target) then
+                break
             end
 
-            root.CFrame =
-                targetRoot.CFrame
-                * CFrame.new(
-                    0,
-                    0,
-                    1.5
-                )
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+            character:PivotTo(cframe)
 
             if activateKnife ~= false then
-                knife:
-                    Activate()
+                pcall(function()
+                    knife:Activate()
+                end)
             end
 
-            task.wait(
-                0.04
-            )
+            touchParts()
+            RunService.Heartbeat:Wait()
+        end
 
-            root.CFrame =
-                oldCFrame
-
-            touched = true
+        if oldCFrame
+        and root
+        and root.Parent then
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+            character:PivotTo(oldCFrame)
         end
     end
 
@@ -1019,6 +1065,46 @@ local function KnifeTargetAlive(
 
     return humanoid
         and humanoid.Health > 0
+end
+
+local function TeleportToTarget(target)
+    if not target
+    or target == Player
+    or not target.Character then
+        return false
+    end
+
+    local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+        or target.Character:FindFirstChild("UpperTorso")
+        or target.Character:FindFirstChild("Torso")
+
+    local character, humanoid, root = GetCharacterState()
+
+    if not targetRoot
+    or not character
+    or not humanoid
+    or humanoid.Health <= 0
+    or not root then
+        return false
+    end
+
+    local lookVector = targetRoot.CFrame.LookVector
+    local position = targetRoot.Position - lookVector * 3 + Vector3.new(0, 1.5, 0)
+    local cframe = CFrame.lookAt(position, targetRoot.Position)
+
+    if getgenv().ToxSafeTeleportToCFrame then
+        return getgenv().ToxSafeTeleportToCFrame(cframe, false, "MM2 Target TP")
+    end
+
+    if getgenv().AllowToxTeleport then
+        getgenv().AllowToxTeleport(0.6, "MM2 Target TP")
+    end
+
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
+    character:PivotTo(cframe)
+
+    return true
 end
 
 local function AttackKnifeTargetUntilDone(
@@ -1045,23 +1131,15 @@ local function AttackKnifeTargetUntilDone(
     )
     and os.clock() - started
         < timeout do
-        if knife:IsA("Tool")
-        and knife.Enabled == false then
-            RunService.Heartbeat:
-                Wait()
-        else
-            if TouchKnifeTarget(
-                knife,
-                target,
-                true
-            ) then
-                attacked = true
-            end
-
-            task.wait(
-                0.035
-            )
+        if TouchKnifeTarget(
+            knife,
+            target,
+            knife.Enabled ~= false
+        ) then
+            attacked = true
         end
+
+        RunService.Heartbeat:Wait()
     end
 
     return attacked
@@ -1099,7 +1177,7 @@ local function OneSlashTargets(
 
     local touchedAny = false
 
-    for pass = 1, 4 do
+    for pass = 1, 6 do
         for _, target in ipairs(
             targets
         ) do
@@ -1121,10 +1199,8 @@ local function OneSlashTargets(
             end
         end
 
-        if pass < 4 then
-            task.wait(
-                0.012
-            )
+        if pass < 6 then
+            RunService.Heartbeat:Wait()
         end
     end
 
@@ -1186,17 +1262,13 @@ local function KillSingleTarget(
             }
         )
 
-        task.wait(
-            0.12
-        )
-
         if KnifeTargetAlive(
             target
         ) then
             AttackKnifeTargetUntilDone(
                 knife,
                 target,
-                2.5
+                0.9
             )
         end
 
@@ -1269,29 +1341,14 @@ local function KillAll()
     ActionBusy = true
 
     task.spawn(function()
-        local oneSlash =
+        for pass = 1, 3 do
+            if getgenv().Destroyed then
+                break
+            end
+
             OneSlashTargets(
                 knife,
                 targets
-            )
-
-        if not oneSlash then
-            for _, target in ipairs(
-                targets
-            ) do
-                if getgenv().Destroyed then
-                    break
-                end
-
-                AttackKnifeTargetUntilDone(
-                    knife,
-                    target,
-                    2.5
-                )
-            end
-        else
-            task.wait(
-                0.2
             )
 
             for _, target in ipairs(
@@ -1303,14 +1360,31 @@ local function KillAll()
 
                 if KnifeTargetAlive(
                     target
-                )
-                and knife.Enabled ~= false then
+                ) then
                     TouchKnifeTarget(
                         knife,
                         target,
-                        false
+                        true
                     )
                 end
+            end
+        end
+
+        for _, target in ipairs(
+            targets
+        ) do
+            if getgenv().Destroyed then
+                break
+            end
+
+            if KnifeTargetAlive(
+                target
+            ) then
+                AttackKnifeTargetUntilDone(
+                    knife,
+                    target,
+                    0.75
+                )
             end
         end
 
@@ -1490,7 +1564,7 @@ local function RefreshPlayerSelector()
             rowCorner.Parent = row
 
             local label = Instance.new("TextLabel")
-            label.Size = UDim2.new(1, -132, 1, 0)
+            label.Size = UDim2.new(1, -184, 1, 0)
             label.Position = UDim2.new(0, 8, 0, 0)
             label.BackgroundTransparency = 1
             label.Text = tostring(item.DisplayName or item.Name or userId) .. " • " .. status
@@ -1503,7 +1577,7 @@ local function RefreshPlayerSelector()
 
             local selectButton = Instance.new("TextButton")
             selectButton.Size = UDim2.new(0, 58, 0, 24)
-            selectButton.Position = UDim2.new(1, -124, 0.5, -12)
+            selectButton.Position = UDim2.new(1, -178, 0.5, -12)
             selectButton.BorderSizePixel = 0
             selectButton.Text = target and "Select" or "Left"
             selectButton.BackgroundColor3 = target and Color3.fromRGB(55, 55, 75) or Color3.fromRGB(45, 45, 55)
@@ -1517,8 +1591,8 @@ local function RefreshPlayerSelector()
             selectCorner.Parent = selectButton
 
             local killButton = Instance.new("TextButton")
-            killButton.Size = UDim2.new(0, 54, 0, 24)
-            killButton.Position = UDim2.new(1, -60, 0.5, -12)
+            killButton.Size = UDim2.new(0, 48, 0, 24)
+            killButton.Position = UDim2.new(1, -52, 0.5, -12)
             killButton.BorderSizePixel = 0
             killButton.Text = "Kill"
             killButton.BackgroundColor3 = target and Color3.fromRGB(155, 40, 48) or Color3.fromRGB(45, 45, 55)
@@ -1531,6 +1605,21 @@ local function RefreshPlayerSelector()
             killCorner.CornerRadius = UDim.new(0, 4)
             killCorner.Parent = killButton
 
+            local tpButton = Instance.new("TextButton")
+            tpButton.Size = UDim2.new(0, 42, 0, 24)
+            tpButton.Position = UDim2.new(1, -100, 0.5, -12)
+            tpButton.BorderSizePixel = 0
+            tpButton.Text = "TP"
+            tpButton.BackgroundColor3 = target and Color3.fromRGB(55, 75, 105) or Color3.fromRGB(45, 45, 55)
+            tpButton.TextColor3 = target and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(130, 130, 145)
+            tpButton.Font = Enum.Font.GothamBold
+            tpButton.TextSize = 9
+            tpButton.Parent = row
+
+            local tpCorner = Instance.new("UICorner")
+            tpCorner.CornerRadius = UDim.new(0, 4)
+            tpCorner.Parent = tpButton
+
             selectButton.MouseButton1Click:Connect(function()
                 if not target or IsWhitelisted(target) then
                     return
@@ -1539,6 +1628,15 @@ local function RefreshPlayerSelector()
                 KnifeTargetIds[target.UserId] = true
                 AddTargetToHistory(target)
                 RefreshPlayerSelector()
+            end)
+
+            tpButton.MouseButton1Click:Connect(function()
+                if not target then
+                    return
+                end
+
+                AddTargetToHistory(target)
+                TeleportToTarget(target)
             end)
 
             killButton.MouseButton1Click:Connect(function()
@@ -1565,7 +1663,7 @@ local function RefreshPlayerSelector()
         rowCorner.Parent = row
 
         local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(1, -178, 0, 18)
+        nameLabel.Size = UDim2.new(1, -224, 0, 18)
         nameLabel.Position = UDim2.new(0, 8, 0, 4)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Text = target.DisplayName
@@ -1580,7 +1678,7 @@ local function RefreshPlayerSelector()
         local status = GetTargetStatusText(target)
 
         local userLabel = Instance.new("TextLabel")
-        userLabel.Size = UDim2.new(1, -178, 0, 15)
+        userLabel.Size = UDim2.new(1, -224, 0, 15)
         userLabel.Position = UDim2.new(0, 8, 0, 22)
         userLabel.BackgroundTransparency = 1
         userLabel.Text = "@" .. target.Name .. " • " .. status .. " • " .. role
@@ -1595,8 +1693,8 @@ local function RefreshPlayerSelector()
         userLabel.Parent = row
 
         local whitelistButton = Instance.new("TextButton")
-        whitelistButton.Size = UDim2.new(0, 58, 0, 26)
-        whitelistButton.Position = UDim2.new(1, -174, 0.5, -13)
+        whitelistButton.Size = UDim2.new(0, 54, 0, 26)
+        whitelistButton.Position = UDim2.new(1, -216, 0.5, -13)
         whitelistButton.BorderSizePixel = 0
         whitelistButton.Font = Enum.Font.GothamBold
         whitelistButton.TextSize = 9
@@ -1608,8 +1706,8 @@ local function RefreshPlayerSelector()
         whitelistCorner.Parent = whitelistButton
 
         local selectButton = Instance.new("TextButton")
-        selectButton.Size = UDim2.new(0, 54, 0, 26)
-        selectButton.Position = UDim2.new(1, -112, 0.5, -13)
+        selectButton.Size = UDim2.new(0, 50, 0, 26)
+        selectButton.Position = UDim2.new(1, -158, 0.5, -13)
         selectButton.BorderSizePixel = 0
         selectButton.Font = Enum.Font.GothamBold
         selectButton.TextSize = 9
@@ -1621,8 +1719,8 @@ local function RefreshPlayerSelector()
         selectCorner.Parent = selectButton
 
         local killButton = Instance.new("TextButton")
-        killButton.Size = UDim2.new(0, 48, 0, 26)
-        killButton.Position = UDim2.new(1, -54, 0.5, -13)
+        killButton.Size = UDim2.new(0, 44, 0, 26)
+        killButton.Position = UDim2.new(1, -50, 0.5, -13)
         killButton.BorderSizePixel = 0
         killButton.Font = Enum.Font.GothamBold
         killButton.TextSize = 9
@@ -1633,6 +1731,21 @@ local function RefreshPlayerSelector()
         local killCorner = Instance.new("UICorner")
         killCorner.CornerRadius = UDim.new(0, 4)
         killCorner.Parent = killButton
+
+        local tpButton = Instance.new("TextButton")
+        tpButton.Size = UDim2.new(0, 42, 0, 26)
+        tpButton.Position = UDim2.new(1, -102, 0.5, -13)
+        tpButton.BorderSizePixel = 0
+        tpButton.Font = Enum.Font.GothamBold
+        tpButton.TextSize = 9
+        tpButton.Text = "TP"
+        tpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        tpButton.BackgroundColor3 = Color3.fromRGB(55, 75, 105)
+        tpButton.Parent = row
+
+        local tpCorner = Instance.new("UICorner")
+        tpCorner.CornerRadius = UDim.new(0, 4)
+        tpCorner.Parent = tpButton
 
         local whitelisted = IsWhitelisted(target)
         local selected = KnifeTargetIds[target.UserId] == true
@@ -1689,6 +1802,11 @@ local function RefreshPlayerSelector()
             end
 
             RefreshPlayerSelector()
+        end)
+
+        tpButton.MouseButton1Click:Connect(function()
+            AddTargetToHistory(target)
+            TeleportToTarget(target)
         end)
 
         killButton.MouseButton1Click:Connect(function()
@@ -2367,7 +2485,7 @@ local function CancelAutoShootMurderer(syncVisual)
 
     Settings.MM2ShootMurderAuto = false
     Settings.MM2ShootMurderAutoV2 = false
-    AutoShootLastAttempt = os.clock() + 1.5
+    AutoShootLastAttempt = os.clock() + 0.05
 
     if syncVisual and SyncToggleVisuals then
         SyncToggleVisuals("MM2ShootMurderAutoV2", false)
@@ -2427,8 +2545,6 @@ local function GetOrEquipGuidedGun()
     pcall(function()
         humanoid:EquipTool(gun)
     end)
-
-    task.wait(0.1)
 
     return character:FindFirstChild("Gun")
         or character:FindFirstChild("Revolver")
@@ -3006,11 +3122,11 @@ local function FireGuidedGunShot(
         return false
     end
 
-    local shotTarget = targetRoot.Position
+    local shotTarget = GetPredictedTargetPosition(target) or targetRoot.Position
 
     local shotOrigin = Vector3.new(
         shotTarget.X,
-        shotTarget.Y + 1.05,
+        shotTarget.Y + 1.25,
         shotTarget.Z
     )
 
@@ -3141,20 +3257,7 @@ local function ShootMurderer(showNotify)
         end
     end
 
-    task.spawn(function()
-        local started =
-            os.clock()
-
-        repeat
-            RunService.Heartbeat:
-                Wait()
-        until getgenv().Destroyed
-        or not gun
-        or not gun.Parent
-        or gun.Enabled ~= false
-        or os.clock() - started
-            >= 2.5
-
+    task.delay(0.06, function()
         GuidedShotBusy = false
     end)
 
@@ -3243,20 +3346,7 @@ local function SilentAimShot()
             murderer
         )
 
-    task.spawn(function()
-        local started =
-            os.clock()
-
-        repeat
-            RunService.Heartbeat:
-                Wait()
-        until getgenv().Destroyed
-        or not gun
-        or not gun.Parent
-        or gun.Enabled ~= false
-        or os.clock() - started
-            >= 2.5
-
+    task.delay(0.06, function()
         SilentAimBusy = false
     end)
 
@@ -3534,9 +3624,12 @@ local function GrabGun(silent, requestedDrop)
         return false
     end
 
-    local _, humanoid, root = GetCharacterState()
+    local character, humanoid, root = GetCharacterState()
 
-    if not humanoid or humanoid.Health <= 0 or not root then
+    if not character
+    or not humanoid
+    or humanoid.Health <= 0
+    or not root then
         return false
     end
 
@@ -3562,45 +3655,118 @@ local function GrabGun(silent, requestedDrop)
         return false
     end
 
+    local function hasGun()
+        local currentCharacter = Player.Character
+        local backpack = Player:FindFirstChildOfClass("Backpack")
+
+        return currentCharacter
+            and (currentCharacter:FindFirstChild("Gun") or currentCharacter:FindFirstChild("Revolver"))
+            or backpack
+            and (backpack:FindFirstChild("Gun") or backpack:FindFirstChild("Revolver"))
+    end
+
+    local function getTouchParts(currentCharacter, currentRoot)
+        local parts = {}
+        local seen = {}
+
+        local function add(part)
+            if part
+            and part:IsA("BasePart")
+            and part.Parent
+            and not seen[part] then
+                seen[part] = true
+                part.CanTouch = true
+                table.insert(parts, part)
+            end
+        end
+
+        add(currentRoot)
+
+        for _, name in ipairs({
+            "UpperTorso",
+            "LowerTorso",
+            "Torso",
+            "Head",
+            "LeftFoot",
+            "RightFoot",
+            "Left Leg",
+            "Right Leg"
+        }) do
+            add(currentCharacter:FindFirstChild(name, true))
+        end
+
+        return parts
+    end
+
     ActionBusy = true
 
-    task.spawn(function()
-        local oldCFrame = root.CFrame
-        local allow = getgenv().AllowToxTeleport
+    local oldCFrame = character:GetPivot()
+    local allow = getgenv().AllowToxTeleport
 
-        if allow then
-            allow(0.5, "MM2 Grab Gun")
+    if allow then
+        allow(0.35, "MM2 Grab Gun")
+    end
+
+    local success = hasGun() ~= nil
+
+    for attempt = 1, 6 do
+        character, humanoid, root = GetCharacterState()
+
+        if success
+        or not gunDrop
+        or not gunDrop.Parent
+        or not character
+        or not humanoid
+        or humanoid.Health <= 0
+        or not root then
+            break
         end
 
-        if gunDrop.Parent and root.Parent and humanoid.Health > 0 then
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.AssemblyAngularVelocity = Vector3.zero
-            root.CFrame = gunDrop.CFrame * CFrame.new(0, 1.15, 0)
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        character:PivotTo(gunDrop.CFrame * CFrame.new(0, 1.05, 0))
 
-            if firetouchinterest then
+        if firetouchinterest then
+            pcall(function()
+                gunDrop.CanTouch = true
+            end)
+
+            for _, part in ipairs(getTouchParts(character, root)) do
                 pcall(function()
-                    firetouchinterest(root, gunDrop, 0)
-                    firetouchinterest(root, gunDrop, 1)
+                    firetouchinterest(part, gunDrop, 0)
+                    firetouchinterest(gunDrop, part, 0)
+                    firetouchinterest(part, gunDrop, 1)
+                    firetouchinterest(gunDrop, part, 1)
                 end)
             end
-
-            task.wait(0.07)
         end
 
-        if root and root.Parent and humanoid and humanoid.Health > 0 then
-            if allow then
-                allow(0.4, "MM2 Grab Gun Return")
-            end
-
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.AssemblyAngularVelocity = Vector3.zero
-            root.CFrame = oldCFrame
+        if hasGun() then
+            success = true
+            break
         end
 
-        ActionBusy = false
-    end)
+        RunService.Heartbeat:Wait()
+    end
 
-    return true
+    character, humanoid, root = GetCharacterState()
+
+    if character
+    and humanoid
+    and humanoid.Health > 0
+    and root then
+        if allow then
+            allow(0.35, "MM2 Grab Gun Return")
+        end
+
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        character:PivotTo(oldCFrame)
+    end
+
+    ActionBusy = false
+
+    return success
 end
 
 local MM2CoinCache = {}
@@ -4126,10 +4292,17 @@ local function SetFarmPosition(position, hold)
         AutoFarmHoldPosition = position
     end
 
+    local character = AutoFarmRoot.Parent
+
     AutoFarmRoot.Anchored = false
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
-    AutoFarmRoot.CFrame = CFrame.new(position)
+
+    if character and character:IsA("Model") then
+        character:PivotTo(CFrame.new(position))
+    else
+        AutoFarmRoot.CFrame = CFrame.new(position)
+    end
 
     return true
 end
@@ -4488,7 +4661,7 @@ local function PrepareAutoFarm()
     return true
 end
 
-local AutoFarmPickupOffsetY = 0.15
+local AutoFarmPickupOffsetY = 0
 local AutoFarmCoinHoldTime = 0.18
 local AutoFarmMinTweenSpeed = 6
 local TouchCoin = nil
@@ -4535,11 +4708,18 @@ local function SetAutoFarmCoinPosition(position)
         return false
     end
 
+    local character = Player.Character
+
+    if not character
+    or not character.Parent then
+        return false
+    end
+
     AutoFarmHoldPosition = position
     AutoFarmRoot.Anchored = false
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
-    AutoFarmRoot.CFrame = CFrame.new(position)
+    character:PivotTo(CFrame.new(position))
     AutoFarmHumanoid.PlatformStand = false
     AutoFarmHumanoid.Sit = false
     AutoFarmHumanoid.AutoRotate = true
@@ -4554,33 +4734,19 @@ local function TweenFarmRoot(targetPosition, duration, coin)
     end
 
     local generation = AutoFarmGeneration
+    local startPosition = AutoFarmRoot.Position
+    local delta = targetPosition - startPosition
+    local startTime = os.clock()
+
     duration = math.max(duration, 0.05)
 
     if AutoFarmTween then
         pcall(function()
             AutoFarmTween:Cancel()
         end)
+
+        AutoFarmTween = nil
     end
-
-    AutoFarmRoot.Anchored = false
-    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
-    AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
-
-    local tweenInfo = TweenInfo.new(
-        duration,
-        Enum.EasingStyle.Linear,
-        Enum.EasingDirection.Out
-    )
-
-    AutoFarmTween = TweenService:Create(
-        AutoFarmRoot,
-        tweenInfo,
-        {
-            CFrame = CFrame.new(targetPosition)
-        }
-    )
-
-    AutoFarmTween:Play()
 
     while Settings.MM2AutoFarmV2
     and AutoFarmPrepared
@@ -4590,16 +4756,22 @@ local function TweenFarmRoot(targetPosition, duration, coin)
     and AutoFarmHumanoid
     and AutoFarmHumanoid.Health > 0 do
         if coin and not IsCoinValid(coin) then
-            pcall(function()
-                AutoFarmTween:Cancel()
-            end)
             return false
         end
 
         if IsFarmBagFull() then
-            pcall(function()
-                AutoFarmTween:Cancel()
-            end)
+            return false
+        end
+
+        local alpha = math.clamp(
+            (os.clock() - startTime) / duration,
+            0,
+            1
+        )
+
+        local position = startPosition + delta * alpha
+
+        if not SetAutoFarmCoinPosition(position) then
             return false
         end
 
@@ -4607,26 +4779,15 @@ local function TweenFarmRoot(targetPosition, duration, coin)
             TouchCoin(coin)
         end
 
-        if AutoFarmTween.PlaybackState == Enum.PlaybackState.Completed then
+        if alpha >= 1 then
             return true
-        end
-
-        if AutoFarmTween.PlaybackState == Enum.PlaybackState.Cancelled then
-            return false
         end
 
         RunService.Heartbeat:Wait()
     end
 
-    if AutoFarmTween then
-        pcall(function()
-            AutoFarmTween:Cancel()
-        end)
-    end
-
     return false
 end
-
 function TouchCoin(coin)
     if not IsCoinValid(coin) then
         return false
@@ -5366,7 +5527,7 @@ CreateMM2Section(
 MM2AutoRuntime = {
     SilentAim = Settings.MM2SilentAimAutoV2 == true,
     KillAll = Settings.MM2KillAllAutoV2 == true,
-    Shoot = Settings.MM2ShootMurderAutoV2 == true,
+    Shoot = false,
     GrabGun = Settings.MM2GrabGunAutoV2 == true
 }
 
@@ -5418,11 +5579,6 @@ CreateMM2Section(
     "TARGETING"
 )
 
-MM2CreateToggle("Round Timer", GamePage, Settings.MM2RoundTimer, function(v)
-    SetRoundTimerVisible(v)
-    AutoSaveConfiguration()
-end, "MM2RoundTimer")
-
 MM2CreateDropdown("Fling Target", {"Murderer", "Sheriff"}, GamePage, Settings.MM2FlingTarget, function(value)
     Settings.MM2FlingTarget = value
     AutoSaveConfiguration()
@@ -5432,6 +5588,20 @@ MM2CreateButton("Fling", GamePage, FlingSelectedRole)
 
 MM2CreateButton("Target", GamePage, function()
     OpenPlayerSelector("targets")
+end)
+
+MM2CreateButton("TP Target", GamePage, function()
+    local targets = GetSelectedKnifeTargets()
+    local target = targets[1]
+
+    if not target then
+        CustomNotify("Select a target first", Color3.fromRGB(255, 180, 70))
+        return
+    end
+
+    if not TeleportToTarget(target) then
+        CustomNotify("Target TP failed", Color3.fromRGB(255, 100, 100))
+    end
 end)
 
 function GetMM2ActiveMapRoot()
@@ -6039,11 +6209,10 @@ task.spawn(function()
                 and murderer.Character
                 and murderer.Character:FindFirstChildOfClass("Humanoid")
 
-            if not murderer
-            or not murderHumanoid
-            or murderHumanoid.Health <= 0 then
-                CancelAutoShootMurderer(true)
-            elseif os.clock() - AutoShootLastAttempt >= 0.16 then
+            if murderer
+            and murderHumanoid
+            and murderHumanoid.Health > 0
+            and os.clock() - AutoShootLastAttempt >= 0.05 then
                 AutoShootLastAttempt = os.clock()
 
                 local shootGeneration = AutoShootGeneration
@@ -6069,15 +6238,19 @@ task.spawn(function()
         and not ActionBusy then
             local drop = FindGunDrop()
 
-            if drop and not AutoGrabAttemptedDrops[drop] then
-                AutoGrabAttemptedDrops[drop] = true
-                task.spawn(function()
-                    GrabGun(true, drop)
-                end)
+            if drop then
+                local lastAttempt = AutoGrabAttemptedDrops[drop]
+
+                if not lastAttempt or os.clock() - lastAttempt >= 0.18 then
+                    AutoGrabAttemptedDrops[drop] = os.clock()
+                    task.spawn(function()
+                        GrabGun(true, drop)
+                    end)
+                end
             end
         end
 
-        task.wait(0.1)
+        task.wait(0.05)
     end
 end)
 
@@ -6101,7 +6274,7 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
             return
         end
 
-        if os.clock() - LastManualSilentAimInput < 0.16 then
+        if os.clock() - LastManualSilentAimInput < 0.05 then
             return
         end
 
@@ -6124,12 +6297,11 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 
     if Settings.MM2ShootMurderKey and input.KeyCode == Settings.MM2ShootMurderKey then
-        if os.clock() - LastManualShootInput < 0.16 then
+        if os.clock() - LastManualShootInput < 0.05 then
             return
         end
 
         LastManualShootInput = os.clock()
-        CancelAutoShootMurderer(true)
 
         task.defer(function()
             if not getgenv().Destroyed then
@@ -6217,7 +6389,9 @@ getgenv().ToxMM2Cleanup = function()
     end
 
     if RoundTimerFrame then
-        RoundTimerFrame.Visible = false
+        RoundTimerFrame:Destroy()
+        RoundTimerFrame = nil
+        RoundTimerLabel = nil
     end
 
     if getgenv().ToxLinkedSubGuis then
@@ -6250,11 +6424,6 @@ local function ApplyMM2SavedOptionsAfterLoad()
         end)
     end
 
-    if Settings.MM2RoundTimer then
-        pcall(function()
-            SetRoundTimerVisible(true)
-        end)
-    end
 end
 
 task.spawn(function()
