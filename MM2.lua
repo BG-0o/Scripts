@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 MM2ModuleVersion =
-    "2026-09-13-mm2-split-loader-config-fix"
+    "2026-09-13-mm2-target-refresh-fix"
 
 local Settings = getgenv().Settings
 local GamePage = getgenv().GamePage
@@ -559,20 +559,6 @@ MM2CreateButton("Fling", GamePage, FlingSelectedRole)
 
 MM2CreateButton("Target", GamePage, function()
     OpenPlayerSelector("targets")
-end)
-
-MM2CreateButton("TP Target", GamePage, function()
-    local targets = GetSelectedKnifeTargets()
-    local target = targets[1]
-
-    if not target then
-        CustomNotify("Select a target first", Color3.fromRGB(255, 180, 70))
-        return
-    end
-
-    if not TeleportToTarget(target) then
-        CustomNotify("Target TP failed", Color3.fromRGB(255, 100, 100))
-    end
 end)
 
 function GetMM2ActiveMapRoot()
