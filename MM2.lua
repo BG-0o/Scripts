@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-13-save-clicktp-fix"
+    "2026-09-13-killall-fix"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -588,7 +588,8 @@ local function FindNamedTool(names)
                     local lowerName = string.lower(child.Name)
 
                     for _, wanted in ipairs(names) do
-                        if lowerName == wanted then
+                        if lowerName == wanted
+                        or string.find(lowerName, wanted, 1, true) then
                             return child
                         end
                     end
@@ -883,6 +884,60 @@ local function GetSelectedKnifeTargets()
     return targets
 end
 
+local KnifeTargetAlive
+
+local function GetKnifeTargetRoot(target)
+    local character = target and target.Character
+
+    if not character then
+        return nil
+    end
+
+    return character:FindFirstChild("HumanoidRootPart")
+        or character:FindFirstChild("UpperTorso")
+        or character:FindFirstChild("Torso")
+        or character:FindFirstChild("Head")
+end
+
+KnifeTargetAlive = function(target)
+    local humanoid =
+        target
+        and target.Character
+        and target.Character:FindFirstChildOfClass("Humanoid")
+
+    return humanoid
+        and humanoid.Health > 0
+        and GetKnifeTargetRoot(target) ~= nil
+end
+
+local function GetKnifeTargets(allTargets)
+    local targets = {}
+
+    if typeof(allTargets) == "table" then
+        for _, target in ipairs(allTargets) do
+            if target
+            and target ~= Player
+            and target.Parent == Players
+            and not IsWhitelisted(target)
+            and KnifeTargetAlive(target) then
+                table.insert(targets, target)
+            end
+        end
+
+        return targets
+    end
+
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= Player
+        and not IsWhitelisted(target)
+        and KnifeTargetAlive(target) then
+            table.insert(targets, target)
+        end
+    end
+
+    return targets
+end
+
 local function TouchKnifeTarget(
     knife,
     target,
@@ -890,16 +945,15 @@ local function TouchKnifeTarget(
 )
     if not knife
     or not target
+    or target == Player
     or not target.Character then
         return false
     end
 
     local targetCharacter = target.Character
     local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
-    local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
-        or targetCharacter:FindFirstChild("UpperTorso")
-        or targetCharacter:FindFirstChild("Torso")
-    local handle = knife:FindFirstChild("Handle")
+    local targetRoot = GetKnifeTargetRoot(target)
+    local handle = knife:FindFirstChild("Handle") or knife:FindFirstChildWhichIsA("BasePart", true)
 
     if not targetHumanoid
     or targetHumanoid.Health <= 0
@@ -908,6 +962,16 @@ local function TouchKnifeTarget(
         return false
     end
 
+    local character, humanoid, root = GetCharacterState()
+
+    if not character
+    or not humanoid
+    or humanoid.Health <= 0
+    or not root then
+        return false
+    end
+
+    local oldCFrame = character:GetPivot()
     local touched = false
     local targetParts = {}
     local seen = {}
@@ -918,6 +982,9 @@ local function TouchKnifeTarget(
         and part.Parent
         and not seen[part] then
             seen[part] = true
+            pcall(function()
+                part.CanTouch = true
+            end)
             table.insert(targetParts, part)
         end
     end
@@ -932,10 +999,16 @@ local function TouchKnifeTarget(
         "RightUpperLeg",
         "LeftLowerLeg",
         "RightLowerLeg",
+        "LeftFoot",
+        "RightFoot",
         "Left Leg",
         "Right Leg",
         "LeftUpperArm",
         "RightUpperArm",
+        "LeftLowerArm",
+        "RightLowerArm",
+        "LeftHand",
+        "RightHand",
         "Left Arm",
         "Right Arm"
     }) do
@@ -943,60 +1016,38 @@ local function TouchKnifeTarget(
     end
 
     for _, object in ipairs(targetCharacter:GetDescendants()) do
-        if #targetParts >= 18 then
+        if #targetParts >= 24 then
             break
         end
 
         addPart(object)
     end
 
-    if activateKnife ~= false then
-        pcall(function()
-            knife:Activate()
-        end)
+    if #targetParts == 0 then
+        return false
     end
 
-    local character, humanoid, root = GetCharacterState()
-    local oldCFrame = root and root.CFrame
-    local velocity = targetRoot.AssemblyLinearVelocity
-    local horizontalVelocity = Vector3.new(velocity.X, 0, velocity.Z)
-
-    if horizontalVelocity.Magnitude > 90 then
-        horizontalVelocity = horizontalVelocity.Unit * 90
+    local function activate()
+        if activateKnife ~= false then
+            pcall(function()
+                knife:Activate()
+            end)
+        end
     end
-
-    local verticalVelocity = math.clamp(velocity.Y, -80, 80)
-    local moveBoost = targetHumanoid.MoveDirection * math.max(targetHumanoid.WalkSpeed * 0.08, 2)
-    local predicted = targetRoot.Position
-        + horizontalVelocity * 0.11
-        + moveBoost
-        + Vector3.new(0, verticalVelocity * 0.05, 0)
-    local predictedFar = targetRoot.Position
-        + horizontalVelocity * 0.2
-        + moveBoost * 1.35
-        + Vector3.new(0, verticalVelocity * 0.08, 0)
-
-    local positions = {
-        CFrame.new(targetRoot.Position + Vector3.new(0, 0.65, 0), targetRoot.Position),
-        CFrame.new(targetRoot.Position + targetRoot.CFrame.LookVector * -1.25 + Vector3.new(0, 0.85, 0), targetRoot.Position),
-        CFrame.new(predicted + targetRoot.CFrame.RightVector * 1.75, predicted),
-        CFrame.new(predicted - targetRoot.CFrame.RightVector * 1.75, predicted),
-        CFrame.new(predicted + Vector3.new(0, 2.1, 0), predicted),
-        CFrame.new(predictedFar + targetRoot.CFrame.RightVector * 2.25, predictedFar),
-        CFrame.new(predictedFar - targetRoot.CFrame.RightVector * 2.25, predictedFar),
-        CFrame.new(predictedFar + Vector3.new(0, -1.15, 0), predictedFar)
-    }
 
     local function touchParts()
         if not firetouchinterest then
             return
         end
 
+        pcall(function()
+            handle.CanTouch = true
+            handle.CanCollide = false
+        end)
+
         for _, part in ipairs(targetParts) do
             if part and part.Parent then
                 pcall(function()
-                    part.CanTouch = true
-                    handle.CanTouch = true
                     firetouchinterest(handle, part, 0)
                     firetouchinterest(part, handle, 0)
                     firetouchinterest(handle, part, 1)
@@ -1008,64 +1059,99 @@ local function TouchKnifeTarget(
         end
     end
 
-    touchParts()
+    local allow = getgenv().AllowToxTeleport
 
-    if character
-    and humanoid
-    and humanoid.Health > 0
-    and root
-    and root.Parent then
-        local allow = getgenv().AllowToxTeleport
+    if allow then
+        allow(0.22, "MM2 Knife Attack")
+    end
 
-        if allow then
-            allow(0.18, "MM2 Knife Attack")
+    local function predictedPoint(mult)
+        targetCharacter = target.Character
+        targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
+        targetRoot = GetKnifeTargetRoot(target)
+
+        if not targetCharacter
+        or not targetHumanoid
+        or targetHumanoid.Health <= 0
+        or not targetRoot then
+            return nil
         end
 
-        for _, cframe in ipairs(positions) do
-            if not targetRoot.Parent
+        local velocity = targetRoot.AssemblyLinearVelocity or Vector3.zero
+        local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
+
+        if horizontal.Magnitude > 150 then
+            horizontal = horizontal.Unit * 150
+        end
+
+        local moveBoost = targetHumanoid.MoveDirection * math.max(targetHumanoid.WalkSpeed * 0.1, 2)
+        local vertical = math.clamp(velocity.Y, -100, 100)
+
+        return targetRoot.Position
+            + horizontal * mult
+            + moveBoost
+            + Vector3.new(0, vertical * math.clamp(mult * 0.5, 0.03, 0.12), 0)
+    end
+
+    activate()
+    touchParts()
+
+    for pass = 1, 3 do
+        if getgenv().Destroyed
+        or not KnifeTargetAlive(target) then
+            break
+        end
+
+        local aim = predictedPoint(0.08 + pass * 0.04)
+
+        if not aim then
+            break
+        end
+
+        local currentRoot = GetKnifeTargetRoot(target)
+        local right = currentRoot and currentRoot.CFrame.RightVector or Vector3.new(1, 0, 0)
+        local look = currentRoot and currentRoot.CFrame.LookVector or Vector3.new(0, 0, -1)
+
+        local positions = {
+            aim + Vector3.new(0, 0.65, 0),
+            aim - look * 1.15 + Vector3.new(0, 0.9, 0),
+            aim + look * 1.15 + Vector3.new(0, 0.9, 0),
+            aim + right * 1.35 + Vector3.new(0, 0.45, 0),
+            aim - right * 1.35 + Vector3.new(0, 0.45, 0),
+            aim + Vector3.new(0, 1.85, 0),
+            aim + Vector3.new(0, -0.8, 0)
+        }
+
+        for _, position in ipairs(positions) do
+            if getgenv().Destroyed
+            or not targetRoot
+            or not targetRoot.Parent
             or not KnifeTargetAlive(target) then
                 break
             end
 
             root.AssemblyLinearVelocity = Vector3.zero
             root.AssemblyAngularVelocity = Vector3.zero
-            character:PivotTo(cframe)
-
-            if activateKnife ~= false then
-                pcall(function()
-                    knife:Activate()
-                end)
-            end
-
+            character:PivotTo(CFrame.lookAt(position, targetRoot.Position))
+            activate()
             touchParts()
-            RunService.Heartbeat:Wait()
-        end
-
-        if oldCFrame
-        and root
-        and root.Parent then
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.AssemblyAngularVelocity = Vector3.zero
-            character:PivotTo(oldCFrame)
+            task.wait()
         end
     end
 
+    if oldCFrame
+    and character
+    and character.Parent
+    and root
+    and root.Parent
+    and humanoid
+    and humanoid.Health > 0 then
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        character:PivotTo(oldCFrame)
+    end
+
     return touched
-end
-
-local function KnifeTargetAlive(
-    target
-)
-    local humanoid =
-        target
-        and target.Character
-        and target.Character:
-            FindFirstChildOfClass(
-                "Humanoid"
-            )
-
-    return humanoid
-        and humanoid.Health > 0
 end
 
 local function TeleportToTarget(target)
@@ -1075,10 +1161,7 @@ local function TeleportToTarget(target)
         return false
     end
 
-    local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
-        or target.Character:FindFirstChild("UpperTorso")
-        or target.Character:FindFirstChild("Torso")
-
+    local targetRoot = GetKnifeTargetRoot(target)
     local character, humanoid, root = GetCharacterState()
 
     if not targetRoot
@@ -1113,13 +1196,9 @@ local function AttackKnifeTargetUntilDone(
     target,
     timeout
 )
-    timeout =
-        tonumber(timeout)
-        or 3.5
+    timeout = tonumber(timeout) or 2
 
-    local started =
-        os.clock()
-
+    local started = os.clock()
     local attacked = false
 
     while not getgenv().Destroyed
@@ -1127,26 +1206,18 @@ local function AttackKnifeTargetUntilDone(
     and knife.Parent
     and target
     and target.Parent == Players
-    and KnifeTargetAlive(
-        target
-    )
-    and os.clock() - started
-        < timeout do
-        if TouchKnifeTarget(
-            knife,
-            target,
-            knife.Enabled ~= false
-        ) then
+    and KnifeTargetAlive(target)
+    and os.clock() - started < timeout do
+        if TouchKnifeTarget(knife, target, true) then
             attacked = true
         end
 
-        RunService.Heartbeat:Wait()
+        if KnifeTargetAlive(target) then
+            task.wait()
+        end
     end
 
-    return attacked
-        and not KnifeTargetAlive(
-            target
-        )
+    return attacked and not KnifeTargetAlive(target)
 end
 
 local function OneSlashTargets(
@@ -1155,123 +1226,75 @@ local function OneSlashTargets(
 )
     if not knife
     or not knife.Parent
-    or typeof(targets)
-        ~= "table" then
+    or typeof(targets) ~= "table" then
         return false
     end
 
-    local handle =
-        knife:
-            FindFirstChild(
-                "Handle"
-            )
+    local touchedAny = false
+    local aliveTargets = GetKnifeTargets(targets)
 
-    if not handle
-    or not firetouchinterest then
+    if #aliveTargets == 0 then
         return false
     end
 
     pcall(function()
-        knife:
-            Activate()
+        knife:Activate()
     end)
 
-    local touchedAny = false
-
-    for pass = 1, 6 do
-        for _, target in ipairs(
-            targets
-        ) do
+    for pass = 1, 3 do
+        for _, target in ipairs(aliveTargets) do
             if target
             and target.Parent == Players
-            and not IsWhitelisted(
-                target
-            )
-            and KnifeTargetAlive(
-                target
-            ) then
-                if TouchKnifeTarget(
-                    knife,
-                    target,
-                    false
-                ) then
+            and not IsWhitelisted(target)
+            and KnifeTargetAlive(target) then
+                if TouchKnifeTarget(knife, target, pass == 1) then
                     touchedAny = true
                 end
             end
         end
 
-        if pass < 6 then
-            RunService.Heartbeat:Wait()
+        aliveTargets = GetKnifeTargets(aliveTargets)
+
+        if #aliveTargets == 0 then
+            break
         end
+
+        RunService.Heartbeat:Wait()
     end
 
     return touchedAny
 end
 
-local function KillSingleTarget(
-    target
-)
+local function KillSingleTarget(target)
     if ActionBusy
     or not target
     or target == Player
-    or IsWhitelisted(
-        target
-    ) then
+    or IsWhitelisted(target) then
         return
     end
 
-    local knife =
-        FindNamedTool({
-            "knife"
-        })
+    local knife = FindNamedTool({"knife"})
 
     if not knife then
-        CustomNotify(
-            "Kill requires the Knife",
-            Color3.fromRGB(
-                255,
-                100,
-                100
-            )
-        )
-
+        CustomNotify("Kill requires the Knife", Color3.fromRGB(255, 100, 100))
         return
     end
 
-    if not EquipTool(
-        knife
-    ) then
-        CustomNotify(
-            "Could not equip Knife",
-            Color3.fromRGB(
-                255,
-                100,
-                100
-            )
-        )
-
+    if not EquipTool(knife) then
+        CustomNotify("Could not equip Knife", Color3.fromRGB(255, 100, 100))
         return
     end
 
     ActionBusy = true
 
     task.spawn(function()
-        OneSlashTargets(
-            knife,
-            {
-                target
-            }
-        )
+        pcall(function()
+            OneSlashTargets(knife, {target})
 
-        if KnifeTargetAlive(
-            target
-        ) then
-            AttackKnifeTargetUntilDone(
-                knife,
-                target,
-                0.9
-            )
-        end
+            if KnifeTargetAlive(target) then
+                AttackKnifeTargetUntilDone(knife, target, 1.4)
+            end
+        end)
 
         ActionBusy = false
     end)
@@ -1282,58 +1305,19 @@ local function KillAll()
         return
     end
 
-    local knife =
-        FindNamedTool({
-            "knife"
-        })
+    local knife = FindNamedTool({"knife"})
 
     if not knife then
-        CustomNotify(
-            "Kill All requires the Knife",
-            Color3.fromRGB(
-                255,
-                100,
-                100
-            )
-        )
-
+        CustomNotify("Kill All requires the Knife", Color3.fromRGB(255, 100, 100))
         return
     end
 
-    if not EquipTool(
-        knife
-    ) then
-        CustomNotify(
-            "Could not equip Knife",
-            Color3.fromRGB(
-                255,
-                100,
-                100
-            )
-        )
-
+    if not EquipTool(knife) then
+        CustomNotify("Could not equip Knife", Color3.fromRGB(255, 100, 100))
         return
     end
 
-    local targets = {}
-
-    for _, target in ipairs(
-        Players:
-            GetPlayers()
-    ) do
-        if target ~= Player
-        and not IsWhitelisted(
-            target
-        )
-        and KnifeTargetAlive(
-            target
-        ) then
-            table.insert(
-                targets,
-                target
-            )
-        end
-    end
+    local targets = GetKnifeTargets()
 
     if #targets == 0 then
         return
@@ -1342,52 +1326,58 @@ local function KillAll()
     ActionBusy = true
 
     task.spawn(function()
-        for pass = 1, 3 do
-            if getgenv().Destroyed then
-                break
+        pcall(function()
+            local started = os.clock()
+
+            while not getgenv().Destroyed
+            and os.clock() - started < 4.5 do
+                targets = GetKnifeTargets()
+
+                if #targets == 0 then
+                    break
+                end
+
+                knife = FindNamedTool({"knife"}) or knife
+
+                if not knife
+                or not knife.Parent then
+                    break
+                end
+
+                EquipTool(knife)
+                OneSlashTargets(knife, targets)
+
+                targets = GetKnifeTargets(targets)
+
+                if #targets == 0 then
+                    break
+                end
+
+                for _, target in ipairs(targets) do
+                    if getgenv().Destroyed then
+                        break
+                    end
+
+                    if KnifeTargetAlive(target) then
+                        TouchKnifeTarget(knife, target, true)
+                    end
+                end
+
+                RunService.Heartbeat:Wait()
             end
 
-            OneSlashTargets(
-                knife,
-                targets
-            )
+            targets = GetKnifeTargets()
 
-            for _, target in ipairs(
-                targets
-            ) do
+            for _, target in ipairs(targets) do
                 if getgenv().Destroyed then
                     break
                 end
 
-                if KnifeTargetAlive(
-                    target
-                ) then
-                    TouchKnifeTarget(
-                        knife,
-                        target,
-                        true
-                    )
+                if KnifeTargetAlive(target) then
+                    AttackKnifeTargetUntilDone(knife, target, 0.9)
                 end
             end
-        end
-
-        for _, target in ipairs(
-            targets
-        ) do
-            if getgenv().Destroyed then
-                break
-            end
-
-            if KnifeTargetAlive(
-                target
-            ) then
-                AttackKnifeTargetUntilDone(
-                    knife,
-                    target,
-                    0.75
-                )
-            end
-        end
+        end)
 
         ActionBusy = false
     end)
@@ -1398,79 +1388,42 @@ local function KillSelectedTargets()
         return
     end
 
-    local knife =
-        FindNamedTool({
-            "knife"
-        })
+    local knife = FindNamedTool({"knife"})
 
     if not knife then
-        CustomNotify(
-            "Kill Selected requires the Knife",
-            Color3.fromRGB(
-                255,
-                100,
-                100
-            )
-        )
-
+        CustomNotify("Kill Selected requires the Knife", Color3.fromRGB(255, 100, 100))
         return
     end
 
-    local targets =
-        GetSelectedKnifeTargets()
+    local targets = GetSelectedKnifeTargets()
 
     if #targets == 0 then
-        CustomNotify(
-            "No selected players available",
-            Color3.fromRGB(
-                255,
-                180,
-                70
-            )
-        )
-
+        CustomNotify("No selected players available", Color3.fromRGB(255, 180, 70))
         return
     end
 
-    if not EquipTool(
-        knife
-    ) then
-        CustomNotify(
-            "Could not equip Knife",
-            Color3.fromRGB(
-                255,
-                100,
-                100
-            )
-        )
-
+    if not EquipTool(knife) then
+        CustomNotify("Could not equip Knife", Color3.fromRGB(255, 100, 100))
         return
     end
 
     ActionBusy = true
 
     task.spawn(function()
-        local oneSlash =
-            OneSlashTargets(
-                knife,
-                targets
-            )
+        pcall(function()
+            OneSlashTargets(knife, targets)
+            targets = GetKnifeTargets(targets)
 
-        if not oneSlash then
-            for _, target in ipairs(
-                targets
-            ) do
+            for _, target in ipairs(targets) do
                 if getgenv().Destroyed then
                     break
                 end
 
-                AttackKnifeTargetUntilDone(
-                    knife,
-                    target,
-                    2.5
-                )
+                if KnifeTargetAlive(target) then
+                    AttackKnifeTargetUntilDone(knife, target, 1.4)
+                end
             end
-        end
+        end)
 
         ActionBusy = false
     end)
