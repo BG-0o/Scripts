@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local MM2ModuleVersion =
-    "2026-09-13-killall-fix"
+    "2026-09-13-mm2-auto-actions-fix"
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -155,6 +155,9 @@ end)
 Settings.MM2RoundTimer = false
 
 local ActionBusy = false
+local KillAllBusy = false
+local GrabGunBusy = false
+local MM2AutoRuntime = nil
 
 if ResumeAutoFarmAfterAntiKick then
     task.delay(
@@ -601,9 +604,63 @@ local function FindNamedTool(names)
     return nil
 end
 
+local MM2RoleDataCache = nil
+local MM2RoleDataCacheTime = 0
+
+local function GetMM2RoleData(force)
+    local now = os.clock()
+
+    if not force
+    and MM2RoleDataCache
+    and now - MM2RoleDataCacheTime < 0.45 then
+        return MM2RoleDataCache
+    end
+
+    local getPlayerData = ReplicatedStorage:FindFirstChild("GetPlayerData", true)
+
+    if getPlayerData
+    and getPlayerData:IsA("RemoteFunction") then
+        local ok, data = pcall(function()
+            return getPlayerData:InvokeServer()
+        end)
+
+        if ok
+        and typeof(data) == "table" then
+            MM2RoleDataCache = data
+            MM2RoleDataCacheTime = now
+            return data
+        end
+    end
+
+    return MM2RoleDataCache
+end
+
+local function NormalizeMM2Role(role)
+    role = tostring(role or "")
+
+    if role == "Murderer" then
+        return "Murderer"
+    end
+
+    if role == "Sheriff"
+    or role == "Hero" then
+        return "Sheriff"
+    end
+
+    if role == "Innocent" then
+        return "Innocent"
+    end
+
+    return nil
+end
+
 local function GetRole(target)
     if getgenv().ToxGetMM2Role then
-        return getgenv().ToxGetMM2Role(target)
+        local role = NormalizeMM2Role(getgenv().ToxGetMM2Role(target))
+
+        if role then
+            return role
+        end
     end
 
     local backpack = target and target:FindFirstChildOfClass("Backpack")
@@ -615,10 +672,32 @@ local function GetRole(target)
                 return "Murderer"
             end
 
-            if container:FindFirstChild("Gun") or container:FindFirstChild("Revolver") then
+            if container:FindFirstChild("Gun")
+            or container:FindFirstChild("Revolver") then
                 return "Sheriff"
             end
         end
+    end
+
+    local data = GetMM2RoleData(false)
+
+    if typeof(data) == "table"
+    and target then
+        local info = data[target.Name]
+            or data[tostring(target.UserId)]
+            or data[target]
+
+        if typeof(info) == "table" then
+            local role = NormalizeMM2Role(info.Role or info.role)
+
+            if role then
+                return role
+            end
+        end
+    end
+
+    if target == Player then
+        return "Innocent"
     end
 
     return nil
@@ -1300,29 +1379,37 @@ local function KillSingleTarget(target)
     end)
 end
 
-local function KillAll()
-    if ActionBusy then
-        return
+local function KillAll(force)
+    if KillAllBusy
+    or ActionBusy and not force then
+        return false
     end
 
     local knife = FindNamedTool({"knife"})
 
     if not knife then
-        CustomNotify("Kill All requires the Knife", Color3.fromRGB(255, 100, 100))
-        return
+        if not force then
+            CustomNotify("Kill All requires the Knife", Color3.fromRGB(255, 100, 100))
+        end
+
+        return false
     end
 
     if not EquipTool(knife) then
-        CustomNotify("Could not equip Knife", Color3.fromRGB(255, 100, 100))
-        return
+        if not force then
+            CustomNotify("Could not equip Knife", Color3.fromRGB(255, 100, 100))
+        end
+
+        return false
     end
 
     local targets = GetKnifeTargets()
 
     if #targets == 0 then
-        return
+        return false
     end
 
+    KillAllBusy = true
     ActionBusy = true
 
     task.spawn(function()
@@ -1379,8 +1466,11 @@ local function KillAll()
             end
         end)
 
+        KillAllBusy = false
         ActionBusy = false
     end)
+
+    return true
 end
 
 local function KillSelectedTargets()
@@ -3211,7 +3301,7 @@ local function ShootMurderer(showNotify)
         end
     end
 
-    task.delay(0.06, function()
+    task.delay(0.025, function()
         GuidedShotBusy = false
     end)
 
@@ -3574,7 +3664,7 @@ task.spawn(function()
 end)
 
 local function GrabGun(silent, requestedDrop)
-    if ActionBusy then
+    if GrabGunBusy then
         return false
     end
 
@@ -3587,7 +3677,10 @@ local function GrabGun(silent, requestedDrop)
         return false
     end
 
-    if GetRole(Player) ~= "Innocent" then
+    local localRole = GetRole(Player)
+
+    if localRole == "Murderer"
+    or localRole == "Sheriff" then
         if not silent then
             CustomNotify("Grab Gun is only for Innocent", Color3.fromRGB(255, 180, 70))
         end
@@ -3637,6 +3730,7 @@ local function GrabGun(silent, requestedDrop)
         add(currentRoot)
 
         for _, name in ipairs({
+            "HumanoidRootPart",
             "UpperTorso",
             "LowerTorso",
             "Torso",
@@ -3644,7 +3738,11 @@ local function GrabGun(silent, requestedDrop)
             "LeftFoot",
             "RightFoot",
             "Left Leg",
-            "Right Leg"
+            "Right Leg",
+            "LeftHand",
+            "RightHand",
+            "Left Arm",
+            "Right Arm"
         }) do
             add(currentCharacter:FindFirstChild(name, true))
         end
@@ -3652,56 +3750,58 @@ local function GrabGun(silent, requestedDrop)
         return parts
     end
 
+    GrabGunBusy = true
     ActionBusy = true
 
     local oldCFrame = character:GetPivot()
     local allow = getgenv().AllowToxTeleport
-
-    if allow then
-        allow(0.35, "MM2 Grab Gun")
-    end
-
     local success = hasGun() ~= nil
 
-    for attempt = 1, 6 do
-        character, humanoid, root = GetCharacterState()
-
-        if success
-        or not gunDrop
-        or not gunDrop.Parent
-        or not character
-        or not humanoid
-        or humanoid.Health <= 0
-        or not root then
-            break
+    pcall(function()
+        if allow then
+            allow(0.5, "MM2 Grab Gun")
         end
 
-        root.AssemblyLinearVelocity = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
-        character:PivotTo(gunDrop.CFrame * CFrame.new(0, 1.05, 0))
+        for attempt = 1, 10 do
+            character, humanoid, root = GetCharacterState()
 
-        if firetouchinterest then
-            pcall(function()
-                gunDrop.CanTouch = true
-            end)
-
-            for _, part in ipairs(getTouchParts(character, root)) do
-                pcall(function()
-                    firetouchinterest(part, gunDrop, 0)
-                    firetouchinterest(gunDrop, part, 0)
-                    firetouchinterest(part, gunDrop, 1)
-                    firetouchinterest(gunDrop, part, 1)
-                end)
+            if success
+            or not gunDrop
+            or not gunDrop.Parent
+            or not character
+            or not humanoid
+            or humanoid.Health <= 0
+            or not root then
+                break
             end
-        end
 
-        if hasGun() then
-            success = true
-            break
-        end
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+            character:PivotTo(gunDrop.CFrame * CFrame.new(0, 1.05, 0))
 
-        RunService.Heartbeat:Wait()
-    end
+            if firetouchinterest then
+                pcall(function()
+                    gunDrop.CanTouch = true
+                end)
+
+                for _, part in ipairs(getTouchParts(character, root)) do
+                    pcall(function()
+                        firetouchinterest(part, gunDrop, 0)
+                        firetouchinterest(gunDrop, part, 0)
+                        firetouchinterest(part, gunDrop, 1)
+                        firetouchinterest(gunDrop, part, 1)
+                    end)
+                end
+            end
+
+            if hasGun() then
+                success = true
+                break
+            end
+
+            RunService.Heartbeat:Wait()
+        end
+    end)
 
     character, humanoid, root = GetCharacterState()
 
@@ -3710,7 +3810,7 @@ local function GrabGun(silent, requestedDrop)
     and humanoid.Health > 0
     and root then
         if allow then
-            allow(0.35, "MM2 Grab Gun Return")
+            allow(0.45, "MM2 Grab Gun Return")
         end
 
         root.AssemblyLinearVelocity = Vector3.zero
@@ -3719,6 +3819,7 @@ local function GrabGun(silent, requestedDrop)
     end
 
     ActionBusy = false
+    GrabGunBusy = false
 
     return success
 end
@@ -5485,6 +5586,35 @@ MM2AutoRuntime = {
     GrabGun = Settings.MM2GrabGunAutoV2 == true
 }
 
+local function SyncMM2AutoRuntimeFromSettings(syncVisual)
+    if not MM2AutoRuntime then
+        return
+    end
+
+    Settings.MM2SilentAimAuto = false
+    Settings.MM2KillAllAuto = false
+    Settings.MM2ShootMurderAuto = false
+    Settings.MM2GrabGunAuto = false
+    Settings.MM2SilentAimAutoV2 = Settings.MM2SilentAimAutoV2 == true
+    Settings.MM2KillAllAutoV2 = Settings.MM2KillAllAutoV2 == true
+    Settings.MM2ShootMurderAutoV2 = Settings.MM2ShootMurderAutoV2 == true
+    Settings.MM2GrabGunAutoV2 = Settings.MM2GrabGunAutoV2 == true
+    MM2AutoRuntime.SilentAim = Settings.MM2SilentAimAutoV2
+    MM2AutoRuntime.KillAll = Settings.MM2KillAllAutoV2
+    MM2AutoRuntime.Shoot = Settings.MM2ShootMurderAutoV2
+    MM2AutoRuntime.GrabGun = Settings.MM2GrabGunAutoV2
+
+    if syncVisual
+    and SyncToggleVisuals then
+        SyncToggleVisuals("MM2SilentAimAutoV2", MM2AutoRuntime.SilentAim)
+        SyncToggleVisuals("MM2KillAllAutoV2", MM2AutoRuntime.KillAll)
+        SyncToggleVisuals("MM2ShootMurderAutoV2", MM2AutoRuntime.Shoot)
+        SyncToggleVisuals("MM2GrabGunAutoV2", MM2AutoRuntime.GrabGun)
+    end
+end
+
+SyncMM2AutoRuntimeFromSettings(true)
+
 MM2CreateKeybindToggle("Silent Aim", GamePage, Settings.MM2SilentAimKey, MM2AutoRuntime.SilentAim, function(key)
     Settings.MM2SilentAimKey = key
 end, function(enabled)
@@ -6133,31 +6263,28 @@ task.spawn(function()
         local alive = humanoid and humanoid.Health > 0
         local localRole = alive and GetRole(Player) or nil
 
+        SyncMM2AutoRuntimeFromSettings(false)
+
         if MM2AutoRuntime.KillAll
+        and Settings.MM2KillAllAutoV2
         and not Settings.MM2AutoFarmV2
         and knife
         and alive
-        and not ActionBusy
-        and knife.Enabled ~= false
-        and os.clock() - AutoKnifeLastAttempt
-            >= 0.05 then
-            AutoKnifeLastAttempt =
-                os.clock()
+        and not KillAllBusy
+        and os.clock() - AutoKnifeLastAttempt >= 0.03 then
+            AutoKnifeLastAttempt = os.clock()
 
-            task.spawn(
-                KillAll
-            )
+            task.spawn(function()
+                KillAll(true)
+            end)
         end
-
 
         if MM2AutoRuntime.Shoot
         and Settings.MM2ShootMurderAutoV2
         and not Settings.MM2AutoFarmV2
-        and gun
         and alive
-        and not ActionBusy
         and not GuidedShotBusy
-        and gun.Enabled ~= false then
+        and os.clock() - AutoShootLastAttempt >= 0.03 then
             local murderer = FindGuidedMurderer()
             local murderHumanoid = murderer
                 and murderer.Character
@@ -6165,8 +6292,7 @@ task.spawn(function()
 
             if murderer
             and murderHumanoid
-            and murderHumanoid.Health > 0
-            and os.clock() - AutoShootLastAttempt >= 0.05 then
+            and murderHumanoid.Health > 0 then
                 AutoShootLastAttempt = os.clock()
 
                 local shootGeneration = AutoShootGeneration
@@ -6186,16 +6312,17 @@ task.spawn(function()
         and Settings.MM2GrabGunAutoV2
         and not Settings.MM2AutoFarmV2
         and alive
-        and localRole == "Innocent"
+        and localRole ~= "Murderer"
+        and localRole ~= "Sheriff"
         and not IsSheriffAlive()
         and not gun
-        and not ActionBusy then
+        and not GrabGunBusy then
             local drop = FindGunDrop()
 
             if drop then
                 local lastAttempt = AutoGrabAttemptedDrops[drop]
 
-                if not lastAttempt or os.clock() - lastAttempt >= 0.18 then
+                if not lastAttempt or os.clock() - lastAttempt >= 0.08 then
                     AutoGrabAttemptedDrops[drop] = os.clock()
                     task.spawn(function()
                         GrabGun(true, drop)
@@ -6246,7 +6373,7 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 
     if Settings.MM2KillAllKey and input.KeyCode == Settings.MM2KillAllKey then
-        KillAll()
+        KillAll(false)
         return
     end
 
@@ -6311,6 +6438,8 @@ getgenv().ToxMM2Cleanup = function()
     ShootSafetySerial = ShootSafetySerial + 1
     GuidedShotBusy = false
     SilentAimBusy = false
+    KillAllBusy = false
+    GrabGunBusy = false
     ActionBusy = false
     AutoSilentAimLastAttempt = 0
     AutoShootLastAttempt = 0
@@ -6388,6 +6517,8 @@ local function ApplyMM2SavedOptionsAfterLoad()
     or not ToxScriptReady() then
         return
     end
+
+    SyncMM2AutoRuntimeFromSettings(true)
 
     if Settings.MM2RoleESP then
         pcall(function()
