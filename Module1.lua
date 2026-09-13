@@ -1434,6 +1434,12 @@ local function LoadConfiguration()
 end
 
 
+local function NormalizeStartupDefaultToggles()
+    Settings.AntiAFK = true
+    Settings.AntiFling = true
+    Settings.Render3D = true
+end
+
 local function DisableUnsupportedGameActions()
     if getgenv().CurrentGameModule then
         return
@@ -1444,9 +1450,14 @@ local function DisableUnsupportedGameActions()
             Settings[key] = false
         end
     end
+
+    Settings.AntiAFK = true
+    Settings.AntiFling = true
+    Settings.Render3D = true
 end
 
 LoadConfiguration()
+NormalizeStartupDefaultToggles()
 DisableUnsupportedGameActions()
 
 getgenv().SavedWaypointsByPlace =
