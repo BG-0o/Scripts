@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 MM2ModuleVersion =
-    "2026-09-13-mm2-split-github-names"
+    "2026-09-13-mm2-split-loader-config-fix"
 
 local Settings = getgenv().Settings
 local GamePage = getgenv().GamePage
@@ -22,34 +22,69 @@ end
 getgenv().ToxMM2CoreReady = false
 getgenv().ToxMM2CoreVersion = nil
 
-local coreUrl =
-    getgenv().ToxMM2CoreURL
-    or "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ModuleMM2.lua"
+local function AddMM2CacheBuster(url)
+    url = tostring(url or "")
 
-local coreOk, coreResult = pcall(function()
-    return game:HttpGet(coreUrl)
-end)
+    if url == "" then
+        return url
+    end
 
-if not coreOk
-or type(coreResult) ~= "string"
-or coreResult == "" then
-    CustomNotify(
-        "MM2 core failed to download",
-        Color3.fromRGB(255, 90, 90),
-        6
-    )
-    return
+    local separator = string.find(url, "?", 1, true) and "&" or "?"
+
+    return url
+        .. separator
+        .. "toxv="
+        .. MM2ModuleVersion
+        .. "_"
+        .. tostring(os.time())
+        .. "_"
+        .. tostring(math.random(1000, 999999))
 end
 
-local coreFunction, coreCompileError = loadstring(coreResult)
+local coreUrls = {}
+
+if getgenv().ToxMM2CoreURL then
+    table.insert(coreUrls, tostring(getgenv().ToxMM2CoreURL))
+end
+
+table.insert(coreUrls, "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ModuleMM2")
+table.insert(coreUrls, "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ModuleMM2.lua")
+
+local coreFunction = nil
+local coreLoadError = nil
+local loadedCoreUrl = nil
+
+for _, url in ipairs(coreUrls) do
+    local requestUrl = AddMM2CacheBuster(url)
+
+    local coreOk, coreResult = pcall(function()
+        return game:HttpGet(requestUrl)
+    end)
+
+    if coreOk
+    and type(coreResult) == "string"
+    and coreResult ~= "" then
+        local compiled, compileError = loadstring(coreResult)
+
+        if compiled then
+            coreFunction = compiled
+            loadedCoreUrl = url
+            break
+        else
+            coreLoadError = compileError
+        end
+    else
+        coreLoadError = coreResult
+    end
+end
 
 if not coreFunction then
     CustomNotify(
-        "MM2 core failed to compile",
+        "MM2 core failed to compile/download",
         Color3.fromRGB(255, 90, 90),
         6
     )
-    warn("[ToxHub MM2 Core Compile Error]:", coreCompileError)
+    warn("[ToxHub MM2 Core Load Error]: " .. tostring(coreLoadError))
     return
 end
 
@@ -63,7 +98,7 @@ or getgenv().ToxMM2CoreVersion ~= MM2ModuleVersion then
         Color3.fromRGB(255, 90, 90),
         6
     )
-    warn("[ToxHub MM2 Core Error]:", coreRunError)
+    warn("[ToxHub MM2 Core Error]: " .. tostring(coreRunError) .. " | " .. tostring(loadedCoreUrl))
     return
 end
 
