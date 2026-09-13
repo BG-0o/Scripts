@@ -11,6 +11,173 @@ local Lighting = game:GetService("Lighting")
 
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
+local ToxParentContainer = (gethui and gethui()) or game:GetService("CoreGui")
+
+local function HasRunningToxHub()
+    local gui = getgenv().Gui
+    local notifGui = getgenv().NotifGui
+
+    if typeof(gui) == "Instance"
+    and gui.Parent then
+        return true
+    end
+
+    if typeof(notifGui) == "Instance"
+    and notifGui.Parent then
+        return true
+    end
+
+    if getgenv().ToxHubActive == true
+    and getgenv().Destroyed ~= true then
+        return true
+    end
+
+    for _, object in ipairs(ToxParentContainer:GetChildren()) do
+        if object.Name == "ToxV1Gui"
+        or object.Name == "ToxNotifs" then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function ShowReexecuteConfirm()
+    if getgenv().ToxReexecuteConfirmOpen then
+        return false
+    end
+
+    getgenv().ToxReexecuteConfirmOpen = true
+
+    local confirmGui = Instance.new("ScreenGui")
+    confirmGui.Name = "ToxReexecuteConfirm"
+    confirmGui.ResetOnSpawn = false
+    confirmGui.IgnoreGuiInset = true
+    confirmGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    confirmGui.DisplayOrder = 2147483647
+    confirmGui.Parent = ToxParentContainer
+
+    local shadow = Instance.new("Frame")
+    shadow.Size = UDim2.new(1, 0, 1, 0)
+    shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    shadow.BackgroundTransparency = 0.35
+    shadow.BorderSizePixel = 0
+    shadow.Parent = confirmGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 380, 0, 190)
+    frame.Position = UDim2.new(0.5, -190, 0.5, -95)
+    frame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+    frame.BorderSizePixel = 0
+    frame.Parent = confirmGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 10)
+    corner.Parent = frame
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(9, 0, 136)
+    stroke.Thickness = 2
+    stroke.Parent = frame
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -30, 0, 42)
+    title.Position = UDim2.new(0, 15, 0, 12)
+    title.BackgroundTransparency = 1
+    title.Text = "ToxHub is already running"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 18
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = frame
+
+    local body = Instance.new("TextLabel")
+    body.Size = UDim2.new(1, -30, 0, 58)
+    body.Position = UDim2.new(0, 15, 0, 58)
+    body.BackgroundTransparency = 1
+    body.Text = "Do you want to execute ToxHub again? The current interface and active loops will be restarted."
+    body.TextColor3 = Color3.fromRGB(220, 220, 230)
+    body.Font = Enum.Font.Gotham
+    body.TextSize = 13
+    body.TextWrapped = true
+    body.TextXAlignment = Enum.TextXAlignment.Left
+    body.TextYAlignment = Enum.TextYAlignment.Top
+    body.Parent = frame
+
+    local execute = Instance.new("TextButton")
+    execute.Size = UDim2.new(0.5, -22, 0, 38)
+    execute.Position = UDim2.new(0, 15, 1, -53)
+    execute.BackgroundColor3 = Color3.fromRGB(45, 170, 80)
+    execute.BorderSizePixel = 0
+    execute.Text = "EXECUTE AGAIN"
+    execute.TextColor3 = Color3.fromRGB(255, 255, 255)
+    execute.Font = Enum.Font.GothamBold
+    execute.TextSize = 12
+    execute.Parent = frame
+
+    local executeCorner = Instance.new("UICorner")
+    executeCorner.CornerRadius = UDim.new(0, 7)
+    executeCorner.Parent = execute
+
+    local cancel = Instance.new("TextButton")
+    cancel.Size = UDim2.new(0.5, -22, 0, 38)
+    cancel.Position = UDim2.new(0.5, 7, 1, -53)
+    cancel.BackgroundColor3 = Color3.fromRGB(170, 50, 55)
+    cancel.BorderSizePixel = 0
+    cancel.Text = "CANCEL"
+    cancel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    cancel.Font = Enum.Font.GothamBold
+    cancel.TextSize = 12
+    cancel.Parent = frame
+
+    local cancelCorner = Instance.new("UICorner")
+    cancelCorner.CornerRadius = UDim.new(0, 7)
+    cancelCorner.Parent = cancel
+
+    local result = nil
+
+    execute.MouseButton1Click:Connect(function()
+        result = true
+    end)
+
+    cancel.MouseButton1Click:Connect(function()
+        result = false
+    end)
+
+    local started = os.clock()
+
+    repeat
+        task.wait(0.05)
+    until result ~= nil
+    or os.clock() - started > 60
+
+    pcall(function()
+        confirmGui:Destroy()
+    end)
+
+    getgenv().ToxReexecuteConfirmOpen = nil
+
+    return result == true
+end
+
+if HasRunningToxHub() then
+    if not ShowReexecuteConfirm() then
+        return
+    end
+
+    getgenv().Destroyed = true
+    getgenv().ScriptLoaded = false
+    getgenv().ToxHubActive = false
+    getgenv().ToxUniversalLoaded = nil
+    getgenv().ToxNDSModuleLoadedJobId = nil
+    getgenv().ToxMM2ModuleLoadedJobId = nil
+
+    if getgenv().ToxADMINCleanup then
+        pcall(getgenv().ToxADMINCleanup)
+    end
+
+    task.wait(0.18)
+end
 
 if getgenv().Gui then pcall(function() getgenv().Gui:Destroy() end) end
 if getgenv().NotifGui then pcall(function() getgenv().NotifGui:Destroy() end) end
@@ -226,6 +393,7 @@ getgenv().GameSpecificSettings = {}
 getgenv().BaseSharedSettings = {}
 getgenv().Destroyed = false
 getgenv().ScriptLoaded = false
+getgenv().ToxHubActive = true
 
 if getgenv().ScriptConnections then
     for _, conn in ipairs(getgenv().ScriptConnections) do
@@ -985,6 +1153,65 @@ local function MigrateLegacyGameSettings(data)
     end
 end
 
+
+local function ReadToxConfigDataForSave()
+    if not isfile
+    or not readfile
+    or not ConfigFilePath
+    or not isfile(ConfigFilePath) then
+        return nil
+    end
+
+    local ok, data = pcall(function()
+        local raw = readfile(ConfigFilePath)
+
+        if not raw
+        or raw == "" then
+            return nil
+        end
+
+        return HttpService:JSONDecode(raw)
+    end)
+
+    if ok
+    and typeof(data) == "table" then
+        return data
+    end
+
+    return nil
+end
+
+local function MergeStoredGameSpecificSettingsForSave(currentPlaceKey)
+    local data = ReadToxConfigDataForSave()
+
+    if typeof(data) ~= "table" then
+        return nil
+    end
+
+    local stored = data.GameSpecificSettings
+    local decoded = DeserializeConfigValue(stored)
+
+    if typeof(decoded) == "table" then
+        getgenv().GameSpecificSettings =
+            typeof(getgenv().GameSpecificSettings) == "table"
+            and getgenv().GameSpecificSettings
+            or {}
+
+        currentPlaceKey = tostring(currentPlaceKey or game.PlaceId)
+
+        for placeKey, state in pairs(decoded) do
+            local key = tostring(placeKey)
+
+            if key ~= currentPlaceKey
+            and typeof(getgenv().GameSpecificSettings[key]) ~= "table" then
+                getgenv().GameSpecificSettings[key] = state
+            end
+        end
+    end
+
+    return data
+end
+
 getgenv().AutoSaveConfiguration = function()
     if getgenv().Destroyed then
         return
@@ -1000,6 +1227,11 @@ getgenv().AutoSaveConfiguration = function()
         typeof(getgenv().GameSpecificSettings) == "table"
         and getgenv().GameSpecificSettings
         or {}
+
+    local existingConfigData =
+        MergeStoredGameSpecificSettingsForSave(
+            game.PlaceId
+        )
 
     if getgenv().CurrentGameModule then
         getgenv().GameSpecificSettings[
@@ -1025,10 +1257,24 @@ getgenv().AutoSaveConfiguration = function()
         guiKeyName = Settings.GUIKeybind.Name
     end
 
+    local globalSettingsSnapshot =
+        BuildGlobalSettingsSnapshot()
+
+    if not getgenv().CurrentGameModule
+    and typeof(existingConfigData) == "table"
+    and typeof(existingConfigData.Settings) == "table" then
+        for key, savedValue in pairs(existingConfigData.Settings) do
+            if typeof(Settings[key]) == "boolean"
+            and Settings[key] == false then
+                globalSettingsSnapshot[key] = savedValue
+            end
+        end
+    end
+
     local data = {
         ConfigVersion = 4,
         GlobalGUIKeybind = guiKeyName,
-        Settings = BuildGlobalSettingsSnapshot(),
+        Settings = globalSettingsSnapshot,
         GameSpecificSettings = SerializeConfigValue(
             getgenv().GameSpecificSettings
         ),
