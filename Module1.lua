@@ -170,6 +170,9 @@ if HasRunningToxHub() then
     getgenv().ToxHubActive = false
     getgenv().ToxUniversalLoaded = nil
     getgenv().ToxNDSModuleLoadedJobId = nil
+    getgenv().ToxLBBModuleLoadedJobId = nil
+    getgenv().ToxLBBModuleVersion = nil
+    getgenv().ToxLBBModulePage = nil
     getgenv().ToxMM2ModuleLoadedJobId = nil
     getgenv().ToxMM2ModuleVersion = nil
     getgenv().ToxMM2ModulePage = nil
@@ -182,6 +185,10 @@ if HasRunningToxHub() then
 
     if getgenv().ToxADMINCleanup then
         pcall(getgenv().ToxADMINCleanup)
+    end
+
+    if getgenv().ToxLBBCleanup then
+        pcall(getgenv().ToxLBBCleanup)
     end
 
     task.wait(0.18)
@@ -240,6 +247,11 @@ getgenv().GameModuleRegistry = {
     [4522347649] = {
         ShortName = "ADMIN",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ADMIN.lua",
+        Ready = true
+    },
+    [662417684] = {
+        ShortName = "LBB",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/LBB.lua",
         Ready = true
     }
 }
