@@ -29,7 +29,7 @@ or not CreateButton then
     return
 end
 
-local LBBModuleVersion = "2026-09-14-lbb-fixed-bases-special-blocks-4"
+local LBBModuleVersion = "2026-09-14-lbb-respawn-esp-special-blocks-5"
 
 if getgenv().ToxLBBModuleLoadedJobId == game.JobId
 and getgenv().ToxLBBModuleVersion == LBBModuleVersion
@@ -64,7 +64,7 @@ local BaseRecordsCache = nil
 local BaseRecordsCacheTime = 0
 
 local BasePalette = {
-    {Name = "YELLOW", Hue = 0.155, Color = Color3.fromRGB(255, 220, 55)},
+    {Name = "YELLOW", Hue = 0.155, Color = Color3.fromRGB(255, 255, 0)},
     {Name = "GREEN", Hue = 0.333, Color = Color3.fromRGB(65, 210, 85)},
     {Name = "CYAN", Hue = 0.500, Color = Color3.fromRGB(45, 210, 235)},
     {Name = "BLUE", Hue = 0.620, Color = Color3.fromRGB(55, 105, 235)},
@@ -963,62 +963,119 @@ local function TriggerNearbySpecial(position, kind)
     return #candidates > 0
 end
 
-local function OpenVoidBlock()
-    local before = CountPlayerTools()
+local function GetFunctionConstants(fn)
+    local getter = nil
 
-    FireSpecialRemote("SpawnVoidBlock", 6)
+    pcall(function()
+        getter = debug and debug.getconstants
+    end)
 
-    if WaitForNewTool(before, 1.35) then
-        return true
+    if not getter and getconstants then
+        getter = getconstants
     end
 
-    TryRemoteCandidates(
-        {
-            "SpawnVoidLuckyBlock",
-            "S*VoidBlock",
-            "SVoidBlock",
-            "VoidBlock",
-            "SpawnVoid"
-        },
-        {
-            {"Void", "Block"},
-            {"Void", "Lucky"}
-        }
-    )
-
-    TriggerGameGuiButton({
-        {"Void", "Block"},
-        {"Void"}
-    })
-
-    TriggerWorldBlock({"Void", "Block"})
-    TryGenericBlockRemote({"VoidBlock", "Void"})
-    TriggerNearbySpecial(CenterPosition, "void")
-
-    if WaitForNewTool(before, 1.35) then
-        return true
+    if not getter then
+        return {}
     end
 
-    CustomNotify(
-        "Void Block not available right now",
-        Color3.fromRGB(255, 180, 70),
-        4
-    )
+    local ok, constants = pcall(getter, fn)
 
-    return false
+    if ok and typeof(constants) == "table" then
+        return constants
+    end
+
+    return {}
 end
 
-local function OpenLimitedBlock()
-    local before = CountPlayerTools()
+local function GetFunctionUpvalues(fn)
+    local getter = nil
 
-    FireSpecialRemote("SpawnHackerBlock", 8)
+    pcall(function()
+        getter = debug and debug.getupvalues
+    end)
 
-    if WaitForNewTool(before, 1.35) then
-        return true
+    if not getter and getupvalues then
+        getter = getupvalues
     end
 
-    TryRemoteCandidates(
-        {
+    if not getter then
+        return {}
+    end
+
+    local ok, upvalues = pcall(getter, fn)
+
+    if ok and typeof(upvalues) == "table" then
+        return upvalues
+    end
+
+    return {}
+end
+
+local function CollectRemoteInstances(value, output, seen, depth)
+    if IsRemote(value) then
+        output[value] = true
+        return
+    end
+
+    if typeof(value) ~= "table"
+    or depth <= 0
+    or seen[value] then
+        return
+    end
+
+    seen[value] = true
+
+    for key, item in pairs(value) do
+        if IsRemote(key) then
+            output[key] = true
+        elseif typeof(key) == "table" then
+            CollectRemoteInstances(key, output, seen, depth - 1)
+        end
+
+        if IsRemote(item) then
+            output[item] = true
+        elseif typeof(item) == "table" then
+            CollectRemoteInstances(item, output, seen, depth - 1)
+        end
+    end
+end
+
+local function GetSpecialDefinition(kind)
+    if kind == "void" then
+        return {
+            Tokens = {"void"},
+            ButtonGroups = {
+                {"Void", "Block"},
+                {"Void"}
+            },
+            Names = {
+                "SpawnVoidBlock",
+                "SpawnVoidLuckyBlock",
+                "S*VoidBlock",
+                "SVoidBlock",
+                "VoidBlock",
+                "SpawnVoid"
+            },
+            Arguments = {
+                "Void",
+                "VoidBlock",
+                "Void Block",
+                "VoidLuckyBlock"
+            }
+        }
+    end
+
+    return {
+        Tokens = {"hacker"},
+        AlternateTokens = {"limited"},
+        ButtonGroups = {
+            {"Hacker", "Block"},
+            {"Limited", "Block"},
+            {"Hacker"},
+            {"Limited"}
+        },
+        Names = {
+            "SpawnHackerBlock",
             "SpawnLimitedBlock",
             "SpawnHackerLuckyBlock",
             "S*HackerBlock",
@@ -1028,12 +1085,499 @@ local function OpenLimitedBlock()
             "SpawnHacker",
             "SpawnLimited"
         },
-        {
-            {"Hacker", "Block"},
-            {"Limited", "Block"},
-            {"Hacker", "Lucky"}
+        Arguments = {
+            "Hacker",
+            "HackerBlock",
+            "Hacker Block",
+            "Limited",
+            "LimitedBlock",
+            "Limited Block"
         }
+    }
+end
+
+local function FunctionMatchesSpecial(fn, definition)
+    local constants = GetFunctionConstants(fn)
+    local pieces = {}
+
+    for _, value in pairs(constants) do
+        if typeof(value) == "string" then
+            table.insert(pieces, value)
+        end
+    end
+
+    local blob = NormalizeName(table.concat(pieces, " "))
+
+    for _, token in ipairs(definition.Tokens or {}) do
+        if string.find(blob, NormalizeName(token), 1, true) then
+            return true, constants
+        end
+    end
+
+    for _, token in ipairs(definition.AlternateTokens or {}) do
+        if string.find(blob, NormalizeName(token), 1, true) then
+            return true, constants
+        end
+    end
+
+    return false, constants
+end
+
+local function AddSpecialCandidate(candidates, scores, remote, score)
+    if not IsRemote(remote) then
+        return
+    end
+
+    if not scores[remote] then
+        table.insert(candidates, remote)
+        scores[remote] = score or 0
+    else
+        scores[remote] = math.max(scores[remote], score or 0)
+    end
+end
+
+local function CollectSpecialRemoteCandidates(kind)
+    local definition = GetSpecialDefinition(kind)
+    local candidates = {}
+    local scores = {}
+
+    for index, name in ipairs(definition.Names) do
+        local remote = ReplicatedStorage:FindFirstChild(name, true)
+            or FindRemoteExact(name, 0.15)
+
+        AddSpecialCandidate(
+            candidates,
+            scores,
+            remote,
+            1000 - index
+        )
+    end
+
+    for _, root in ipairs(RemoteSearchRoots()) do
+        for _, object in ipairs(root:GetDescendants()) do
+            if IsRemote(object) then
+                local normalized = NormalizeName(object.Name)
+                local score = 0
+
+                for _, token in ipairs(definition.Tokens or {}) do
+                    if string.find(normalized, NormalizeName(token), 1, true) then
+                        score += 500
+                    end
+                end
+
+                for _, token in ipairs(definition.AlternateTokens or {}) do
+                    if string.find(normalized, NormalizeName(token), 1, true) then
+                        score += 450
+                    end
+                end
+
+                if string.find(normalized, "spawn", 1, true) then
+                    score += 80
+                end
+
+                if string.find(normalized, "block", 1, true) then
+                    score += 80
+                end
+
+                if string.sub(tostring(object.Name), 1, 2) == "S*" then
+                    score += 45
+                end
+
+                if score > 0 then
+                    AddSpecialCandidate(candidates, scores, object, score)
+                end
+            end
+        end
+    end
+
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+
+    if playerGui and getconnections then
+        for _, object in ipairs(playerGui:GetDescendants()) do
+            if (object:IsA("TextButton") or object:IsA("ImageButton"))
+            and not IsInsideToxGui(object) then
+                local blob = GetGuiSearchText(object)
+                local matches = false
+
+                for _, tokens in ipairs(definition.ButtonGroups) do
+                    if HasTokens(blob, tokens) then
+                        matches = true
+                        break
+                    end
+                end
+
+                if matches then
+                    for _, signal in ipairs({
+                        object.Activated,
+                        object.MouseButton1Click,
+                        object.MouseButton1Down
+                    }) do
+                        local ok, connections = pcall(getconnections, signal)
+
+                        if ok and typeof(connections) == "table" then
+                            for _, connection in ipairs(connections) do
+                                local fn = connection.Function
+
+                                if typeof(fn) == "function" then
+                                    local remotes = {}
+                                    CollectRemoteInstances(
+                                        GetFunctionUpvalues(fn),
+                                        remotes,
+                                        {},
+                                        4
+                                    )
+
+                                    for remote in pairs(remotes) do
+                                        AddSpecialCandidate(
+                                            candidates,
+                                            scores,
+                                            remote,
+                                            900
+                                        )
+                                    end
+
+                                    for _, constant in pairs(GetFunctionConstants(fn)) do
+                                        if typeof(constant) == "string" then
+                                            local remote = FindRemoteExact(constant, 0)
+
+                                            if remote then
+                                                AddSpecialCandidate(
+                                                    candidates,
+                                                    scores,
+                                                    remote,
+                                                    850
+                                                )
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if getgc then
+        local ok, objects = pcall(getgc, true)
+
+        if ok and typeof(objects) == "table" then
+            for _, value in ipairs(objects) do
+                if typeof(value) == "function" then
+                    local matches, constants = FunctionMatchesSpecial(
+                        value,
+                        definition
+                    )
+
+                    if matches then
+                        local remotes = {}
+                        CollectRemoteInstances(
+                            GetFunctionUpvalues(value),
+                            remotes,
+                            {},
+                            4
+                        )
+
+                        for remote in pairs(remotes) do
+                            AddSpecialCandidate(
+                                candidates,
+                                scores,
+                                remote,
+                                780
+                            )
+                        end
+
+                        for _, constant in pairs(constants) do
+                            if typeof(constant) == "string" then
+                                local remote = FindRemoteExact(constant, 0)
+
+                                if remote then
+                                    AddSpecialCandidate(
+                                        candidates,
+                                        scores,
+                                        remote,
+                                        760
+                                    )
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if getnilinstances then
+        local ok, objects = pcall(getnilinstances)
+
+        if ok and typeof(objects) == "table" then
+            for _, object in ipairs(objects) do
+                if IsRemote(object) then
+                    local normalized = NormalizeName(object.Name)
+                    local score = 0
+
+                    for _, token in ipairs(definition.Tokens or {}) do
+                        if string.find(normalized, NormalizeName(token), 1, true) then
+                            score += 400
+                        end
+                    end
+
+                    for _, token in ipairs(definition.AlternateTokens or {}) do
+                        if string.find(normalized, NormalizeName(token), 1, true) then
+                            score += 380
+                        end
+                    end
+
+                    if score > 0 then
+                        AddSpecialCandidate(candidates, scores, object, score)
+                    end
+                end
+            end
+        end
+    end
+
+    table.sort(candidates, function(a, b)
+        return (scores[a] or 0) > (scores[b] or 0)
+    end)
+
+    return candidates, definition
+end
+
+local function TrySpecialRemote(kind, before)
+    local candidates, definition = CollectSpecialRemoteCandidates(kind)
+
+    for _, remote in ipairs(candidates) do
+        FireRemote(remote)
+        task.wait(0.12)
+
+        if CountPlayerTools() > before then
+            return true
+        end
+
+        for _, argument in ipairs(definition.Arguments or {}) do
+            FireRemote(remote, argument)
+            task.wait(0.09)
+
+            if CountPlayerTools() > before then
+                return true
+            end
+        end
+    end
+
+    local genericNames = kind == "void"
+        and {"VoidBlock", "Void"}
+        or {"HackerBlock", "Hacker", "LimitedBlock", "Limited"}
+
+    TryGenericBlockRemote(genericNames)
+    return WaitForNewTool(before, 0.65)
+end
+
+local function FindPhysicalSpecialBlock(position, kind)
+    if typeof(position) ~= "Vector3" then
+        return nil
+    end
+
+    local best = nil
+    local bestScore = -math.huge
+    local maxHorizontal = kind == "void" and 105 or 95
+
+    for _, part in ipairs(workspace:GetDescendants()) do
+        if part:IsA("BasePart")
+        and part.Parent
+        and part.Transparency < 0.98 then
+            local horizontal = Vector3.new(
+                part.Position.X - position.X,
+                0,
+                part.Position.Z - position.Z
+            ).Magnitude
+
+            if horizontal <= maxHorizontal then
+                local blob = NormalizeName(
+                    tostring(part.Name)
+                    .. " "
+                    .. tostring(part.Parent and part.Parent.Name or "")
+                    .. " "
+                    .. tostring(part.Parent and part.Parent.Parent and part.Parent.Parent.Name or "")
+                )
+                local hue, saturation, value = part.Color:ToHSV()
+                local score = 100 - horizontal
+
+                if string.find(blob, "lucky", 1, true)
+                or string.find(blob, "block", 1, true) then
+                    score += 180
+                end
+
+                if kind == "void" then
+                    if string.find(blob, "void", 1, true) then
+                        score += 1000
+                    end
+
+                    if saturation <= 0.20 and value >= 0.72 then
+                        score += 140
+                    end
+
+                    if value <= 0.20 then
+                        score += 35
+                    end
+                else
+                    if string.find(blob, "hacker", 1, true)
+                    or string.find(blob, "limited", 1, true) then
+                        score += 1000
+                    end
+
+                    if value <= 0.28 then
+                        score += 95
+                    end
+
+                    if saturation >= 0.48
+                    and hue >= 0.24
+                    and hue <= 0.45 then
+                        score += 85
+                    end
+                end
+
+                local sizeMagnitude = part.Size.Magnitude
+
+                if sizeMagnitude <= 30 then
+                    score += 80
+                elseif sizeMagnitude >= 90 then
+                    score -= 160
+                end
+
+                if score > bestScore then
+                    best = part
+                    bestScore = score
+                end
+            end
+        end
+    end
+
+    if bestScore < 70 then
+        return nil
+    end
+
+    return best
+end
+
+local function InteractPhysicalSpecial(position, kind, before)
+    local part = FindPhysicalSpecialBlock(position, kind)
+
+    if not part then
+        return false
+    end
+
+    local click = part:FindFirstChildWhichIsA("ClickDetector", true)
+        or (part.Parent and part.Parent:FindFirstChildWhichIsA("ClickDetector", true))
+    local prompt = part:FindFirstChildWhichIsA("ProximityPrompt", true)
+        or (part.Parent and part.Parent:FindFirstChildWhichIsA("ProximityPrompt", true))
+
+    if click and fireclickdetector then
+        pcall(function()
+            fireclickdetector(click)
+        end)
+    end
+
+    if prompt and fireproximityprompt then
+        pcall(function()
+            fireproximityprompt(prompt)
+        end)
+    end
+
+    local character = Player.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+
+    if root then
+        local oldCFrame = root.CFrame
+        local oldLinear = root.AssemblyLinearVelocity
+        local oldAngular = root.AssemblyAngularVelocity
+        local distance = (root.Position - part.Position).Magnitude
+
+        if getgenv().AllowToxTeleport then
+            getgenv().AllowToxTeleport(1.2, "LBB Special Block")
+        end
+
+        if distance > 16 then
+            root.CFrame = CFrame.new(
+                part.Position + Vector3.new(0, math.max(3, part.Size.Y * 0.5 + 2), 0)
+            )
+            task.wait(0.08)
+        end
+
+        if firetouchinterest then
+            pcall(function()
+                firetouchinterest(root, part, 0)
+                task.wait(0.05)
+                firetouchinterest(root, part, 1)
+            end)
+        end
+
+        task.wait(0.18)
+
+        if distance > 16
+        and root.Parent
+        and character == Player.Character then
+            root.CFrame = oldCFrame
+            root.AssemblyLinearVelocity = oldLinear
+            root.AssemblyAngularVelocity = oldAngular
+        end
+    end
+
+    return WaitForNewTool(before, 0.8)
+end
+
+local function OpenVoidBlock()
+    local before = CountPlayerTools()
+
+    if InteractPhysicalSpecial(CenterPosition, "void", before) then
+        return true
+    end
+
+    if TrySpecialRemote("void", before) then
+        return true
+    end
+
+    TriggerGameGuiButton({
+        {"Void", "Block"},
+        {"Void"}
+    })
+
+    if WaitForNewTool(before, 0.7) then
+        return true
+    end
+
+    CustomNotify(
+        "Void Block unavailable",
+        Color3.fromRGB(255, 180, 70),
+        4
     )
+
+    return false
+end
+
+local function OpenLimitedBlock()
+    local before = CountPlayerTools()
+    local basePosition = nil
+    local baseRecord = PlayerBaseCache[Player]
+
+    if baseRecord and baseRecord.Position then
+        basePosition = baseRecord.Position
+    else
+        local respawn = Player.RespawnLocation
+
+        if respawn and respawn:IsA("BasePart") then
+            basePosition = respawn.Position
+        end
+    end
+
+    if basePosition
+    and InteractPhysicalSpecial(basePosition, "hacker", before) then
+        return true
+    end
+
+    if TrySpecialRemote("hacker", before) then
+        return true
+    end
 
     TriggerGameGuiButton({
         {"Hacker", "Block"},
@@ -1042,47 +1586,12 @@ local function OpenLimitedBlock()
         {"Limited"}
     })
 
-    local basePosition = nil
-    local respawn = Player.RespawnLocation
-
-    if respawn
-    and respawn:IsA("BasePart") then
-        basePosition = respawn.Position
-    else
-        local root = Player.Character
-            and Player.Character:FindFirstChild("HumanoidRootPart")
-
-        if root then
-            local closestDistance = math.huge
-
-            for _, position in pairs(BasePositionByName) do
-                local distance = (root.Position - position).Magnitude
-
-                if distance < closestDistance then
-                    closestDistance = distance
-                    basePosition = position
-                end
-            end
-
-            if closestDistance > 135 then
-                basePosition = nil
-            end
-        end
-    end
-
-    TriggerWorldBlock({"Hacker", "Block"})
-    TryGenericBlockRemote({"HackerBlock", "Hacker", "LimitedBlock", "Limited"})
-
-    if basePosition then
-        TriggerNearbySpecial(basePosition, "hacker")
-    end
-
-    if WaitForNewTool(before, 1.35) then
+    if WaitForNewTool(before, 0.7) then
         return true
     end
 
     CustomNotify(
-        "Limited Block not available right now",
+        "Limited Block unavailable",
         Color3.fromRGB(255, 180, 70),
         4
     )
@@ -1752,105 +2261,45 @@ local function FindTaggedBaseRecord(player)
     return nil
 end
 
-local function GetPlayerTeamColorName(player)
-    if player.Team then
-        local colorName = GetDirectColorName(player.Team.TeamColor)
+local PlayerRespawnCFrameCache = setmetatable({}, {__mode = "k"})
+local LocalSpawnCFrame = nil
 
-        if colorName then
-            return colorName
-        end
-
-        colorName = GetDirectColorName(player.Team.Name)
-
-        if colorName then
-            return colorName
-        end
+local function GetBaseRecordFromPosition(position, maxDistance)
+    if typeof(position) ~= "Vector3" then
+        return nil
     end
 
-    local ok, teamColor = pcall(function()
-        return player.TeamColor
-    end)
+    local record, distance = GetNearestBaseRecord(
+        position,
+        tonumber(maxDistance) or 145
+    )
 
-    if ok then
-        local colorName = GetDirectColorName(teamColor)
-
-        if colorName then
-            return colorName
-        end
+    if record
+    and distance <= (tonumber(maxDistance) or 145) then
+        return record
     end
 
     return nil
 end
 
-local LocalSpawnCFrame = nil
-
-local function GetRecordFromTeamSpawn(player)
-    local ok, playerTeamColor = pcall(function()
-        return player.TeamColor
-    end)
-
-    if not ok
-    or typeof(playerTeamColor) ~= "BrickColor"
-    or playerTeamColor.Name == "Medium stone grey" then
+local function GetBaseRecordFromTeamName(player)
+    if not player
+    or not player.Team then
         return nil
     end
 
-    local bestRecord = nil
-    local bestDistance = math.huge
+    local colorName = GetDirectColorName(player.Team.Name)
 
-    for _, spawn in ipairs(GetSpawnLocations()) do
-        local spawnOk, spawnTeamColor = pcall(function()
-            return spawn.TeamColor
-        end)
-
-        if spawnOk
-        and spawnTeamColor == playerTeamColor then
-            local record, distance = GetNearestBaseRecord(spawn.Position, 150)
-
-            if record
-            and distance < bestDistance then
-                bestRecord = record
-                bestDistance = distance
-            end
-        end
+    if colorName then
+        return GetBaseRecordByColor(colorName)
     end
 
-    return bestRecord
+    return nil
 end
 
-local function CachePlayerBase(player, allowLoose)
+local function GetBaseRecordFromAttributes(player)
     if not player then
         return nil
-    end
-
-    local respawn = player.RespawnLocation
-
-    if respawn
-    and respawn:IsA("BasePart") then
-        local record, distance = GetNearestBaseRecord(respawn.Position, 150)
-
-        if record
-        and distance <= 150 then
-            PlayerBaseCache[player] = record
-
-            if player == Player then
-                LocalSpawnCFrame = GetSpawnCFrame(respawn)
-            end
-
-            return record
-        end
-    end
-
-    local teamRecord = GetRecordFromTeamSpawn(player)
-
-    if teamRecord then
-        PlayerBaseCache[player] = teamRecord
-
-        if player == Player then
-            LocalSpawnCFrame = GetRecordSpawnCFrame(teamRecord)
-        end
-
-        return teamRecord
     end
 
     for key, value in pairs(player:GetAttributes()) do
@@ -1862,50 +2311,100 @@ local function CachePlayerBase(player, allowLoose)
         or string.find(lowerKey, "spawn", 1, true) then
             local colorName = GetDirectColorName(value)
 
-            if colorName
-            and BasePositionByName[colorName] then
+            if colorName then
                 local record = GetBaseRecordByColor(colorName)
 
                 if record then
-                    PlayerBaseCache[player] = record
-
-                    if player == Player then
-                        LocalSpawnCFrame = GetRecordSpawnCFrame(record)
-                    end
-
                     return record
                 end
             end
         end
     end
 
-    local taggedRecord = FindTaggedBaseRecord(player)
+    return nil
+end
 
-    if taggedRecord then
-        PlayerBaseCache[player] = taggedRecord
-
-        if player == Player then
-            LocalSpawnCFrame = GetRecordSpawnCFrame(taggedRecord)
-        end
-
-        return taggedRecord
+local function CachePlayerBase(player, allowCurrentPosition)
+    if not player then
+        return nil
     end
 
-    local root = GetCharacterRoot(player)
+    local respawn = player.RespawnLocation
 
-    if root then
-        local maxDistance = allowLoose and 135 or 105
-        local record, distance = GetNearestBaseRecord(root.Position, maxDistance)
+    if respawn
+    and respawn:IsA("BasePart") then
+        local record = GetBaseRecordFromPosition(respawn.Position, 150)
 
-        if record
-        and distance <= maxDistance then
+        if record then
             PlayerBaseCache[player] = record
+            PlayerRespawnCFrameCache[player] = GetSpawnCFrame(respawn)
 
             if player == Player then
-                LocalSpawnCFrame = CFrame.new(record.Position)
+                LocalSpawnCFrame = PlayerRespawnCFrameCache[player]
             end
 
             return record
+        end
+    end
+
+    local savedSpawn = PlayerRespawnCFrameCache[player]
+
+    if typeof(savedSpawn) == "CFrame" then
+        local record = GetBaseRecordFromPosition(savedSpawn.Position, 150)
+
+        if record then
+            PlayerBaseCache[player] = record
+
+            if player == Player then
+                LocalSpawnCFrame = savedSpawn
+            end
+
+            return record
+        end
+    end
+
+    local teamRecord = GetBaseRecordFromTeamName(player)
+
+    if teamRecord then
+        PlayerBaseCache[player] = teamRecord
+
+        if player == Player
+        and not LocalSpawnCFrame then
+            LocalSpawnCFrame = GetRecordSpawnCFrame(teamRecord)
+        end
+
+        return teamRecord
+    end
+
+    local attributeRecord = GetBaseRecordFromAttributes(player)
+
+    if attributeRecord then
+        PlayerBaseCache[player] = attributeRecord
+
+        if player == Player
+        and not LocalSpawnCFrame then
+            LocalSpawnCFrame = GetRecordSpawnCFrame(attributeRecord)
+        end
+
+        return attributeRecord
+    end
+
+    if allowCurrentPosition then
+        local root = GetCharacterRoot(player)
+
+        if root then
+            local record = GetBaseRecordFromPosition(root.Position, 115)
+
+            if record then
+                PlayerBaseCache[player] = record
+
+                if player == Player
+                and not LocalSpawnCFrame then
+                    LocalSpawnCFrame = GetRecordSpawnCFrame(record)
+                end
+
+                return record
+            end
         end
     end
 
@@ -1932,24 +2431,31 @@ local function GetPlayerBaseCFrame()
 
     if respawn
     and respawn:IsA("BasePart") then
-        return GetSpawnCFrame(respawn)
-    end
-
-    local record = GetPlayerBaseRecord(Player)
-
-    if not record then
-        record = CachePlayerBase(Player, true)
-    end
-
-    if record then
-        local cframe = GetRecordSpawnCFrame(record)
+        local cframe = GetSpawnCFrame(respawn)
 
         if cframe then
             return cframe
         end
     end
 
-    return LocalSpawnCFrame
+    if typeof(LocalSpawnCFrame) == "CFrame" then
+        return LocalSpawnCFrame
+    end
+
+    local savedSpawn = PlayerRespawnCFrameCache[Player]
+
+    if typeof(savedSpawn) == "CFrame" then
+        return savedSpawn
+    end
+
+    local record = GetPlayerBaseRecord(Player)
+        or CachePlayerBase(Player, true)
+
+    if record then
+        return GetRecordSpawnCFrame(record)
+    end
+
+    return nil
 end
 
 local function GetObjectTopPosition(object)
@@ -2019,29 +2525,6 @@ local function FindCenterAnchor()
         return bestPosition
     end
 
-    local bestGrass = nil
-    local bestArea = 0
-
-    for _, part in ipairs(GetWorldParts()) do
-        if part.Anchored
-        and part.CanCollide
-        and part.Transparency < 0.9
-        and part.Material == Enum.Material.Grass then
-            local area = part.Size.X * part.Size.Z
-
-            if area > bestArea then
-                bestArea = area
-                bestGrass = part
-            end
-        end
-    end
-
-    if bestGrass
-    and bestArea >= 800 then
-        return bestGrass.Position
-            + bestGrass.CFrame.UpVector * (bestGrass.Size.Y * 0.5)
-    end
-
     return nil
 end
 
@@ -2067,14 +2550,12 @@ end
 
 local function GetPlayerBaseColor(player)
     local record = GetPlayerBaseRecord(player)
-
-    if not record then
-        record = CachePlayerBase(player, false)
-    end
+        or CachePlayerBase(player, false)
 
     if record
-    and record.Color then
-        return record.Color
+    and record.ColorName
+    and BasePaletteByName[record.ColorName] then
+        return BasePaletteByName[record.ColorName]
     end
 
     return Color3.fromRGB(255, 255, 255)
@@ -2228,35 +2709,39 @@ end
 local function CaptureCharacterBase(player, character)
     task.spawn(function()
         local root = character
-            and character:WaitForChild("HumanoidRootPart", 6)
+            and character:WaitForChild("HumanoidRootPart", 8)
 
-        if not root then
+        if not root
+        or character ~= player.Character then
             return
         end
 
-        for _, delayTime in ipairs({0.03, 0.18, 0.55}) do
-            task.wait(delayTime)
+        task.wait(0.08)
 
-            if character ~= player.Character
-            or not root.Parent then
-                return
-            end
+        if not root.Parent
+        or character ~= player.Character then
+            return
+        end
 
-            local record, distance = GetNearestBaseRecord(root.Position, 120)
+        local spawnCFrame = root.CFrame
+        PlayerRespawnCFrameCache[player] = spawnCFrame
 
-            if record
-            and distance <= 120 then
+        local record = GetBaseRecordFromPosition(root.Position, 155)
+
+        if record then
+            PlayerBaseCache[player] = record
+        else
+            record = GetBaseRecordFromTeamName(player)
+                or GetBaseRecordFromAttributes(player)
+
+            if record then
                 PlayerBaseCache[player] = record
-
-                if player == Player then
-                    LocalSpawnCFrame = GetRecordSpawnCFrame(record)
-                end
-
-                return
             end
         end
 
-        CachePlayerBase(player, true)
+        if player == Player then
+            LocalSpawnCFrame = spawnCFrame
+        end
     end)
 end
 
@@ -2265,17 +2750,32 @@ local function HookPlayerBaseTracking(player)
         return
     end
 
+    local respawn = player.RespawnLocation
+
+    if respawn
+    and respawn:IsA("BasePart") then
+        local respawnCFrame = GetSpawnCFrame(respawn)
+
+        if respawnCFrame then
+            PlayerRespawnCFrameCache[player] = respawnCFrame
+
+            if player == Player then
+                LocalSpawnCFrame = respawnCFrame
+            end
+        end
+    end
+
     if player.Character then
         local root = GetCharacterRoot(player)
 
         if root then
-            local record, distance = GetNearestBaseRecord(root.Position, 100)
+            local record = GetBaseRecordFromPosition(root.Position, 115)
 
-            if record
-            and distance <= 100 then
+            if record then
                 PlayerBaseCache[player] = record
 
-                if player == Player then
+                if player == Player
+                and not LocalSpawnCFrame then
                     LocalSpawnCFrame = GetRecordSpawnCFrame(record)
                 end
             else
@@ -2290,13 +2790,30 @@ local function HookPlayerBaseTracking(player)
 
     pcall(function()
         TrackConnection(player:GetPropertyChangedSignal("RespawnLocation"):Connect(function()
-            CachePlayerBase(player, true)
+            local location = player.RespawnLocation
+
+            if location
+            and location:IsA("BasePart") then
+                local cframe = GetSpawnCFrame(location)
+
+                if cframe then
+                    PlayerRespawnCFrameCache[player] = cframe
+
+                    if player == Player then
+                        LocalSpawnCFrame = cframe
+                    end
+                end
+            end
+
+            CachePlayerBase(player, false)
         end))
     end)
 
     pcall(function()
         TrackConnection(player:GetPropertyChangedSignal("Team"):Connect(function()
-            CachePlayerBase(player, false)
+            if not PlayerBaseCache[player] then
+                CachePlayerBase(player, false)
+            end
         end))
     end)
 end
@@ -2313,6 +2830,7 @@ end))
 
 TrackConnection(Players.PlayerRemoving:Connect(function(player)
     PlayerBaseCache[player] = nil
+    PlayerRespawnCFrameCache[player] = nil
     ClearLBBESPPlayer(player)
 end))
 
