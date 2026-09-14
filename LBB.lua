@@ -29,7 +29,7 @@ or not CreateButton then
     return
 end
 
-local LBBModuleVersion = "2026-09-14-lbb-respawn-esp-spawnfix-8"
+local LBBModuleVersion = "2026-09-14-lbb-block-open-restore-9"
 
 if getgenv().ToxLBBModuleLoadedJobId == game.JobId
 and getgenv().ToxLBBModuleVersion == LBBModuleVersion
@@ -779,22 +779,24 @@ local function TryGenericBlockRemote(blockNames)
 end
 
 local function OpenStandardBlock(remoteName, label)
-    local ok = TryRemoteCandidates(
-        {remoteName},
-        {
-            {string.gsub(remoteName, "^Spawn", ""):gsub("Block$", ""), "Block"}
-        }
-    )
+    local remote = ReplicatedStorage:FindFirstChild(remoteName)
 
-    if not ok then
-        CustomNotify(
-            tostring(label) .. " unavailable",
-            Color3.fromRGB(255, 180, 70),
-            4
-        )
+    if not IsRemote(remote) then
+        remote = FindRemoteExact(remoteName, 1.5)
     end
 
-    return ok
+    if IsRemote(remote)
+    and FireRemote(remote) then
+        return true
+    end
+
+    CustomNotify(
+        tostring(label) .. " unavailable",
+        Color3.fromRGB(255, 180, 70),
+        4
+    )
+
+    return false
 end
 
 local function CountPlayerTools()
@@ -1546,21 +1548,10 @@ local function OpenExactLBBBlock(remoteNames, label)
 end
 
 local function OpenVoidBlock()
-    local remote = ReplicatedStorage:FindFirstChild("SpawnVoidBlock")
-        or ReplicatedStorage:FindFirstChild("SpawnVoidBlock", true)
-        or FindRemoteExact("SpawnVoidBlock", 0.5)
-
-    if IsRemote(remote) then
-        return FireRemote(remote)
-    end
-
-    CustomNotify(
-        "Void Block unavailable",
-        Color3.fromRGB(255, 180, 70),
-        4
+    return OpenStandardBlock(
+        "SpawnVoidBlock",
+        "Void Block"
     )
-
-    return false
 end
 
 local function GetUnknownLimitedBlockRemotes()
@@ -1614,19 +1605,19 @@ end
 
 local function OpenLimitedBlock()
     local remote = ReplicatedStorage:FindFirstChild("SpawnHackerBlock")
-        or ReplicatedStorage:FindFirstChild("SpawnHackerBlock", true)
-        or FindRemoteExact("SpawnHackerBlock", 0.5)
 
-    if IsRemote(remote) then
-        return FireRemote(remote)
+    if not IsRemote(remote) then
+        remote = FindRemoteExact("SpawnHackerBlock", 1.5)
     end
 
-    local limited = ReplicatedStorage:FindFirstChild("SpawnLimitedBlock")
-        or ReplicatedStorage:FindFirstChild("SpawnLimitedBlock", true)
-        or FindRemoteExact("SpawnLimitedBlock", 0.35)
+    if not IsRemote(remote) then
+        remote = ReplicatedStorage:FindFirstChild("SpawnLimitedBlock")
+            or FindRemoteExact("SpawnLimitedBlock", 0.75)
+    end
 
-    if IsRemote(limited) then
-        return FireRemote(limited)
+    if IsRemote(remote)
+    and FireRemote(remote) then
+        return true
     end
 
     CustomNotify(
