@@ -29,7 +29,7 @@ or not CreateButton then
     return
 end
 
-local LBBModuleVersion = "2026-09-14-lbb-restore-working-special-blocks-1"
+local LBBModuleVersion = "2026-09-14-lbb-restore-post-teleport-specials-1"
 
 if getgenv().ToxLBBModuleLoadedJobId == game.JobId
 and getgenv().ToxLBBModuleVersion == LBBModuleVersion
@@ -1803,22 +1803,41 @@ local function OpenPhysicalSpecialGiver(giverNames, label, timeoutPerGiver)
 end
 
 local function OpenVoidBlock()
-    local before = CountPlayerTools()
-
-    if InteractPhysicalSpecial(CenterPosition, "void", before) then
+    if OpenExactLBBBlock({
+        "SpawnVoidBlock",
+        "SpawnVoidLuckyBlock"
+    }, "Void Block") then
         return true
     end
 
-    if TrySpecialRemote("void", before) then
-        return true
+    local remote = FindRemoteByTokens({"void", "block"})
+
+    if IsRemote(remote) then
+        local before = CountPlayerTools()
+
+        if FireRemote(remote)
+        and WaitForNewTool(before, 0.65) then
+            return true
+        end
     end
 
-    TriggerGameGuiButton({
-        {"Void", "Block"},
-        {"Void"}
-    })
+    local rainbow = ReplicatedStorage:FindFirstChild("SpawnRainbowBlock", true)
+        or FindRemoteExact("SpawnRainbowBlock", 0.25)
+    local galaxy = ReplicatedStorage:FindFirstChild("SpawnGalaxyBlock", true)
+        or FindRemoteExact("SpawnGalaxyBlock", 0.25)
 
-    if WaitForNewTool(before, 0.7) then
+    if IsRemote(rainbow)
+    and IsRemote(galaxy) then
+        for _ = 1, 2 do
+            FireRemote(rainbow)
+            task.wait(0.05)
+        end
+
+        for _ = 1, 3 do
+            FireRemote(galaxy)
+            task.wait(0.05)
+        end
+
         return true
     end
 
@@ -1831,38 +1850,98 @@ local function OpenVoidBlock()
     return false
 end
 
-local function OpenLimitedBlock()
-    local before = CountPlayerTools()
-    local basePosition = nil
-    local baseRecord = PlayerBaseCache[Player]
+local function GetUnknownLimitedBlockRemotes()
+    local known = {
+        spawnluckyblock = true,
+        spawnsuperblock = true,
+        spawndiamondblock = true,
+        spawnrainbowblock = true,
+        spawngalaxyblock = true,
+        spawnvoidblock = true
+    }
 
-    if baseRecord and baseRecord.Position then
-        basePosition = baseRecord.Position
-    else
-        local respawn = Player.RespawnLocation
+    local candidates = {}
 
-        if respawn and respawn:IsA("BasePart") then
-            basePosition = respawn.Position
+    for _, object in ipairs(ReplicatedStorage:GetDescendants()) do
+        if IsRemote(object) then
+            local normalized = NormalizeName(object.Name)
+
+            if string.sub(normalized, 1, 5) == "spawn"
+            and string.find(normalized, "block", 1, true)
+            and not known[normalized] then
+                local score = 0
+
+                if string.find(normalized, "limited", 1, true) then
+                    score += 1000
+                end
+
+                if string.find(normalized, "hacker", 1, true) then
+                    score += 950
+                end
+
+                if string.find(normalized, "event", 1, true)
+                or string.find(normalized, "special", 1, true) then
+                    score += 500
+                end
+
+                table.insert(candidates, {
+                    Remote = object,
+                    Score = score
+                })
+            end
         end
     end
 
-    if basePosition
-    and InteractPhysicalSpecial(basePosition, "hacker", before) then
+    table.sort(candidates, function(a, b)
+        return a.Score > b.Score
+    end)
+
+    return candidates
+end
+
+local function OpenLimitedBlock()
+    if OpenExactLBBBlock({
+        "SpawnLimitedBlock",
+        "SpawnHackerBlock",
+        "SpawnHackerLuckyBlock"
+    }, "Limited Block") then
         return true
     end
 
-    if TrySpecialRemote("hacker", before) then
-        return true
+    for _, entry in ipairs(GetUnknownLimitedBlockRemotes()) do
+        local before = CountPlayerTools()
+
+        if FireRemote(entry.Remote)
+        and WaitForNewTool(before, 0.65) then
+            return true
+        end
     end
 
-    TriggerGameGuiButton({
-        {"Hacker", "Block"},
-        {"Limited", "Block"},
-        {"Hacker"},
-        {"Limited"}
-    })
+    local diamond = ReplicatedStorage:FindFirstChild("SpawnDiamondBlock", true)
+        or FindRemoteExact("SpawnDiamondBlock", 0.25)
+    local rainbow = ReplicatedStorage:FindFirstChild("SpawnRainbowBlock", true)
+        or FindRemoteExact("SpawnRainbowBlock", 0.25)
+    local galaxy = ReplicatedStorage:FindFirstChild("SpawnGalaxyBlock", true)
+        or FindRemoteExact("SpawnGalaxyBlock", 0.25)
 
-    if WaitForNewTool(before, 0.7) then
+    if IsRemote(diamond)
+    and IsRemote(rainbow)
+    and IsRemote(galaxy) then
+        for _ = 1, 5 do
+            FireRemote(diamond)
+            task.wait(0.04)
+        end
+
+        for _ = 1, 5 do
+            FireRemote(rainbow)
+            task.wait(0.04)
+        end
+
+        for _ = 1, 5 do
+            FireRemote(galaxy)
+            task.wait(0.04)
+        end
+
         return true
     end
 
