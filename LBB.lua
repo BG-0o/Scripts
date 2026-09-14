@@ -29,7 +29,7 @@ or not CreateButton then
     return
 end
 
-local LBBModuleVersion = "2026-09-14-lbb-void-limited-giver-fix-11"
+local LBBModuleVersion = "2026-09-14-lbb-restore-working-special-blocks-1"
 
 if getgenv().ToxLBBModuleLoadedJobId == game.JobId
 and getgenv().ToxLBBModuleVersion == LBBModuleVersion
@@ -1803,37 +1803,27 @@ local function OpenPhysicalSpecialGiver(giverNames, label, timeoutPerGiver)
 end
 
 local function OpenVoidBlock()
-    local before = CountToolsForBlockOpen()
-    local remote = FindBlockRemoteDirect("SpawnVoidBlock")
+    local before = CountPlayerTools()
 
-    if IsRemote(remote) then
-        pcall(function()
-            if remote:IsA("RemoteEvent") then
-                remote:FireServer()
-            else
-                remote:InvokeServer()
-            end
-        end)
-
-        if WaitForBlockTool(before, 0.55) then
-            return true
-        end
+    if InteractPhysicalSpecial(CenterPosition, "void", before) then
+        return true
     end
 
-    if OpenPhysicalSpecialGiver(
-        {
-            "BlockGiverVoid1",
-            "BlockGiverVoid2",
-            "VoidGiver"
-        },
-        "Void Block",
-        0.7
-    ) then
+    if TrySpecialRemote("void", before) then
+        return true
+    end
+
+    TriggerGameGuiButton({
+        {"Void", "Block"},
+        {"Void"}
+    })
+
+    if WaitForNewTool(before, 0.7) then
         return true
     end
 
     CustomNotify(
-        "Void Block unavailable / cooldown",
+        "Void Block unavailable",
         Color3.fromRGB(255, 180, 70),
         4
     )
@@ -1842,42 +1832,42 @@ local function OpenVoidBlock()
 end
 
 local function OpenLimitedBlock()
-    local before = CountToolsForBlockOpen()
-    local remoteNames = {
-        "SpawnHackerBlock",
-        "SpawnLimitedBlock",
-        "SpawnGlitchBlock",
-        "SpawnLavaBlock"
-    }
+    local before = CountPlayerTools()
+    local basePosition = nil
+    local baseRecord = PlayerBaseCache[Player]
 
-    for _, remoteName in ipairs(remoteNames) do
-        local remote = FindBlockRemoteDirect(remoteName)
+    if baseRecord and baseRecord.Position then
+        basePosition = baseRecord.Position
+    else
+        local respawn = Player.RespawnLocation
 
-        if IsRemote(remote) then
-            pcall(function()
-                if remote:IsA("RemoteEvent") then
-                    remote:FireServer()
-                else
-                    remote:InvokeServer()
-                end
-            end)
-
-            if WaitForBlockTool(before, 0.5) then
-                return true
-            end
+        if respawn and respawn:IsA("BasePart") then
+            basePosition = respawn.Position
         end
     end
 
-    if OpenPhysicalSpecialGiver(
-        {"LimitedTimeGiver"},
-        "Limited Block",
-        0.85
-    ) then
+    if basePosition
+    and InteractPhysicalSpecial(basePosition, "hacker", before) then
+        return true
+    end
+
+    if TrySpecialRemote("hacker", before) then
+        return true
+    end
+
+    TriggerGameGuiButton({
+        {"Hacker", "Block"},
+        {"Limited", "Block"},
+        {"Hacker"},
+        {"Limited"}
+    })
+
+    if WaitForNewTool(before, 0.7) then
         return true
     end
 
     CustomNotify(
-        "Limited Block unavailable / cooldown",
+        "Limited Block unavailable",
         Color3.fromRGB(255, 180, 70),
         4
     )
