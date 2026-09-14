@@ -29,7 +29,7 @@ or not CreateButton then
     return
 end
 
-local LBBModuleVersion = "2026-09-14-lbb-respawn-esp-special-blocks-7"
+local LBBModuleVersion = "2026-09-14-lbb-respawn-esp-spawnfix-8"
 
 if getgenv().ToxLBBModuleLoadedJobId == game.JobId
 and getgenv().ToxLBBModuleVersion == LBBModuleVersion
@@ -1546,42 +1546,12 @@ local function OpenExactLBBBlock(remoteNames, label)
 end
 
 local function OpenVoidBlock()
-    if OpenExactLBBBlock({
-        "SpawnVoidBlock",
-        "SpawnVoidLuckyBlock"
-    }, "Void Block") then
-        return true
-    end
-
-    local remote = FindRemoteByTokens({"void", "block"})
+    local remote = ReplicatedStorage:FindFirstChild("SpawnVoidBlock")
+        or ReplicatedStorage:FindFirstChild("SpawnVoidBlock", true)
+        or FindRemoteExact("SpawnVoidBlock", 0.5)
 
     if IsRemote(remote) then
-        local before = CountPlayerTools()
-
-        if FireRemote(remote)
-        and WaitForNewTool(before, 0.65) then
-            return true
-        end
-    end
-
-    local rainbow = ReplicatedStorage:FindFirstChild("SpawnRainbowBlock", true)
-        or FindRemoteExact("SpawnRainbowBlock", 0.25)
-    local galaxy = ReplicatedStorage:FindFirstChild("SpawnGalaxyBlock", true)
-        or FindRemoteExact("SpawnGalaxyBlock", 0.25)
-
-    if IsRemote(rainbow)
-    and IsRemote(galaxy) then
-        for _ = 1, 2 do
-            FireRemote(rainbow)
-            task.wait(0.05)
-        end
-
-        for _ = 1, 3 do
-            FireRemote(galaxy)
-            task.wait(0.05)
-        end
-
-        return true
+        return FireRemote(remote)
     end
 
     CustomNotify(
@@ -1643,49 +1613,20 @@ local function GetUnknownLimitedBlockRemotes()
 end
 
 local function OpenLimitedBlock()
-    if OpenExactLBBBlock({
-        "SpawnLimitedBlock",
-        "SpawnHackerBlock",
-        "SpawnHackerLuckyBlock"
-    }, "Limited Block") then
-        return true
+    local remote = ReplicatedStorage:FindFirstChild("SpawnHackerBlock")
+        or ReplicatedStorage:FindFirstChild("SpawnHackerBlock", true)
+        or FindRemoteExact("SpawnHackerBlock", 0.5)
+
+    if IsRemote(remote) then
+        return FireRemote(remote)
     end
 
-    for _, entry in ipairs(GetUnknownLimitedBlockRemotes()) do
-        local before = CountPlayerTools()
+    local limited = ReplicatedStorage:FindFirstChild("SpawnLimitedBlock")
+        or ReplicatedStorage:FindFirstChild("SpawnLimitedBlock", true)
+        or FindRemoteExact("SpawnLimitedBlock", 0.35)
 
-        if FireRemote(entry.Remote)
-        and WaitForNewTool(before, 0.65) then
-            return true
-        end
-    end
-
-    local diamond = ReplicatedStorage:FindFirstChild("SpawnDiamondBlock", true)
-        or FindRemoteExact("SpawnDiamondBlock", 0.25)
-    local rainbow = ReplicatedStorage:FindFirstChild("SpawnRainbowBlock", true)
-        or FindRemoteExact("SpawnRainbowBlock", 0.25)
-    local galaxy = ReplicatedStorage:FindFirstChild("SpawnGalaxyBlock", true)
-        or FindRemoteExact("SpawnGalaxyBlock", 0.25)
-
-    if IsRemote(diamond)
-    and IsRemote(rainbow)
-    and IsRemote(galaxy) then
-        for _ = 1, 5 do
-            FireRemote(diamond)
-            task.wait(0.04)
-        end
-
-        for _ = 1, 5 do
-            FireRemote(rainbow)
-            task.wait(0.04)
-        end
-
-        for _ = 1, 5 do
-            FireRemote(galaxy)
-            task.wait(0.04)
-        end
-
-        return true
+    if IsRemote(limited) then
+        return FireRemote(limited)
     end
 
     CustomNotify(
@@ -1809,37 +1750,85 @@ local function ClosestBaseColor(color)
 end
 
 local function GetDirectColorName(value)
+    local function FromText(text)
+        text = NormalizeName(text)
+
+        if text == "" then
+            return nil
+        end
+
+        if string.find(text, "grey", 1, true)
+        or string.find(text, "gray", 1, true)
+        or string.find(text, "stone", 1, true)
+        or string.find(text, "white", 1, true)
+        or string.find(text, "black", 1, true) then
+            return nil
+        end
+
+        local named = {
+            {"newyeller", "YELLOW"},
+            {"brightyellow", "YELLOW"},
+            {"yellow", "YELLOW"},
+            {"brightorange", "ORANGE"},
+            {"orange", "ORANGE"},
+            {"brightgreen", "GREEN"},
+            {"limegreen", "GREEN"},
+            {"lime", "GREEN"},
+            {"green", "GREEN"},
+            {"toothpaste", "CYAN"},
+            {"lightblue", "CYAN"},
+            {"aqua", "CYAN"},
+            {"teal", "CYAN"},
+            {"cyan", "CYAN"},
+            {"brightblue", "BLUE"},
+            {"darkblue", "BLUE"},
+            {"royalblue", "BLUE"},
+            {"blue", "BLUE"},
+            {"brightred", "RED"},
+            {"reallyred", "RED"},
+            {"red", "RED"},
+            {"royalpurple", "PURPLE"},
+            {"brightviolet", "PURPLE"},
+            {"purple", "PURPLE"},
+            {"violet", "PURPLE"},
+            {"hotpink", "PINK"},
+            {"pink", "PINK"}
+        }
+
+        for _, entry in ipairs(named) do
+            if string.find(text, entry[1], 1, true) then
+                return entry[2]
+            end
+        end
+
+        return nil
+    end
+
     if typeof(value) == "BrickColor" then
+        local byName = FromText(value.Name)
+
+        if byName then
+            return byName, 0
+        end
+
         value = value.Color
     end
 
     if typeof(value) == "Color3" then
+        local _, saturation, brightness = value:ToHSV()
+
+        if saturation < 0.28
+        or brightness < 0.18 then
+            return nil, math.huge
+        end
+
         return ClosestBaseColor(value)
     end
 
-    local text = NormalizeName(value)
-    local named = {
-        {"lightblue", "CYAN"},
-        {"aqua", "CYAN"},
-        {"teal", "CYAN"},
-        {"cyan", "CYAN"},
-        {"darkblue", "BLUE"},
-        {"royalblue", "BLUE"},
-        {"blue", "BLUE"},
-        {"lime", "GREEN"},
-        {"green", "GREEN"},
-        {"yellow", "YELLOW"},
-        {"orange", "ORANGE"},
-        {"purple", "PURPLE"},
-        {"violet", "PURPLE"},
-        {"pink", "PINK"},
-        {"red", "RED"}
-    }
+    local byText = FromText(value)
 
-    for _, entry in ipairs(named) do
-        if string.find(text, entry[1], 1, true) then
-            return entry[2], 0
-        end
+    if byText then
+        return byText, 0
     end
 
     return nil, math.huge
@@ -2444,6 +2433,71 @@ local function GetBaseRecordFromTeamName(player)
     return nil
 end
 
+local function GetBaseRecordFromSpawnTeamColor(player)
+    if not player then
+        return nil, nil
+    end
+
+    local playerTeamColor = nil
+
+    pcall(function()
+        playerTeamColor = player.TeamColor
+    end)
+
+    if typeof(playerTeamColor) ~= "BrickColor" then
+        return nil, nil
+    end
+
+    local matches = {}
+
+    for _, record in ipairs(GetBaseRecords()) do
+        local spawn = record.Spawn
+
+        if spawn
+        and spawn.Parent
+        and spawn:IsA("SpawnLocation") then
+            local sameColor = false
+
+            pcall(function()
+                sameColor = spawn.TeamColor == playerTeamColor
+            end)
+
+            if sameColor then
+                table.insert(matches, {
+                    Record = record,
+                    Spawn = spawn
+                })
+            end
+        end
+    end
+
+    if #matches == 1 then
+        return matches[1].Record, matches[1].Spawn
+    end
+
+    if #matches > 1 then
+        local wantedName = nil
+
+        if player.Team then
+            wantedName = GetDirectColorName(player.Team.Name)
+        end
+
+        if not wantedName then
+            wantedName = GetDirectColorName(playerTeamColor)
+        end
+
+        if wantedName then
+            for _, match in ipairs(matches) do
+                if match.Record.ColorName == wantedName then
+                    return match.Record, match.Spawn
+                end
+            end
+        end
+    end
+
+    return nil, nil
+end
+
 local function GetBaseRecordFromPlayerValues(player)
     if not player then
         return nil
@@ -2521,29 +2575,47 @@ local function CachePlayerBase(player, allowCurrentPosition)
         return nil
     end
 
-    local respawn = player.RespawnLocation
+    local respawn = nil
+
+    pcall(function()
+        respawn = player.RespawnLocation
+    end)
 
     if respawn
     and respawn:IsA("BasePart") then
-        local record = GetBaseRecordFromPosition(respawn.Position, 145)
+        local record = GetBaseRecordFromPosition(respawn.Position, 160)
+        local spawnCFrame = GetSpawnCFrame(respawn)
+
+        if typeof(spawnCFrame) == "CFrame" then
+            PlayerRespawnCFrameCache[player] = spawnCFrame
+
+            if player == Player then
+                LocalSpawnCFrame = spawnCFrame
+            end
+        end
 
         if record then
             PlayerBaseCache[player] = record
-            PlayerRespawnCFrameCache[player] = GetSpawnCFrame(respawn)
-
-            if player == Player then
-                LocalSpawnCFrame = PlayerRespawnCFrameCache[player]
-            end
-
             return record
         end
     end
 
-    local teamColorRecord = GetBaseRecordFromTeamColor(player)
+    local spawnRecord, spawnLocation = GetBaseRecordFromSpawnTeamColor(player)
 
-    if teamColorRecord then
-        PlayerBaseCache[player] = teamColorRecord
-        return teamColorRecord
+    if spawnRecord then
+        PlayerBaseCache[player] = spawnRecord
+
+        local spawnCFrame = GetSpawnCFrame(spawnLocation)
+
+        if typeof(spawnCFrame) == "CFrame" then
+            PlayerRespawnCFrameCache[player] = spawnCFrame
+
+            if player == Player then
+                LocalSpawnCFrame = spawnCFrame
+            end
+        end
+
+        return spawnRecord
     end
 
     local teamRecord = GetBaseRecordFromTeamName(player)
@@ -2551,6 +2623,13 @@ local function CachePlayerBase(player, allowCurrentPosition)
     if teamRecord then
         PlayerBaseCache[player] = teamRecord
         return teamRecord
+    end
+
+    local teamColorRecord = GetBaseRecordFromTeamColor(player)
+
+    if teamColorRecord then
+        PlayerBaseCache[player] = teamColorRecord
+        return teamColorRecord
     end
 
     local attributeRecord = GetBaseRecordFromAttributes(player)
@@ -2577,7 +2656,7 @@ local function CachePlayerBase(player, allowCurrentPosition)
     local savedSpawn = PlayerRespawnCFrameCache[player]
 
     if typeof(savedSpawn) == "CFrame" then
-        local record = GetBaseRecordFromPosition(savedSpawn.Position, 110)
+        local record = GetBaseRecordFromPosition(savedSpawn.Position, 150)
 
         if record then
             PlayerBaseCache[player] = record
@@ -2594,17 +2673,18 @@ local function CachePlayerBase(player, allowCurrentPosition)
 
     if allowCurrentPosition then
         local root = GetCharacterRoot(player)
+        local character = player.Character
+        local forceField = character and character:FindFirstChildOfClass("ForceField")
 
-        if root then
-            local record = GetBaseRecordFromPosition(root.Position, 62)
+        if root and forceField then
+            local record = GetBaseRecordFromPosition(root.Position, 125)
 
             if record then
                 PlayerBaseCache[player] = record
+                PlayerRespawnCFrameCache[player] = root.CFrame
 
-                if player == Player
-                and not LocalSpawnCFrame then
+                if player == Player then
                     LocalSpawnCFrame = root.CFrame
-                    PlayerRespawnCFrameCache[player] = root.CFrame
                 end
 
                 return record
@@ -2624,13 +2704,30 @@ local function GetPlayerBaseRecord(player)
 end
 
 local function GetPlayerBaseCFrame()
-    local respawn = Player.RespawnLocation
+    local respawn = nil
+
+    pcall(function()
+        respawn = Player.RespawnLocation
+    end)
 
     if respawn
     and respawn:IsA("BasePart") then
         local cframe = GetSpawnCFrame(respawn)
 
-        if cframe then
+        if typeof(cframe) == "CFrame" then
+            PlayerRespawnCFrameCache[Player] = cframe
+            LocalSpawnCFrame = cframe
+            return cframe
+        end
+    end
+
+    local spawnRecord, spawnLocation = GetBaseRecordFromSpawnTeamColor(Player)
+
+    if spawnLocation then
+        local cframe = GetSpawnCFrame(spawnLocation)
+
+        if typeof(cframe) == "CFrame" then
+            PlayerBaseCache[Player] = spawnRecord
             PlayerRespawnCFrameCache[Player] = cframe
             LocalSpawnCFrame = cframe
             return cframe
@@ -2647,33 +2744,27 @@ local function GetPlayerBaseCFrame()
         return LocalSpawnCFrame
     end
 
-    local record = GetBaseRecordFromTeamColor(Player)
+    local record = PlayerBaseCache[Player]
         or GetBaseRecordFromTeamName(Player)
+        or GetBaseRecordFromTeamColor(Player)
         or GetBaseRecordFromAttributes(Player)
         or GetBaseRecordFromPlayerValues(Player)
         or FindTaggedBaseRecord(Player)
 
     if record then
-        PlayerBaseCache[Player] = record
-        local cframe = GetRecordSpawnCFrame(record)
+        local spawn = record.Spawn
 
-        if cframe then
-            PlayerRespawnCFrameCache[Player] = cframe
-            LocalSpawnCFrame = cframe
-            return cframe
-        end
-    end
+        if spawn
+        and spawn.Parent
+        and spawn:IsA("BasePart") then
+            local cframe = GetSpawnCFrame(spawn)
 
-    local root = GetCharacterRoot(Player)
-
-    if root then
-        local currentRecord = GetBaseRecordFromPosition(root.Position, 62)
-
-        if currentRecord then
-            PlayerBaseCache[Player] = currentRecord
-            PlayerRespawnCFrameCache[Player] = root.CFrame
-            LocalSpawnCFrame = root.CFrame
-            return root.CFrame
+            if typeof(cframe) == "CFrame" then
+                PlayerBaseCache[Player] = record
+                PlayerRespawnCFrameCache[Player] = cframe
+                LocalSpawnCFrame = cframe
+                return cframe
+            end
         end
     end
 
@@ -2773,10 +2864,55 @@ end
 local function GetPlayerBaseColor(player)
     local record = GetPlayerBaseRecord(player)
 
+    if not record then
+        local spawnRecord = select(1, GetBaseRecordFromSpawnTeamColor(player))
+
+        if spawnRecord then
+            PlayerBaseCache[player] = spawnRecord
+            record = spawnRecord
+        end
+    end
+
+    if not record then
+        local root = GetCharacterRoot(player)
+        local character = player.Character
+        local forceField = character and character:FindFirstChildOfClass("ForceField")
+
+        if root and forceField then
+            record = GetBaseRecordFromPosition(root.Position, 125)
+
+            if record then
+                PlayerBaseCache[player] = record
+                PlayerRespawnCFrameCache[player] = root.CFrame
+            end
+        end
+    end
+
     if record
     and record.ColorName
     and BasePaletteByName[record.ColorName] then
         return BasePaletteByName[record.ColorName], record.ColorName
+    end
+
+    local directName = nil
+
+    if player.Team then
+        directName = GetDirectColorName(player.Team.Name)
+    end
+
+    if not directName then
+        local teamColor = nil
+
+        pcall(function()
+            teamColor = player.TeamColor
+        end)
+
+        directName = GetDirectColorName(teamColor)
+    end
+
+    if directName
+    and BasePaletteByName[directName] then
+        return BasePaletteByName[directName], directName
     end
 
     return nil, nil
@@ -2943,28 +3079,28 @@ local function CaptureCharacterBase(player, character)
             return
         end
 
-        task.wait(0.12)
+        task.wait(0.15)
 
         if not root.Parent
         or character ~= player.Character then
             return
         end
 
-        local record = GetBaseRecordFromPosition(root.Position, 82)
-            or GetBaseRecordFromTeamColor(player)
+        PlayerRespawnCFrameCache[player] = root.CFrame
+
+        if player == Player then
+            LocalSpawnCFrame = root.CFrame
+        end
+
+        local record = GetBaseRecordFromPosition(root.Position, 150)
+            or select(1, GetBaseRecordFromSpawnTeamColor(player))
             or GetBaseRecordFromTeamName(player)
+            or GetBaseRecordFromTeamColor(player)
             or GetBaseRecordFromAttributes(player)
             or GetBaseRecordFromPlayerValues(player)
 
         if record then
             PlayerBaseCache[player] = record
-
-            local spawnCFrame = root.CFrame
-            PlayerRespawnCFrameCache[player] = spawnCFrame
-
-            if player == Player then
-                LocalSpawnCFrame = spawnCFrame
-            end
         end
     end)
 end
@@ -2993,19 +3129,29 @@ local function HookPlayerBaseTracking(player)
 
     if player.Character then
         local root = GetCharacterRoot(player)
+        local forceField = player.Character:FindFirstChildOfClass("ForceField")
 
         if root
-        and not PlayerBaseCache[player] then
-            local record = GetBaseRecordFromPosition(root.Position, 62)
+        and forceField then
+            PlayerRespawnCFrameCache[player] = root.CFrame
+
+            if player == Player then
+                LocalSpawnCFrame = root.CFrame
+            end
+
+            local record = GetBaseRecordFromPosition(root.Position, 125)
+                or select(1, GetBaseRecordFromSpawnTeamColor(player))
 
             if record then
                 PlayerBaseCache[player] = record
+            end
+        elseif not PlayerBaseCache[player] then
+            local record = select(1, GetBaseRecordFromSpawnTeamColor(player))
+                or GetBaseRecordFromTeamName(player)
+                or GetBaseRecordFromTeamColor(player)
 
-                if player == Player
-                and not LocalSpawnCFrame then
-                    LocalSpawnCFrame = root.CFrame
-                    PlayerRespawnCFrameCache[player] = root.CFrame
-                end
+            if record then
+                PlayerBaseCache[player] = record
             end
         end
     end
