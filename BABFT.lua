@@ -27,7 +27,7 @@ or not CreateDropdown then
     return
 end
 
-local BABFTModuleVersion = "2026-09-14-babft-initial-1"
+local BABFTModuleVersion = "2026-09-14-babft-farm-platform-2"
 
 if getgenv().ToxBABFTModuleLoadedJobId == game.JobId
 and getgenv().ToxBABFTModuleVersion == BABFTModuleVersion
@@ -73,6 +73,7 @@ local BABFTSections = {}
 local AutofarmGeneration = 0
 local AutoUnboxGeneration = 0
 local SafetyPlatform = nil
+local FarmPlatform = nil
 local StatusLabel = nil
 local LastStatus = "Idle"
 
@@ -393,6 +394,35 @@ local function GetTreasureTrigger()
     return nil
 end
 
+
+local function DestroyFarmPlatform()
+    if FarmPlatform and FarmPlatform.Parent then
+        FarmPlatform:Destroy()
+    end
+
+    FarmPlatform = nil
+end
+
+local function PlaceFarmPlatform(cframe)
+    if typeof(cframe) ~= "CFrame" then
+        return
+    end
+
+    if not FarmPlatform or not FarmPlatform.Parent then
+        FarmPlatform = Instance.new("Part")
+        FarmPlatform.Name = "ToxBABFTFarmPlatform"
+        FarmPlatform.Size = Vector3.new(16, 1, 16)
+        FarmPlatform.Anchored = true
+        FarmPlatform.CanCollide = true
+        FarmPlatform.CanTouch = false
+        FarmPlatform.CanQuery = false
+        FarmPlatform.Transparency = 1
+        FarmPlatform.Parent = workspace
+    end
+
+    FarmPlatform.CFrame = CFrame.new(cframe.Position - Vector3.new(0, 4.15, 0))
+end
+
 local function DestroySafetyPlatform()
     if SafetyPlatform and SafetyPlatform.Parent then
         SafetyPlatform:Destroy()
@@ -474,7 +504,10 @@ local function RunAutofarmCycle(generation)
 
         if target then
             SetStatus("Stage " .. tostring(index) .. "/" .. tostring(#stages))
-            MoveCharacter(target.CFrame + Vector3.new(0, 4, 0), "Autofarm Stage")
+            local destination = target.CFrame + Vector3.new(0, 4, 0)
+            PlaceFarmPlatform(destination)
+            task.wait()
+            MoveCharacter(destination, "Autofarm Stage")
             task.wait(delay)
         end
     end
@@ -506,7 +539,10 @@ local function RunAutofarmCycle(generation)
         local character, humanoid, root = GetCharacterRoot()
 
         if character and humanoid and root then
-            MoveCharacter(trigger.CFrame + Vector3.new(0, 1.5, 0), "Autofarm Treasure")
+            local destination = trigger.CFrame + Vector3.new(0, 1.5, 0)
+            PlaceFarmPlatform(destination)
+            task.wait()
+            MoveCharacter(destination, "Autofarm Treasure")
             humanoid.Jump = true
         end
 
@@ -548,6 +584,7 @@ local function StartAutofarm()
     if not Settings.BABFTAutofarm then
         SetStatus("Idle")
         DestroySafetyPlatform()
+        DestroyFarmPlatform()
         return
     end
 
@@ -567,6 +604,7 @@ local function StartAutofarm()
 
         if generation == AutofarmGeneration then
             SetStatus("Idle")
+            DestroyFarmPlatform()
         end
     end)
 end
@@ -826,6 +864,7 @@ getgenv().ToxBABFTCleanup = function()
     AutofarmGeneration += 1
     AutoUnboxGeneration += 1
     DestroySafetyPlatform()
+    DestroyFarmPlatform()
 
     for _, connection in ipairs(BABFTConnections) do
         pcall(function()
