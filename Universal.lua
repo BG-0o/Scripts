@@ -6566,34 +6566,37 @@ local function IsBadCtrlClickTeleportPart(part)
     return false
 end
 
-local function GetCtrlClickGroundFrom(position, params)
-    if typeof(position) ~= "Vector3" then
-        return nil
-    end
-
-    local heights = {8, 24, 60, 140, 260}
-
-    for _, height in ipairs(heights) do
-        local result = workspace:Raycast(
-            position + Vector3.new(0, height, 0),
-            Vector3.new(0, -(height + 320), 0),
-            params
+local function GetCtrlClickTeleportOffset(root, humanoid, normal)
+    local standHeight =
+        math.max(
+            2.5,
+            (root.Size.Y * 0.5)
+            + (humanoid and humanoid.HipHeight or 2)
+            + 0.15
         )
 
-        if result
-        and result.Instance
-        and result.Normal.Y >= 0.25
-        and not IsBadCtrlClickTeleportPart(result.Instance) then
-            return result
-        end
+    if normal.Y >= 0.55 then
+        return Vector3.new(
+            0,
+            standHeight,
+            0
+        )
     end
 
-    return nil
+    local sideClearance =
+        math.max(
+            root.Size.X,
+            root.Size.Z
+        ) * 0.5 + 0.65
+
+    return normal.Unit * sideClearance
 end
 
 local function GetCtrlClickTeleportCFrame()
     local mouse = Player:GetMouse()
-    local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+    local character = Player.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 
     if not mouse
     or not root then
@@ -6602,8 +6605,8 @@ local function GetCtrlClickTeleportCFrame()
 
     local excluded = {}
 
-    if Player.Character then
-        table.insert(excluded, Player.Character)
+    if character then
+        table.insert(excluded, character)
     end
 
     if getgenv().Gui then
@@ -6616,56 +6619,52 @@ local function GetCtrlClickTeleportCFrame()
     params.IgnoreWater = false
 
     local camera = workspace.CurrentCamera or Camera
-    local result = nil
-    local hitPosition = nil
 
-    if camera then
-        local ray = camera:ScreenPointToRay(mouse.X, mouse.Y)
-        result = workspace:Raycast(ray.Origin, ray.Direction * 5000, params)
-
-        if result then
-            hitPosition = result.Position
-        end
-    end
-
-    if not hitPosition and mouse.Hit then
-        hitPosition = mouse.Hit.Position
-    end
-
-    if not hitPosition then
+    if not camera then
         return nil
     end
 
-    local finalResult = nil
+    local ray = camera:ScreenPointToRay(
+        mouse.X,
+        mouse.Y
+    )
 
-    if result
-    and result.Instance
-    and result.Normal.Y >= 0.25
-    and not IsBadCtrlClickTeleportPart(result.Instance) then
-        finalResult = result
-    else
-        finalResult = GetCtrlClickGroundFrom(hitPosition, params)
+    local result = workspace:Raycast(
+        ray.Origin,
+        ray.Direction * 5000,
+        params
+    )
+
+    if not result
+    or not result.Instance
+    or IsBadCtrlClickTeleportPart(result.Instance) then
+        return nil
     end
 
-    local _, yaw, _ = root.CFrame:ToOrientation()
+    local normal = result.Normal
 
-    if finalResult
-    and finalResult.Instance then
-        return CFrame.new(
-            finalResult.Position + Vector3.new(0, 3, 0)
-        ) * CFrame.Angles(0, yaw, 0)
+    if normal.Magnitude <= 0 then
+        return nil
     end
 
-    local target = mouse.Target
+    local targetPosition =
+        result.Position
+        + GetCtrlClickTeleportOffset(
+            root,
+            humanoid,
+            normal
+        )
 
-    if target
-    and not IsBadCtrlClickTeleportPart(target) then
-        return CFrame.new(
-            hitPosition + Vector3.new(0, 3, 0)
-        ) * CFrame.Angles(0, yaw, 0)
-    end
+    local _, yaw, _ =
+        root.CFrame:ToOrientation()
 
-    return nil
+    return CFrame.new(
+        targetPosition
+    ) * CFrame.Angles(
+        0,
+        yaw,
+        0
+    )
 end
 
 AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
