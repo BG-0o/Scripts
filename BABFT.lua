@@ -27,7 +27,7 @@ or not CreateDropdown then
     return
 end
 
-local BABFTModuleVersion = "2026-09-14-babft-farm-platform-2"
+local BABFTModuleVersion = "2026-09-14-babft-treasure-3x-3"
 
 if getgenv().ToxBABFTModuleLoadedJobId == game.JobId
 and getgenv().ToxBABFTModuleVersion == BABFTModuleVersion
@@ -527,11 +527,10 @@ local function RunAutofarmCycle(generation)
     local startingGold = GetGoldValue()
     local oldCharacter = Player.Character
     local collected = false
-    local deadline = os.clock() + 15
 
     SetStatus("Collecting treasure...")
 
-    repeat
+    for attempt = 1, 3 do
         if generation ~= AutofarmGeneration or not Settings.BABFTAutofarm then
             return false
         end
@@ -563,8 +562,39 @@ local function RunAutofarmCycle(generation)
             break
         end
 
-        task.wait(0.12)
-    until os.clock() >= deadline
+        if attempt < 3 then
+            task.wait(1)
+        end
+    end
+
+    if not collected then
+        local deadline = os.clock() + 12
+
+        repeat
+            if generation ~= AutofarmGeneration or not Settings.BABFTAutofarm then
+                return false
+            end
+
+            local currentGold = GetGoldValue()
+
+            if startingGold and currentGold and currentGold > startingGold then
+                collected = true
+                break
+            end
+
+            if oldCharacter and Player.Character ~= oldCharacter then
+                collected = true
+                break
+            end
+
+            if oldCharacter and not oldCharacter:FindFirstChildOfClass("Humanoid") then
+                collected = true
+                break
+            end
+
+            task.wait(0.15)
+        until os.clock() >= deadline
+    end
 
     if collected then
         SetStatus("Collected! Restarting...")
