@@ -29,7 +29,7 @@ or not CreateButton then
     return
 end
 
-local LBBModuleVersion = "2026-09-14-lbb-restore-post-teleport-specials-1"
+local LBBModuleVersion = "2026-09-14-lbb-user-working-blocks-1"
 
 if getgenv().ToxLBBModuleLoadedJobId == game.JobId
 and getgenv().ToxLBBModuleVersion == LBBModuleVersion
@@ -778,140 +778,23 @@ local function TryGenericBlockRemote(blockNames)
     return #remotes > 0
 end
 
-local function FindBlockRemoteDirect(remoteName)
-    local direct = ReplicatedStorage:FindFirstChild(remoteName, true)
-
-    if IsRemote(direct) then
-        return direct
-    end
-
-    local wanted = string.lower(tostring(remoteName or ""))
-
-    for _, object in ipairs(ReplicatedStorage:GetDescendants()) do
-        if IsRemote(object)
-        and string.lower(object.Name) == wanted then
-            return object
-        end
-    end
-
-    return nil
-end
-
-local function CountToolsForBlockOpen()
-    local count = 0
-    local character = Player.Character
-    local backpack = Player:FindFirstChildOfClass("Backpack")
-
-    for _, container in ipairs({character, backpack}) do
-        if container then
-            for _, object in ipairs(container:GetChildren()) do
-                if object:IsA("Tool") then
-                    count += 1
-                end
-            end
-        end
-    end
-
-    return count
-end
-
-local function WaitForBlockTool(before, timeout)
-    local deadline = os.clock() + (tonumber(timeout) or 0.65)
-
-    repeat
-        if CountToolsForBlockOpen() > before then
-            return true
-        end
-
-        task.wait(0.05)
-    until os.clock() >= deadline
-
-    return CountToolsForBlockOpen() > before
-end
-
-local function TriggerNamedBlockGiver(giverNames)
-    local wanted = {}
-
-    for _, name in ipairs(giverNames or {}) do
-        wanted[string.lower(tostring(name))] = true
-    end
-
-    local root = Player.Character
-        and Player.Character:FindFirstChild("HumanoidRootPart")
-    local triggered = false
-
-    for _, object in ipairs(workspace:GetDescendants()) do
-        if wanted[string.lower(object.Name)] then
-            for _, descendant in ipairs(object:GetDescendants()) do
-                if descendant:IsA("ClickDetector")
-                and fireclickdetector then
-                    if pcall(function()
-                        fireclickdetector(descendant)
-                    end) then
-                        triggered = true
-                    end
-                elseif descendant:IsA("ProximityPrompt")
-                and fireproximityprompt then
-                    if pcall(function()
-                        fireproximityprompt(descendant)
-                    end) then
-                        triggered = true
-                    end
-                elseif descendant:IsA("TouchTransmitter")
-                and firetouchinterest
-                and root
-                and descendant.Parent
-                and descendant.Parent:IsA("BasePart") then
-                    if pcall(function()
-                        firetouchinterest(root, descendant.Parent, 0)
-                        task.wait(0.03)
-                        firetouchinterest(root, descendant.Parent, 1)
-                    end) then
-                        triggered = true
-                    end
-                end
-            end
-        end
-    end
-
-    return triggered
-end
-
-local function OpenStandardBlock(remoteName, label, giverNames)
-    local before = CountToolsForBlockOpen()
-    local remote = FindBlockRemoteDirect(remoteName)
-
-    if IsRemote(remote) then
-        local ok = pcall(function()
-            if remote:IsA("RemoteEvent") then
-                remote:FireServer()
-            else
-                remote:InvokeServer()
-            end
-        end)
-
-        if ok then
-            if WaitForBlockTool(before, 0.7) then
-                return true
-            end
-        end
-    end
-
-    if TriggerNamedBlockGiver(giverNames) then
-        if WaitForBlockTool(before, 0.8) then
-            return true
-        end
-
-        return true
-    end
-
-    CustomNotify(
-        tostring(label) .. " unavailable",
-        Color3.fromRGB(255, 180, 70),
-        4
+local function OpenStandardBlock(remoteName, label)
+    local ok = TryRemoteCandidates(
+        {remoteName},
+        {
+            {string.gsub(remoteName, "^Spawn", ""):gsub("Block$", ""), "Block"}
+        }
     )
 
-    return false
+    if not ok then
+        CustomNotify(
+            tostring(label) .. " unavailable",
+            Color3.fromRGB(255, 180, 70),
+            4
+        )
+    end
+
+    return ok
 end
 
 local function CountPlayerTools()
@@ -1655,146 +1538,6 @@ local function OpenExactLBBBlock(remoteNames, label)
                 if WaitForNewTool(before, 0.55) then
                     return true
                 end
-            end
-        end
-    end
-
-    return false
-end
-
-local function GetSpecialGiverObjects(giverNames)
-    local wanted = {}
-
-    for _, name in ipairs(giverNames or {}) do
-        wanted[string.lower(tostring(name))] = true
-    end
-
-    local objects = {}
-
-    for _, object in ipairs(workspace:GetDescendants()) do
-        if wanted[string.lower(object.Name)] then
-            table.insert(objects, object)
-        end
-    end
-
-    table.sort(objects, function(a, b)
-        local aParent = a.Parent and a.Parent.Parent
-        local bParent = b.Parent and b.Parent.Parent
-        local aSpawn = aParent and string.match(aParent.Name, "^Spawn%d+$") and 1 or 0
-        local bSpawn = bParent and string.match(bParent.Name, "^Spawn%d+$") and 1 or 0
-
-        if aSpawn ~= bSpawn then
-            return aSpawn > bSpawn
-        end
-
-        return a:GetFullName() < b:GetFullName()
-    end)
-
-    return objects
-end
-
-local function GetTouchCharacterParts()
-    local character = Player.Character
-
-    if not character then
-        return {}
-    end
-
-    local preferred = {
-        "HumanoidRootPart",
-        "Head",
-        "UpperTorso",
-        "LowerTorso",
-        "Torso",
-        "LeftFoot",
-        "RightFoot",
-        "Left Leg",
-        "Right Leg"
-    }
-
-    local parts = {}
-    local used = {}
-
-    for _, name in ipairs(preferred) do
-        local part = character:FindFirstChild(name)
-
-        if part and part:IsA("BasePart") then
-            table.insert(parts, part)
-            used[part] = true
-        end
-    end
-
-    for _, object in ipairs(character:GetChildren()) do
-        if object:IsA("BasePart")
-        and not used[object] then
-            table.insert(parts, object)
-        end
-    end
-
-    return parts
-end
-
-local function ActivateGiverObject(giver)
-    if not giver or not giver.Parent then
-        return false
-    end
-
-    local activated = false
-    local characterParts = GetTouchCharacterParts()
-    local giverParts = {}
-
-    if giver:IsA("BasePart") then
-        table.insert(giverParts, giver)
-    end
-
-    for _, object in ipairs(giver:GetDescendants()) do
-        if object:IsA("ClickDetector")
-        and fireclickdetector then
-            if pcall(function()
-                fireclickdetector(object)
-            end) then
-                activated = true
-            end
-        elseif object:IsA("ProximityPrompt")
-        and fireproximityprompt then
-            if pcall(function()
-                fireproximityprompt(object)
-            end) then
-                activated = true
-            end
-        elseif object:IsA("BasePart") then
-            table.insert(giverParts, object)
-        end
-    end
-
-    if firetouchinterest then
-        for _, bodyPart in ipairs(characterParts) do
-            for _, giverPart in ipairs(giverParts) do
-                if giverPart.Parent
-                and giverPart.CanTouch then
-                    if pcall(function()
-                        firetouchinterest(bodyPart, giverPart, 0)
-                        task.wait()
-                        firetouchinterest(bodyPart, giverPart, 1)
-                    end) then
-                        activated = true
-                    end
-                end
-            end
-        end
-    end
-
-    return activated
-end
-
-local function OpenPhysicalSpecialGiver(giverNames, label, timeoutPerGiver)
-    local before = CountToolsForBlockOpen()
-    local givers = GetSpecialGiverObjects(giverNames)
-
-    for _, giver in ipairs(givers) do
-        if ActivateGiverObject(giver) then
-            if WaitForBlockTool(before, timeoutPerGiver or 0.65) then
-                return true
             end
         end
     end
@@ -3604,23 +3347,23 @@ LBBCreateToggle(
 CreateLBBSection("LUCKY BLOCKS")
 
 LBBCreateButton("Lucky Blocks (Open)", GamePage, function()
-    OpenStandardBlock("SpawnLuckyBlock", "Lucky Block", {"BlockGiverLucky1", "BlockGiverLucky2"})
+    OpenStandardBlock("SpawnLuckyBlock", "Lucky Block")
 end)
 
 LBBCreateButton("Super Blocks (Open)", GamePage, function()
-    OpenStandardBlock("SpawnSuperBlock", "Super Block", {"BlockGiverSuper1", "BlockGiverSuper2"})
+    OpenStandardBlock("SpawnSuperBlock", "Super Block")
 end)
 
 LBBCreateButton("Diamond Blocks (Open)", GamePage, function()
-    OpenStandardBlock("SpawnDiamondBlock", "Diamond Block", {"BlockGiverDiamond1", "BlockGiverDiamond2"})
+    OpenStandardBlock("SpawnDiamondBlock", "Diamond Block")
 end)
 
 LBBCreateButton("Rainbow Blocks (Open)", GamePage, function()
-    OpenStandardBlock("SpawnRainbowBlock", "Rainbow Block", {"BlockGiverRainbow1", "BlockGiverRainbow2"})
+    OpenStandardBlock("SpawnRainbowBlock", "Rainbow Block")
 end)
 
 LBBCreateButton("Galaxy Blocks (Open)", GamePage, function()
-    OpenStandardBlock("SpawnGalaxyBlock", "Galaxy Block", {"BlockGiverGalaxy1", "BlockGiverGalaxy2"})
+    OpenStandardBlock("SpawnGalaxyBlock", "Galaxy Block")
 end)
 
 LBBCreateButton("Void Blocks (Open)", GamePage, function()
