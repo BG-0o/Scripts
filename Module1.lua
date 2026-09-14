@@ -173,6 +173,12 @@ if HasRunningToxHub() then
     getgenv().ToxLBBModuleLoadedJobId = nil
     getgenv().ToxLBBModuleVersion = nil
     getgenv().ToxLBBModulePage = nil
+    getgenv().ToxFTFModuleLoadedJobId = nil
+    getgenv().ToxFTFModuleVersion = nil
+    getgenv().ToxFTFModulePage = nil
+    getgenv().ToxPLModuleLoadedJobId = nil
+    getgenv().ToxPLModuleVersion = nil
+    getgenv().ToxPLModulePage = nil
     getgenv().ToxMM2ModuleLoadedJobId = nil
     getgenv().ToxMM2ModuleVersion = nil
     getgenv().ToxMM2ModulePage = nil
@@ -189,6 +195,14 @@ if HasRunningToxHub() then
 
     if getgenv().ToxLBBCleanup then
         pcall(getgenv().ToxLBBCleanup)
+    end
+
+    if getgenv().ToxFTFCleanup then
+        pcall(getgenv().ToxFTFCleanup)
+    end
+
+    if getgenv().ToxPLCleanup then
+        pcall(getgenv().ToxPLCleanup)
     end
 
     task.wait(0.18)
@@ -252,6 +266,16 @@ getgenv().GameModuleRegistry = {
     [662417684] = {
         ShortName = "LBB",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/LBB.lua",
+        Ready = true
+    },
+    [893973440] = {
+        ShortName = "FTF",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/FTF.lua",
+        Ready = true
+    },
+    [155615604] = {
+        ShortName = "PL",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/PL.lua",
         Ready = true
     }
 }
