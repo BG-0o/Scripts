@@ -29,7 +29,7 @@ or not CreateButton then
     return
 end
 
-local LBBModuleVersion = "2026-09-14-lbb-bases-blocks-fix-2"
+local LBBModuleVersion = "2026-09-14-lbb-runtime-map-fix-3"
 
 if getgenv().ToxLBBModuleLoadedJobId == game.JobId
 and getgenv().ToxLBBModuleVersion == LBBModuleVersion
@@ -64,14 +64,14 @@ local BaseRecordsCache = nil
 local BaseRecordsCacheTime = 0
 
 local BasePalette = {
-    {Name = "YELLOW", Color = Color3.fromRGB(245, 205, 48)},
-    {Name = "GREEN", Color = Color3.fromRGB(75, 151, 75)},
-    {Name = "CYAN", Color = Color3.fromRGB(4, 175, 236)},
-    {Name = "BLUE", Color = Color3.fromRGB(13, 105, 172)},
-    {Name = "RED", Color = Color3.fromRGB(196, 40, 28)},
-    {Name = "ORANGE", Color = Color3.fromRGB(218, 133, 65)},
-    {Name = "PURPLE", Color = Color3.fromRGB(123, 47, 123)},
-    {Name = "PINK", Color = Color3.fromRGB(255, 102, 204)}
+    {Name = "YELLOW", Hue = 0.155, Color = Color3.fromRGB(255, 220, 55)},
+    {Name = "GREEN", Hue = 0.333, Color = Color3.fromRGB(65, 210, 85)},
+    {Name = "CYAN", Hue = 0.500, Color = Color3.fromRGB(45, 210, 235)},
+    {Name = "BLUE", Hue = 0.620, Color = Color3.fromRGB(55, 105, 235)},
+    {Name = "RED", Hue = 0.000, Color = Color3.fromRGB(235, 55, 55)},
+    {Name = "ORANGE", Hue = 0.080, Color = Color3.fromRGB(240, 135, 45)},
+    {Name = "PURPLE", Hue = 0.765, Color = Color3.fromRGB(150, 70, 220)},
+    {Name = "PINK", Hue = 0.910, Color = Color3.fromRGB(245, 90, 175)}
 }
 
 local BasePaletteByName = {}
@@ -203,75 +203,131 @@ local function IsRemote(object)
         )
 end
 
-local function FindRemoteExact(name, waitTime)
-    local direct = ReplicatedStorage:FindFirstChild(name, true)
-
-    if IsRemote(direct) then
-        return direct
+local function FireRemote(remote, ...)
+    if not IsRemote(remote) then
+        return false
     end
 
-    if waitTime
-    and waitTime > 0 then
-        local deadline = os.clock() + waitTime
+    local args = {...}
 
-        repeat
-            for _, object in ipairs(ReplicatedStorage:GetDescendants()) do
+    return pcall(function()
+        if remote:IsA("RemoteEvent") then
+            remote:FireServer(table.unpack(args))
+        else
+            remote:InvokeServer(table.unpack(args))
+        end
+    end)
+end
+
+local function RemoteSearchRoots()
+    local roots = {ReplicatedStorage}
+
+    pcall(function()
+        local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+
+        if playerGui then
+            table.insert(roots, playerGui)
+        end
+    end)
+
+    return roots
+end
+
+local function FindRemoteExact(name, waitTime)
+    local normalized = NormalizeName(name)
+    local deadline = os.clock() + (tonumber(waitTime) or 0)
+
+    repeat
+        for _, root in ipairs(RemoteSearchRoots()) do
+            local direct = root:FindFirstChild(name, true)
+
+            if IsRemote(direct) then
+                return direct
+            end
+
+            for _, object in ipairs(root:GetDescendants()) do
                 if IsRemote(object)
-                and object.Name == name then
+                and NormalizeName(object.Name) == normalized then
                     return object
                 end
             end
+        end
 
-            task.wait(0.1)
-        until os.clock() >= deadline
-    end
+        if os.clock() >= deadline then
+            break
+        end
 
-    local normalized = NormalizeName(name)
+        task.wait(0.08)
+    until false
 
-    for _, object in ipairs(ReplicatedStorage:GetDescendants()) do
-        if IsRemote(object)
-        and NormalizeName(object.Name) == normalized then
-            return object
+    if getnilinstances then
+        local ok, list = pcall(getnilinstances)
+
+        if ok
+        and typeof(list) == "table" then
+            for _, object in ipairs(list) do
+                if IsRemote(object)
+                and NormalizeName(object.Name) == normalized then
+                    return object
+                end
+            end
         end
     end
 
     return nil
 end
 
+local function HasTokens(text, tokens)
+    text = NormalizeName(text)
+
+    for _, token in ipairs(tokens or {}) do
+        local normalized = NormalizeName(token)
+
+        if normalized ~= ""
+        and not string.find(text, normalized, 1, true) then
+            return false
+        end
+    end
+
+    return true
+end
+
 local function FindRemoteByTokens(tokens)
     local best = nil
-    local bestScore = 0
+    local bestScore = -math.huge
 
-    for _, object in ipairs(ReplicatedStorage:GetDescendants()) do
-        if IsRemote(object) then
-            local blob = NormalizeName(object.Name)
-            local score = 0
-            local valid = true
+    for _, root in ipairs(RemoteSearchRoots()) do
+        for _, object in ipairs(root:GetDescendants()) do
+            if IsRemote(object) then
+                local blob = NormalizeName(object.Name)
 
-            for _, token in ipairs(tokens) do
-                local normalizedToken = NormalizeName(token)
+                if HasTokens(blob, tokens) then
+                    local score = 0
 
-                if normalizedToken ~= ""
-                and string.find(blob, normalizedToken, 1, true) then
-                    score += 12
-                else
-                    valid = false
-                    break
-                end
-            end
+                    if string.find(blob, "spawn", 1, true) then
+                        score += 15
+                    end
 
-            if valid then
-                if string.find(blob, "spawn", 1, true) then
-                    score += 8
-                end
+                    if string.find(blob, "open", 1, true) then
+                        score += 12
+                    end
 
-                if string.find(blob, "block", 1, true) then
-                    score += 5
-                end
+                    if string.find(blob, "give", 1, true) then
+                        score += 8
+                    end
 
-                if score > bestScore then
-                    best = object
-                    bestScore = score
+                    if string.find(blob, "block", 1, true) then
+                        score += 8
+                    end
+
+                    if root == ReplicatedStorage then
+                        score += 5
+                    end
+
+                    if score > bestScore then
+                        best = object
+                        bestScore = score
+                    end
                 end
             end
         end
@@ -280,23 +336,128 @@ local function FindRemoteByTokens(tokens)
     return best
 end
 
-local function FireRemote(remote)
-    if not IsRemote(remote) then
+local function ReadRemoteFromValue(value, seen, depth)
+    if IsRemote(value) then
+        return value
+    end
+
+    if typeof(value) ~= "table"
+    or depth <= 0
+    or seen[value] then
+        return nil
+    end
+
+    seen[value] = true
+
+    for key, item in pairs(value) do
+        if IsRemote(item) then
+            return item
+        end
+
+        if typeof(item) == "table" then
+            local found = ReadRemoteFromValue(item, seen, depth - 1)
+
+            if found then
+                return found
+            end
+        end
+
+        if IsRemote(key) then
+            return key
+        end
+    end
+
+    return nil
+end
+
+local function FunctionMentionsTokens(fn, tokens)
+    local getter = nil
+
+    pcall(function()
+        getter = debug and debug.getconstants
+    end)
+
+    if not getter and getconstants then
+        getter = getconstants
+    end
+
+    if not getter then
         return false
     end
 
-    return pcall(function()
-        if remote:IsA("RemoteEvent") then
-            remote:FireServer()
-        else
-            remote:InvokeServer()
+    local ok, constants = pcall(getter, fn)
+
+    if not ok
+    or typeof(constants) ~= "table" then
+        return false
+    end
+
+    local pieces = {}
+
+    for _, value in pairs(constants) do
+        if typeof(value) == "string" then
+            table.insert(pieces, value)
         end
+    end
+
+    return HasTokens(table.concat(pieces, " "), tokens)
+end
+
+local function FindRemoteFromGC(tokens)
+    if not getgc then
+        return nil
+    end
+
+    local ok, objects = pcall(getgc, true)
+
+    if not ok
+    or typeof(objects) ~= "table" then
+        return nil
+    end
+
+    local upvalueGetter = nil
+
+    pcall(function()
+        upvalueGetter = debug and debug.getupvalues
     end)
+
+    if not upvalueGetter and getupvalues then
+        upvalueGetter = getupvalues
+    end
+
+    for _, value in ipairs(objects) do
+        if typeof(value) == "function"
+        and FunctionMentionsTokens(value, tokens)
+        and upvalueGetter then
+            local upOk, upvalues = pcall(upvalueGetter, value)
+
+            if upOk
+            and typeof(upvalues) == "table" then
+                for _, upvalue in pairs(upvalues) do
+                    local remote = ReadRemoteFromValue(upvalue, {}, 3)
+
+                    if remote then
+                        return remote
+                    end
+                end
+            end
+        elseif typeof(value) == "table" then
+            for key, item in pairs(value) do
+                if typeof(key) == "string"
+                and HasTokens(key, tokens)
+                and IsRemote(item) then
+                    return item
+                end
+            end
+        end
+    end
+
+    return nil
 end
 
 local function TryRemoteCandidates(names, tokenGroups)
     for _, name in ipairs(names or {}) do
-        local remote = FindRemoteExact(name, 1.5)
+        local remote = FindRemoteExact(name, 0.7)
 
         if remote
         and FireRemote(remote) then
@@ -306,9 +467,151 @@ local function TryRemoteCandidates(names, tokenGroups)
 
     for _, tokens in ipairs(tokenGroups or {}) do
         local remote = FindRemoteByTokens(tokens)
+            or FindRemoteFromGC(tokens)
 
         if remote
         and FireRemote(remote) then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function IsInsideToxGui(object)
+    local gui = getgenv().Gui
+
+    return gui
+        and object
+        and (
+            object == gui
+            or object:IsDescendantOf(gui)
+        )
+end
+
+local function GetGuiSearchText(object)
+    local pieces = {}
+    local current = object
+
+    for _ = 1, 5 do
+        if not current then
+            break
+        end
+
+        table.insert(pieces, tostring(current.Name or ""))
+
+        if current:IsA("TextButton")
+        or current:IsA("TextLabel")
+        or current:IsA("TextBox") then
+            table.insert(pieces, tostring(current.Text or ""))
+        end
+
+        current = current.Parent
+    end
+
+    return table.concat(pieces, " ")
+end
+
+local function FireSignalConnections(signal)
+    local fired = false
+
+    if firesignal then
+        local ok = pcall(function()
+            firesignal(signal)
+        end)
+
+        if ok then
+            fired = true
+        end
+    end
+
+    if getconnections then
+        local ok, connections = pcall(getconnections, signal)
+
+        if ok
+        and typeof(connections) == "table" then
+            for _, connection in ipairs(connections) do
+                local fn = connection.Function
+
+                if typeof(fn) == "function" then
+                    if pcall(fn) then
+                        fired = true
+                    end
+                elseif connection.Fire then
+                    if pcall(function()
+                        connection:Fire()
+                    end) then
+                        fired = true
+                    end
+                end
+            end
+        end
+    end
+
+    return fired
+end
+
+local function TriggerGameGuiButton(tokenGroups)
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+
+    if not playerGui then
+        return false
+    end
+
+    local candidates = {}
+
+    for _, object in ipairs(playerGui:GetDescendants()) do
+        if (object:IsA("TextButton") or object:IsA("ImageButton"))
+        and not IsInsideToxGui(object) then
+            local blob = GetGuiSearchText(object)
+
+            for _, tokens in ipairs(tokenGroups or {}) do
+                if HasTokens(blob, tokens) then
+                    local score = 0
+
+                    if object.Visible then
+                        score += 10
+                    end
+
+                    if object.Active then
+                        score += 5
+                    end
+
+                    if object:IsA("TextButton") then
+                        score += 4
+                    end
+
+                    table.insert(candidates, {
+                        Button = object,
+                        Score = score
+                    })
+                    break
+                end
+            end
+        end
+    end
+
+    table.sort(candidates, function(a, b)
+        return a.Score > b.Score
+    end)
+
+    for _, entry in ipairs(candidates) do
+        local button = entry.Button
+        local fired = false
+
+        pcall(function()
+            fired = FireSignalConnections(button.Activated) or fired
+        end)
+
+        pcall(function()
+            fired = FireSignalConnections(button.MouseButton1Click) or fired
+        end)
+
+        pcall(function()
+            fired = FireSignalConnections(button.MouseButton1Down) or fired
+        end)
+
+        if fired then
             return true
         end
     end
@@ -339,33 +642,20 @@ local function FindInteractivePart(tokens)
                     break
                 end
 
-                table.insert(pieces, NormalizeName(current.Name))
+                table.insert(pieces, tostring(current.Name or ""))
                 current = current.Parent
             end
 
-            local blob = table.concat(pieces, "")
-            local valid = true
-            local score = 0
+            local blob = table.concat(pieces, " ")
 
-            for _, token in ipairs(tokens) do
-                local normalizedToken = NormalizeName(token)
-
-                if normalizedToken ~= ""
-                and string.find(blob, normalizedToken, 1, true) then
-                    score += 10
-                else
-                    valid = false
-                    break
-                end
-            end
-
-            if valid then
+            if HasTokens(blob, tokens) then
                 local click = object:FindFirstChildWhichIsA("ClickDetector", true)
                     or part:FindFirstChildWhichIsA("ClickDetector", true)
                 local prompt = object:FindFirstChildWhichIsA("ProximityPrompt", true)
                     or part:FindFirstChildWhichIsA("ProximityPrompt", true)
                 local touch = object:FindFirstChildWhichIsA("TouchTransmitter", true)
                     or part:FindFirstChildWhichIsA("TouchTransmitter", true)
+                local score = 1
 
                 if click then
                     score += 15
@@ -405,22 +695,18 @@ local function TriggerWorldBlock(tokens)
 
     if target.Click
     and fireclickdetector then
-        local ok = pcall(function()
+        if pcall(function()
             fireclickdetector(target.Click)
-        end)
-
-        if ok then
+        end) then
             return true
         end
     end
 
     if target.Prompt
     and fireproximityprompt then
-        local ok = pcall(function()
+        if pcall(function()
             fireproximityprompt(target.Prompt)
-        end)
-
-        if ok then
+        end) then
             return true
         end
     end
@@ -430,20 +716,53 @@ local function TriggerWorldBlock(tokens)
         local character = Player.Character
         local root = character and character:FindFirstChild("HumanoidRootPart")
 
-        if root then
-            local ok = pcall(function()
-                firetouchinterest(root, target.Part, 0)
-                task.wait()
-                firetouchinterest(root, target.Part, 1)
-            end)
-
-            if ok then
-                return true
-            end
+        if root
+        and pcall(function()
+            firetouchinterest(root, target.Part, 0)
+            task.wait()
+            firetouchinterest(root, target.Part, 1)
+        end) then
+            return true
         end
     end
 
     return false
+end
+
+local function TryGenericBlockRemote(blockNames)
+    local remotes = {}
+
+    for _, object in ipairs(ReplicatedStorage:GetDescendants()) do
+        if IsRemote(object) then
+            local lower = NormalizeName(object.Name)
+
+            if string.find(lower, "block", 1, true)
+            and (
+                string.find(lower, "spawn", 1, true)
+                or string.find(lower, "open", 1, true)
+                or string.find(lower, "give", 1, true)
+            ) then
+                table.insert(remotes, object)
+            end
+        end
+    end
+
+    for _, remote in ipairs(remotes) do
+        for _, name in ipairs(blockNames or {}) do
+            local forms = {
+                name,
+                NormalizeName(name),
+                string.gsub(name, "Block", ""),
+                string.lower(string.gsub(name, "Block", ""))
+            }
+
+            for _, value in ipairs(forms) do
+                FireRemote(remote, value)
+            end
+        end
+    end
+
+    return #remotes > 0
 end
 
 local function OpenStandardBlock(remoteName, label)
@@ -471,7 +790,9 @@ local function OpenVoidBlock()
             "SpawnVoidBlock",
             "SpawnVoidLuckyBlock",
             "S*VoidBlock",
-            "VoidBlock"
+            "SVoidBlock",
+            "VoidBlock",
+            "SpawnVoid"
         },
         {
             {"Void", "Block"},
@@ -480,11 +801,18 @@ local function OpenVoidBlock()
     )
 
     if not ok then
+        ok = TriggerGameGuiButton({
+            {"Void", "Block"},
+            {"Void"}
+        })
+    end
+
+    if not ok then
         ok = TriggerWorldBlock({"Void", "Block"})
     end
 
     if not ok then
-        ok = TriggerWorldBlock({"Void"})
+        ok = TryGenericBlockRemote({"VoidBlock", "Void"})
     end
 
     if not ok then
@@ -504,7 +832,12 @@ local function OpenLimitedBlock()
             "SpawnHackerBlock",
             "SpawnLimitedBlock",
             "SpawnHackerLuckyBlock",
-            "HackerBlock"
+            "S*HackerBlock",
+            "SHackerBlock",
+            "HackerBlock",
+            "LimitedBlock",
+            "SpawnHacker",
+            "SpawnLimited"
         },
         {
             {"Hacker", "Block"},
@@ -514,11 +847,20 @@ local function OpenLimitedBlock()
     )
 
     if not ok then
+        ok = TriggerGameGuiButton({
+            {"Hacker", "Block"},
+            {"Limited", "Block"},
+            {"Hacker"},
+            {"Limited"}
+        })
+    end
+
+    if not ok then
         ok = TriggerWorldBlock({"Hacker", "Block"})
     end
 
     if not ok then
-        ok = TriggerWorldBlock({"Hacker"})
+        ok = TryGenericBlockRemote({"HackerBlock", "Hacker", "LimitedBlock", "Limited"})
     end
 
     if not ok then
@@ -607,11 +949,9 @@ local function GetSpawnLocations()
     return spawns
 end
 
-local function ColorDistance(a, b)
-    local dr = a.R - b.R
-    local dg = a.G - b.G
-    local db = a.B - b.B
-    return math.sqrt(dr * dr + dg * dg + db * db)
+local function HueDistance(a, b)
+    local distance = math.abs(a - b)
+    return math.min(distance, 1 - distance)
 end
 
 local function ClosestBaseColor(color)
@@ -619,10 +959,10 @@ local function ClosestBaseColor(color)
         return nil, math.huge
     end
 
-    local h, s, v = color:ToHSV()
+    local hue, saturation, value = color:ToHSV()
 
-    if s < 0.22
-    or v < 0.18 then
+    if saturation < 0.28
+    or value < 0.16 then
         return nil, math.huge
     end
 
@@ -630,7 +970,7 @@ local function ClosestBaseColor(color)
     local bestDistance = math.huge
 
     for _, entry in ipairs(BasePalette) do
-        local distance = ColorDistance(color, entry.Color)
+        local distance = HueDistance(hue, entry.Hue)
 
         if distance < bestDistance then
             bestName = entry.Name
@@ -638,7 +978,7 @@ local function ClosestBaseColor(color)
         end
     end
 
-    if bestDistance > 0.72 then
+    if bestDistance > 0.095 then
         return nil, bestDistance
     end
 
@@ -654,61 +994,120 @@ local function GetDirectColorName(value)
         return ClosestBaseColor(value)
     end
 
-    local text = string.upper(tostring(value or ""))
+    local text = NormalizeName(value)
+    local named = {
+        {"lightblue", "CYAN"},
+        {"aqua", "CYAN"},
+        {"teal", "CYAN"},
+        {"cyan", "CYAN"},
+        {"darkblue", "BLUE"},
+        {"royalblue", "BLUE"},
+        {"blue", "BLUE"},
+        {"lime", "GREEN"},
+        {"green", "GREEN"},
+        {"yellow", "YELLOW"},
+        {"orange", "ORANGE"},
+        {"purple", "PURPLE"},
+        {"violet", "PURPLE"},
+        {"pink", "PINK"},
+        {"red", "RED"}
+    }
 
-    for _, entry in ipairs(BasePalette) do
-        if string.find(text, entry.Name, 1, true) then
-            return entry.Name, 0
+    for _, entry in ipairs(named) do
+        if string.find(text, entry[1], 1, true) then
+            return entry[2], 0
         end
     end
 
     return nil, math.huge
 end
 
-local function DetectBaseColorAround(position)
-    local params = OverlapParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = Player.Character and {Player.Character} or {}
+local function GetObjectColorName(object)
+    local current = object
 
-    local ok, parts = pcall(function()
-        return workspace:GetPartBoundsInRadius(position, 62, params)
-    end)
+    for _ = 1, 5 do
+        if not current then
+            break
+        end
 
-    if not ok
-    or typeof(parts) ~= "table" then
-        return nil
+        local colorName = GetDirectColorName(current.Name)
+
+        if colorName then
+            return colorName
+        end
+
+        current = current.Parent
     end
 
+    return nil
+end
+
+local function GetWorldParts()
+    local parts = {}
+
+    for _, object in ipairs(workspace:GetDescendants()) do
+        if object:IsA("BasePart") then
+            table.insert(parts, object)
+        end
+    end
+
+    return parts
+end
+
+local function DetectBaseColorAround(position, parts, radius)
+    if typeof(position) ~= "Vector3" then
+        return nil, nil, 0
+    end
+
+    parts = parts or GetWorldParts()
+    radius = tonumber(radius) or 125
+
     local scores = {}
+    local strongestColor = {}
+    local strongestWeight = {}
 
     for _, part in ipairs(parts) do
-        if part:IsA("BasePart")
-        and part.Transparency < 0.9 then
-            local name, distance = ClosestBaseColor(part.Color)
+        if part.Parent
+        and part.Transparency < 0.97 then
+            local distance = (part.Position - position).Magnitude
 
-            if name then
-                local area = math.max(
-                    1,
-                    math.min(
-                        1400,
-                        math.max(
-                            part.Size.X * part.Size.Z,
-                            part.Size.X * part.Size.Y,
-                            part.Size.Z * part.Size.Y
-                        )
-                    )
-                )
+            if distance <= radius then
+                local colorName, hueDistance = ClosestBaseColor(part.Color)
+                local namedColor = GetObjectColorName(part)
 
-                local _, saturation, value = part.Color:ToHSV()
-                local distanceWeight = math.max(0.2, 1 - distance)
-                local materialWeight = part.Material == Enum.Material.Grass and 0.18 or 1
-                local weight = area
-                    * (0.35 + saturation)
-                    * (0.35 + value)
-                    * distanceWeight
-                    * materialWeight
+                if namedColor then
+                    colorName = namedColor
+                    hueDistance = 0
+                end
 
-                scores[name] = (scores[name] or 0) + weight
+                if colorName then
+                    local size = part.Size
+                    local horizontalArea = math.max(1, size.X * size.Z)
+                    local sideArea = math.max(size.X * size.Y, size.Z * size.Y)
+                    local area = math.min(5000, math.max(horizontalArea, sideArea * 0.45))
+                    local _, saturation, value = part.Color:ToHSV()
+                    local distanceWeight = 1 / (1 + distance / 24)
+                    local materialWeight = part.Material == Enum.Material.Grass and 0.025 or 1
+                    local transparencyWeight = math.max(0.08, 1 - part.Transparency)
+                    local namedWeight = namedColor and 4.5 or 1
+                    local spawnWeight = part:IsA("SpawnLocation") and 0.18 or 1
+                    local weight = area
+                        * distanceWeight
+                        * materialWeight
+                        * transparencyWeight
+                        * namedWeight
+                        * spawnWeight
+                        * (0.35 + saturation)
+                        * (0.35 + value)
+                        * math.max(0.25, 1 - (hueDistance or 0))
+
+                    scores[colorName] = (scores[colorName] or 0) + weight
+
+                    if weight > (strongestWeight[colorName] or 0) then
+                        strongestWeight[colorName] = weight
+                        strongestColor[colorName] = part.Color
+                    end
+                end
             end
         end
     end
@@ -723,14 +1122,20 @@ local function DetectBaseColorAround(position)
         end
     end
 
-    return bestName
+    return bestName,
+        bestName and strongestColor[bestName] or nil,
+        bestScore
 end
 
-local function DetectSpawnColor(spawn)
-    local colorName = DetectBaseColorAround(spawn.Position)
+local function DetectSpawnColor(spawn, parts)
+    local colorName, color, score = DetectBaseColorAround(
+        spawn.Position,
+        parts,
+        135
+    )
 
     if colorName then
-        return colorName
+        return colorName, color, score
     end
 
     local ok, teamColor = pcall(function()
@@ -741,95 +1146,164 @@ local function DetectSpawnColor(spawn)
         colorName = GetDirectColorName(teamColor)
 
         if colorName then
-            return colorName
+            return colorName, BasePaletteByName[colorName], 1
         end
     end
 
     colorName = GetDirectColorName(spawn.Color)
-    return colorName
+
+    if colorName then
+        return colorName, spawn.Color, 0.5
+    end
+
+    return nil, nil, 0
+end
+
+local function BuildGeometryBaseRecords(parts)
+    local candidates = {}
+
+    for _, part in ipairs(parts) do
+        if part.Parent
+        and part.Anchored
+        and part.CanCollide
+        and part.Transparency < 0.9 then
+            local colorName = GetObjectColorName(part)
+            local hueName = ClosestBaseColor(part.Color)
+            colorName = colorName or hueName
+
+            if colorName then
+                local size = part.Size
+                local area = size.X * size.Z
+                local _, saturation = part.Color:ToHSV()
+                local nameBlob = NormalizeName(part.Name .. " " .. tostring(part.Parent and part.Parent.Name or ""))
+                local score = area * math.max(0.2, saturation)
+
+                if string.find(nameBlob, "base", 1, true)
+                or string.find(nameBlob, "spawn", 1, true)
+                or string.find(nameBlob, "team", 1, true) then
+                    score *= 5
+                end
+
+                if part.Material == Enum.Material.Grass then
+                    score *= 0.03
+                end
+
+                if area >= 180
+                and score >= 80 then
+                    table.insert(candidates, {
+                        Part = part,
+                        Position = part.Position,
+                        ColorName = colorName,
+                        Color = part.Color,
+                        Score = score
+                    })
+                end
+            end
+        end
+    end
+
+    table.sort(candidates, function(a, b)
+        return a.Score > b.Score
+    end)
+
+    local records = {}
+
+    for _, candidate in ipairs(candidates) do
+        local farEnough = true
+
+        for _, record in ipairs(records) do
+            if (record.Position - candidate.Position).Magnitude < 55 then
+                farEnough = false
+                break
+            end
+        end
+
+        if farEnough then
+            table.insert(records, {
+                Spawn = nil,
+                Anchor = candidate.Part,
+                Position = candidate.Position,
+                ColorName = candidate.ColorName,
+                Color = candidate.Color,
+                Score = candidate.Score
+            })
+
+            if #records >= 8 then
+                break
+            end
+        end
+    end
+
+    return records
 end
 
 local function BuildBaseRecords()
+    local parts = GetWorldParts()
     local spawns = GetSpawnLocations()
-    local rawRecords = {}
+    local records = {}
+    local usedPositions = {}
 
     for _, spawn in ipairs(spawns) do
-        local colorName = DetectSpawnColor(spawn)
+        local duplicate = false
 
-        if colorName then
-            table.insert(rawRecords, {
+        for _, position in ipairs(usedPositions) do
+            if (spawn.Position - position).Magnitude < 24 then
+                duplicate = true
+                break
+            end
+        end
+
+        if not duplicate then
+            local colorName, color, score = DetectSpawnColor(spawn, parts)
+            table.insert(usedPositions, spawn.Position)
+            table.insert(records, {
                 Spawn = spawn,
+                Anchor = spawn,
                 Position = spawn.Position,
                 ColorName = colorName,
-                Color = BasePaletteByName[colorName]
+                Color = color
+                    or (colorName and BasePaletteByName[colorName])
+                    or Color3.fromRGB(255, 255, 255),
+                Score = score
             })
         end
     end
 
-    local deduped = {}
+    if #records > 8 then
+        local roughCenter = Vector3.zero
 
-    for _, record in ipairs(rawRecords) do
-        local existing = deduped[record.ColorName]
-
-        if not existing then
-            deduped[record.ColorName] = record
-        else
-            local existingNamed = string.find(
-                string.lower(existing.Spawn.Name),
-                string.lower(record.ColorName),
-                1,
-                true
-            ) ~= nil
-
-            local currentNamed = string.find(
-                string.lower(record.Spawn.Name),
-                string.lower(record.ColorName),
-                1,
-                true
-            ) ~= nil
-
-            if currentNamed and not existingNamed then
-                deduped[record.ColorName] = record
-            end
+        for _, record in ipairs(records) do
+            roughCenter += record.Position
         end
-    end
 
-    local records = {}
+        roughCenter /= #records
 
-    for _, entry in ipairs(BasePalette) do
-        local record = deduped[entry.Name]
+        table.sort(records, function(a, b)
+            return (a.Position - roughCenter).Magnitude
+                > (b.Position - roughCenter).Magnitude
+        end)
 
-        if record then
-            table.insert(records, record)
+        while #records > 8 do
+            table.remove(records)
         end
     end
 
     if #records < 4 then
-        records = {}
-        local usedPositions = {}
+        records = BuildGeometryBaseRecords(parts)
+    end
 
-        for _, spawn in ipairs(spawns) do
-            local duplicate = false
+    for _, record in ipairs(records) do
+        if not record.ColorName then
+            local colorName, color, score = DetectBaseColorAround(
+                record.Position,
+                parts,
+                190
+            )
 
-            for _, position in ipairs(usedPositions) do
-                if (spawn.Position - position).Magnitude < 45 then
-                    duplicate = true
-                    break
-                end
-            end
-
-            if not duplicate then
-                local colorName = DetectSpawnColor(spawn)
-
-                if colorName then
-                    table.insert(usedPositions, spawn.Position)
-                    table.insert(records, {
-                        Spawn = spawn,
-                        Position = spawn.Position,
-                        ColorName = colorName,
-                        Color = BasePaletteByName[colorName]
-                    })
-                end
+            if colorName then
+                record.ColorName = colorName
+                record.Color = color or BasePaletteByName[colorName]
+                record.Score = math.max(record.Score or 0, score or 0)
             end
         end
     end
@@ -840,7 +1314,7 @@ end
 local function GetBaseRecords(force)
     if not force
     and BaseRecordsCache
-    and os.clock() - BaseRecordsCacheTime < 2.5 then
+    and os.clock() - BaseRecordsCacheTime < 4 then
         return BaseRecordsCache
     end
 
@@ -897,10 +1371,10 @@ local function RaycastGroundAt(position, startY)
     local originY = tonumber(startY) or position.Y + 180
     local origin = Vector3.new(position.X, originY, position.Z)
 
-    for _ = 1, 8 do
+    for _ = 1, 10 do
         local result = workspace:Raycast(
             origin,
-            Vector3.new(0, -900, 0),
+            Vector3.new(0, -1200, 0),
             params
         )
 
@@ -918,7 +1392,6 @@ local function RaycastGroundAt(position, startY)
         if result.Instance then
             table.insert(excluded, result.Instance)
             params.FilterDescendantsInstances = excluded
-            origin = Vector3.new(position.X, originY, position.Z)
         else
             return nil
         end
@@ -927,32 +1400,65 @@ local function RaycastGroundAt(position, startY)
     return nil
 end
 
+local function GetPartTopCFrame(part)
+    if not part
+    or not part:IsA("BasePart") then
+        return nil
+    end
+
+    local top = part.Position
+        + part.CFrame.UpVector * (part.Size.Y * 0.5 + 4)
+
+    return CFrame.new(top)
+end
+
 local function GetSpawnCFrame(spawn)
     if not spawn
     or not spawn:IsA("BasePart") then
         return nil
     end
 
-    return CFrame.new(
-        spawn.Position
-        + Vector3.new(
-            0,
-            math.max(3.5, spawn.Size.Y * 0.5 + 3.5),
-            0
-        )
-    )
+    return GetPartTopCFrame(spawn)
+end
+
+local function GetRecordSpawnCFrame(record)
+    if not record then
+        return nil
+    end
+
+    if record.Spawn
+    and record.Spawn.Parent then
+        return GetSpawnCFrame(record.Spawn)
+    end
+
+    if record.Anchor
+    and record.Anchor.Parent then
+        return GetPartTopCFrame(record.Anchor)
+    end
+
+    local ground = RaycastGroundAt(record.Position, record.Position.Y + 180)
+
+    if ground then
+        return CFrame.new(ground + Vector3.new(0, 4, 0))
+    end
+
+    return CFrame.new(record.Position + Vector3.new(0, 4, 0))
 end
 
 local function GetBaseRecordByColor(colorName)
     colorName = string.upper(tostring(colorName or ""))
+    local best = nil
+    local bestScore = -math.huge
 
     for _, record in ipairs(GetBaseRecords()) do
-        if record.ColorName == colorName then
-            return record
+        if record.ColorName == colorName
+        and (record.Score or 0) > bestScore then
+            best = record
+            bestScore = record.Score or 0
         end
     end
 
-    return nil
+    return best
 end
 
 local function GetNearestBaseRecord(position, maxDistance)
@@ -972,8 +1478,129 @@ local function GetNearestBaseRecord(position, maxDistance)
         end
     end
 
-    return closest
+    return closest, closestDistance
 end
+
+local function ValueMatchesPlayer(value, player)
+    if value == player then
+        return true
+    end
+
+    if typeof(value) == "string" then
+        local lower = string.lower(value)
+        return lower == string.lower(player.Name)
+            or lower == string.lower(player.DisplayName)
+            or lower == tostring(player.UserId)
+    end
+
+    if typeof(value) == "number" then
+        return math.floor(value) == player.UserId
+    end
+
+    return false
+end
+
+local function ContainerMatchesPlayer(container, player)
+    if not container
+    or container == workspace then
+        return false
+    end
+
+    for key, value in pairs(container:GetAttributes()) do
+        local lowerKey = string.lower(tostring(key))
+
+        if string.find(lowerKey, "owner", 1, true)
+        or string.find(lowerKey, "player", 1, true)
+        or string.find(lowerKey, "user", 1, true) then
+            if ValueMatchesPlayer(value, player) then
+                return true
+            end
+        end
+    end
+
+    local count = 0
+
+    for _, object in ipairs(container:GetDescendants()) do
+        count += 1
+
+        if count > 180 then
+            break
+        end
+
+        if object:IsA("ObjectValue") then
+            if object.Value == player then
+                return true
+            end
+        elseif object:IsA("StringValue")
+        or object:IsA("IntValue")
+        or object:IsA("NumberValue") then
+            local lowerName = string.lower(object.Name)
+
+            if string.find(lowerName, "owner", 1, true)
+            or string.find(lowerName, "player", 1, true)
+            or string.find(lowerName, "user", 1, true) then
+                if ValueMatchesPlayer(object.Value, player) then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+local function FindTaggedBaseRecord(player)
+    for _, record in ipairs(GetBaseRecords()) do
+        local current = record.Spawn or record.Anchor
+
+        for _ = 1, 4 do
+            if not current
+            or current == workspace then
+                break
+            end
+
+            if ContainerMatchesPlayer(current, player) then
+                return record
+            end
+
+            current = current.Parent
+        end
+    end
+
+    return nil
+end
+
+local function GetPlayerTeamColorName(player)
+    if player.Team then
+        local colorName = GetDirectColorName(player.Team.TeamColor)
+
+        if colorName then
+            return colorName
+        end
+
+        colorName = GetDirectColorName(player.Team.Name)
+
+        if colorName then
+            return colorName
+        end
+    end
+
+    local ok, teamColor = pcall(function()
+        return player.TeamColor
+    end)
+
+    if ok then
+        local colorName = GetDirectColorName(teamColor)
+
+        if colorName then
+            return colorName
+        end
+    end
+
+    return nil
+end
+
+local LocalSpawnCFrame = nil
 
 local function CachePlayerBase(player, allowLoose)
     if not player then
@@ -984,58 +1611,83 @@ local function CachePlayerBase(player, allowLoose)
 
     if respawn
     and respawn:IsA("BasePart") then
-        local record = GetNearestBaseRecord(respawn.Position, 90)
+        local record = GetNearestBaseRecord(respawn.Position, 180)
 
         if record then
-            PlayerBaseCache[player] = record.ColorName
+            PlayerBaseCache[player] = record
+
+            if player == Player then
+                LocalSpawnCFrame = GetSpawnCFrame(respawn)
+            end
+
             return record
         end
     end
 
-    local attributes = player:GetAttributes()
+    local teamColorName = GetPlayerTeamColorName(player)
 
-    for key, value in pairs(attributes) do
+    if teamColorName then
+        local record = GetBaseRecordByColor(teamColorName)
+
+        if record then
+            PlayerBaseCache[player] = record
+
+            if player == Player then
+                LocalSpawnCFrame = GetRecordSpawnCFrame(record)
+            end
+
+            return record
+        end
+    end
+
+    for key, value in pairs(player:GetAttributes()) do
         local lowerKey = string.lower(tostring(key))
 
         if string.find(lowerKey, "base", 1, true)
         or string.find(lowerKey, "team", 1, true)
-        or string.find(lowerKey, "color", 1, true) then
+        or string.find(lowerKey, "color", 1, true)
+        or string.find(lowerKey, "spawn", 1, true) then
             local colorName = GetDirectColorName(value)
 
             if colorName then
                 local record = GetBaseRecordByColor(colorName)
 
                 if record then
-                    PlayerBaseCache[player] = record.ColorName
+                    PlayerBaseCache[player] = record
                     return record
                 end
             end
         end
     end
 
-    if player.Team then
-        local colorName = GetDirectColorName(player.Team.TeamColor)
+    local taggedRecord = FindTaggedBaseRecord(player)
 
-        if colorName then
-            local record = GetBaseRecordByColor(colorName)
+    if taggedRecord then
+        PlayerBaseCache[player] = taggedRecord
 
-            if record then
-                PlayerBaseCache[player] = record.ColorName
-                return record
-            end
+        if player == Player then
+            LocalSpawnCFrame = GetRecordSpawnCFrame(taggedRecord)
         end
+
+        return taggedRecord
     end
 
     local root = GetCharacterRoot(player)
 
     if root then
-        local record = GetNearestBaseRecord(
+        local record, distance = GetNearestBaseRecord(
             root.Position,
-            allowLoose and 170 or 105
+            allowLoose and 190 or 90
         )
 
-        if record then
-            PlayerBaseCache[player] = record.ColorName
+        if record
+        and distance <= (allowLoose and 190 or 90) then
+            PlayerBaseCache[player] = record
+
+            if player == Player then
+                LocalSpawnCFrame = GetRecordSpawnCFrame(record)
+            end
+
             return record
         end
     end
@@ -1048,31 +1700,17 @@ local function GetPlayerBaseRecord(player)
         return nil
     end
 
-    local cachedName = PlayerBaseCache[player]
+    local cached = PlayerBaseCache[player]
 
-    if cachedName then
-        local cachedRecord = GetBaseRecordByColor(cachedName)
-
-        if cachedRecord then
-            return cachedRecord
-        end
+    if cached
+    and cached.Position then
+        return cached
     end
 
     return CachePlayerBase(player, false)
 end
 
 local function GetPlayerBaseCFrame()
-    local record = GetPlayerBaseRecord(Player)
-
-    if not record then
-        record = CachePlayerBase(Player, true)
-    end
-
-    if record
-    and record.Spawn then
-        return GetSpawnCFrame(record.Spawn)
-    end
-
     local respawn = Player.RespawnLocation
 
     if respawn
@@ -1080,10 +1718,129 @@ local function GetPlayerBaseCFrame()
         return GetSpawnCFrame(respawn)
     end
 
+    local record = GetPlayerBaseRecord(Player)
+
+    if not record then
+        record = CachePlayerBase(Player, true)
+    end
+
+    if record then
+        local cframe = GetRecordSpawnCFrame(record)
+
+        if cframe then
+            return cframe
+        end
+    end
+
+    return LocalSpawnCFrame
+end
+
+local function GetObjectTopPosition(object)
+    if object:IsA("BasePart") then
+        return object.Position
+            + object.CFrame.UpVector * (object.Size.Y * 0.5),
+            object.Size.X * object.Size.Z
+    end
+
+    if object:IsA("Model") then
+        local ok, cframe, size = pcall(function()
+            local cf, sz = object:GetBoundingBox()
+            return cf, sz
+        end)
+
+        if ok
+        and cframe
+        and size then
+            return cframe.Position
+                + Vector3.new(0, size.Y * 0.5, 0),
+                size.X * size.Z
+        end
+    end
+
+    return nil, 0
+end
+
+local function FindCenterAnchor()
+    local bestPosition = nil
+    local bestScore = 0
+
+    for _, object in ipairs(workspace:GetDescendants()) do
+        if object:IsA("BasePart")
+        or object:IsA("Model") then
+            local name = NormalizeName(object.Name)
+            local nameScore = 0
+
+            if name == "center"
+            or name == "middle"
+            or name == "middlearea"
+            or name == "centerarea" then
+                nameScore = 1000
+            elseif string.find(name, "center", 1, true)
+            or string.find(name, "middle", 1, true) then
+                nameScore = 600
+            elseif string.find(name, "arena", 1, true)
+            or string.find(name, "island", 1, true) then
+                nameScore = 250
+            end
+
+            if nameScore > 0 then
+                local position, area = GetObjectTopPosition(object)
+
+                if position then
+                    local score = nameScore + math.min(area, 100000) * 0.01
+
+                    if score > bestScore then
+                        bestScore = score
+                        bestPosition = position
+                    end
+                end
+            end
+        end
+    end
+
+    if bestPosition then
+        return bestPosition
+    end
+
+    local bestGrass = nil
+    local bestArea = 0
+
+    for _, part in ipairs(GetWorldParts()) do
+        if part.Anchored
+        and part.CanCollide
+        and part.Transparency < 0.9
+        and part.Material == Enum.Material.Grass then
+            local area = part.Size.X * part.Size.Z
+
+            if area > bestArea then
+                bestArea = area
+                bestGrass = part
+            end
+        end
+    end
+
+    if bestGrass
+    and bestArea >= 800 then
+        return bestGrass.Position
+            + bestGrass.CFrame.UpVector * (bestGrass.Size.Y * 0.5)
+    end
+
     return nil
 end
 
 local function GetCenterCFrame()
+    local anchor = FindCenterAnchor()
+
+    if anchor then
+        local ground = RaycastGroundAt(anchor, anchor.Y + 250)
+
+        if ground then
+            return CFrame.new(ground + Vector3.new(0, 4, 0))
+        end
+
+        return CFrame.new(anchor + Vector3.new(0, 4, 0))
+    end
+
     local records = GetBaseRecords(true)
     local center = GetBaseCenterPosition(records)
 
@@ -1097,7 +1854,7 @@ local function GetCenterCFrame()
         highestY = math.max(highestY, record.Position.Y)
     end
 
-    local ground = RaycastGroundAt(center, highestY + 350)
+    local ground = RaycastGroundAt(center, highestY + 300)
 
     if ground then
         return CFrame.new(ground + Vector3.new(0, 4, 0))
@@ -1111,10 +1868,11 @@ local function GetBaseFrontCFrame(record)
         return nil
     end
 
-    local center = GetBaseCenterPosition(GetBaseRecords())
+    local center = FindCenterAnchor()
+        or GetBaseCenterPosition(GetBaseRecords())
 
     if not center then
-        return GetSpawnCFrame(record.Spawn)
+        return GetRecordSpawnCFrame(record)
     end
 
     local delta = Vector3.new(
@@ -1124,15 +1882,14 @@ local function GetBaseFrontCFrame(record)
     )
 
     if delta.Magnitude < 1 then
-        return GetSpawnCFrame(record.Spawn)
+        return GetRecordSpawnCFrame(record)
     end
 
-    local distanceToCenter = delta.Magnitude
-    local forwardDistance = math.clamp(distanceToCenter * 0.13, 14, 28)
+    local forwardDistance = math.clamp(delta.Magnitude * 0.24, 28, 58)
     local target = record.Position + delta.Unit * forwardDistance
     local ground = RaycastGroundAt(
         target,
-        math.max(center.Y, record.Position.Y) + 140
+        math.max(center.Y, record.Position.Y) + 180
     )
 
     if ground then
@@ -1151,24 +1908,22 @@ end
 local function GetPlayerBaseColor(player)
     local record = GetPlayerBaseRecord(player)
 
+    if not record then
+        record = CachePlayerBase(player, false)
+    end
+
     if record
     and record.Color then
         return record.Color
     end
 
-    local colorName = nil
+    local colorName = GetPlayerTeamColorName(player)
 
-    if player.Team then
-        colorName = GetDirectColorName(player.Team.TeamColor)
+    if colorName then
+        return BasePaletteByName[colorName]
     end
 
-    if not colorName then
-        colorName = GetDirectColorName(player.TeamColor)
-    end
-
-    return colorName
-        and BasePaletteByName[colorName]
-        or Color3.fromRGB(255, 255, 255)
+    return Color3.fromRGB(255, 255, 255)
 end
 
 local function ClearLBBESPPlayer(player)
@@ -1316,31 +2071,78 @@ local function SetLBBESP(enabled)
     AutoSaveConfiguration()
 end
 
+local function CaptureCharacterBase(player, character)
+    task.spawn(function()
+        local root = character
+            and character:WaitForChild("HumanoidRootPart", 6)
+
+        if not root then
+            return
+        end
+
+        for _, delayTime in ipairs({0.03, 0.18, 0.55}) do
+            task.wait(delayTime)
+
+            if character ~= player.Character
+            or not root.Parent then
+                return
+            end
+
+            local record, distance = GetNearestBaseRecord(root.Position, 200)
+
+            if record
+            and distance <= 200 then
+                PlayerBaseCache[player] = record
+
+                if player == Player then
+                    LocalSpawnCFrame = GetRecordSpawnCFrame(record)
+                end
+
+                return
+            end
+        end
+
+        CachePlayerBase(player, true)
+    end)
+end
+
 local function HookPlayerBaseTracking(player)
     if not player then
         return
     end
 
     if player.Character then
-        task.defer(function()
-            task.wait(0.15)
-            CachePlayerBase(player, false)
-        end)
+        local root = GetCharacterRoot(player)
+
+        if root then
+            local record, distance = GetNearestBaseRecord(root.Position, 100)
+
+            if record
+            and distance <= 100 then
+                PlayerBaseCache[player] = record
+
+                if player == Player then
+                    LocalSpawnCFrame = GetRecordSpawnCFrame(record)
+                end
+            else
+                CachePlayerBase(player, false)
+            end
+        end
     end
 
-    TrackConnection(player.CharacterAdded:Connect(function()
-        task.delay(0.12, function()
-            CachePlayerBase(player, false)
-        end)
-
-        task.delay(0.65, function()
-            CachePlayerBase(player, false)
-        end)
+    TrackConnection(player.CharacterAdded:Connect(function(character)
+        CaptureCharacterBase(player, character)
     end))
 
     pcall(function()
         TrackConnection(player:GetPropertyChangedSignal("RespawnLocation"):Connect(function()
             CachePlayerBase(player, true)
+        end))
+    end)
+
+    pcall(function()
+        TrackConnection(player:GetPropertyChangedSignal("Team"):Connect(function()
+            CachePlayerBase(player, false)
         end))
     end)
 end
@@ -1480,42 +2282,16 @@ LBBCreateButton("BASE", GamePage, function()
     TeleportTo(GetPlayerBaseCFrame(), "BASE")
 end)
 
-local initialRecords = GetBaseRecords(true)
-local createdColors = {}
+GetBaseRecords(true)
 
 for _, entry in ipairs(BasePalette) do
-    local exists = false
-
-    for _, record in ipairs(initialRecords) do
-        if record.ColorName == entry.Name then
-            exists = true
-            break
-        end
-    end
-
-    if exists then
-        createdColors[entry.Name] = true
-
-        LBBCreateButton(entry.Name, GamePage, function()
-            local record = GetBaseRecordByColor(entry.Name)
-            TeleportTo(
-                GetBaseFrontCFrame(record),
-                entry.Name
-            )
-        end)
-    end
-end
-
-if next(createdColors) == nil then
-    for _, entry in ipairs(BasePalette) do
-        LBBCreateButton(entry.Name, GamePage, function()
-            local record = GetBaseRecordByColor(entry.Name)
-            TeleportTo(
-                GetBaseFrontCFrame(record),
-                entry.Name
-            )
-        end)
-    end
+    LBBCreateButton(entry.Name, GamePage, function()
+        local record = GetBaseRecordByColor(entry.Name)
+        TeleportTo(
+            GetBaseFrontCFrame(record),
+            entry.Name
+        )
+    end)
 end
 
 getgenv().ToxLBBCleanup = function()
