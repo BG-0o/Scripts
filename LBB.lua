@@ -29,7 +29,7 @@ or not CreateButton then
     return
 end
 
-local LBBModuleVersion = "2026-09-14-lbb-block-open-restore-9"
+local LBBModuleVersion = "2026-09-14-lbb-block-open-stable-10"
 
 if getgenv().ToxLBBModuleLoadedJobId == game.JobId
 and getgenv().ToxLBBModuleVersion == LBBModuleVersion
@@ -778,15 +778,130 @@ local function TryGenericBlockRemote(blockNames)
     return #remotes > 0
 end
 
-local function OpenStandardBlock(remoteName, label)
-    local remote = ReplicatedStorage:FindFirstChild(remoteName)
+local function FindBlockRemoteDirect(remoteName)
+    local direct = ReplicatedStorage:FindFirstChild(remoteName, true)
 
-    if not IsRemote(remote) then
-        remote = FindRemoteExact(remoteName, 1.5)
+    if IsRemote(direct) then
+        return direct
     end
 
-    if IsRemote(remote)
-    and FireRemote(remote) then
+    local wanted = string.lower(tostring(remoteName or ""))
+
+    for _, object in ipairs(ReplicatedStorage:GetDescendants()) do
+        if IsRemote(object)
+        and string.lower(object.Name) == wanted then
+            return object
+        end
+    end
+
+    return nil
+end
+
+local function CountToolsForBlockOpen()
+    local count = 0
+    local character = Player.Character
+    local backpack = Player:FindFirstChildOfClass("Backpack")
+
+    for _, container in ipairs({character, backpack}) do
+        if container then
+            for _, object in ipairs(container:GetChildren()) do
+                if object:IsA("Tool") then
+                    count += 1
+                end
+            end
+        end
+    end
+
+    return count
+end
+
+local function WaitForBlockTool(before, timeout)
+    local deadline = os.clock() + (tonumber(timeout) or 0.65)
+
+    repeat
+        if CountToolsForBlockOpen() > before then
+            return true
+        end
+
+        task.wait(0.05)
+    until os.clock() >= deadline
+
+    return CountToolsForBlockOpen() > before
+end
+
+local function TriggerNamedBlockGiver(giverNames)
+    local wanted = {}
+
+    for _, name in ipairs(giverNames or {}) do
+        wanted[string.lower(tostring(name))] = true
+    end
+
+    local root = Player.Character
+        and Player.Character:FindFirstChild("HumanoidRootPart")
+    local triggered = false
+
+    for _, object in ipairs(workspace:GetDescendants()) do
+        if wanted[string.lower(object.Name)] then
+            for _, descendant in ipairs(object:GetDescendants()) do
+                if descendant:IsA("ClickDetector")
+                and fireclickdetector then
+                    if pcall(function()
+                        fireclickdetector(descendant)
+                    end) then
+                        triggered = true
+                    end
+                elseif descendant:IsA("ProximityPrompt")
+                and fireproximityprompt then
+                    if pcall(function()
+                        fireproximityprompt(descendant)
+                    end) then
+                        triggered = true
+                    end
+                elseif descendant:IsA("TouchTransmitter")
+                and firetouchinterest
+                and root
+                and descendant.Parent
+                and descendant.Parent:IsA("BasePart") then
+                    if pcall(function()
+                        firetouchinterest(root, descendant.Parent, 0)
+                        task.wait(0.03)
+                        firetouchinterest(root, descendant.Parent, 1)
+                    end) then
+                        triggered = true
+                    end
+                end
+            end
+        end
+    end
+
+    return triggered
+end
+
+local function OpenStandardBlock(remoteName, label, giverNames)
+    local before = CountToolsForBlockOpen()
+    local remote = FindBlockRemoteDirect(remoteName)
+
+    if IsRemote(remote) then
+        local ok = pcall(function()
+            if remote:IsA("RemoteEvent") then
+                remote:FireServer()
+            else
+                remote:InvokeServer()
+            end
+        end)
+
+        if ok then
+            if WaitForBlockTool(before, 0.7) then
+                return true
+            end
+        end
+    end
+
+    if TriggerNamedBlockGiver(giverNames) then
+        if WaitForBlockTool(before, 0.8) then
+            return true
+        end
+
         return true
     end
 
@@ -1550,7 +1665,12 @@ end
 local function OpenVoidBlock()
     return OpenStandardBlock(
         "SpawnVoidBlock",
-        "Void Block"
+        "Void Block",
+        {
+            "BlockGiverVoid1",
+            "BlockGiverVoid2",
+            "VoidGiver"
+        }
     )
 end
 
@@ -1573,50 +1693,62 @@ local function GetUnknownLimitedBlockRemotes()
             if string.sub(normalized, 1, 5) == "spawn"
             and string.find(normalized, "block", 1, true)
             and not known[normalized] then
-                local score = 0
-
-                if string.find(normalized, "limited", 1, true) then
-                    score += 1000
-                end
-
-                if string.find(normalized, "hacker", 1, true) then
-                    score += 950
-                end
-
-                if string.find(normalized, "event", 1, true)
-                or string.find(normalized, "special", 1, true) then
-                    score += 500
-                end
-
-                table.insert(candidates, {
-                    Remote = object,
-                    Score = score
-                })
+                table.insert(candidates, object)
             end
         end
     end
-
-    table.sort(candidates, function(a, b)
-        return a.Score > b.Score
-    end)
 
     return candidates
 end
 
 local function OpenLimitedBlock()
-    local remote = ReplicatedStorage:FindFirstChild("SpawnHackerBlock")
+    local before = CountToolsForBlockOpen()
+    local names = {
+        "SpawnHackerBlock",
+        "SpawnLimitedBlock",
+        "SpawnGlitchBlock",
+        "SpawnLavaBlock"
+    }
 
-    if not IsRemote(remote) then
-        remote = FindRemoteExact("SpawnHackerBlock", 1.5)
+    for _, remoteName in ipairs(names) do
+        local remote = FindBlockRemoteDirect(remoteName)
+
+        if IsRemote(remote) then
+            local ok = pcall(function()
+                if remote:IsA("RemoteEvent") then
+                    remote:FireServer()
+                else
+                    remote:InvokeServer()
+                end
+            end)
+
+            if ok
+            and WaitForBlockTool(before, 0.45) then
+                return true
+            end
+        end
     end
 
-    if not IsRemote(remote) then
-        remote = ReplicatedStorage:FindFirstChild("SpawnLimitedBlock")
-            or FindRemoteExact("SpawnLimitedBlock", 0.75)
+    for _, remote in ipairs(GetUnknownLimitedBlockRemotes()) do
+        local ok = pcall(function()
+            if remote:IsA("RemoteEvent") then
+                remote:FireServer()
+            else
+                remote:InvokeServer()
+            end
+        end)
+
+        if ok
+        and WaitForBlockTool(before, 0.35) then
+            return true
+        end
     end
 
-    if IsRemote(remote)
-    and FireRemote(remote) then
+    if TriggerNamedBlockGiver({"LimitedTimeGiver"}) then
+        if WaitForBlockTool(before, 0.8) then
+            return true
+        end
+
         return true
     end
 
@@ -3279,23 +3411,23 @@ LBBCreateToggle(
 CreateLBBSection("LUCKY BLOCKS")
 
 LBBCreateButton("Lucky Blocks (Open)", GamePage, function()
-    OpenStandardBlock("SpawnLuckyBlock", "Lucky Block")
+    OpenStandardBlock("SpawnLuckyBlock", "Lucky Block", {"BlockGiverLucky1", "BlockGiverLucky2"})
 end)
 
 LBBCreateButton("Super Blocks (Open)", GamePage, function()
-    OpenStandardBlock("SpawnSuperBlock", "Super Block")
+    OpenStandardBlock("SpawnSuperBlock", "Super Block", {"BlockGiverSuper1", "BlockGiverSuper2"})
 end)
 
 LBBCreateButton("Diamond Blocks (Open)", GamePage, function()
-    OpenStandardBlock("SpawnDiamondBlock", "Diamond Block")
+    OpenStandardBlock("SpawnDiamondBlock", "Diamond Block", {"BlockGiverDiamond1", "BlockGiverDiamond2"})
 end)
 
 LBBCreateButton("Rainbow Blocks (Open)", GamePage, function()
-    OpenStandardBlock("SpawnRainbowBlock", "Rainbow Block")
+    OpenStandardBlock("SpawnRainbowBlock", "Rainbow Block", {"BlockGiverRainbow1", "BlockGiverRainbow2"})
 end)
 
 LBBCreateButton("Galaxy Blocks (Open)", GamePage, function()
-    OpenStandardBlock("SpawnGalaxyBlock", "Galaxy Block")
+    OpenStandardBlock("SpawnGalaxyBlock", "Galaxy Block", {"BlockGiverGalaxy1", "BlockGiverGalaxy2"})
 end)
 
 LBBCreateButton("Void Blocks (Open)", GamePage, function()
