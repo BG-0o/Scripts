@@ -437,10 +437,19 @@ getgenv().AddConnection = function(conn)
 end
 
 local FolderName = "ToxV1_Data"
+local CurrentPlaceKey = tostring(game.PlaceId)
+local LegacyUserConfigFilePath =
+    FolderName
+    .. "/config_"
+    .. tostring(Player.UserId)
+    .. ".json"
+
 local ConfigFilePath =
     FolderName
     .. "/config_"
     .. tostring(Player.UserId)
+    .. "_"
+    .. CurrentPlaceKey
     .. ".json"
 
 local MusicIDsFilePath =
@@ -457,6 +466,12 @@ local LegacyConfigFilePath =
 
 getgenv().ToxConfigFilePath =
     ConfigFilePath
+
+getgenv().ToxLegacyUserConfigFilePath =
+    LegacyUserConfigFilePath
+
+getgenv().ToxConfigPlaceId =
+    game.PlaceId
 
 getgenv().ToxMusicIDsFilePath =
     MusicIDsFilePath
@@ -859,6 +874,10 @@ local function LoadSharedMusicIDs()
                 if string.match(
                     normalized,
                     "/config_%d+%.json$"
+                )
+                or string.match(
+                    normalized,
+                    "/config_%d+_%d+%.json$"
                 ) then
                     local candidate =
                         DecodeSavedIDsFromFile(
@@ -1009,6 +1028,10 @@ local function LoadSharedJoinGames()
                 if string.match(
                     normalized,
                     "/config_%d+%.json$"
+                )
+                or string.match(
+                    normalized,
+                    "/config_%d+_%d+%.json$"
                 ) then
                     local candidate =
                         DecodeSavedJoinGamesFromFile(
@@ -1136,20 +1159,33 @@ local function MigrateLegacyGameSettings(data)
         or {}
 
     if typeof(data.GameSpecificSettings) == "table" then
-        for placeKey, state in pairs(data.GameSpecificSettings) do
-            if typeof(state) == "table" then
-                getgenv().GameSpecificSettings[tostring(placeKey)] =
-                    state
+        local decoded = DeserializeConfigValue(
+            data.GameSpecificSettings
+        )
+
+        if typeof(decoded) == "table" then
+            for placeKey, state in pairs(decoded) do
+                if typeof(state) == "table" then
+                    getgenv().GameSpecificSettings[tostring(placeKey)] =
+                        state
+                end
             end
         end
     end
 
     if typeof(data.GameSettings) == "table" then
-        for placeKey, state in pairs(data.GameSettings) do
-            if typeof(state) == "table"
-            and getgenv().GameSpecificSettings[tostring(placeKey)] == nil then
-                getgenv().GameSpecificSettings[tostring(placeKey)] =
-                    state
+        local decoded = DeserializeConfigValue(
+            data.GameSettings
+        )
+
+        if typeof(decoded) == "table" then
+            for placeKey, state in pairs(decoded) do
+                local key = tostring(placeKey)
+
+                if typeof(state) == "table"
+                and getgenv().GameSpecificSettings[key] == nil then
+                    getgenv().GameSpecificSettings[key] = state
+                end
             end
         end
     end
@@ -1174,63 +1210,24 @@ local function MigrateLegacyGameSettings(data)
     end
 end
 
-
-local function ReadToxConfigDataForSave()
-    if not isfile
-    or not readfile
-    or not ConfigFilePath
-    or not isfile(ConfigFilePath) then
-        return nil
+local function ResolveConfigReadPath()
+    if not isfile then
+        return nil, false
     end
 
-    local ok, data = pcall(function()
-        local raw = readfile(ConfigFilePath)
-
-        if not raw
-        or raw == "" then
-            return nil
-        end
-
-        return HttpService:JSONDecode(raw)
-    end)
-
-    if ok
-    and typeof(data) == "table" then
-        return data
+    if isfile(ConfigFilePath) then
+        return ConfigFilePath, false
     end
 
-    return nil
-end
-
-local function MergeStoredGameSpecificSettingsForSave(currentPlaceKey)
-    local data = ReadToxConfigDataForSave()
-
-    if typeof(data) ~= "table" then
-        return nil
+    if isfile(LegacyUserConfigFilePath) then
+        return LegacyUserConfigFilePath, true
     end
 
-    local stored = data.GameSpecificSettings
-    local decoded = DeserializeConfigValue(stored)
-
-    if typeof(decoded) == "table" then
-        getgenv().GameSpecificSettings =
-            typeof(getgenv().GameSpecificSettings) == "table"
-            and getgenv().GameSpecificSettings
-            or {}
-
-        currentPlaceKey = tostring(currentPlaceKey or game.PlaceId)
-
-        for placeKey, state in pairs(decoded) do
-            local key = tostring(placeKey)
-
-            if key ~= currentPlaceKey
-            and typeof(getgenv().GameSpecificSettings[key]) ~= "table" then
-                getgenv().GameSpecificSettings[key] = state
-            end
-        end
+    if isfile(LegacyConfigFilePath) then
+        return LegacyConfigFilePath, true
     end
 
-    return data
+    return nil, false
 end
 
 getgenv().AutoSaveConfiguration = function()
@@ -1244,23 +1241,20 @@ getgenv().AutoSaveConfiguration = function()
         return
     end
 
+    local placeKey = tostring(game.PlaceId)
+
     getgenv().GameSpecificSettings =
         typeof(getgenv().GameSpecificSettings) == "table"
         and getgenv().GameSpecificSettings
         or {}
 
-    local existingConfigData =
-        MergeStoredGameSpecificSettingsForSave(
-            game.PlaceId
-        )
+    local currentGameSettings = {}
 
     if getgenv().CurrentGameModule then
-        getgenv().GameSpecificSettings[
-            tostring(game.PlaceId)
-        ] = BuildCurrentGameSettingsSnapshot()
+        local snapshot = BuildCurrentGameSettingsSnapshot()
+        getgenv().GameSpecificSettings[placeKey] = snapshot
+        currentGameSettings[placeKey] = snapshot
     end
-
-    local placeKey = tostring(game.PlaceId)
 
     getgenv().SavedWaypointsByPlace =
         typeof(getgenv().SavedWaypointsByPlace) == "table"
@@ -1278,33 +1272,21 @@ getgenv().AutoSaveConfiguration = function()
         guiKeyName = Settings.GUIKeybind.Name
     end
 
-    local globalSettingsSnapshot =
-        BuildGlobalSettingsSnapshot()
-
-    if not getgenv().CurrentGameModule
-    and typeof(existingConfigData) == "table"
-    and typeof(existingConfigData.Settings) == "table" then
-        for key, savedValue in pairs(existingConfigData.Settings) do
-            if typeof(Settings[key]) == "boolean"
-            and Settings[key] == false then
-                globalSettingsSnapshot[key] = savedValue
-            end
-        end
-    end
-
     local data = {
-        ConfigVersion = 4,
+        ConfigVersion = 5,
+        UserId = Player.UserId,
+        PlaceId = game.PlaceId,
         GlobalGUIKeybind = guiKeyName,
-        Settings = globalSettingsSnapshot,
+        Settings = BuildGlobalSettingsSnapshot(),
         GameSpecificSettings = SerializeConfigValue(
-            getgenv().GameSpecificSettings
+            currentGameSettings
         ),
         SavedWaypoints = SerializeConfigValue(
             getgenv().SavedWaypoints
         ),
-        SavedWaypointsByPlace = SerializeConfigValue(
-            getgenv().SavedWaypointsByPlace
-        ),
+        SavedWaypointsByPlace = SerializeConfigValue({
+            [placeKey] = getgenv().SavedWaypointsByPlace[placeKey]
+        }),
         UIPositions = SerializeConfigValue(
             getgenv().UIPositions
         )
@@ -1322,14 +1304,22 @@ getgenv().AutoSaveConfiguration = function()
 end
 
 local function LoadConfiguration()
-    if not isfile
-    or not readfile
-    or not isfile(ConfigFilePath) then
+    if not readfile then
         return
     end
 
+    local sourcePath,
+        migratedFromLegacy =
+        ResolveConfigReadPath()
+
+    if not sourcePath then
+        return
+    end
+
+    local loaded = false
+
     pcall(function()
-        local raw = readfile(ConfigFilePath)
+        local raw = readfile(sourcePath)
 
         if not raw or raw == "" then
             return
@@ -1407,8 +1397,6 @@ local function LoadConfiguration()
             end
         end
 
-
-
         local currentPlaceKey = tostring(game.PlaceId)
 
         if data.SavedWaypointsByPlace ~= nil then
@@ -1417,7 +1405,19 @@ local function LoadConfiguration()
             )
 
             if typeof(value) == "table" then
-                getgenv().SavedWaypointsByPlace = value
+                local currentValue = value[currentPlaceKey]
+
+                if typeof(currentValue) == "table" then
+                    getgenv().SavedWaypointsByPlace =
+                        typeof(getgenv().SavedWaypointsByPlace) == "table"
+                        and getgenv().SavedWaypointsByPlace
+                        or {}
+
+                    getgenv().SavedWaypointsByPlace[currentPlaceKey] =
+                        currentValue
+                elseif migratedFromLegacy then
+                    getgenv().SavedWaypointsByPlace = value
+                end
             end
         end
 
@@ -1427,9 +1427,10 @@ local function LoadConfiguration()
             )
 
             if typeof(value) == "table" then
-                if typeof(getgenv().SavedWaypointsByPlace) ~= "table" then
-                    getgenv().SavedWaypointsByPlace = {}
-                end
+                getgenv().SavedWaypointsByPlace =
+                    typeof(getgenv().SavedWaypointsByPlace) == "table"
+                    and getgenv().SavedWaypointsByPlace
+                    or {}
 
                 if typeof(getgenv().SavedWaypointsByPlace[currentPlaceKey]) ~= "table" then
                     getgenv().SavedWaypointsByPlace[currentPlaceKey] = value
@@ -1451,9 +1452,15 @@ local function LoadConfiguration()
                 getgenv().UIPositions = value
             end
         end
-    end)
-end
 
+        loaded = true
+    end)
+
+    if loaded
+    and migratedFromLegacy then
+        getgenv().AutoSaveConfiguration()
+    end
+end
 
 local function NormalizeStartupDefaultToggles()
     Settings.AntiAFK = true
@@ -1589,20 +1596,43 @@ for _ = 1, 20 do
         local localPlayer =
             Players.LocalPlayer
 
+        local userId = tostring(
+            localPlayer
+            and localPlayer.UserId
+            or 0
+        )
+
         local configPath =
             "ToxV1_Data/config_"
-            .. tostring(
-                localPlayer
-                and localPlayer.UserId
-                or 0
-            )
+            .. userId
+            .. "_"
+            .. tostring(game.PlaceId)
             .. ".json"
 
-        if isfile
-        and readfile
-        and isfile(configPath) then
+        local legacyUserPath =
+            "ToxV1_Data/config_"
+            .. userId
+            .. ".json"
+
+        local legacyPath =
+            "ToxV1_Data/config.json"
+
+        local readPath = nil
+
+        if isfile then
+            if isfile(configPath) then
+                readPath = configPath
+            elseif isfile(legacyUserPath) then
+                readPath = legacyUserPath
+            elseif isfile(legacyPath) then
+                readPath = legacyPath
+            end
+        end
+
+        if readfile
+        and readPath then
             local HttpService = game:GetService("HttpService")
-            local raw = readfile(configPath)
+            local raw = readfile(readPath)
 
             if raw and raw ~= "" then
                 local data = HttpService:JSONDecode(raw)
