@@ -179,6 +179,9 @@ if HasRunningToxHub() then
     getgenv().ToxPLModuleLoadedJobId = nil
     getgenv().ToxPLModuleVersion = nil
     getgenv().ToxPLModulePage = nil
+    getgenv().ToxBABFTModuleLoadedJobId = nil
+    getgenv().ToxBABFTModuleVersion = nil
+    getgenv().ToxBABFTModulePage = nil
     getgenv().ToxMM2ModuleLoadedJobId = nil
     getgenv().ToxMM2ModuleVersion = nil
     getgenv().ToxMM2ModulePage = nil
@@ -203,6 +206,10 @@ if HasRunningToxHub() then
 
     if getgenv().ToxPLCleanup then
         pcall(getgenv().ToxPLCleanup)
+    end
+
+    if getgenv().ToxBABFTCleanup then
+        pcall(getgenv().ToxBABFTCleanup)
     end
 
     task.wait(0.18)
@@ -276,6 +283,11 @@ getgenv().GameModuleRegistry = {
     [155615604] = {
         ShortName = "PL",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/PL.lua",
+        Ready = true
+    },
+    [537413528] = {
+        ShortName = "BABFT",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BABFT.lua",
         Ready = true
     }
 }
