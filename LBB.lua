@@ -29,7 +29,7 @@ or not CreateButton then
     return
 end
 
-local LBBModuleVersion = "2026-09-14-lbb-block-open-stable-10"
+local LBBModuleVersion = "2026-09-14-lbb-void-limited-giver-fix-11"
 
 if getgenv().ToxLBBModuleLoadedJobId == game.JobId
 and getgenv().ToxLBBModuleVersion == LBBModuleVersion
@@ -1662,75 +1662,152 @@ local function OpenExactLBBBlock(remoteNames, label)
     return false
 end
 
-local function OpenVoidBlock()
-    return OpenStandardBlock(
-        "SpawnVoidBlock",
-        "Void Block",
-        {
-            "BlockGiverVoid1",
-            "BlockGiverVoid2",
-            "VoidGiver"
-        }
-    )
+local function GetSpecialGiverObjects(giverNames)
+    local wanted = {}
+
+    for _, name in ipairs(giverNames or {}) do
+        wanted[string.lower(tostring(name))] = true
+    end
+
+    local objects = {}
+
+    for _, object in ipairs(workspace:GetDescendants()) do
+        if wanted[string.lower(object.Name)] then
+            table.insert(objects, object)
+        end
+    end
+
+    table.sort(objects, function(a, b)
+        local aParent = a.Parent and a.Parent.Parent
+        local bParent = b.Parent and b.Parent.Parent
+        local aSpawn = aParent and string.match(aParent.Name, "^Spawn%d+$") and 1 or 0
+        local bSpawn = bParent and string.match(bParent.Name, "^Spawn%d+$") and 1 or 0
+
+        if aSpawn ~= bSpawn then
+            return aSpawn > bSpawn
+        end
+
+        return a:GetFullName() < b:GetFullName()
+    end)
+
+    return objects
 end
 
-local function GetUnknownLimitedBlockRemotes()
-    local known = {
-        spawnluckyblock = true,
-        spawnsuperblock = true,
-        spawndiamondblock = true,
-        spawnrainbowblock = true,
-        spawngalaxyblock = true,
-        spawnvoidblock = true
+local function GetTouchCharacterParts()
+    local character = Player.Character
+
+    if not character then
+        return {}
+    end
+
+    local preferred = {
+        "HumanoidRootPart",
+        "Head",
+        "UpperTorso",
+        "LowerTorso",
+        "Torso",
+        "LeftFoot",
+        "RightFoot",
+        "Left Leg",
+        "Right Leg"
     }
 
-    local candidates = {}
+    local parts = {}
+    local used = {}
 
-    for _, object in ipairs(ReplicatedStorage:GetDescendants()) do
-        if IsRemote(object) then
-            local normalized = NormalizeName(object.Name)
+    for _, name in ipairs(preferred) do
+        local part = character:FindFirstChild(name)
 
-            if string.sub(normalized, 1, 5) == "spawn"
-            and string.find(normalized, "block", 1, true)
-            and not known[normalized] then
-                table.insert(candidates, object)
+        if part and part:IsA("BasePart") then
+            table.insert(parts, part)
+            used[part] = true
+        end
+    end
+
+    for _, object in ipairs(character:GetChildren()) do
+        if object:IsA("BasePart")
+        and not used[object] then
+            table.insert(parts, object)
+        end
+    end
+
+    return parts
+end
+
+local function ActivateGiverObject(giver)
+    if not giver or not giver.Parent then
+        return false
+    end
+
+    local activated = false
+    local characterParts = GetTouchCharacterParts()
+    local giverParts = {}
+
+    if giver:IsA("BasePart") then
+        table.insert(giverParts, giver)
+    end
+
+    for _, object in ipairs(giver:GetDescendants()) do
+        if object:IsA("ClickDetector")
+        and fireclickdetector then
+            if pcall(function()
+                fireclickdetector(object)
+            end) then
+                activated = true
+            end
+        elseif object:IsA("ProximityPrompt")
+        and fireproximityprompt then
+            if pcall(function()
+                fireproximityprompt(object)
+            end) then
+                activated = true
+            end
+        elseif object:IsA("BasePart") then
+            table.insert(giverParts, object)
+        end
+    end
+
+    if firetouchinterest then
+        for _, bodyPart in ipairs(characterParts) do
+            for _, giverPart in ipairs(giverParts) do
+                if giverPart.Parent
+                and giverPart.CanTouch then
+                    if pcall(function()
+                        firetouchinterest(bodyPart, giverPart, 0)
+                        task.wait()
+                        firetouchinterest(bodyPart, giverPart, 1)
+                    end) then
+                        activated = true
+                    end
+                end
             end
         end
     end
 
-    return candidates
+    return activated
 end
 
-local function OpenLimitedBlock()
+local function OpenPhysicalSpecialGiver(giverNames, label, timeoutPerGiver)
     local before = CountToolsForBlockOpen()
-    local names = {
-        "SpawnHackerBlock",
-        "SpawnLimitedBlock",
-        "SpawnGlitchBlock",
-        "SpawnLavaBlock"
-    }
+    local givers = GetSpecialGiverObjects(giverNames)
 
-    for _, remoteName in ipairs(names) do
-        local remote = FindBlockRemoteDirect(remoteName)
-
-        if IsRemote(remote) then
-            local ok = pcall(function()
-                if remote:IsA("RemoteEvent") then
-                    remote:FireServer()
-                else
-                    remote:InvokeServer()
-                end
-            end)
-
-            if ok
-            and WaitForBlockTool(before, 0.45) then
+    for _, giver in ipairs(givers) do
+        if ActivateGiverObject(giver) then
+            if WaitForBlockTool(before, timeoutPerGiver or 0.65) then
                 return true
             end
         end
     end
 
-    for _, remote in ipairs(GetUnknownLimitedBlockRemotes()) do
-        local ok = pcall(function()
+    return false
+end
+
+local function OpenVoidBlock()
+    local before = CountToolsForBlockOpen()
+    local remote = FindBlockRemoteDirect("SpawnVoidBlock")
+
+    if IsRemote(remote) then
+        pcall(function()
             if remote:IsA("RemoteEvent") then
                 remote:FireServer()
             else
@@ -1738,22 +1815,69 @@ local function OpenLimitedBlock()
             end
         end)
 
-        if ok
-        and WaitForBlockTool(before, 0.35) then
+        if WaitForBlockTool(before, 0.55) then
             return true
         end
     end
 
-    if TriggerNamedBlockGiver({"LimitedTimeGiver"}) then
-        if WaitForBlockTool(before, 0.8) then
-            return true
-        end
-
+    if OpenPhysicalSpecialGiver(
+        {
+            "BlockGiverVoid1",
+            "BlockGiverVoid2",
+            "VoidGiver"
+        },
+        "Void Block",
+        0.7
+    ) then
         return true
     end
 
     CustomNotify(
-        "Limited Block unavailable",
+        "Void Block unavailable / cooldown",
+        Color3.fromRGB(255, 180, 70),
+        4
+    )
+
+    return false
+end
+
+local function OpenLimitedBlock()
+    local before = CountToolsForBlockOpen()
+    local remoteNames = {
+        "SpawnHackerBlock",
+        "SpawnLimitedBlock",
+        "SpawnGlitchBlock",
+        "SpawnLavaBlock"
+    }
+
+    for _, remoteName in ipairs(remoteNames) do
+        local remote = FindBlockRemoteDirect(remoteName)
+
+        if IsRemote(remote) then
+            pcall(function()
+                if remote:IsA("RemoteEvent") then
+                    remote:FireServer()
+                else
+                    remote:InvokeServer()
+                end
+            end)
+
+            if WaitForBlockTool(before, 0.5) then
+                return true
+            end
+        end
+    end
+
+    if OpenPhysicalSpecialGiver(
+        {"LimitedTimeGiver"},
+        "Limited Block",
+        0.85
+    ) then
+        return true
+    end
+
+    CustomNotify(
+        "Limited Block unavailable / cooldown",
         Color3.fromRGB(255, 180, 70),
         4
     )
