@@ -32,7 +32,6 @@ local CustomNotify =
     getgenv().CustomNotify
 local ChatPage =
     getgenv().ChatPage
-    or getgenv().FlingPage
 local RequestFunction =
     getgenv().ToxRequestFunction
 
@@ -990,8 +989,6 @@ end)
 
 
 if ToxChatGui then
-    getgenv().ToxChatGui = ToxChatGui
-
     ToxChatGui.Visible = true
 end
 
