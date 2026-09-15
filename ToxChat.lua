@@ -41,6 +41,224 @@ or not ChatPage then
     return
 end
 
+local MAIN_COLOR =
+    getgenv().MAIN_COLOR
+    or Color3.fromRGB(9, 0, 136)
+
+local function RebuildEmbeddedChat()
+    local previous = getgenv().ToxChatGui
+
+    if previous and previous.Parent then
+        pcall(function()
+            previous:Destroy()
+        end)
+    end
+
+    local frame = Instance.new("Frame")
+    frame.Name = "ToxChatFrame"
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.Position = UDim2.new(0, 0, 0, 0)
+    frame.BackgroundTransparency = 1
+    frame.BorderSizePixel = 0
+    frame.ClipsDescendants = true
+    frame.Visible = true
+    frame.ZIndex = 5
+    frame.Parent = ChatPage
+
+    local status = Instance.new("TextLabel")
+    status.Name = "Status"
+    status.Size = UDim2.new(1, -8, 0, 22)
+    status.Position = UDim2.new(0, 4, 0, 0)
+    status.BackgroundTransparency = 1
+    status.Text = "Connecting to Tox Chat..."
+    status.TextColor3 = Color3.fromRGB(145, 145, 170)
+    status.TextXAlignment = Enum.TextXAlignment.Left
+    status.Font = Enum.Font.Gotham
+    status.TextSize = 10
+    status.ZIndex = 6
+    status.Parent = frame
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Name = "Messages"
+    scroll.Size = UDim2.new(1, -8, 1, -64)
+    scroll.Position = UDim2.new(0, 4, 0, 24)
+    scroll.BackgroundColor3 = Color3.fromRGB(12, 12, 20)
+    scroll.BackgroundTransparency = 0.2
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 3
+    scroll.ScrollBarImageColor3 = MAIN_COLOR
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scroll.ZIndex = 5
+    scroll.Parent = frame
+
+    local scrollCorner = Instance.new("UICorner")
+    scrollCorner.CornerRadius = UDim.new(0, 5)
+    scrollCorner.Parent = scroll
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 5)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = scroll
+
+    local scrollPadding = Instance.new("UIPadding")
+    scrollPadding.PaddingTop = UDim.new(0, 4)
+    scrollPadding.PaddingBottom = UDim.new(0, 4)
+    scrollPadding.PaddingLeft = UDim.new(0, 4)
+    scrollPadding.PaddingRight = UDim.new(0, 4)
+    scrollPadding.Parent = scroll
+
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        if not scroll.Parent then
+            return
+        end
+
+        scroll.CanvasSize = UDim2.new(
+            0,
+            0,
+            0,
+            layout.AbsoluteContentSize.Y + 8
+        )
+
+        scroll.CanvasPosition = Vector2.new(
+            0,
+            math.max(
+                0,
+                layout.AbsoluteContentSize.Y
+                - scroll.AbsoluteWindowSize.Y
+                + 8
+            )
+        )
+    end)
+
+    local input = Instance.new("TextBox")
+    input.Name = "Input"
+    input.Size = UDim2.new(1, -76, 0, 32)
+    input.Position = UDim2.new(0, 4, 1, -34)
+    input.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+    input.BorderSizePixel = 0
+    input.PlaceholderText = "Message..."
+    input.PlaceholderColor3 = Color3.fromRGB(130, 130, 150)
+    input.Text = ""
+    input.TextColor3 = Color3.fromRGB(255, 255, 255)
+    input.TextXAlignment = Enum.TextXAlignment.Left
+    input.ClearTextOnFocus = false
+    input.Font = Enum.Font.Gotham
+    input.TextSize = 11
+    input.ZIndex = 6
+    input.Parent = frame
+
+    local inputCorner = Instance.new("UICorner")
+    inputCorner.CornerRadius = UDim.new(0, 5)
+    inputCorner.Parent = input
+
+    local inputPadding = Instance.new("UIPadding")
+    inputPadding.PaddingLeft = UDim.new(0, 8)
+    inputPadding.PaddingRight = UDim.new(0, 8)
+    inputPadding.Parent = input
+
+    local send = Instance.new("TextButton")
+    send.Name = "Send"
+    send.Size = UDim2.new(0, 68, 0, 32)
+    send.Position = UDim2.new(1, -72, 1, -34)
+    send.BackgroundColor3 = MAIN_COLOR
+    send.BorderSizePixel = 0
+    send.Text = "Send"
+    send.TextColor3 = Color3.fromRGB(255, 255, 255)
+    send.Font = Enum.Font.GothamBold
+    send.TextSize = 11
+    send.ZIndex = 6
+    send.Parent = frame
+
+    local sendCorner = Instance.new("UICorner")
+    sendCorner.CornerRadius = UDim.new(0, 5)
+    sendCorner.Parent = send
+
+    getgenv().ToxChatGui = frame
+    getgenv().ToxChatScroll = scroll
+    getgenv().ToxChatInput = input
+    getgenv().ToxChatSendBtn = send
+    getgenv().ToxChatStatus = status
+
+    getgenv().AddToxChatMessage = function(
+        displayName,
+        message,
+        blocked,
+        showPopup
+    )
+        if not scroll or not scroll.Parent then
+            return
+        end
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -2, 0, 0)
+        label.AutomaticSize = Enum.AutomaticSize.Y
+        label.BackgroundColor3 = Color3.fromRGB(16, 16, 24)
+        label.BackgroundTransparency = 0.15
+        label.BorderSizePixel = 0
+        label.Text =
+            tostring(displayName)
+            .. ": "
+            .. tostring(message)
+        label.TextColor3 =
+            blocked
+            and Color3.fromRGB(255, 120, 120)
+            or Color3.fromRGB(235, 235, 245)
+        label.TextWrapped = true
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.TextYAlignment = Enum.TextYAlignment.Top
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 11
+        label.ZIndex = 6
+        label.Parent = scroll
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 4)
+        corner.Parent = label
+
+        local padding = Instance.new("UIPadding")
+        padding.PaddingLeft = UDim.new(0, 7)
+        padding.PaddingRight = UDim.new(0, 7)
+        padding.PaddingTop = UDim.new(0, 5)
+        padding.PaddingBottom = UDim.new(0, 5)
+        padding.Parent = label
+
+        local labels = {}
+
+        for _, child in ipairs(scroll:GetChildren()) do
+            if child:IsA("TextLabel") then
+                table.insert(labels, child)
+            end
+        end
+
+        while #labels > 100 do
+            local oldest = table.remove(labels, 1)
+
+            if oldest and oldest.Parent then
+                oldest:Destroy()
+            end
+        end
+
+        if showPopup ~= false
+        and getgenv().ShowToxChatPopup then
+            getgenv().ShowToxChatPopup(
+                displayName,
+                message,
+                blocked
+            )
+        end
+    end
+
+    getgenv().ClearToxChatMessages = function()
+        for _, child in ipairs(scroll:GetChildren()) do
+            if child:IsA("TextLabel") then
+                child:Destroy()
+            end
+        end
+    end
+end
+
+RebuildEmbeddedChat()
+
 local ToxChatGui = getgenv().ToxChatGui
 local ToxChatInput = getgenv().ToxChatInput
 local ToxChatSendBtn = getgenv().ToxChatSendBtn
