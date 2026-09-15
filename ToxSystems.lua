@@ -1,5 +1,19 @@
-if getgenv().ToxSystemsLoaded then
+local ToxChatEnv = getgenv()
+local ToxChatExecutionToken = ToxChatEnv.ToxExecutionToken
+
+local function ToxChatExecutionActive()
+    return getgenv().ToxExecutionToken == ToxChatExecutionToken
+        and not getgenv().Destroyed
+end
+
+if ToxChatEnv.ToxChatLoaded
+and ToxChatEnv.ToxChatLoadedToken == ToxChatExecutionToken
+and ToxChatEnv.Destroyed ~= true then
     return
+end
+
+if type(ToxChatEnv.ToxChatCleanup) == "function" then
+    pcall(ToxChatEnv.ToxChatCleanup)
 end
 
 if not getgenv().ToxUniversalLoaded then
@@ -8,7 +22,7 @@ if not getgenv().ToxUniversalLoaded then
 
     if notify then
         notify(
-            "Universal.lua must load before ToxSystems.lua",
+            "Universal.lua must load before ToxChat.lua",
             Color3.fromRGB(
                 255,
                 100,
@@ -23,885 +37,586 @@ end
 
 local Players =
     game:GetService("Players")
-local UserInputService =
-    game:GetService("UserInputService")
-local RunService =
-    game:GetService("RunService")
-local TextChatService =
-    game:GetService("TextChatService")
 local HttpService =
     game:GetService("HttpService")
-local ReplicatedStorage =
-    game:GetService("ReplicatedStorage")
-local TeleportService =
-    game:GetService("TeleportService")
-local MarketplaceService =
-    game:GetService("MarketplaceService")
 
-local Player = Players.LocalPlayer
-local Gui = getgenv().Gui
-local ControlPage =
-    getgenv().ControlPage
-local MAIN_COLOR =
-    getgenv().MAIN_COLOR
+local Player =
+    Players.LocalPlayer
 local CustomNotify =
     getgenv().CustomNotify
-local AddConnection =
-    getgenv().AddConnection
-local Settings =
-    getgenv().Settings or {}
-local AutoSaveConfiguration =
-    getgenv().AutoSaveConfiguration
+local ChatPage =
+    getgenv().ChatPage
 local RequestFunction =
     getgenv().ToxRequestFunction
 
 if not Player
-or not Gui
-or not ControlPage
 or not CustomNotify
-or not AddConnection then
+or not ChatPage then
     return
 end
 
+local MAIN_COLOR =
+    getgenv().MAIN_COLOR
+    or Color3.fromRGB(9, 0, 136)
+
+local function RebuildEmbeddedChat()
+    local previous = getgenv().ToxChatGui
+
+    if previous and previous.Parent then
+        pcall(function()
+            previous:Destroy()
+        end)
+    end
+
+    local frame = Instance.new("Frame")
+    frame.Name = "ToxChatFrame"
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.Position = UDim2.new(0, 0, 0, 0)
+    frame.BackgroundTransparency = 1
+    frame.BorderSizePixel = 0
+    frame.ClipsDescendants = true
+    frame.Visible = true
+    frame.ZIndex = 5
+    frame.Parent = ChatPage
+
+    local status = Instance.new("TextLabel")
+    status.Name = "Status"
+    status.Size = UDim2.new(1, -8, 0, 22)
+    status.Position = UDim2.new(0, 4, 0, 0)
+    status.BackgroundTransparency = 1
+    status.Text = "Connecting to Tox Chat..."
+    status.TextColor3 = Color3.fromRGB(145, 145, 170)
+    status.TextXAlignment = Enum.TextXAlignment.Left
+    status.Font = Enum.Font.Gotham
+    status.TextSize = 10
+    status.ZIndex = 6
+    status.Parent = frame
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Name = "Messages"
+    scroll.Size = UDim2.new(1, -8, 1, -64)
+    scroll.Position = UDim2.new(0, 4, 0, 24)
+    scroll.BackgroundColor3 = Color3.fromRGB(12, 12, 20)
+    scroll.BackgroundTransparency = 0.2
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 3
+    scroll.ScrollBarImageColor3 = MAIN_COLOR
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scroll.ZIndex = 5
+    scroll.Parent = frame
+
+    local scrollCorner = Instance.new("UICorner")
+    scrollCorner.CornerRadius = UDim.new(0, 5)
+    scrollCorner.Parent = scroll
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 5)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = scroll
+
+    local scrollPadding = Instance.new("UIPadding")
+    scrollPadding.PaddingTop = UDim.new(0, 4)
+    scrollPadding.PaddingBottom = UDim.new(0, 4)
+    scrollPadding.PaddingLeft = UDim.new(0, 4)
+    scrollPadding.PaddingRight = UDim.new(0, 4)
+    scrollPadding.Parent = scroll
+
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        if not scroll.Parent then
+            return
+        end
+
+        scroll.CanvasSize = UDim2.new(
+            0,
+            0,
+            0,
+            layout.AbsoluteContentSize.Y + 8
+        )
+
+        scroll.CanvasPosition = Vector2.new(
+            0,
+            math.max(
+                0,
+                layout.AbsoluteContentSize.Y
+                - scroll.AbsoluteWindowSize.Y
+                + 8
+            )
+        )
+    end)
+
+    local input = Instance.new("TextBox")
+    input.Name = "Input"
+    input.Size = UDim2.new(1, -76, 0, 32)
+    input.Position = UDim2.new(0, 4, 1, -34)
+    input.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+    input.BorderSizePixel = 0
+    input.PlaceholderText = "Message..."
+    input.PlaceholderColor3 = Color3.fromRGB(130, 130, 150)
+    input.Text = ""
+    input.TextColor3 = Color3.fromRGB(255, 255, 255)
+    input.TextXAlignment = Enum.TextXAlignment.Left
+    input.ClearTextOnFocus = false
+    input.Font = Enum.Font.Gotham
+    input.TextSize = 11
+    input.ZIndex = 6
+    input.Parent = frame
+
+    local inputCorner = Instance.new("UICorner")
+    inputCorner.CornerRadius = UDim.new(0, 5)
+    inputCorner.Parent = input
+
+    local inputPadding = Instance.new("UIPadding")
+    inputPadding.PaddingLeft = UDim.new(0, 8)
+    inputPadding.PaddingRight = UDim.new(0, 8)
+    inputPadding.Parent = input
+
+    local send = Instance.new("TextButton")
+    send.Name = "Send"
+    send.Size = UDim2.new(0, 68, 0, 32)
+    send.Position = UDim2.new(1, -72, 1, -34)
+    send.BackgroundColor3 = MAIN_COLOR
+    send.BorderSizePixel = 0
+    send.Text = "Send"
+    send.TextColor3 = Color3.fromRGB(255, 255, 255)
+    send.Font = Enum.Font.GothamBold
+    send.TextSize = 11
+    send.ZIndex = 6
+    send.Parent = frame
+
+    local sendCorner = Instance.new("UICorner")
+    sendCorner.CornerRadius = UDim.new(0, 5)
+    sendCorner.Parent = send
+
+    getgenv().ToxChatGui = frame
+    getgenv().ToxChatScroll = scroll
+    getgenv().ToxChatInput = input
+    getgenv().ToxChatSendBtn = send
+    getgenv().ToxChatStatus = status
+
+    getgenv().AddToxChatMessage = function(
+        displayName,
+        message,
+        blocked,
+        showPopup
+    )
+        if not scroll or not scroll.Parent then
+            return
+        end
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -2, 0, 0)
+        label.AutomaticSize = Enum.AutomaticSize.Y
+        label.BackgroundColor3 = Color3.fromRGB(16, 16, 24)
+        label.BackgroundTransparency = 0.15
+        label.BorderSizePixel = 0
+        label.Text =
+            tostring(displayName)
+            .. ": "
+            .. tostring(message)
+        label.TextColor3 =
+            blocked
+            and Color3.fromRGB(255, 120, 120)
+            or Color3.fromRGB(235, 235, 245)
+        label.TextWrapped = true
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.TextYAlignment = Enum.TextYAlignment.Top
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 11
+        label.ZIndex = 6
+        label.Parent = scroll
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 4)
+        corner.Parent = label
+
+        local padding = Instance.new("UIPadding")
+        padding.PaddingLeft = UDim.new(0, 7)
+        padding.PaddingRight = UDim.new(0, 7)
+        padding.PaddingTop = UDim.new(0, 5)
+        padding.PaddingBottom = UDim.new(0, 5)
+        padding.Parent = label
+
+        local labels = {}
+
+        for _, child in ipairs(scroll:GetChildren()) do
+            if child:IsA("TextLabel") then
+                table.insert(labels, child)
+            end
+        end
+
+        while #labels > 100 do
+            local oldest = table.remove(labels, 1)
+
+            if oldest and oldest.Parent then
+                oldest:Destroy()
+            end
+        end
+
+        if showPopup ~= false
+        and getgenv().ShowToxChatPopup then
+            getgenv().ShowToxChatPopup(
+                displayName,
+                message,
+                blocked
+            )
+        end
+    end
+
+    getgenv().ClearToxChatMessages = function()
+        for _, child in ipairs(scroll:GetChildren()) do
+            if child:IsA("TextLabel") then
+                child:Destroy()
+            end
+        end
+    end
+end
+
+RebuildEmbeddedChat()
+
+local ToxChatGui = getgenv().ToxChatGui
+local ToxChatInput = getgenv().ToxChatInput
+local ToxChatSendBtn = getgenv().ToxChatSendBtn
+local ToxChatStatus = getgenv().ToxChatStatus
+local AddToxChatMessage = getgenv().AddToxChatMessage
+
+local ToxChatRelayHost =
+    "https://tox-control-relay.1kobg-0o.workers.dev"
+
+local ToxChatLastID = 0
+local ToxChatSeenIDs = {}
+local ToxChatSeenNonces = {}
+local ToxChatLastSend = 0
+local ToxChatSenderState = {}
+local ToxChatConnectedNotified = false
+local ToxChatFailureCount = 0
+local ToxChatClearVersion = nil
 local TOX_OWNER_ID = 2245662672
+local ClearToxChatMessages =
+    getgenv().ClearToxChatMessages
 
-local TOX_FRIEND_IDS = {
-    2805909339,
-    415081654,
-    400345609
+local BlockedChatWords = {
+    estupro = true,
+    estrupo = true,
+    estuprador = true,
+    estupradora = true,
+    rape = true,
+    rapist = true,
+    pedofilia = true,
+    pedofilo = true,
+    pedofila = true,
+    zoofilia = true
 }
 
-local TOX_PREMIUM_IDS = {
-    37052741
+local BlockedCompactChatParts = {
+    "estupro",
+    "estrupo",
+    "estuprador",
+    "estupradora",
+    "rape",
+    "rapist",
+    "pedofilia",
+    "pedofilo",
+    "pedofila",
+    "zoofilia"
 }
 
-local TOX_PREMIUM_ASSET_ID =
-    70855495297491
-
-local TOX_ROLE_LEVELS = {
-    Member = 1,
-    Friend = 2,
-    Premium = 3,
-    Owner = 4
+local BlockedChatPhrases = {
+    "kill yourself",
+    "go kill yourself",
+    "vai se matar",
+    "se mata"
 }
 
-local function BuildRoleSet(list)
-    local set = {}
+local function ReplaceChatAccents(text)
+    local replacements = {
+        ["á"] = "a",
+        ["à"] = "a",
+        ["â"] = "a",
+        ["ã"] = "a",
+        ["ä"] = "a",
+        ["é"] = "e",
+        ["è"] = "e",
+        ["ê"] = "e",
+        ["ë"] = "e",
+        ["í"] = "i",
+        ["ì"] = "i",
+        ["î"] = "i",
+        ["ï"] = "i",
+        ["ó"] = "o",
+        ["ò"] = "o",
+        ["ô"] = "o",
+        ["õ"] = "o",
+        ["ö"] = "o",
+        ["ú"] = "u",
+        ["ù"] = "u",
+        ["û"] = "u",
+        ["ü"] = "u",
+        ["ç"] = "c"
+    }
 
-    for _, id in ipairs(list) do
-        local numeric =
-            tonumber(id)
+    for from, to in pairs(replacements) do
+        text = string.gsub(text, from, to)
+    end
 
-        if numeric
-        and numeric > 0 then
-            set[
-                math.floor(numeric)
-            ] = true
+    return text
+end
+
+local function CollapseChatRepeats(text)
+    local result = {}
+    local previous = ""
+    local count = 0
+
+    for i = 1, #text do
+        local char = string.sub(text, i, i)
+
+        if char == previous then
+            count = count + 1
+        else
+            previous = char
+            count = 1
+        end
+
+        if count <= 2 then
+            table.insert(result, char)
         end
     end
 
-    return set
+    return table.concat(result)
 end
 
-local FriendSet =
-    BuildRoleSet(
-        TOX_FRIEND_IDS
-    )
+local function CollapseChatAllRepeats(text)
+    local result = {}
+    local previous = ""
 
-local PremiumSet =
-    BuildRoleSet(
-        TOX_PREMIUM_IDS
-    )
+    for i = 1, #text do
+        local char = string.sub(text, i, i)
 
-local PremiumAssetCache = {}
-
-local function OwnsToxPremium(
-    player
-)
-    if not player then
-        return false
-    end
-
-    local userId =
-        tonumber(player.UserId)
-        or 0
-
-    if PremiumSet[userId] then
-        return true
-    end
-
-    if PremiumAssetCache[userId]
-    ~= nil then
-        return PremiumAssetCache[
-            userId
-        ]
-    end
-
-    local owns = false
-
-    pcall(function()
-        owns =
-            MarketplaceService:
-                PlayerOwnsAsset(
-                    player,
-                    TOX_PREMIUM_ASSET_ID
-                )
-    end)
-
-    PremiumAssetCache[userId] =
-        owns == true
-
-    return PremiumAssetCache[
-        userId
-    ]
-end
-
-local function GetToxRole(player)
-    if not player then
-        return "Member", 1
-    end
-
-    local userId =
-        tonumber(player.UserId)
-        or 0
-
-    if userId == TOX_OWNER_ID then
-        return "Owner", 4
-    end
-
-    if OwnsToxPremium(player) then
-        return "Premium", 3
-    end
-
-    if FriendSet[userId] then
-        return "Friend", 2
-    end
-
-    return "Member", 1
-end
-
-local function CanUseControl(player)
-    local _, level =
-        GetToxRole(player)
-
-    return level >=
-        TOX_ROLE_LEVELS.Friend
-end
-
-local function CanControlTarget(
-    actor,
-    target
-)
-    if not actor
-    or not target then
-        return false
-    end
-
-    local _, actorLevel =
-        GetToxRole(actor)
-
-    local _, targetLevel =
-        GetToxRole(target)
-
-    if target.UserId
-        == TOX_OWNER_ID
-    and actor.UserId
-        ~= TOX_OWNER_ID then
-        return false
-    end
-
-    return actorLevel
-        >= targetLevel
-end
-
-getgenv().GetToxRole =
-    GetToxRole
-
-getgenv().GetToxRoleByUserId =
-    function(userId)
-        local target =
-            Players:GetPlayerByUserId(
-                tonumber(userId) or 0
-            )
-
-        if target then
-            return GetToxRole(target)
+        if char ~= previous then
+            table.insert(result, char)
+            previous = char
         end
-
-        local numeric =
-            tonumber(userId) or 0
-
-        if numeric == TOX_OWNER_ID then
-            return "Owner", 4
-        end
-
-        if PremiumSet[numeric] then
-            return "Premium", 3
-        end
-
-        if FriendSet[numeric] then
-            return "Friend", 2
-        end
-
-        return "Member", 1
     end
 
-getgenv().ToxRole =
-    select(
-        1,
-        GetToxRole(Player)
-    )
-
-Settings.ToxControlMode =
-    tostring(
-        Settings.ToxControlMode
-        or "HIDDEN"
-    )
-
-if Settings.ToxControlMode
-~= "CHAT"
-and Settings.ToxControlMode
-~= "HIDDEN" then
-    Settings.ToxControlMode =
-        "HIDDEN"
+    return table.concat(result)
 end
 
-local function Save()
-    if AutoSaveConfiguration then
-        pcall(
-            AutoSaveConfiguration
+local function NormalizeChatForFilter(message)
+    local text = string.lower(tostring(message or ""))
+    text = ReplaceChatAccents(text)
+    text = text:gsub("@", "a")
+    text = text:gsub("4", "a")
+    text = text:gsub("3", "e")
+    text = text:gsub("1", "i")
+    text = text:gsub("!", "i")
+    text = text:gsub("0", "o")
+    text = text:gsub("5", "s")
+    text = text:gsub("7", "t")
+    text = text:gsub("%$", "s")
+    text = CollapseChatRepeats(text)
+
+    local spaced = text:gsub("[^a-z0-9]+", " ")
+    spaced = spaced:gsub("%s+", " ")
+    spaced = spaced:match("^%s*(.-)%s*$") or ""
+
+    local compact = spaced:gsub("[^a-z0-9]", "")
+
+    return text, spaced, compact
+end
+
+local function ModerateToxChatMessage(message)
+    local raw =
+        tostring(
+            message or ""
         )
-    end
-end
 
-local function Trim(text)
-    return tostring(text or "")
-        :gsub("[\r\n]+", " ")
-        :match("^%s*(.-)%s*$")
-        or ""
-end
-
-local function ResolvePlayer(text)
-    local input =
-        Trim(text)
-            :gsub("^@", "")
-
-    if input == "" then
-        return nil
+    if raw == "" then
+        return false, "empty"
     end
 
-    local lower =
-        string.lower(input)
-    local partial = nil
-
-    for _, candidate in ipairs(
-        Players:GetPlayers()
-    ) do
-        local name =
-            string.lower(
-                candidate.Name
-            )
-
-        local display =
-            string.lower(
-                candidate.DisplayName
-            )
-
-        if name == lower
-        or display == lower then
-            return candidate
-        end
-
-        if not partial
-        and (
-            string.find(
-                name,
-                lower,
-                1,
-                true
-            ) == 1
-            or string.find(
-                display,
-                lower,
-                1,
-                true
-            ) == 1
-        ) then
-            partial = candidate
-        end
+    if #raw > 160 then
+        return false, "too_long"
     end
 
-    return partial
-end
-
-local function SendRobloxChat(
-    message
-)
-    message = Trim(message)
-
-    if message == "" then
-        return false
-    end
-
-    local sent = false
-
-    pcall(function()
-        local config =
-            TextChatService:
-                FindFirstChild(
-                    "ChatInputBarConfiguration"
-                )
-
-        local channel =
-            config
-            and config.TargetTextChannel
-
-        if channel then
-            channel:SendAsync(
-                message
-            )
-
-            sent = true
-        end
-    end)
-
-    if not sent then
-        local events =
-            ReplicatedStorage:
-                FindFirstChild(
-                    "DefaultChatSystemChatEvents"
-                )
-
-        local say =
-            events
-            and events:
-                FindFirstChild(
-                    "SayMessageRequest"
-                )
-
-        if say
-        and say:IsA("RemoteEvent") then
-            pcall(function()
-                say:FireServer(
-                    message,
-                    "All"
-                )
-
-                sent = true
-            end)
-        end
-    end
-
-    return sent
-end
-
-local AutoJumpEnabled = false
-local AutoJumpConnection = nil
-local FrozenByControl = false
-local RecentCommands = {}
-
-local function SetAutoJump(enabled)
-    AutoJumpEnabled =
-        enabled == true
-
-    if AutoJumpConnection then
-        AutoJumpConnection:
-            Disconnect()
-
-        AutoJumpConnection = nil
-    end
-
-    if not AutoJumpEnabled then
-        return
-    end
-
-    AutoJumpConnection =
-        AddConnection(
-            RunService.Heartbeat:
-                Connect(function()
-                    if not AutoJumpEnabled
-                    or getgenv().Destroyed
-                    or not getgenv().ScriptLoaded then
-                        return
-                    end
-
-                    local character =
-                        Player.Character
-
-                    local humanoid =
-                        character
-                        and character:
-                            FindFirstChildOfClass(
-                                "Humanoid"
-                            )
-
-                    if humanoid
-                    and humanoid.Health > 0
-                    and humanoid.FloorMaterial
-                        ~= Enum.Material.Air then
-                        humanoid.Jump = true
-                    end
-                end)
+    local normalized,
+        spaced,
+        compact =
+        NormalizeChatForFilter(
+            raw
         )
-end
 
-local function NotifyReceived(
-    actor,
-    text
-)
-    CustomNotify(
-        "Tox Control • @"
-        .. actor.Name
+    local padded =
+        " "
+        .. spaced
         .. " "
-        .. text,
-        Color3.fromRGB(
-            120,
-            210,
-            255
-        ),
-        4
+
+    for word in spaced:gmatch(
+        "[a-z0-9]+"
+    ) do
+        if BlockedChatWords[
+            word
+        ] then
+            return false, "word"
+        end
+    end
+
+    for _, phrase in ipairs(
+        BlockedChatPhrases
+    ) do
+        if padded:find(
+            " "
+            .. phrase
+            .. " ",
+            1,
+            true
+        ) then
+            return false, "phrase"
+        end
+    end
+
+    local collapsedCompact =
+        CollapseChatAllRepeats(
+            compact
+        )
+
+    for _, part in ipairs(
+        BlockedCompactChatParts
+    ) do
+        local collapsedPart =
+            CollapseChatAllRepeats(
+                part
+            )
+
+        if compact:find(
+            part,
+            1,
+            true
+        )
+        or collapsedCompact:find(
+            collapsedPart,
+            1,
+            true
+        ) then
+            return false, "obfuscated"
+        end
+    end
+
+    if normalized:match(
+        "%f[%a]e+[%W_]*s+[%W_]*t+[%W_]*u+[%W_]*p+[%W_]*r+[%W_]*o+%f[%A]"
     )
+    or normalized:match(
+        "%f[%a]e+[%W_]*s+[%W_]*t+[%W_]*r+[%W_]*u+[%W_]*p+[%W_]*o+%f[%A]"
+    )
+    or normalized:match(
+        "%f[%a]r+[%W_]*a+[%W_]*p+[%W_]*e+%f[%A]"
+    ) then
+        return false, "obfuscated"
+    end
+
+    return true, nil
 end
 
-local function ExecuteCommand(
-    actor,
-    command,
-    argument
-)
-    if not actor
-    or not CanControlTarget(
-        actor,
-        Player
-    ) then
-        return false
+local function IsToxChatSpam(userId, message)
+    local key = tostring(userId or "0")
+    local now = tick()
+    local state = ToxChatSenderState[key]
+
+    if not state then
+        state = {
+            Times = {},
+            LastMessage = "",
+            LastMessageTime = 0
+        }
+        ToxChatSenderState[key] = state
     end
 
-    command =
-        string.lower(
-            Trim(command)
-        )
+    local newTimes = {}
 
-    argument =
-        Trim(argument)
-
-    local character =
-        Player.Character
-
-    local humanoid =
-        character
-        and character:
-            FindFirstChildOfClass(
-                "Humanoid"
-            )
-
-    local root =
-        character
-        and character:
-            FindFirstChild(
-                "HumanoidRootPart"
-            )
-
-    if command == "reset" then
-        NotifyReceived(
-            actor,
-            "used RESET"
-        )
-
-        task.delay(0.12, function()
-            if humanoid then
-                humanoid.Health = 0
-            end
-
-            if character
-            and character.Parent then
-                pcall(function()
-                    character:
-                        BreakJoints()
-                end)
-            end
-        end)
-
-        return true
-    end
-
-    if command == "freeze" then
-        if root then
-            FrozenByControl =
-                not FrozenByControl
-
-            root.Anchored =
-                FrozenByControl
-
-            NotifyReceived(
-                actor,
-                FrozenByControl
-                and "enabled FREEZE"
-                or "disabled FREEZE"
-            )
+    for _, timeValue in ipairs(state.Times) do
+        if now - timeValue <= 10 then
+            table.insert(newTimes, timeValue)
         end
+    end
 
+    state.Times = newTimes
+
+    local normalizedMessage = string.lower(tostring(message or ""))
+
+    if state.LastMessage == normalizedMessage and now - state.LastMessageTime < 12 then
         return true
     end
 
-    if command == "unfreeze" then
-        FrozenByControl = false
-
-        if root then
-            root.Anchored = false
-        end
-
-        NotifyReceived(
-            actor,
-            "disabled FREEZE"
-        )
-
+    if #state.Times >= 5 then
         return true
     end
 
-    if command == "bring" then
-        local actorRoot =
-            actor.Character
-            and actor.Character:
-                FindFirstChild(
-                    "HumanoidRootPart"
-                )
-
-        if root
-        and actorRoot then
-            if getgenv().AllowToxTeleport then
-                getgenv().AllowToxTeleport(
-                    1.5
-                )
-            end
-
-            root.CFrame =
-                actorRoot.CFrame
-                * CFrame.new(
-                    0,
-                    0,
-                    -3
-                )
-
-            if getgenv().SetNDSNoTPAnchor then
-                pcall(function()
-                    getgenv().SetNDSNoTPAnchor(
-                        root.CFrame,
-                        true
-                    )
-                end)
-            end
-
-            NotifyReceived(
-                actor,
-                "used BRING"
-            )
-        end
-
-        return true
-    end
-
-    if command == "jump" then
-        SetAutoJump(
-            not AutoJumpEnabled
-        )
-
-        NotifyReceived(
-            actor,
-            AutoJumpEnabled
-            and "enabled JUMP"
-            or "disabled JUMP"
-        )
-
-        return true
-    end
-
-    if command == "unjump" then
-        SetAutoJump(false)
-
-        NotifyReceived(
-            actor,
-            "disabled JUMP"
-        )
-
-        return true
-    end
-
-    if command == "chat" then
-        if argument ~= "" then
-            NotifyReceived(
-                actor,
-                "used CHAT"
-            )
-
-            return SendRobloxChat(
-                argument
-            )
-        end
-
-        return false
-    end
-
-    if command == "kick" then
-        NotifyReceived(
-            actor,
-            "used KICK"
-        )
-
-        task.delay(0.15, function()
-            Player:Kick(
-                "Tox Control"
-            )
-        end)
-
-        return true
-    end
-
-    if command == "rejoin" then
-        NotifyReceived(
-            actor,
-            "used REJOIN"
-        )
-
-        task.delay(0.15, function()
-            local ok =
-                pcall(function()
-                    TeleportService:
-                        TeleportToPlaceInstance(
-                            game.PlaceId,
-                            game.JobId,
-                            Player
-                        )
-                end)
-
-            if not ok then
-                pcall(function()
-                    TeleportService:
-                        Teleport(
-                            game.PlaceId,
-                            Player
-                        )
-                end)
-            end
-        end)
-
-        return true
-    end
-
-    if command == "sit" then
-        if humanoid then
-            humanoid.Sit =
-                not humanoid.Sit
-
-            NotifyReceived(
-                actor,
-                humanoid.Sit
-                and "enabled SIT"
-                or "disabled SIT"
-            )
-        end
-
-        return true
-    end
-
-    if command == "fling" then
-        local target =
-            ResolvePlayer(argument)
-
-        if not target
-        or not CanControlTarget(
-            actor,
-            target
-        ) then
-            return false
-        end
-
-        local fling =
-            getgenv().ToxExecuteFling
-
-        if not fling then
-            return false
-        end
-
-        NotifyReceived(
-            actor,
-            "used FLING on @"
-            .. target.Name
-        )
-
-        task.spawn(function()
-            fling(
-                target.Name
-            )
-        end)
-
-        return true
-    end
+    table.insert(state.Times, now)
+    state.LastMessage = normalizedMessage
+    state.LastMessageTime = now
 
     return false
 end
 
-local function IsDuplicate(
-    actor,
-    message
-)
-    local key =
-        tostring(actor.UserId)
-        .. "|"
-        .. string.lower(
-            tostring(message or "")
-        )
+local function CleanToxChatDisplayName(displayName)
+    local name = tostring(displayName or "Unknown")
+    name = name:gsub("[\r\n<>]", "")
+    name = name:match("^%s*(.-)%s*$") or "Unknown"
 
-    local now = tick()
-    local old =
-        RecentCommands[key]
-
-    RecentCommands[key] = now
-
-    for oldKey, timeValue in pairs(
-        RecentCommands
-    ) do
-        if now - timeValue > 3 then
-            RecentCommands[
-                oldKey
-            ] = nil
-        end
+    if name == "" then
+        name = "Unknown"
     end
 
-    return old
-        and now - old < 0.75
+    if #name > 40 then
+        name = string.sub(name, 1, 40)
+    end
+
+    return name
 end
 
-local function HandleChatCommand(
-    actor,
-    message
-)
-    if not actor
-    or typeof(message)
-        ~= "string"
-    or IsDuplicate(
-        actor,
-        message
-    ) then
-        return false
-    end
 
-    local targetText,
-        command,
-        argument =
-        message:match(
-            "^%s*%.c%s+(%S+)%s+(%S+)%s*(.-)%s*$"
-        )
+local function GetToxChatRole()
+    local roleGetter =
+        getgenv().GetToxRole
 
-    if not targetText
-    or not command
-    or not CanUseControl(actor) then
-        return false
-    end
-
-    local target =
-        ResolvePlayer(
-            targetText
-        )
-
-    if not target then
-        return true
-    end
-
-    command =
-        string.lower(command)
-
-    if target ~= Player then
-        if actor == Player
-        and CanControlTarget(
-            actor,
-            target
-        ) then
-            CustomNotify(
-                "Tox Control • "
-                .. string.upper(command)
-                .. " -> @"
-                .. target.Name,
-                Color3.fromRGB(
-                    100,
-                    255,
-                    130
-                ),
-                3
+    if type(roleGetter)
+        == "function" then
+        local ok, role =
+            pcall(
+                roleGetter,
+                Player
             )
-        end
 
-        return true
+        if ok
+        and typeof(role)
+            == "string"
+        and role ~= "" then
+            return role
+        end
     end
 
-    ExecuteCommand(
-        actor,
-        command,
-        argument
-    )
-
-    return true
-end
-
-local function HookChatPlayer(player)
-    AddConnection(
-        player.Chatted:
-            Connect(function(message)
-                HandleChatCommand(
-                    player,
-                    message
-                )
-            end)
-    )
-end
-
-for _, player in ipairs(
-    Players:GetPlayers()
-) do
-    HookChatPlayer(player)
-end
-
-AddConnection(
-    Players.PlayerAdded:
-        Connect(
-            HookChatPlayer
+    local role =
+        tostring(
+            getgenv().ToxRole
+            or "Member"
         )
-)
 
-AddConnection(
-    TextChatService.MessageReceived:
-        Connect(function(message)
-            local source =
-                message
-                and message.TextSource
+    if role == "" then
+        role = "Member"
+    end
 
-            if not source then
-                return
-            end
+    return role
+end
 
-            local actor =
-                Players:GetPlayerByUserId(
-                    source.UserId
-                )
+local function GetToxChatDisplayName()
+    return
+        CleanToxChatDisplayName(
+            Player.DisplayName
+        )
+        .. " • "
+        .. GetToxChatRole()
+end
 
-            if actor then
-                HandleChatCommand(
-                    actor,
-                    message.Text
-                )
-            end
-        end)
-)
 
-local ToxControlRelayHost =
-    "https://tox-control-relay.1kobg-0o.workers.dev"
-
-local HiddenLastID = 0
-local HiddenPendingAcks = {}
-local HiddenSeenNonces = {}
-local HiddenConnected = false
-local HiddenFailureCount = 0
-
-local function ReadControlRelayResponse(
+local function ReadRelayResponse(
     response
 )
     if typeof(response)
@@ -938,7 +653,7 @@ local function ReadControlRelayResponse(
     return body, ok
 end
 
-local function ControlRelayRequest(
+local function RelayRequest(
     method,
     path,
     body
@@ -963,7 +678,7 @@ local function ControlRelayRequest(
         pcall(function()
             return RequestFunction({
                 Url =
-                    ToxControlRelayHost
+                    ToxChatRelayHost
                     .. path,
                 Method = method,
                 Headers = headers,
@@ -975,105 +690,170 @@ local function ControlRelayRequest(
         return nil, false
     end
 
-    return ReadControlRelayResponse(
+    return ReadRelayResponse(
         response
     )
 end
 
-local ToxActiveUsers =
-    getgenv().ToxActiveUsers
-    or {}
-
-getgenv().ToxActiveUsers =
-    ToxActiveUsers
-
-ToxActiveUsers[
-    Player.UserId
-] = tick()
-
-local function IsToxUser(
-    player
+local function DecodeToxChatResponse(
+    response
 )
-    if not player then
-        return false
-    end
-
-    if player == Player then
-        return true
-    end
-
-    local lastSeen =
-        tonumber(
-            ToxActiveUsers[
-                player.UserId
-            ]
-        )
-
-    return lastSeen ~= nil
-        and tick() - lastSeen
-            <= 40
-end
-
-getgenv().IsToxUser =
-    IsToxUser
-
-local function DecodeRelayJson(
-    body
-)
-    if typeof(body)
+    if typeof(response)
         ~= "string"
-    or body == "" then
-        return nil
+    or response == "" then
+        return false
     end
 
     local ok, decoded =
         pcall(function()
             return HttpService:
-                JSONDecode(body)
+                JSONDecode(response)
         end)
 
-    if ok
-    and typeof(decoded)
-        == "table" then
-        return decoded
+    if not ok
+    or typeof(decoded)
+        ~= "table"
+    or decoded.ok ~= true
+    or typeof(decoded.messages)
+        ~= "table" then
+        return false
     end
 
-    return nil
+    local initialSync =
+        ToxChatClearVersion
+        == nil
+
+    local clearVersion =
+        tonumber(
+            decoded.clearVersion
+        ) or 0
+
+    if ToxChatClearVersion
+        == nil then
+        ToxChatClearVersion =
+            clearVersion
+    elseif clearVersion
+        ~= ToxChatClearVersion then
+        ToxChatClearVersion =
+            clearVersion
+
+        if ClearToxChatMessages then
+            ClearToxChatMessages()
+        end
+
+        CustomNotify(
+            "Tox Chat cleared by Owner",
+            Color3.fromRGB(
+                120,
+                180,
+                255
+            ),
+            4
+        )
+    end
+
+    for _, payload in ipairs(
+        decoded.messages
+    ) do
+        local id =
+            tonumber(
+                payload.id
+            ) or 0
+
+        if id > ToxChatLastID then
+            ToxChatLastID = id
+        end
+
+        if id > 0
+        and not ToxChatSeenIDs[id] then
+            ToxChatSeenIDs[id] = true
+
+            local nonce =
+                tostring(
+                    payload.nonce
+                    or ""
+                )
+
+            if nonce == ""
+            or not ToxChatSeenNonces[
+                nonce
+            ] then
+                if nonce ~= "" then
+                    ToxChatSeenNonces[
+                        nonce
+                    ] = true
+                end
+
+                local userId =
+                    tonumber(
+                        payload.userId
+                    )
+
+                local message =
+                    tostring(
+                        payload.message
+                        or ""
+                    )
+
+                if userId
+                and message ~= "" then
+                    local displayName =
+                        CleanToxChatDisplayName(
+                            payload.displayName
+                            or payload.username
+                        )
+
+                    local allowed =
+                        ModerateToxChatMessage(
+                            message
+                        )
+
+                    local spam =
+                        IsToxChatSpam(
+                            userId,
+                            message
+                        )
+
+                    if not spam then
+                        if not allowed then
+                            if AddToxChatMessage then
+                                AddToxChatMessage(
+                                    displayName,
+                                    "[message blocked]",
+                                    true,
+                                    not initialSync
+                                )
+                            end
+                        elseif AddToxChatMessage then
+                            AddToxChatMessage(
+                                displayName,
+                                message,
+                                false,
+                                not initialSync
+                            )
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return true
 end
 
-local function UpdateToxActiveUsers()
-    local heartbeatBody =
-        HttpService:
-            JSONEncode({
-                userId =
-                    Player.UserId,
-                placeId =
-                    game.PlaceId,
-                jobId =
-                    game.JobId
-            })
+local function PollToxChat()
+    if not ToxChatExecutionActive() then
+        return false
+    end
 
-    ControlRelayRequest(
-        "POST",
-        "/tox/heartbeat",
-        heartbeatBody
-    )
-
-    local activeBody, activeOk =
-        ControlRelayRequest(
+    local response, ok =
+        RelayRequest(
             "GET",
-            "/tox/active?placeId="
+            "/chat/poll?after="
             .. tostring(
-                game.PlaceId
+                ToxChatLastID
             )
-            .. "&jobId="
-            .. HttpService:
-                UrlEncode(
-                    tostring(
-                        game.JobId
-                    )
-                )
-            .. "&_="
+            .. "&limit=50&_="
             .. tostring(
                 math.floor(
                     os.clock() * 1000
@@ -1081,2197 +861,393 @@ local function UpdateToxActiveUsers()
             )
         )
 
-    if not activeOk then
-        ToxActiveUsers[
-            Player.UserId
-        ] = tick()
-
-        return
-    end
-
-    local decoded =
-        DecodeRelayJson(
-            activeBody
-        )
-
-    if not decoded
-    or decoded.ok ~= true
-    or typeof(decoded.users)
-        ~= "table" then
-        return
-    end
-
-    local now = tick()
-    local fresh = {
-        [Player.UserId] = now
-    }
-
-    for _, entry in ipairs(
-        decoded.users
-    ) do
-        local userId =
-            tonumber(
-                entry.userId
-            )
-
-        if userId then
-            fresh[userId] =
-                now
-        end
-    end
-
-    for userId in pairs(
-        ToxActiveUsers
-    ) do
-        if not fresh[userId] then
-            ToxActiveUsers[
-                userId
-            ] = nil
-        end
-    end
-
-    for userId, seenAt in pairs(
-        fresh
-    ) do
-        ToxActiveUsers[
-            userId
-        ] = seenAt
-    end
-end
-
-task.spawn(function()
-    while not getgenv().Destroyed do
-        pcall(
-            UpdateToxActiveUsers
-        )
-
-        task.wait(10)
-    end
-end)
-
-local function SendControlAck(
-    payload,
-    success
-)
-    local body =
-        HttpService:
-            JSONEncode({
-                nonce =
-                    tostring(
-                        payload.nonce
-                        or ""
-                    ),
-                actorUserId =
-                    tonumber(
-                        payload.actorUserId
-                    ) or 0,
-                targetUserId =
-                    Player.UserId,
-                success =
-                    success == true
-            })
-
-    task.spawn(function()
-        ControlRelayRequest(
-            "POST",
-            "/control/ack",
-            body
-        )
-    end)
-end
-
-local function HandleHiddenCommand(
-    payload
-)
-    if typeof(payload)
-        ~= "table"
-    or tonumber(
-        payload.targetUserId
-    ) ~= Player.UserId
-    or tonumber(
-        payload.placeId
-    ) ~= game.PlaceId
-    or tostring(
-        payload.jobId or ""
-    ) ~= tostring(
-        game.JobId
-    ) then
+    if not ToxChatExecutionActive() then
         return false
     end
 
-    local nonce =
-        tostring(
-            payload.nonce
-            or ""
-        )
-
-    if nonce == "" then
-        return true
-    end
-
-    if HiddenSeenNonces[
-        nonce
-    ] then
-        return true
-    end
-
-    HiddenSeenNonces[
-        nonce
-    ] = true
-
-    local actor =
-        Players:
-            GetPlayerByUserId(
-                tonumber(
-                    payload.actorUserId
-                ) or 0
-            )
-
-    if not actor
-    or not CanUseControl(actor)
-    or not CanControlTarget(
-        actor,
-        Player
+    if ok
+    and DecodeToxChatResponse(
+        response
     ) then
-        SendControlAck(
-            payload,
-            false
-        )
+        ToxChatFailureCount = 0
 
-        return true
-    end
+        if ToxChatStatus
+        and ToxChatStatus.Parent then
+            ToxChatStatus.Text =
+                "Global chat • connected"
 
-    local success =
-        ExecuteCommand(
-            actor,
-            payload.command,
-            payload.argument
-        ) == true
-
-    SendControlAck(
-        payload,
-        success
-    )
-
-    return true
-end
-
-local function PollHiddenControl()
-    local path =
-        "/control/poll?targetUserId="
-        .. tostring(
-            Player.UserId
-        )
-        .. "&after="
-        .. tostring(
-            HiddenLastID
-        )
-        .. "&placeId="
-        .. tostring(
-            game.PlaceId
-        )
-        .. "&jobId="
-        .. HttpService:
-            UrlEncode(
-                tostring(
-                    game.JobId
-                )
-            )
-        .. "&_="
-        .. tostring(
-            math.floor(
-                os.clock() * 1000
-            )
-        )
-
-    local response, ok =
-        ControlRelayRequest(
-            "GET",
-            path
-        )
-
-    local decoded =
-        ok
-        and DecodeRelayJson(
-            response
-        )
-        or nil
-
-    if not decoded
-    or decoded.ok ~= true
-    or typeof(decoded.commands)
-        ~= "table" then
-        HiddenFailureCount += 1
-
-        if HiddenFailureCount == 3 then
-            CustomNotify(
-                "Tox Control hidden reconnecting...",
+            ToxChatStatus.TextColor3 =
                 Color3.fromRGB(
+                    100,
                     255,
-                    180,
-                    70
-                ),
-                4
-            )
-        end
-
-        return false
-    end
-
-    HiddenFailureCount = 0
-
-    if not HiddenConnected then
-        HiddenConnected = true
-
-        CustomNotify(
-            "Tox Control hidden connected",
-            Color3.fromRGB(
-                100,
-                255,
-                130
-            ),
-            3
-        )
-    end
-
-    for _, payload in ipairs(
-        decoded.commands
-    ) do
-        local id =
-            tonumber(
-                payload.id
-            ) or 0
-
-        if id > HiddenLastID then
-            HiddenLastID = id
-        end
-
-        HandleHiddenCommand(
-            payload
-        )
-    end
-
-    return true
-end
-
-task.spawn(function()
-    while not getgenv().Destroyed do
-        PollHiddenControl()
-        task.wait(0.75)
-    end
-end)
-
-local function SendHiddenControl(
-    target,
-    command,
-    argument
-)
-    if not target then
-        return false
-    end
-
-    local nonce =
-        HttpService:
-            GenerateGUID(false)
-
-    local body =
-        HttpService:
-            JSONEncode({
-                nonce = nonce,
-                actorUserId =
-                    Player.UserId,
-                targetUserId =
-                    target.UserId,
-                command =
-                    tostring(
-                        command or ""
-                    ),
-                argument =
-                    tostring(
-                        argument or ""
-                    ),
-                placeId =
-                    game.PlaceId,
-                jobId =
-                    game.JobId,
-                sentAt =
-                    os.time()
-            })
-
-    local response, ok =
-        ControlRelayRequest(
-            "POST",
-            "/control/send",
-            body
-        )
-
-    local decoded =
-        ok
-        and DecodeRelayJson(
-            response
-        )
-        or nil
-
-    if not decoded
-    or decoded.ok ~= true then
-        return false
-    end
-
-    local started = tick()
-
-    while tick() - started < 8 do
-        local ackBody, ackOk =
-            ControlRelayRequest(
-                "GET",
-                "/control/ack?nonce="
-                .. HttpService:
-                    UrlEncode(nonce)
-                .. "&_="
-                .. tostring(
-                    math.floor(
-                        os.clock() * 1000
-                    )
+                    130
                 )
-            )
-
-        local ackDecoded =
-            ackOk
-            and DecodeRelayJson(
-                ackBody
-            )
-            or nil
-
-        if ackDecoded
-        and ackDecoded.ok == true
-        and typeof(
-            ackDecoded.ack
-        ) == "table" then
-            return
-                ackDecoded.ack.success
-                == true
         end
 
-        task.wait(0.25)
+        if not ToxChatConnectedNotified then
+            ToxChatConnectedNotified =
+                true
+
+            CustomNotify(
+                "Tox Chat connected",
+                Color3.fromRGB(
+                    100,
+                    255,
+                    130
+                ),
+                3
+            )
+        end
+
+        return true
+    end
+
+    ToxChatFailureCount += 1
+
+    if ToxChatStatus
+    and ToxChatStatus.Parent then
+        ToxChatStatus.Text =
+            "Global chat • reconnecting..."
+
+        ToxChatStatus.TextColor3 =
+            Color3.fromRGB(
+                255,
+                180,
+                70
+            )
+    end
+
+    if ToxChatFailureCount == 3 then
+        CustomNotify(
+            "Tox Chat relay unavailable",
+            Color3.fromRGB(
+                255,
+                180,
+                70
+            ),
+            4
+        )
     end
 
     return false
 end
 
-local function BuildChatCommand(
-    target,
-    command,
-    argument
-)
-    local message =
-        ".c "
-        .. target.Name
-        .. " "
-        .. command
-
-    argument =
-        Trim(argument)
-
-    if argument ~= "" then
-        message =
-            message
-            .. " "
-            .. argument
-    end
-
-    return message
-end
-
-local function SendControl(
-    target,
-    command,
-    argument,
-    Silent
-)
-    if not target
-    or not CanControlTarget(
-        Player,
-        target
-    ) then
-        return false
-    end
-
-    local mode =
-        Settings.ToxControlMode
-
-    local success = false
-
-    if mode == "CHAT" then
-        success =
-            SendRobloxChat(
-                BuildChatCommand(
-                    target,
-                    command,
-                    argument
-                )
-            )
-    else
-        success =
-            SendHiddenControl(
-                target,
-                command,
-                argument
-            )
-    end
-
-    if success
-    and not Silent then
+local function ClearToxChatForEveryone()
+    if Player.UserId
+        ~= TOX_OWNER_ID then
         CustomNotify(
-            "Tox Control • "
-            .. string.upper(
-                command
-            )
-            .. " -> @"
-            .. target.Name,
-            Color3.fromRGB(
-                100,
-                255,
-                130
-            ),
-            3
-        )
-    elseif not success
-    and mode ~= "HIDDEN"
-    and not Silent then
-        CustomNotify(
-            "Tox Control chat command failed",
+            "/clear is Owner only",
             Color3.fromRGB(
                 255,
-                180,
-                70
+                120,
+                120
             ),
             4
         )
-    end
 
-    return success
-end
-
-local function GotoPlayer(
-    target,
-    Silent
-)
-    local root =
-        Player.Character
-        and Player.Character:
-            FindFirstChild(
-                "HumanoidRootPart"
-            )
-
-    local targetRoot =
-        target
-        and target.Character
-        and target.Character:
-            FindFirstChild(
-                "HumanoidRootPart"
-            )
-
-    if not root
-    or not targetRoot then
         return false
     end
 
-    if getgenv().AllowToxTeleport then
-        getgenv().AllowToxTeleport(
-            1.5
+    local body =
+        HttpService:
+            JSONEncode({
+                userId =
+                    Player.UserId
+            })
+
+    local response, ok =
+        RelayRequest(
+            "POST",
+            "/chat/clear",
+            body
         )
+
+    if not ok
+    or typeof(response)
+        ~= "string" then
+        return false
     end
 
-    root.CFrame =
-        targetRoot.CFrame
-        * CFrame.new(
-            0,
-            0,
-            -3
-        )
-
-    if getgenv().SetNDSNoTPAnchor then
+    local decodeOk, decoded =
         pcall(function()
-            getgenv().SetNDSNoTPAnchor(
-                root.CFrame,
-                true
-            )
+            return HttpService:
+                JSONDecode(response)
         end)
+
+    if not decodeOk
+    or typeof(decoded)
+        ~= "table"
+    or decoded.ok ~= true then
+        return false
     end
 
-    if not Silent then
-        CustomNotify(
-            "Tox Control • GOTO -> @"
-            .. target.Name,
-            Color3.fromRGB(
-                100,
-                255,
-                130
-            ),
-            3
+    ToxChatClearVersion =
+        tonumber(
+            decoded.clearVersion
         )
+        or ToxChatClearVersion
+        or 0
+
+    if ClearToxChatMessages then
+        ClearToxChatMessages()
     end
 
     return true
 end
 
-local function MakeCorner(
-    object,
-    radius
+local function PublishToxChatPayload(
+    payload
 )
-    local corner =
-        Instance.new("UICorner")
+    local body =
+        HttpService:
+            JSONEncode(payload)
 
-    corner.CornerRadius =
-        UDim.new(
-            0,
-            radius or 5
+    local response, ok =
+        RelayRequest(
+            "POST",
+            "/chat/send",
+            body
         )
 
-    corner.Parent = object
+    if not ok
+    or typeof(response)
+        ~= "string" then
+        return false
+    end
+
+    local decodeOk, decoded =
+        pcall(function()
+            return HttpService:
+                JSONDecode(response)
+        end)
+
+    return decodeOk
+        and typeof(decoded)
+            == "table"
+        and decoded.ok == true
 end
 
-local function InitToxControlGui()
-    local controlGui =
-        Instance.new("ScrollingFrame")
-
-    controlGui.Name =
-        "ToxControlFrame"
-
-    controlGui.Size =
-        UDim2.new(
-            1,
-            0,
-            1,
-            0
-        )
-
-    controlGui.Position =
-        UDim2.new(
-            0,
-            0,
-            0,
-            0
-        )
-
-    controlGui.BackgroundColor3 =
-        Color3.fromRGB(
-            12,
-            12,
-            20
-        )
-
-    controlGui.BorderSizePixel = 0
-    controlGui.ClipsDescendants = true
-    controlGui.Visible = true
-    controlGui.ScrollBarThickness = 4
-    controlGui.ScrollBarImageColor3 = MAIN_COLOR
-    controlGui.CanvasSize = UDim2.new(0, 0, 0, 418)
-    controlGui.ScrollingDirection = Enum.ScrollingDirection.Y
-    controlGui.Parent = ControlPage
-
-    MakeCorner(
-        controlGui,
-        8
-    )
-
-    local stroke =
-        Instance.new("UIStroke")
-
-    stroke.Color = MAIN_COLOR
-    stroke.Thickness = 2
-    stroke.Parent = controlGui
-
-    local topBar =
-        Instance.new("Frame")
-
-    topBar.Size =
-        UDim2.new(
-            1,
-            0,
-            0,
-            32
-        )
-
-    topBar.BackgroundColor3 =
-        Color3.fromRGB(16, 16, 26)
-
-    topBar.BorderSizePixel = 0
-    topBar.Parent = controlGui
-
-    local title =
-        Instance.new("TextLabel")
-
-    title.Size =
-        UDim2.new(
-            1,
-            -80,
-            1,
-            0
-        )
-
-    title.Position =
-        UDim2.new(
-            0,
-            10,
-            0,
-            0
-        )
-
-    title.BackgroundTransparency = 1
-    title.Text = "CONTROL"
-    title.TextColor3 =
-        Color3.fromRGB(
-            255,
-            255,
-            255
-        )
-
-    title.Font =
-        Enum.Font.GothamBold
-
-    title.TextSize = 13
-    title.TextXAlignment =
-        Enum.TextXAlignment.Left
-
-    title.Parent = topBar
-
-    local close =
-        Instance.new("TextButton")
-
-    close.Size =
-        UDim2.new(
-            0,
-            28,
-            0,
-            24
-        )
-
-    close.Position =
-        UDim2.new(
-            1,
-            -34,
-            0,
-            4
-        )
-
-    close.BackgroundColor3 =
-        Color3.fromRGB(
-            30,
-            30,
-            42
-        )
-
-    close.BorderSizePixel = 0
-    close.Text = "X"
-    close.TextColor3 =
-        Color3.fromRGB(
-            255,
-            255,
-            255
-        )
-
-    close.Font =
-        Enum.Font.GothamBold
-
-    close.TextSize = 11
-    close.Parent = topBar
-    close.Visible = false
-
-    MakeCorner(
-        close,
-        4
-    )
-
-    local roleLabel =
-        Instance.new("TextLabel")
-
-    roleLabel.Size =
-        UDim2.new(
-            1,
-            -180,
-            0,
-            20
-        )
-
-    roleLabel.Position =
-        UDim2.new(
-            0,
-            10,
-            0,
-            40
-        )
-
-    roleLabel.BackgroundTransparency = 1
-    roleLabel.TextColor3 =
-        Color3.fromRGB(
-            210,
-            210,
-            225
-        )
-
-    roleLabel.Font =
-        Enum.Font.GothamMedium
-
-    roleLabel.TextSize = 10
-    roleLabel.TextXAlignment =
-        Enum.TextXAlignment.Left
-
-    roleLabel.Parent = controlGui
-
-    local targetBox =
-        Instance.new("TextBox")
-
-    targetBox.Size =
-        UDim2.new(
-            1,
-            -20,
-            0,
-            30
-        )
-
-    targetBox.Position =
-        UDim2.new(
-            0,
-            10,
-            0,
-            66
-        )
-
-    targetBox.BackgroundColor3 =
-        Color3.fromRGB(
-            20,
-            20,
-            30
-        )
-
-    targetBox.BorderSizePixel = 0
-    targetBox.Text = ""
-    targetBox.PlaceholderText =
-        "Nick"
-
-    targetBox.TextColor3 =
-        Color3.fromRGB(
-            255,
-            255,
-            255
-        )
-
-    targetBox.PlaceholderColor3 =
-        Color3.fromRGB(
-            130,
-            130,
-            145
-        )
-
-    targetBox.Font =
-        Enum.Font.Gotham
-
-    targetBox.TextSize = 11
-    targetBox.ClearTextOnFocus = false
-    targetBox.Parent = controlGui
-
-    MakeCorner(
-        targetBox,
-        5
-    )
-
-    local targetInfo =
-        Instance.new("TextLabel")
-
-    targetInfo.Size =
-        UDim2.new(
-            1,
-            -20,
-            0,
-            18
-        )
-
-    targetInfo.Position =
-        UDim2.new(
-            0,
-            10,
-            0,
-            99
-        )
-
-    targetInfo.BackgroundTransparency = 1
-    targetInfo.Text =
-        "Target: none"
-
-    targetInfo.TextColor3 =
-        Color3.fromRGB(
-            155,
-            155,
-            170
-        )
-
-    targetInfo.Font =
-        Enum.Font.Gotham
-
-    targetInfo.TextSize = 9
-    targetInfo.TextXAlignment =
-        Enum.TextXAlignment.Left
-
-    targetInfo.Parent = controlGui
-
-    local modeChat =
-        Instance.new("TextButton")
-
-    local modeHidden =
-        Instance.new("TextButton")
-
-    modeChat.Size =
-        UDim2.new(
-            0,
-            70,
-            0,
-            25
-        )
-
-    modeHidden.Size =
-        UDim2.new(
-            0,
-            70,
-            0,
-            25
-        )
-
-    modeChat.Position =
-        UDim2.new(
-            1,
-            -160,
-            0,
-            38
-        )
-
-    modeHidden.Position =
-        UDim2.new(
-            1,
-            -84,
-            0,
-            38
-        )
-
-    for _, button in ipairs({
-        modeChat,
-        modeHidden
-    }) do
-        button.BorderSizePixel = 0
-        button.TextColor3 =
-            Color3.fromRGB(
-                255,
-                255,
-                255
-            )
-
-        button.Font =
-            Enum.Font.GothamBold
-
-        button.TextSize = 9
-        button.AutoButtonColor = false
-        button.Parent = controlGui
-
-        MakeCorner(
-            button,
-            4
-        )
+local function SendToxChatMessage()
+    if not ToxChatInput then
+        return
     end
 
-    modeChat.Text = "CHAT"
-    modeHidden.Text = "HIDDEN"
-
-    local selectedTarget = nil
-
-    local function RefreshRole()
-        local role =
-            select(
-                1,
-                GetToxRole(Player)
-            )
-
-        getgenv().ToxRole = role
-
-        roleLabel.Text =
-            "@"
-            .. Player.Name
-            .. " • "
-            .. role
-    end
-
-    local function RefreshMode()
-        local mode =
-            Settings.ToxControlMode
-
-        modeChat.BackgroundColor3 =
-            mode == "CHAT"
-            and Color3.fromRGB(
-                50,
-                180,
-                70
-            )
-            or Color3.fromRGB(
-                28,
-                28,
-                42
-            )
-
-        modeHidden.BackgroundColor3 =
-            mode == "HIDDEN"
-            and Color3.fromRGB(
-                50,
-                180,
-                70
-            )
-            or Color3.fromRGB(
-                28,
-                28,
-                42
-            )
-    end
-
-    local function RefreshTarget()
-        selectedTarget =
-            ResolvePlayer(
-                targetBox.Text
-            )
-
-        if selectedTarget then
-            local suffix =
-                ""
-
-            if IsToxUser(
-                selectedTarget
-            ) then
-                local role =
-                    select(
-                        1,
-                        GetToxRole(
-                            selectedTarget
-                        )
-                    )
-
-                suffix =
-                    " • "
-                    .. role
-            else
-                suffix =
-                    " • No ToxHub"
-            end
-
-            targetInfo.Text =
-                "Target: @"
-                .. selectedTarget.Name
-                .. suffix
-        else
-            targetInfo.Text =
-                "Target: none"
-        end
-
-        return selectedTarget
-    end
-
-    targetBox.FocusLost:
-        Connect(
-            RefreshTarget
-        )
-
-    modeChat.MouseButton1Click:
-        Connect(function()
-            Settings.ToxControlMode =
-                "CHAT"
-
-            RefreshMode()
-            Save()
-        end)
-
-    modeHidden.MouseButton1Click:
-        Connect(function()
-            Settings.ToxControlMode =
-                "HIDDEN"
-
-            RefreshMode()
-            Save()
-        end)
-
-    local function MakeButton(
-        text,
-        x,
-        y,
-        width,
-        callback
-    )
-        local button =
-            Instance.new(
-                "TextButton"
-            )
-
-        button.Size =
-            UDim2.new(
-                0,
-                width,
-                0,
-                32
-            )
-
-        button.Position =
-            UDim2.new(
-                0,
-                x,
-                0,
-                y
-            )
-
-        button.BackgroundColor3 =
-            Color3.fromRGB(
-                20,
-                20,
-                30
-            )
-
-        button.BorderSizePixel = 0
-        button.Text = text
-        button.TextColor3 =
-            Color3.fromRGB(
-                245,
-                245,
-                245
-            )
-
-        button.Font =
-            Enum.Font.GothamMedium
-
-        button.TextSize = 9
-        button.AutoButtonColor = false
-        button.Parent = controlGui
-
-        MakeCorner(
-            button,
-            5
-        )
-
-        button.MouseButton1Click:
-            Connect(callback)
-
-        return button
-    end
-
-    local loopState = {}
-    local loopGeneration = {}
-
-    local function RefreshLoopButton(
-        button,
-        enabled
-    )
-        if not button then
-            return
-        end
-
-        button.Text =
-            enabled
-            and "LOOP ON"
-            or "LOOP"
-
-        button.BackgroundColor3 =
-            enabled
-            and Color3.fromRGB(
-                50,
-                180,
-                70
-            )
-            or Color3.fromRGB(
-                20,
-                20,
-                30
-            )
-    end
-
-    local function ToggleLoop(
-        key,
-        label,
-        button,
-        interval,
-        callback
-    )
-        loopGeneration[key] =
-            (loopGeneration[key] or 0)
-            + 1
-
-        if loopState[key] then
-            loopState[key] = false
-            RefreshLoopButton(
-                button,
-                false
-            )
-
-            CustomNotify(
-                "Tox Control • "
-                .. label
-                .. " LOOP OFF",
-                Color3.fromRGB(
-                    255,
-                    180,
-                    70
-                ),
-                3
-            )
-
-            return
-        end
-
-        loopState[key] = true
-        local generation =
-            loopGeneration[key]
-
-        RefreshLoopButton(
-            button,
-            true
-        )
-
+    if tick() - ToxChatLastSend
+        < 1.2 then
         CustomNotify(
-            "Tox Control • "
-            .. label
-            .. " LOOP ON",
+            "Wait a moment before sending again",
             Color3.fromRGB(
-                100,
                 255,
-                130
-            ),
-            3
+                180,
+                70
+            )
         )
+
+        return
+    end
+
+    local message =
+        tostring(
+            ToxChatInput.Text or ""
+        )
+
+    message =
+        message:
+            gsub(
+                "[\r\n]+",
+                " "
+            ):
+            match(
+                "^%s*(.-)%s*$"
+            )
+        or ""
+
+    if message == "" then
+        return
+    end
+
+    if string.lower(message)
+        == "/clear" then
+        ToxChatLastSend = tick()
 
         task.spawn(function()
-            while loopState[key]
-            and loopGeneration[key]
-                == generation
-            and not getgenv().Destroyed do
-                local ok, continue =
-                    pcall(callback)
+            local success =
+                ClearToxChatForEveryone()
 
-                if not ok
-                or continue == false then
-                    break
+            if success then
+                if ToxChatInput then
+                    ToxChatInput.Text = ""
                 end
 
-                task.wait(
-                    interval
+                CustomNotify(
+                    "Tox Chat cleared for everyone",
+                    Color3.fromRGB(
+                        120,
+                        180,
+                        255
+                    ),
+                    4
                 )
-            end
-
-            if loopGeneration[key]
-                == generation then
-                loopState[key] = false
-                RefreshLoopButton(
-                    button,
-                    false
+            else
+                CustomNotify(
+                    "Tox Chat clear failed",
+                    Color3.fromRGB(
+                        255,
+                        100,
+                        100
+                    ),
+                    4
                 )
             end
         end)
+
+        return
     end
 
-    local function Remote(
-        command,
-        argument,
-        targetOverride,
-        Silent
-    )
-        local target =
-            targetOverride
-            or RefreshTarget()
-
-        if not target
-        or not target.Parent
-        or not CanControlTarget(
-            Player,
-            target
-        ) then
-            return false
-        end
-
-        return SendControl(
-            target,
-            command,
-            argument,
-            Silent
-        )
-    end
-
-    local resetLoopButton = nil
-    local bringLoopButton = nil
-    local gotoLoopButton = nil
-    local rejoinLoopButton = nil
-    local flingLoopButton = nil
-
-    local function PlaceButton(
-        text,
-        xScale,
-        xOffset,
-        y,
-        widthScale,
-        widthOffset,
-        callback
-    )
-        local button =
-            MakeButton(
-                text,
-                0,
-                y,
+    if #message > 160 then
+        message =
+            string.sub(
+                message,
                 1,
-                callback
-            )
-
-        button.Position =
-            UDim2.new(
-                xScale,
-                xOffset,
-                0,
-                y
-            )
-
-        button.Size =
-            UDim2.new(
-                widthScale,
-                widthOffset,
-                0,
-                32
-            )
-
-        return button
-    end
-
-    local actionsTitle =
-        Instance.new(
-            "TextLabel"
-        )
-
-    actionsTitle.Size =
-        UDim2.new(
-            1,
-            -20,
-            0,
-            18
-        )
-
-    actionsTitle.Position =
-        UDim2.new(
-            0,
-            10,
-            0,
-            122
-        )
-
-    actionsTitle.BackgroundTransparency = 1
-    actionsTitle.Text = "ACTIONS"
-
-    actionsTitle.TextColor3 =
-        Color3.fromRGB(
-            145,
-            145,
-            160
-        )
-
-    actionsTitle.Font =
-        Enum.Font.GothamBold
-
-    actionsTitle.TextSize = 9
-
-    actionsTitle.TextXAlignment =
-        Enum.TextXAlignment.Left
-
-    actionsTitle.Parent =
-        controlGui
-
-    PlaceButton(
-        "RESET",
-        0,
-        10,
-        144,
-        0.29,
-        -6,
-        function()
-            Remote(
-                "reset"
-            )
-        end
-    )
-
-    resetLoopButton =
-        PlaceButton(
-            "LOOP",
-            0.29,
-            8,
-            144,
-            0.16,
-            -7,
-            function()
-                local target =
-                    RefreshTarget()
-
-                if not target then
-                    return
-                end
-
-                ToggleLoop(
-                    "reset",
-                    "RESET",
-                    resetLoopButton,
-                    1.15,
-                    function()
-                        if not target.Parent then
-                            return false
-                        end
-
-                        Remote(
-                            "reset",
-                            nil,
-                            target,
-                            true
-                        )
-
-                        return true
-                    end
-                )
-            end
-        )
-
-    PlaceButton(
-        "FREEZE / UNFREEZE",
-        0.45,
-        8,
-        144,
-        0.55,
-        -18,
-        function()
-            Remote(
-                "freeze"
-            )
-        end
-    )
-
-    PlaceButton(
-        "BRING",
-        0,
-        10,
-        182,
-        0.29,
-        -6,
-        function()
-            Remote(
-                "bring"
-            )
-        end
-    )
-
-    bringLoopButton =
-        PlaceButton(
-            "LOOP",
-            0.29,
-            8,
-            182,
-            0.16,
-            -7,
-            function()
-                local target =
-                    RefreshTarget()
-
-                if not target then
-                    return
-                end
-
-                ToggleLoop(
-                    "bring",
-                    "BRING",
-                    bringLoopButton,
-                    0.7,
-                    function()
-                        if not target.Parent then
-                            return false
-                        end
-
-                        Remote(
-                            "bring",
-                            nil,
-                            target,
-                            true
-                        )
-
-                        return true
-                    end
-                )
-            end
-        )
-
-    PlaceButton(
-        "GOTO",
-        0.45,
-        8,
-        182,
-        0.30,
-        -8,
-        function()
-            local target =
-                RefreshTarget()
-
-            if target then
-                GotoPlayer(
-                    target
-                )
-            end
-        end
-    )
-
-    gotoLoopButton =
-        PlaceButton(
-            "LOOP",
-            0.75,
-            6,
-            182,
-            0.25,
-            -16,
-            function()
-                local target =
-                    RefreshTarget()
-
-                if not target then
-                    return
-                end
-
-                ToggleLoop(
-                    "goto",
-                    "GOTO",
-                    gotoLoopButton,
-                    0.25,
-                    function()
-                        if not target.Parent then
-                            return false
-                        end
-
-                        return GotoPlayer(
-                            target,
-                            true
-                        )
-                    end
-                )
-            end
-        )
-
-    PlaceButton(
-        "REJOIN",
-        0,
-        10,
-        220,
-        0.29,
-        -6,
-        function()
-            Remote(
-                "rejoin"
-            )
-        end
-    )
-
-    rejoinLoopButton =
-        PlaceButton(
-            "LOOP",
-            0.29,
-            8,
-            220,
-            0.16,
-            -7,
-            function()
-                local target =
-                    RefreshTarget()
-
-                if not target then
-                    return
-                end
-
-                ToggleLoop(
-                    "rejoin",
-                    "REJOIN",
-                    rejoinLoopButton,
-                    3,
-                    function()
-                        if not target.Parent then
-                            return false
-                        end
-
-                        Remote(
-                            "rejoin",
-                            nil,
-                            target,
-                            true
-                        )
-
-                        return true
-                    end
-                )
-            end
-        )
-
-    PlaceButton(
-        "KICK",
-        0.45,
-        8,
-        220,
-        0.55,
-        -18,
-        function()
-            Remote(
-                "kick"
-            )
-        end
-    )
-
-    local messageTitle =
-        Instance.new(
-            "TextLabel"
-        )
-
-    messageTitle.Size =
-        UDim2.new(
-            1,
-            -20,
-            0,
-            18
-        )
-
-    messageTitle.Position =
-        UDim2.new(
-            0,
-            10,
-            0,
-            258
-        )
-
-    messageTitle.BackgroundTransparency = 1
-    messageTitle.Text = "MESSAGE"
-
-    messageTitle.TextColor3 =
-        Color3.fromRGB(
-            145,
-            145,
-            160
-        )
-
-    messageTitle.Font =
-        Enum.Font.GothamBold
-
-    messageTitle.TextSize = 9
-
-    messageTitle.TextXAlignment =
-        Enum.TextXAlignment.Left
-
-    messageTitle.Parent =
-        controlGui
-
-    local chatBox =
-        Instance.new(
-            "TextBox"
-        )
-
-    chatBox.Size =
-        UDim2.new(
-            0.78,
-            -12,
-            0,
-            32
-        )
-
-    chatBox.Position =
-        UDim2.new(
-            0,
-            10,
-            0,
-            280
-        )
-
-    chatBox.BackgroundColor3 =
-        Color3.fromRGB(
-            20,
-            20,
-            30
-        )
-
-    chatBox.BorderSizePixel = 0
-    chatBox.Text = ""
-    chatBox.PlaceholderText =
-        "Chat text"
-
-    chatBox.TextColor3 =
-        Color3.fromRGB(
-            255,
-            255,
-            255
-        )
-
-    chatBox.PlaceholderColor3 =
-        Color3.fromRGB(
-            130,
-            130,
-            145
-        )
-
-    chatBox.Font =
-        Enum.Font.Gotham
-
-    chatBox.TextSize = 10
-    chatBox.ClearTextOnFocus = false
-    chatBox.Parent = controlGui
-
-    MakeCorner(
-        chatBox,
-        5
-    )
-
-    PlaceButton(
-        "SEND",
-        0.78,
-        2,
-        280,
-        0.22,
-        -12,
-        function()
-            local message =
-                Trim(
-                    chatBox.Text
-                )
-
-            if message ~= "" then
-                Remote(
-                    "chat",
-                    message
-                )
-            end
-        end
-    )
-
-    local flingTitle =
-        Instance.new(
-            "TextLabel"
-        )
-
-    flingTitle.Size =
-        UDim2.new(
-            1,
-            -20,
-            0,
-            18
-        )
-
-    flingTitle.Position =
-        UDim2.new(
-            0,
-            10,
-            0,
-            318
-        )
-
-    flingTitle.BackgroundTransparency = 1
-    flingTitle.Text = "FLING TARGET"
-
-    flingTitle.TextColor3 =
-        Color3.fromRGB(
-            145,
-            145,
-            160
-        )
-
-    flingTitle.Font =
-        Enum.Font.GothamBold
-
-    flingTitle.TextSize = 9
-
-    flingTitle.TextXAlignment =
-        Enum.TextXAlignment.Left
-
-    flingTitle.Parent =
-        controlGui
-
-    local flingBox =
-        Instance.new(
-            "TextBox"
-        )
-
-    flingBox.Size =
-        UDim2.new(
-            0.56,
-            -12,
-            0,
-            32
-        )
-
-    flingBox.Position =
-        UDim2.new(
-            0,
-            10,
-            0,
-            340
-        )
-
-    flingBox.BackgroundColor3 =
-        Color3.fromRGB(
-            20,
-            20,
-            30
-        )
-
-    flingBox.BorderSizePixel = 0
-    flingBox.Text = ""
-    flingBox.PlaceholderText =
-        "Fling target"
-
-    flingBox.TextColor3 =
-        Color3.fromRGB(
-            255,
-            255,
-            255
-        )
-
-    flingBox.PlaceholderColor3 =
-        Color3.fromRGB(
-            130,
-            130,
-            145
-        )
-
-    flingBox.Font =
-        Enum.Font.Gotham
-
-    flingBox.TextSize = 10
-    flingBox.ClearTextOnFocus = false
-    flingBox.Parent = controlGui
-
-    MakeCorner(
-        flingBox,
-        5
-    )
-
-    PlaceButton(
-        "FLING",
-        0.56,
-        2,
-        340,
-        0.20,
-        -8,
-        function()
-            local flingTarget =
-                ResolvePlayer(
-                    flingBox.Text
-                )
-
-            if not flingTarget
-            or not CanControlTarget(
-                Player,
-                flingTarget
-            ) then
-                return
-            end
-
-            Remote(
-                "fling",
-                flingTarget.Name
-            )
-        end
-    )
-
-    flingLoopButton =
-        PlaceButton(
-            "LOOP",
-            0.76,
-            0,
-            340,
-            0.24,
-            -10,
-            function()
-                local controllerTarget =
-                    RefreshTarget()
-
-                local flingTarget =
-                    ResolvePlayer(
-                        flingBox.Text
-                    )
-
-                if not controllerTarget
-                or not flingTarget
-                or not CanControlTarget(
-                    Player,
-                    flingTarget
-                ) then
-                    return
-                end
-
-                ToggleLoop(
-                    "fling",
-                    "FLING",
-                    flingLoopButton,
-                    2.2,
-                    function()
-                        if not controllerTarget.Parent
-                        or not flingTarget.Parent then
-                            return false
-                        end
-
-                        Remote(
-                            "fling",
-                            flingTarget.Name,
-                            controllerTarget,
-                            true
-                        )
-
-                        return true
-                    end
-                )
-            end
-        )
-
-    local examples =
-        Instance.new(
-            "TextLabel"
-        )
-
-    examples.Size =
-        UDim2.new(
-            1,
-            -20,
-            0,
-            28
-        )
-
-    examples.Position =
-        UDim2.new(
-            0,
-            10,
-            0,
-            378
-        )
-
-    examples.BackgroundTransparency = 1
-
-    examples.Text =
-        "CHAT: .c NICK command  •  HIDDEN: private relay  •  LOOP: reset / bring / goto / rejoin / fling"
-
-    examples.TextColor3 =
-        Color3.fromRGB(
-            145,
-            145,
-            160
-        )
-
-    examples.Font =
-        Enum.Font.Gotham
-
-    examples.TextSize = 9
-    examples.TextWrapped = true
-
-    examples.TextXAlignment =
-        Enum.TextXAlignment.Left
-
-    examples.TextYAlignment =
-        Enum.TextYAlignment.Top
-
-    examples.Parent =
-        controlGui
-
-    local locked =
-        Instance.new("Frame")
-
-    locked.Size =
-        UDim2.new(
-            1,
-            0,
-            1,
-            -32
-        )
-
-    locked.Position =
-        UDim2.new(
-            0,
-            0,
-            0,
-            32
-        )
-
-    locked.BackgroundColor3 =
-        Color3.fromRGB(
-            10,
-            10,
-            16
-        )
-
-    locked.BackgroundTransparency = 0.04
-    locked.BorderSizePixel = 0
-    locked.ZIndex = 20
-    locked.Parent = controlGui
-
-    local lockedTitle =
-        Instance.new("TextLabel")
-
-    lockedTitle.Size =
-        UDim2.new(
-            1,
-            -30,
-            0,
-            40
-        )
-
-    lockedTitle.Position =
-        UDim2.new(
-            0,
-            15,
-            0.5,
-            -65
-        )
-
-    lockedTitle.BackgroundTransparency = 1
-    lockedTitle.Text =
-        "Buy Premium to Use"
-
-    lockedTitle.TextColor3 =
-        Color3.fromRGB(
-            255,
-            255,
-            255
-        )
-
-    lockedTitle.Font =
-        Enum.Font.GothamBold
-
-    lockedTitle.TextSize = 20
-    lockedTitle.ZIndex = 21
-    lockedTitle.Parent = locked
-
-    local lockedInfo =
-        Instance.new("TextLabel")
-
-    lockedInfo.Size =
-        UDim2.new(
-            1,
-            -40,
-            0,
-            42
-        )
-
-    lockedInfo.Position =
-        UDim2.new(
-            0,
-            20,
-            0.5,
-            -20
-        )
-
-    lockedInfo.BackgroundTransparency = 1
-    lockedInfo.Text =
-        "Own the Tox Premium shirt to unlock Tox Control."
-
-    lockedInfo.TextColor3 =
-        Color3.fromRGB(
-            170,
-            170,
-            185
-        )
-
-    lockedInfo.Font =
-        Enum.Font.Gotham
-
-    lockedInfo.TextSize = 10
-    lockedInfo.TextWrapped = true
-    lockedInfo.ZIndex = 21
-    lockedInfo.Parent = locked
-
-    local buy =
-        Instance.new("TextButton")
-
-    buy.Size =
-        UDim2.new(
-            0,
-            180,
-            0,
-            34
-        )
-
-    buy.Position =
-        UDim2.new(
-            0.5,
-            -90,
-            0.5,
-            38
-        )
-
-    buy.BackgroundColor3 =
-        MAIN_COLOR
-
-    buy.BorderSizePixel = 0
-    buy.Text = "BUY PREMIUM"
-    buy.TextColor3 =
-        Color3.fromRGB(
-            255,
-            255,
-            255
-        )
-
-    buy.Font =
-        Enum.Font.GothamBold
-
-    buy.TextSize = 11
-    buy.ZIndex = 21
-    buy.Parent = locked
-
-    MakeCorner(
-        buy,
-        5
-    )
-
-    local function RefreshLock()
-        PremiumAssetCache[
-            Player.UserId
-        ] = nil
-
-        RefreshRole()
-
-        locked.Visible =
-            not CanUseControl(
-                Player
+                160
             )
     end
 
-    buy.MouseButton1Click:
-        Connect(function()
-            MarketplaceService:
-                PromptPurchase(
-                    Player,
-                    TOX_PREMIUM_ASSET_ID
-                )
-        end)
-
-    AddConnection(
-        MarketplaceService.
-            PromptPurchaseFinished:
-            Connect(function(
-                player,
-                assetId,
-                purchased
+    if not ModerateToxChatMessage(
+        message
+    ) then
+        CustomNotify(
+            "Message blocked by Tox Chat filter",
+            Color3.fromRGB(
+                255,
+                100,
+                100
             )
-                if player == Player
-                and tonumber(assetId)
-                    == TOX_PREMIUM_ASSET_ID
-                and purchased then
-                    PremiumAssetCache[
-                        Player.UserId
-                    ] = true
+        )
 
-                    RefreshLock()
+        return
+    end
 
-                    CustomNotify(
-                        "Tox Premium unlocked",
-                        Color3.fromRGB(
-                            100,
-                            255,
-                            130
-                        ),
-                        4
-                    )
-                end
-            end)
-    )
+    if IsToxChatSpam(
+        Player.UserId,
+        message
+    ) then
+        CustomNotify(
+            "Message blocked as spam",
+            Color3.fromRGB(
+                255,
+                180,
+                70
+            )
+        )
 
-    close.MouseButton1Click:
-        Connect(function()
-            controlGui.Visible =
-                false
-        end)
+        return
+    end
 
-    -- Embedded in CONTROL page; no detached drag/minimize behavior.
+    ToxChatLastSend = tick()
 
-    RefreshRole()
-    RefreshMode()
-    RefreshLock()
+    local nonce =
+        HttpService:
+            GenerateGUID(false)
 
-    return controlGui
+    local payload = {
+        nonce = nonce,
+        displayName =
+            GetToxChatDisplayName(),
+        username =
+            Player.Name,
+        userId =
+            Player.UserId,
+        message = message,
+        placeId =
+            game.PlaceId,
+        gameId =
+            game.GameId,
+        sentAt =
+            os.time()
+    }
+
+    task.spawn(function()
+        local success =
+            PublishToxChatPayload(
+                payload
+            )
+
+        if success then
+            ToxChatSeenNonces[
+                nonce
+            ] = true
+
+            if ToxChatInput
+            and ToxChatInput.Text
+                == message then
+                ToxChatInput.Text = ""
+            end
+
+            if AddToxChatMessage then
+                AddToxChatMessage(
+                    GetToxChatDisplayName(),
+                    message,
+                    false,
+                    true
+                )
+            end
+
+            ToxChatFailureCount = 0
+        else
+            CustomNotify(
+                "Tox Chat send failed",
+                Color3.fromRGB(
+                    255,
+                    100,
+                    100
+                ),
+                4
+            )
+        end
+    end)
 end
 
-local ControlGui = nil
-
-local guiOk, guiResult =
-    pcall(
-        InitToxControlGui
-    )
-
-if guiOk then
-    ControlGui =
-        guiResult
-
-    getgenv().ToxControlGui = ControlGui
-
-    if ControlGui then
-        ControlGui.Visible = true
-    end
-else
-    CustomNotify(
-        "Tox Control UI failed: "
-        .. string.sub(
-            tostring(guiResult),
-            1,
-            80
-        ),
-        Color3.fromRGB(
-            255,
-            100,
-            100
-        ),
-        6
-    )
-
-    warn(
-        "[ToxHub ToxControl UI Error]: "
-        .. tostring(guiResult)
-    )
+if ToxChatSendBtn then
+    ToxChatSendBtn.MouseButton1Click:Connect(SendToxChatMessage)
 end
 
-AddConnection(
-    Player.CharacterAdded:
-        Connect(function(character)
-            FrozenByControl = false
-
-            task.defer(function()
-                local root =
-                    character:
-                        WaitForChild(
-                            "HumanoidRootPart",
-                            8
-                        )
-
-                if root then
-                    root.Anchored = false
-                end
-            end)
-        end)
-)
-
-getgenv().ToxSystemsCleanup =
-    function()
-        SetAutoJump(false)
-
-        if Player.Character then
-            local root =
-                Player.Character:
-                    FindFirstChild(
-                        "HumanoidRootPart"
-                    )
-
-            if root then
-                root.Anchored = false
-            end
+if ToxChatInput then
+    ToxChatInput.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            SendToxChatMessage()
         end
+    end)
+end
 
-        FrozenByControl = false
-
-        if ControlGui
-        and ControlGui.Parent then
-            ControlGui.Visible = false
-        end
-
-        if getgenv().ToxControlGui == ControlGui then
-            getgenv().ToxControlGui = nil
-        end
+getgenv().ToxChatCleanup = function()
+    if getgenv().ToxChatLoadedToken == ToxChatExecutionToken then
+        getgenv().ToxChatLoaded = nil
+        getgenv().ToxChatLoadedToken = nil
     end
 
-getgenv().ToxSystemsLoaded = true
+    local chatGui = getgenv().ToxChatGui
+    if chatGui and chatGui.Parent then
+        pcall(function()
+            chatGui:Destroy()
+        end)
+    end
+
+    if getgenv().ToxChatGui == chatGui then
+        getgenv().ToxChatGui = nil
+    end
+end
+
+task.spawn(function()
+    while ToxChatExecutionActive() do
+        PollToxChat()
+        task.wait(1)
+    end
+end)
+
+if ToxChatGui then
+    ToxChatGui.Visible = true
+end
+
+getgenv().ToxChatLoadedToken = ToxChatExecutionToken
+getgenv().ToxChatLoaded = true
