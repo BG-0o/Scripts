@@ -3126,15 +3126,17 @@ if DetectedGameModule and DetectedGameModule.Ready then
     GamePage = CreatePage(DetectedGameModule.ShortName)
 end
 
-local CombatPage = CreatePage("COMBAT")
-local PlayerPage = CreatePage("PLAYER")
-local VisualsPage = CreatePage("VISUALS")
-local FlingPage = CreatePage("MISC")
+local UniversalPage = CreatePage("UNIVERSAL")
+local CombatPage = UniversalPage
+local PlayerPage = UniversalPage
+local VisualsPage = UniversalPage
+local FlingPage = UniversalPage
 local ScriptsPage = CreatePage("SCRIPTS")
 local JoinPage = CreatePage("JOIN")
 local ConfigPage = CreatePage("CONFIG")
 
 getgenv().GamePage = GamePage
+getgenv().UniversalPage = UniversalPage
 getgenv().CombatPage = CombatPage
 getgenv().PlayerPage = PlayerPage
 getgenv().VisualsPage = VisualsPage
@@ -3143,7 +3145,7 @@ getgenv().ScriptsPage = ScriptsPage
 getgenv().JoinPage = JoinPage
 getgenv().ConfigPage = ConfigPage
 
-getgenv().CurrentPage = CombatPage
+getgenv().CurrentPage = UniversalPage
 
 getgenv().CreateTab = function(Name, Page)
 	local Button = Instance.new("TextButton")
@@ -3196,19 +3198,21 @@ if GamePage and DetectedGameModule then
     GameTab = CreateTab(DetectedGameModule.ShortName, GamePage)
 end
 
-local CombatTab = CreateTab("COMBAT", CombatPage)
-local PlayerTab = CreateTab("PLAYER", PlayerPage)
-local VisualsTab = CreateTab("VISUALS", VisualsPage)
+local UniversalTab = CreateTab("UNIVERSAL", UniversalPage)
 local ScriptsTab = CreateTab("SCRIPTS", ScriptsPage)
 local JoinTab = CreateTab("JOIN", JoinPage)
-local FlingTab = CreateTab("MISC", FlingPage)
 local ConfigTab = CreateTab("CONFIG", ConfigPage)
 
 getgenv().GameTab = GameTab
+getgenv().UniversalTab = UniversalTab
+getgenv().CombatTab = UniversalTab
+getgenv().PlayerTab = UniversalTab
+getgenv().VisualsTab = UniversalTab
+getgenv().FlingTab = UniversalTab
 
-CombatPage.Visible = true
-CombatTab.BackgroundColor3 = MAIN_COLOR
-CombatTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+UniversalPage.Visible = true
+UniversalTab.BackgroundColor3 = MAIN_COLOR
+UniversalTab.TextColor3 = Color3.fromRGB(255, 255, 255)
 
 
 getgenv().ToxPageButtonsByPage = getgenv().ToxPageButtonsByPage or {}
@@ -3803,7 +3807,7 @@ getgenv().ShowToxUpdateGui = function(version, changes)
     end)
 end
 
-getgenv().ShowToxUpdateGui("2026-09-14-games-update-3", {
+getgenv().ShowToxUpdateGui("2026-09-14-universal-reorg-4", {
     Added = {
         "Build A Boat For Treasure (BABFT)",
         "Prison Life (PL)",
@@ -3816,6 +3820,8 @@ getgenv().ShowToxUpdateGui("2026-09-14-games-update-3", {
         "All saved options now stay disabled until the loading screen fully finishes"
     },
     Changed = {
+        "Combat, Player, Visuals and Misc are now organized inside the UNIVERSAL tab",
+        "UNIVERSAL categories now use collapsible sections",
         "Updated game module registry and game-specific settings support"
     }
 })
