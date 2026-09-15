@@ -500,6 +500,10 @@ env.ToxSetNoclipCamera = SetNoclipCamera
 env.ToxSetFreecam = SetFreecam
 
 env.ToxUniversal2Cleanup = function()
+    if type(env.ToxUniversal3Cleanup) == "function" then
+        pcall(env.ToxUniversal3Cleanup)
+    end
+
     StopFreecam()
     RestoreCameraNoclip()
 
@@ -520,5 +524,30 @@ task.spawn(function()
     end
 end)
 
+local universal3Ok, universal3Error = pcall(function()
+    local source = game:HttpGet(
+        "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Universal3.lua?toxv=2026-09-14-part1-split"
+    )
+    local chunk, compileError = loadstring(source)
+
+    if not chunk then
+        error(compileError)
+    end
+
+    chunk()
+end)
+
+if not universal3Ok then
+    if type(env.CustomNotify) == "function" then
+        env.CustomNotify(
+            "Universal3.lua failed: " .. string.sub(tostring(universal3Error), 1, 90),
+            Color3.fromRGB(255, 100, 100),
+            6
+        )
+    end
+
+    warn("[ToxHub Universal3.lua Error]: " .. tostring(universal3Error))
+end
+
 env.ToxUniversal2Loaded = true
-env.ToxUniversal2Version = "2026-09-14-camera-features"
+env.ToxUniversal2Version = "2026-09-14-camera-features-plus-universal3"
