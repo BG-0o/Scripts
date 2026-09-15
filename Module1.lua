@@ -167,6 +167,10 @@ if HasRunningToxHub() then
 
     getgenv().Destroyed = true
     getgenv().ScriptLoaded = false
+    getgenv().ToxOptionsReady = nil
+    getgenv().ToxStartupBooleanState = nil
+    getgenv().ToxStartupToggleCallbacks = nil
+    getgenv().ToxStartupOptionsApplied = nil
     getgenv().ToxHubActive = false
     getgenv().ToxUniversalLoaded = nil
     getgenv().ToxNDSModuleLoadedJobId = nil
@@ -450,6 +454,10 @@ getgenv().GameSpecificSettings = {}
 getgenv().BaseSharedSettings = {}
 getgenv().Destroyed = false
 getgenv().ScriptLoaded = false
+getgenv().ToxOptionsReady = nil
+getgenv().ToxStartupBooleanState = {}
+getgenv().ToxStartupToggleCallbacks = {}
+getgenv().ToxStartupOptionsApplied = false
 getgenv().ToxHubActive = true
 
 if getgenv().ScriptConnections then
@@ -1271,6 +1279,10 @@ getgenv().AutoSaveConfiguration = function()
         return
     end
 
+    if getgenv().ToxOptionsReady == false then
+        return
+    end
+
     EnsureFolder()
 
     if not writefile then
@@ -1520,9 +1532,26 @@ local function DisableUnsupportedGameActions()
     Settings.Render3D = true
 end
 
+local function StageOptionsUntilLoadScreen()
+    local staged = {}
+
+    for key, value in pairs(Settings) do
+        if typeof(value) == "boolean" then
+            staged[key] = value == true
+            Settings[key] = false
+        end
+    end
+
+    getgenv().ToxStartupBooleanState = staged
+    getgenv().ToxStartupToggleCallbacks = {}
+    getgenv().ToxStartupOptionsApplied = false
+    getgenv().ToxOptionsReady = false
+end
+
 LoadConfiguration()
 NormalizeStartupDefaultToggles()
 DisableUnsupportedGameActions()
+StageOptionsUntilLoadScreen()
 
 getgenv().SavedWaypointsByPlace =
     typeof(getgenv().SavedWaypointsByPlace) == "table"
@@ -3774,6 +3803,23 @@ getgenv().ShowToxUpdateGui = function(version, changes)
     end)
 end
 
+getgenv().ShowToxUpdateGui("2026-09-14-games-update-3", {
+    Added = {
+        "Build A Boat For Treasure (BABFT)",
+        "Prison Life (PL)",
+        "Flee the Facility (FTF)"
+    },
+    Fixed = {
+        "BABFT Autofarm no longer drops the player into the water between stages",
+        "BABFT final chest now stops after 3 teleport attempts with 1 second between each",
+        "Game settings remain separated and saved by Place ID",
+        "All saved options now stay disabled until the loading screen fully finishes"
+    },
+    Changed = {
+        "Updated game module registry and game-specific settings support"
+    }
+})
+
 local ChatLogGui = Instance.new("Frame")
 ChatLogGui.Name = "ChatLogFrame"
 ChatLogGui.Size = UDim2.new(0, 360, 0, 240)
@@ -4988,6 +5034,25 @@ function RegisterSharedToggle(Key, Controller)
     table.insert(getgenv().SharedToggleControls[Key], Controller)
 end
 
+local function RegisterStartupToggleCallback(Key, Callback)
+    if getgenv().ToxOptionsReady ~= false
+    or not Key
+    or type(Callback) ~= "function" then
+        return
+    end
+
+    local callbacks = getgenv().ToxStartupToggleCallbacks
+
+    if typeof(callbacks) ~= "table" then
+        callbacks = {}
+        getgenv().ToxStartupToggleCallbacks = callbacks
+    end
+
+    if callbacks[Key] == nil then
+        callbacks[Key] = Callback
+    end
+end
+
 getgenv().SyncValueVisuals = function(Key, Value)
     if not Key then return end
 
@@ -5052,7 +5117,9 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     Indicator.Parent = Toggle
     local IndicatorCorner = Instance.new("UICorner") IndicatorCorner.CornerRadius = UDim.new(0, 3) IndicatorCorner.Parent = Indicator
 
-    local Enabled = DefaultValue or false
+    local Enabled = getgenv().ToxOptionsReady == false
+        and false
+        or (DefaultValue == true)
 
     local function Update()
         if Enabled then
@@ -5073,9 +5140,10 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     }
 
     RegisterSharedToggle(SyncKey, Controller)
+    RegisterStartupToggleCallback(SyncKey, Callback)
 
     Button.MouseButton1Click:Connect(function()
-        if Destroyed then return end
+        if Destroyed or getgenv().ToxOptionsReady == false then return end
 
         Enabled = not Enabled
         Update()
@@ -5150,7 +5218,9 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     Indicator.Parent = ToggleButton
     local IndicatorCorner = Instance.new("UICorner") IndicatorCorner.CornerRadius = UDim.new(0, 3) IndicatorCorner.Parent = Indicator
 
-    local Enabled = DefaultToggle or false
+    local Enabled = getgenv().ToxOptionsReady == false
+        and false
+        or (DefaultToggle == true)
 
     local function UpdateToggle()
         if Enabled then
@@ -5177,9 +5247,10 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
 
     RegisterSharedToggle(SyncKey, Controller)
     RegisterSharedValue(SyncKey, Controller)
+    RegisterStartupToggleCallback(SyncKey, CallbackToggle)
 
     ToggleButton.MouseButton1Click:Connect(function()
-        if Destroyed then return end
+        if Destroyed or getgenv().ToxOptionsReady == false then return end
 
         Enabled = not Enabled
         UpdateToggle()
@@ -5197,7 +5268,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     end)
 
     Input.FocusLost:Connect(function()
-        if Destroyed then return end
+        if Destroyed or getgenv().ToxOptionsReady == false then return end
 
         local Number = tonumber(Input.Text)
 
@@ -5268,7 +5339,7 @@ getgenv().CreateInputWithButton = function(Name, Page, DefaultText, ButtonText, 
 	local ButtonCorner = Instance.new("UICorner") ButtonCorner.CornerRadius = UDim.new(0, 4) ButtonCorner.Parent = Button
 
 	Button.MouseButton1Click:Connect(function()
-		if Destroyed then return end
+		if Destroyed or getgenv().ToxOptionsReady == false then return end
 		Callback(Input.Text)
 	end)
 
@@ -5336,12 +5407,12 @@ getgenv().CreateInputWithTwoButtons = function(Name, Page, DefaultText, Btn1Text
 	local B2Corner = Instance.new("UICorner") B2Corner.CornerRadius = UDim.new(0, 4) B2Corner.Parent = Button2
 
 	Button1.MouseButton1Click:Connect(function()
-		if Destroyed then return end
+		if Destroyed or getgenv().ToxOptionsReady == false then return end
 		Callback(Input.Text, "TP")
 	end)
 
     Button2.MouseButton1Click:Connect(function()
-		if Destroyed then return end
+		if Destroyed or getgenv().ToxOptionsReady == false then return end
 		Callback(Input.Text, "LOOP")
 	end)
 
@@ -5385,7 +5456,7 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback
 	for i, opt in ipairs(Options) do if opt == DefaultOption then CurrentIdx = i end end
 
 	Button.MouseButton1Click:Connect(function()
-		if Destroyed then return end
+		if Destroyed or getgenv().ToxOptionsReady == false then return end
 		CurrentIdx = CurrentIdx + 1
 		if CurrentIdx > #Options then CurrentIdx = 1 end
 		Button.Text = Options[CurrentIdx]
@@ -5413,7 +5484,7 @@ getgenv().CreateButton = function(Name, Page, Callback)
 	local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 4) Corner.Parent = Button
 
 	Button.MouseButton1Click:Connect(function()
-		if Destroyed then return end
+		if Destroyed or getgenv().ToxOptionsReady == false then return end
 		Callback(Button)
 	end)
 
@@ -5439,7 +5510,7 @@ getgenv().CreateConfirmButton = function(Name, Page, Callback)
     local Confirming = false
 
     Button.MouseButton1Click:Connect(function()
-        if Destroyed then return end
+        if Destroyed or getgenv().ToxOptionsReady == false then return end
         if not Confirming then
             Confirming = true
             Button.Text = "CONFIRM " .. string.upper(Name) .. "? (Click Again)"
@@ -5499,7 +5570,7 @@ getgenv().CreateKeybindButton = function(Name, Page, DefaultKey, Callback)
     local CurrentKey = DefaultKey
 
     Button.MouseButton1Click:Connect(function()
-        if Binding then return end
+        if getgenv().ToxOptionsReady == false or Binding then return end
         Binding = true
         Button.Text = "Press Key..."
 
@@ -5608,7 +5679,9 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
 
     local Binding = false
     local CurrentKey = DefaultKey
-    local Enabled = DefaultToggle == true
+    local Enabled = getgenv().ToxOptionsReady == false
+        and false
+        or (DefaultToggle == true)
 
     local function UpdateToggle()
         if Enabled then
@@ -5629,9 +5702,10 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     }
 
     RegisterSharedToggle(SyncKey, Controller)
+    RegisterStartupToggleCallback(SyncKey, ToggleCallback)
 
     KeyButton.MouseButton1Click:Connect(function()
-        if Destroyed or Binding then return end
+        if Destroyed or getgenv().ToxOptionsReady == false or Binding then return end
 
         Binding = true
         KeyButton.Text = "..."
@@ -5665,7 +5739,7 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     end)
 
     Toggle.MouseButton1Click:Connect(function()
-        if Destroyed then return end
+        if Destroyed or getgenv().ToxOptionsReady == false then return end
 
         Enabled = not Enabled
         UpdateToggle()
@@ -5695,3 +5769,58 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
 
     return Box
 end
+
+local function ApplyStagedOptionsAfterLoadScreen()
+    if getgenv().ToxStartupOptionsApplied
+    or getgenv().Destroyed
+    or not getgenv().ScriptLoaded then
+        return
+    end
+
+    local staged = getgenv().ToxStartupBooleanState
+    local callbacks = getgenv().ToxStartupToggleCallbacks
+
+    if typeof(staged) ~= "table" then
+        staged = {}
+    end
+
+    for key, value in pairs(staged) do
+        Settings[key] = value == true
+    end
+
+    getgenv().ToxStartupOptionsApplied = true
+    getgenv().ToxOptionsReady = true
+
+    if getgenv().SyncToggleVisuals then
+        for key, value in pairs(staged) do
+            pcall(function()
+                getgenv().SyncToggleVisuals(key, value == true)
+            end)
+        end
+    end
+
+    if typeof(callbacks) == "table" then
+        for key, value in pairs(staged) do
+            if value == true
+            and type(callbacks[key]) == "function" then
+                pcall(callbacks[key], true)
+            end
+        end
+    end
+
+    getgenv().ToxStartupBooleanState = nil
+    getgenv().ToxStartupToggleCallbacks = nil
+end
+
+task.spawn(function()
+    while not getgenv().Destroyed
+    and not getgenv().ScriptLoaded do
+        task.wait(0.03)
+    end
+
+    if getgenv().Destroyed then
+        return
+    end
+
+    ApplyStagedOptionsAfterLoadScreen()
+end)
