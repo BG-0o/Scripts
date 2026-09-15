@@ -1,11 +1,3 @@
-local env = getgenv()
-local ToxExecutionToken = env.ToxExecutionToken
-
-local function IsCurrentExecution()
-    return env.ToxExecutionToken == ToxExecutionToken
-        and env.Destroyed ~= true
-end
-
 local UNIVERSAL_URL =
     "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Universal.lua"
 
@@ -53,10 +45,6 @@ local function LoadRemote(
     name,
     url
 )
-    if not IsCurrentExecution() then
-        return false
-    end
-
     local requestUrl =
         AddToxCacheBuster(url)
 
@@ -64,10 +52,6 @@ local function LoadRemote(
         pcall(function()
             return game:HttpGet(requestUrl)
         end)
-
-    if not IsCurrentExecution() then
-        return false
-    end
 
     if not fetchOk then
         Notify(
@@ -111,10 +95,6 @@ local function LoadRemote(
             .. " Compile Error]: "
             .. detail
         )
-        return false
-    end
-
-    if not IsCurrentExecution() then
         return false
     end
 
@@ -186,7 +166,6 @@ and getgenv().GamePage then
     local env =
         getgenv()
 
-    local moduleExecutionToken = env.ToxExecutionToken
     local gamePage =
         env.GamePage
 
@@ -226,11 +205,6 @@ and getgenv().GamePage then
         task.spawn(function()
             local ok, err =
                 pcall(function()
-                    if env.ToxExecutionToken ~= moduleExecutionToken
-                    or env.Destroyed == true then
-                        return
-                    end
-
                     local source =
                         game:HttpGet(
                             AddToxCacheBuster(moduleUrl)
@@ -241,11 +215,6 @@ and getgenv().GamePage then
                         loadstring(
                             source
                         )
-
-                    if env.ToxExecutionToken ~= moduleExecutionToken
-                    or env.Destroyed == true then
-                        return
-                    end
 
                     if not chunk then
                         error(
@@ -258,16 +227,6 @@ and getgenv().GamePage then
 
                     chunk()
                 end)
-
-            if env.ToxExecutionToken ~= moduleExecutionToken
-            or env.Destroyed == true then
-                if env.ToxGameModuleLoadingPage == gamePage
-                and env.ToxGameModuleLoadingUrl == moduleUrl then
-                    env.ToxGameModuleLoadingPage = nil
-                    env.ToxGameModuleLoadingUrl = nil
-                end
-                return
-            end
 
             if env.ToxGameModuleLoadingPage
                 == gamePage
