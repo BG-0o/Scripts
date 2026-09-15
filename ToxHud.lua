@@ -11,9 +11,15 @@ local function SafeLoad(url)
         warn("[ToxHud Syntax Error]: " .. tostring(err))
         return false
     end
-    pcall(func)
+    local runSuccess, runError = pcall(func)
+    if not runSuccess then
+        warn("[ToxHub Runtime Error]: " .. tostring(runError))
+        return false
+    end
+
     return true
 end
 
-SafeLoad("https://raw.githubusercontent.com/BG-0o/Scripts/main/Module1.lua")
-SafeLoad("https://raw.githubusercontent.com/BG-0o/Scripts/main/Module2.lua")
+if SafeLoad("https://raw.githubusercontent.com/BG-0o/Scripts/main/Module1.lua") then
+    SafeLoad("https://raw.githubusercontent.com/BG-0o/Scripts/main/Module2.lua")
+end
