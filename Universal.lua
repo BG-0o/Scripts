@@ -545,7 +545,6 @@ end
 RegisterSubGuiMinimize(ChatLogGui, -88)
 RegisterSubGuiMinimize(MusicGui, -52)
 RegisterSubGuiMinimize(WaypointsGui, -52)
-RegisterSubGuiMinimize(ToxChatGui, -52)
 
 if JoinGamesGui then
     JoinGamesGui.Visible = false
@@ -556,7 +555,6 @@ if getgenv().MakeResizable then
     getgenv().MakeResizable(ChatLogGui, "ChatLogs", 0.85, 1.50)
     getgenv().MakeResizable(MusicGui, "Music", 0.85, 1.50)
     getgenv().MakeResizable(WaypointsGui, "Waypoints", 0.85, 1.50)
-    getgenv().MakeResizable(ToxChatGui, "ToxChat", 0.85, 1.50)
 end
 
 getgenv().ToxLinkedSubGuis = getgenv().ToxLinkedSubGuis or {}
@@ -6719,14 +6717,12 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
             SubGuisPreKeyHiddenState.ChatLog = ChatLogGui.Visible
             SubGuisPreKeyHiddenState.Music = MusicGui.Visible
             SubGuisPreKeyHiddenState.Waypoints = WaypointsGui.Visible
-            SubGuisPreKeyHiddenState.ToxChat = ToxChatGui.Visible
             SubGuisPreKeyHiddenState.QuickJoin = JoinGamesGui and JoinGamesGui.Visible or false
 
             Main.Visible = false
             ChatLogGui.Visible = false
             MusicGui.Visible = false
             WaypointsGui.Visible = false
-            ToxChatGui.Visible = false
             if JoinGamesGui then JoinGamesGui.Visible = false end
 
             for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
@@ -6748,9 +6744,6 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 if SubGuisPreKeyHiddenState.Waypoints ~= nil then
                     WaypointsGui.Visible = SubGuisPreKeyHiddenState.Waypoints
                 end
-                if SubGuisPreKeyHiddenState.ToxChat ~= nil then
-                    ToxChatGui.Visible = SubGuisPreKeyHiddenState.ToxChat
-                end
                 if JoinGamesGui and SubGuisPreKeyHiddenState.QuickJoin ~= nil then
                     JoinGamesGui.Visible = SubGuisPreKeyHiddenState.QuickJoin
                 end
@@ -6766,8 +6759,7 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 ChatLogGui.Visible = false
                 MusicGui.Visible = false
                 WaypointsGui.Visible = false
-                ToxChatGui.Visible = false
-                if JoinGamesGui then JoinGamesGui.Visible = false end
+                    if JoinGamesGui then JoinGamesGui.Visible = false end
             end
         end
     end
@@ -7696,7 +7688,6 @@ if Minimize then
             CollapseSubGuiWithMain("ChatLog", ChatLogGui)
             CollapseSubGuiWithMain("Music", MusicGui)
             CollapseSubGuiWithMain("Waypoints", WaypointsGui)
-            CollapseSubGuiWithMain("ToxChat", ToxChatGui)
 
             for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
                 CollapseSubGuiWithMain("Extra_" .. tostring(key), gui)
@@ -7705,7 +7696,6 @@ if Minimize then
             RestoreSubGuiAfterMain("ChatLog", ChatLogGui)
             RestoreSubGuiAfterMain("Music", MusicGui)
             RestoreSubGuiAfterMain("Waypoints", WaypointsGui)
-            RestoreSubGuiAfterMain("ToxChat", ToxChatGui)
 
             for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
                 RestoreSubGuiAfterMain("Extra_" .. tostring(key), gui)
