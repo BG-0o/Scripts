@@ -41,6 +41,7 @@ if Settings.AimbotMode ~= "CAMERA" and Settings.AimbotMode ~= "MOUSE" then
 end
 Settings.AimbotBindEnabled = Settings.AimbotBindEnabled == true
 Settings.AimbotKey = Settings.AimbotKey or Enum.KeyCode.E
+Settings.AimbotBlatant = Settings.AimbotBlatant == true
 Settings.Render3D = Settings.Render3D ~= false
 Settings.Render3DColor = string.upper(tostring(Settings.Render3DColor or "BLACK"))
 if Settings.Render3DColor ~= "WHITE"
@@ -1519,6 +1520,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
     end
     Settings.AimbotBindEnabled = Settings.AimbotBindEnabled == true
     Settings.AimbotKey = Settings.AimbotKey or Enum.KeyCode.E
+    Settings.AimbotBlatant = Settings.AimbotBlatant == true
     Settings.AimLock = Settings.AimLock == true
     Settings.LockRadius = math.clamp(tonumber(Settings.LockRadius) or 110, 1, 2000)
     Settings.AimTargets = tostring(Settings.AimTargets or "Players Only")
@@ -2142,6 +2144,17 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end,
             "AimLock"
         )
+
+        CreateToggle(
+            "Blatant",
+            page,
+            Settings.AimbotBlatant,
+            function(value)
+                Settings.AimbotBlatant = value == true
+                lockedTarget = nil
+            end,
+            "AimbotBlatant"
+        )
     
         CreateDropdown(
             "Aim Targets",
@@ -2464,7 +2477,8 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         MoveAfter(combatSection, "Aimbot Bind", "Aimbot")
         MoveAfter(combatSection, "Aim Smoothness", "Aimbot Bind")
         MoveAfter(combatSection, "Aim Lock", "Aim Smoothness")
-        MoveAfter(combatSection, "Aim Targets", "Aim Lock")
+        MoveAfter(combatSection, "Blatant", "Aim Lock")
+        MoveAfter(combatSection, "Aim Targets", "Blatant")
         MoveAfter(combatSection, "Ignore Friends", "Aim Targets")
 
         MoveAfter(playerSection, "Freecam", "Jump")
@@ -2796,20 +2810,23 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
                 end
             end
     
-            local rightClick = UserInputService:IsMouseButtonPressed(
-                Enum.UserInputType.MouseButton2
-            )
-            local activationPressed = rightClick
+            local blatant = Settings.AimbotBlatant == true
+            local activationPressed = false
 
-            if Settings.AimbotBindEnabled == true then
+            if blatant then
+                activationPressed = true
+            elseif Settings.AimbotBindEnabled == true then
                 local key = Settings.AimbotKey
-                activationPressed = false
 
                 if typeof(key) == "EnumItem"
                 and key.EnumType == Enum.KeyCode
                 and key ~= Enum.KeyCode.Unknown then
                     activationPressed = UserInputService:IsKeyDown(key)
                 end
+            else
+                activationPressed = UserInputService:IsMouseButtonPressed(
+                    Enum.UserInputType.MouseButton2
+                )
             end
 
             local mode = string.upper(tostring(Settings.AimbotMode or "CAMERA"))
@@ -2849,7 +2866,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
                 end
 
                 local mousePosition = UserInputService:GetMouseLocation()
-                local smooth = math.max(1, tonumber(Settings.AimbotSmoothness) or 2)
+                local smooth = blatant and 1 or math.max(1, tonumber(Settings.AimbotSmoothness) or 2)
                 local dx = (screen.X - mousePosition.X) / smooth
                 local dy = (screen.Y - mousePosition.Y) / smooth
 
@@ -2867,7 +2884,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
                 return
             end
 
-            if Settings.AimLock ~= true then
+            if Settings.AimLock ~= true and not blatant then
                 lockedTarget = nil
                 return
             end
@@ -2889,7 +2906,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end
 
             local aimPosition = target.Part.Position
-            local smooth = math.max(
+            local smooth = blatant and 1 or math.max(
                 1,
                 tonumber(Settings.AimbotSmoothness) or 2
             )
