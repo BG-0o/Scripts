@@ -42,18 +42,6 @@ if game.PlaceId ~= NDSPlaceId then
 end
 
 Settings.WalkFling = Settings.WalkFling == true
-Settings.AimLock = Settings.AimLock == true
-Settings.LockRadius = math.clamp(tonumber(Settings.LockRadius) or 110, 1, 2000)
-Settings.AimTargets = tostring(Settings.AimTargets or "Players Only")
-Settings.IgnoreFriends = Settings.IgnoreFriends == true
-Settings.ProjectileSpeed = math.clamp(tonumber(Settings.ProjectileSpeed) or 200, 1, 5000)
-Settings.ProjectileDrop = math.clamp(tonumber(Settings.ProjectileDrop) or 0, -1000, 1000)
-Settings.RageMode = Settings.RageMode == true
-Settings.RageDistance = math.clamp(tonumber(Settings.RageDistance) or 5, 1, 5000)
-Settings.AntiAim = Settings.AntiAim == true
-Settings.AntiAimType = tostring(Settings.AntiAimType or "Shift")
-Settings.NormalizeAnimations = Settings.NormalizeAnimations == true
-Settings.ForceJump = Settings.ForceJump == true
 Settings.EspMaxDistanceByPlace =
     typeof(Settings.EspMaxDistanceByPlace) == "table"
     and Settings.EspMaxDistanceByPlace
@@ -115,17 +103,6 @@ local HumanoidDefaults = setmetatable({}, {__mode = "k"})
 local NoclipDefaults = setmetatable({}, {__mode = "k"})
 local AntiFlingDefaults = setmetatable({}, {__mode = "k"})
 local HitboxDefaults = setmetatable({}, {__mode = "k"})
-local AntiAimDefaults = setmetatable({}, {__mode = "k"})
-local AnimationSpeedDefaults = setmetatable({}, {__mode = "k"})
-local ForceJumpDefaults = setmetatable({}, {__mode = "k"})
-local FriendAimCache = {}
-local NPCAimCache = {}
-local NPCAimCacheTime = 0
-local LockedAimTarget = nil
-local AntiAimJitter = false
-local AntiAimJitterClock = 0
-local AntiAimSpinYaw = 0
-local NormalizeAnimationClock = 0
 
 local FOVDefault = Camera.FieldOfView
 local FOVCaptured = false
@@ -4637,540 +4614,39 @@ local function IsPartVisible(part)
     return result == nil
 end
 
-local function IsAimFriend(targetPlayer)
-    if not targetPlayer
-    or targetPlayer == Player
-    or not Settings.IgnoreFriends then
-        return false
-    end
-
-    local userId = tonumber(targetPlayer.UserId) or 0
-    local cached = FriendAimCache[userId]
-
-    if cached ~= nil then
-        return cached == true
-    end
-
-    local isFriend = false
-    pcall(function()
-        isFriend = Player:IsFriendsWith(userId) == true
-    end)
-
-    FriendAimCache[userId] = isFriend
-    return isFriend
-end
-
-local function GetAimPartFromModel(model)
-    if not model then
-        return nil
-    end
-
-    local wanted = tostring(Settings.AimPart or "Head")
-    local part = model:FindFirstChild(wanted)
-
-    if part and part:IsA("BasePart") then
-        return part
-    end
-
-    part = model:FindFirstChild("Head")
-        or model:FindFirstChild("HumanoidRootPart")
-        or model:FindFirstChild("UpperTorso")
-        or model:FindFirstChild("Torso")
-
-    return part and part:IsA("BasePart") and part or nil
-end
-
-local function RefreshNPCAimCache()
-    if tick() - NPCAimCacheTime < 1 then
-        return
-    end
-
-    NPCAimCacheTime = tick()
-    NPCAimCache = {}
-
-    local count = 0
-
-    for _, object in ipairs(workspace:GetDescendants()) do
-        if object:IsA("Humanoid")
-        and object.Health > 0 then
-            local model = object.Parent
-
-            if model
-            and model:IsA("Model")
-            and not Players:GetPlayerFromCharacter(model) then
-                NPCAimCache[#NPCAimCache + 1] = model
-                count += 1
-
-                if count >= 250 then
-                    break
+local function GetClosestPlayerToMouse()
+    local Closest = nil
+    local ShortestDistance = Settings.FOVRadius or 120
+    local MousePos = UserInputService:GetMouseLocation()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= Player and p.Character then
+            local targetPart = p.Character:FindFirstChild(Settings.AimPart or "Head")
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            if targetPart and hum and hum.Health > 0 and IsPartVisible(targetPart) then
+                local ScreenPos, OnScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                if OnScreen then
+                    local Dist = (Vector2.new(ScreenPos.X, ScreenPos.Y) - MousePos).Magnitude
+                    if Dist < ShortestDistance then
+                        ShortestDistance = Dist
+                        Closest = targetPart
+                    end
                 end
             end
         end
     end
-end
-
-local function GetAimCandidates()
-    local mode = tostring(Settings.AimTargets or "Players Only")
-    local candidates = {}
-
-    if mode ~= "NPCs Only" then
-        for _, targetPlayer in ipairs(Players:GetPlayers()) do
-            if targetPlayer ~= Player
-            and targetPlayer.Character
-            and not IsAimFriend(targetPlayer) then
-                local hum = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
-                local part = GetAimPartFromModel(targetPlayer.Character)
-
-                if hum
-                and hum.Health > 0
-                and part then
-                    candidates[#candidates + 1] = {
-                        Part = part,
-                        Humanoid = hum,
-                        Player = targetPlayer,
-                        Model = targetPlayer.Character
-                    }
-                end
-            end
-        end
-    end
-
-    if mode == "NPCs Only"
-    or mode == "Players + NPCs" then
-        RefreshNPCAimCache()
-
-        for _, model in ipairs(NPCAimCache) do
-            local hum = model and model:FindFirstChildOfClass("Humanoid")
-            local part = GetAimPartFromModel(model)
-
-            if hum
-            and hum.Health > 0
-            and part then
-                candidates[#candidates + 1] = {
-                    Part = part,
-                    Humanoid = hum,
-                    Player = nil,
-                    Model = model
-                }
-            end
-        end
-    end
-
-    return candidates
-end
-
-local function IsAimTargetValid(target)
-    if typeof(target) ~= "table"
-    or not target.Part
-    or not target.Part.Parent
-    or not target.Humanoid
-    or target.Humanoid.Health <= 0 then
-        return false
-    end
-
-    if target.Player then
-        if target.Player.Parent ~= Players
-        or target.Player == Player
-        or IsAimFriend(target.Player) then
-            return false
-        end
-    end
-
-    return IsPartVisible(target.Part)
-end
-
-local function GetClosestAimTargetToMouse()
-    local closest = nil
-    local shortestDistance = math.max(
-        1,
-        tonumber(Settings.LockRadius) or tonumber(Settings.FOVRadius) or 110
-    )
-    local mousePos = UserInputService:GetMouseLocation()
-
-    for _, target in ipairs(GetAimCandidates()) do
-        if IsAimTargetValid(target) then
-            local screenPos, onScreen = Camera:WorldToViewportPoint(target.Part.Position)
-
-            if onScreen then
-                local distance = (
-                    Vector2.new(screenPos.X, screenPos.Y)
-                    - mousePos
-                ).Magnitude
-
-                if distance < shortestDistance then
-                    shortestDistance = distance
-                    closest = target
-                end
-            end
-        end
-    end
-
-    return closest
-end
-
-local function GetClosestRageTarget(root)
-    if not root then
-        return nil
-    end
-
-    local closest = nil
-    local shortestDistance = math.max(
-        1,
-        tonumber(Settings.RageDistance) or 5
-    )
-
-    for _, target in ipairs(GetAimCandidates()) do
-        if IsAimTargetValid(target) then
-            local distance = (root.Position - target.Part.Position).Magnitude
-
-            if distance <= shortestDistance then
-                shortestDistance = distance
-                closest = target
-            end
-        end
-    end
-
-    return closest
-end
-
-local function GetLockedOrNewAimTarget(useRage, root)
-    local target = LockedAimTarget
-
-    if target
-    and IsAimTargetValid(target) then
-        if useRage then
-            local maxDistance = math.max(1, tonumber(Settings.RageDistance) or 5)
-            if (root.Position - target.Part.Position).Magnitude > maxDistance then
-                target = nil
-            end
-        end
-    else
-        target = nil
-    end
-
-    if not Settings.AimLock then
-        target = nil
-    end
-
-    if not target then
-        target = useRage
-            and GetClosestRageTarget(root)
-            or GetClosestAimTargetToMouse()
-
-        if Settings.AimLock then
-            LockedAimTarget = target
-        end
-    end
-
-    return target
-end
-
-local function GetPredictedAimPosition(target)
-    if not target
-    or not target.Part then
-        return nil
-    end
-
-    local part = target.Part
-    local position = part.Position
-    local speed = math.max(1, tonumber(Settings.ProjectileSpeed) or 200)
-    local distance = (position - Camera.CFrame.Position).Magnitude
-    local travelTime = math.clamp(distance / speed, 0, 5)
-    local velocity = part.AssemblyLinearVelocity or Vector3.zero
-    local drop = tonumber(Settings.ProjectileDrop) or 0
-
-    return position
-        + velocity * travelTime
-        + Vector3.new(0, 0.5 * drop * travelTime * travelTime, 0)
-end
-
-local function RestoreAntiAim()
-    for hum, autoRotate in pairs(AntiAimDefaults) do
-        if hum and hum.Parent then
-            pcall(function()
-                hum.AutoRotate = autoRotate
-            end)
-        end
-    end
-
-    AntiAimDefaults = setmetatable({}, {__mode = "k"})
-end
-
-local function SetAntiAim(enabled)
-    Settings.AntiAim = enabled == true
-
-    if not Settings.AntiAim then
-        RestoreAntiAim()
-    end
-end
-
-local function ApplyAntiAim(root, hum, delta)
-    if not root
-    or not hum
-    or hum.Health <= 0 then
-        return
-    end
-
-    if AntiAimDefaults[hum] == nil then
-        AntiAimDefaults[hum] = hum.AutoRotate
-    end
-
-    hum.AutoRotate = false
-
-    local mode = tostring(Settings.AntiAimType or "Shift")
-    local look = Camera.CFrame.LookVector
-    local horizontal = Vector3.new(-look.X, 0, -look.Z)
-
-    if horizontal.Magnitude <= 0.001 then
-        horizontal = Vector3.new(0, 0, 1)
-    else
-        horizontal = horizontal.Unit
-    end
-
-    if mode == "Spin" then
-        AntiAimSpinYaw = (AntiAimSpinYaw + math.rad(540) * math.max(delta or 0, 0)) % (math.pi * 2)
-        root.CFrame = CFrame.new(root.Position) * CFrame.Angles(0, AntiAimSpinYaw, 0)
-        return
-    end
-
-    local frame = CFrame.lookAt(root.Position, root.Position + horizontal)
-
-    if mode == "Jitter" then
-        AntiAimJitterClock += math.max(delta or 0, 0)
-
-        if AntiAimJitterClock >= 0.08 then
-            AntiAimJitterClock = 0
-            AntiAimJitter = not AntiAimJitter
-        end
-
-        frame *= CFrame.Angles(0, math.rad(AntiAimJitter and 42 or -42), 0)
-    end
-
-    root.CFrame = frame
-end
-
-local function RestoreNormalizedAnimations()
-    for track, speed in pairs(AnimationSpeedDefaults) do
-        pcall(function()
-            if track.IsPlaying then
-                track:AdjustSpeed(speed)
-            end
-        end)
-    end
-
-    AnimationSpeedDefaults = setmetatable({}, {__mode = "k"})
-end
-
-local function SetNormalizeAnimations(enabled)
-    Settings.NormalizeAnimations = enabled == true
-
-    if not Settings.NormalizeAnimations then
-        RestoreNormalizedAnimations()
-    end
-end
-
-local function NormalizeCurrentAnimations()
-    local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-    local animator = hum and hum:FindFirstChildOfClass("Animator")
-
-    if not animator then
-        return
-    end
-
-    for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-        if AnimationSpeedDefaults[track] == nil then
-            AnimationSpeedDefaults[track] = tonumber(track.Speed) or 1
-        end
-
-        pcall(function()
-            track:AdjustSpeed(1)
-        end)
-    end
-end
-
-local function CaptureForceJumpDefaults(hum)
-    if not hum
-    or ForceJumpDefaults[hum] then
-        return
-    end
-
-    local jumpStateEnabled = true
-    pcall(function()
-        jumpStateEnabled = hum:GetStateEnabled(Enum.HumanoidStateType.Jumping)
-    end)
-
-    ForceJumpDefaults[hum] = {
-        UseJumpPower = hum.UseJumpPower,
-        JumpPower = hum.JumpPower,
-        JumpHeight = hum.JumpHeight,
-        JumpStateEnabled = jumpStateEnabled
-    }
-end
-
-local function RestoreForceJump()
-    for hum, defaults in pairs(ForceJumpDefaults) do
-        if hum and hum.Parent then
-            pcall(function()
-                hum.UseJumpPower = defaults.UseJumpPower
-                hum.JumpPower = defaults.JumpPower
-                hum.JumpHeight = defaults.JumpHeight
-                hum:SetStateEnabled(
-                    Enum.HumanoidStateType.Jumping,
-                    defaults.JumpStateEnabled
-                )
-            end)
-        end
-    end
-
-    ForceJumpDefaults = setmetatable({}, {__mode = "k"})
-end
-
-local function SetForceJump(enabled)
-    Settings.ForceJump = enabled == true
-
-    if Settings.ForceJump then
-        local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-        CaptureForceJumpDefaults(hum)
-    else
-        RestoreForceJump()
-    end
-end
-
-local function EnforceForceJump(hum)
-    if not hum
-    or hum.Health <= 0 then
-        return
-    end
-
-    CaptureForceJumpDefaults(hum)
-
-    pcall(function()
-        hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
-    end)
-
-    if hum.UseJumpPower then
-        hum.JumpPower = math.max(tonumber(hum.JumpPower) or 0, 50)
-    else
-        hum.JumpHeight = math.max(tonumber(hum.JumpHeight) or 0, 7.2)
-    end
+    return Closest
 end
 
 do
     loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Universal2.lua"))()
 end
 
-local function CreateNumberOption(name, page, defaultValue, minValue, maxValue, callback)
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, -5, 0, 39)
-    container.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-    container.BorderSizePixel = 0
-    container.Parent = page
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -90, 1, 0)
-    label.Position = UDim2.new(0, 12, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = name
-    label.TextColor3 = Color3.fromRGB(240, 240, 240)
-    label.TextSize = 13
-    label.Font = Enum.Font.GothamMedium
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
-
-    local input = Instance.new("TextBox")
-    input.Size = UDim2.new(0, 72, 0, 25)
-    input.Position = UDim2.new(1, -82, 0.5, -12)
-    input.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
-    input.BorderSizePixel = 0
-    input.Text = tostring(defaultValue)
-    input.TextColor3 = Color3.fromRGB(255, 255, 255)
-    input.TextSize = 12
-    input.Font = Enum.Font.Gotham
-    input.ClearTextOnFocus = false
-    input.Parent = container
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 4)
-    corner.Parent = input
-
-    input.FocusLost:Connect(function()
-        if Destroyed
-        or getgenv().ToxOptionsReady == false then
-            return
-        end
-
-        local value = tonumber(input.Text)
-
-        if value == nil then
-            input.Text = tostring(defaultValue)
-            return
-        end
-
-        value = math.clamp(value, minValue, maxValue)
-        input.Text = tostring(value)
-        callback(value)
-
-        if AutoSaveConfiguration then
-            AutoSaveConfiguration()
-        end
-    end)
-
-    if getgenv().TrackUniversalControl then
-        getgenv().TrackUniversalControl(container, page)
-    end
-
-    if getgenv().RegisterToxSearchControl then
-        getgenv().RegisterToxSearchControl(name, page, container)
-    end
-
-    return container
-end
-
 BeginUniversalSection("Combat")
 
 CreateToggle("Aimbot (Right Click)", CombatPage, Settings.Aimbot, function(v) Settings.Aimbot = v end)
 CreateToggleWithValue("Aim Smoothness", CombatPage, false, Settings.AimbotSmoothness, function(v) end, function(val) Settings.AimbotSmoothness = val end)
-CreateDropdown("Aim Part", {"Head", "HumanoidRootPart", "Torso"}, CombatPage, Settings.AimPart, function(v)
-    Settings.AimPart = v
-    LockedAimTarget = nil
-end)
-CreateToggle("Aim Wall Check", CombatPage, Settings.AimWallCheck, function(v)
-    Settings.AimWallCheck = v
-    LockedAimTarget = nil
-end)
-CreateToggle("Aim Lock", CombatPage, Settings.AimLock, function(v)
-    Settings.AimLock = v
-    if not v then LockedAimTarget = nil end
-end, "AimLock")
-CreateNumberOption("Lock Radius", CombatPage, Settings.LockRadius, 1, 2000, function(v)
-    Settings.LockRadius = v
-end)
-CreateDropdown("Aim Targets", {"Players Only", "NPCs Only", "Players + NPCs"}, CombatPage, Settings.AimTargets, function(v)
-    Settings.AimTargets = v
-    LockedAimTarget = nil
-end)
-CreateToggle("Ignore Friends", CombatPage, Settings.IgnoreFriends, function(v)
-    Settings.IgnoreFriends = v
-    FriendAimCache = {}
-    LockedAimTarget = nil
-end, "IgnoreFriends")
-CreateNumberOption("Projectile Speed", CombatPage, Settings.ProjectileSpeed, 1, 5000, function(v)
-    Settings.ProjectileSpeed = v
-end)
-CreateNumberOption("Projectile Drop", CombatPage, Settings.ProjectileDrop, -1000, 1000, function(v)
-    Settings.ProjectileDrop = v
-end)
-CreateToggle("Rage Mode", CombatPage, Settings.RageMode, function(v)
-    Settings.RageMode = v
-    LockedAimTarget = nil
-end, "RageMode")
-CreateNumberOption("Rage Distance", CombatPage, Settings.RageDistance, 1, 5000, function(v)
-    Settings.RageDistance = v
-end)
-CreateToggle("Anti Aim", CombatPage, Settings.AntiAim, SetAntiAim, "AntiAim")
-CreateDropdown("Anti Aim Type", {"Shift", "Jitter", "Spin"}, CombatPage, Settings.AntiAimType, function(v)
-    Settings.AntiAimType = v
-end)
+CreateDropdown("Aim Part", {"Head", "HumanoidRootPart", "Torso"}, CombatPage, Settings.AimPart, function(v) Settings.AimPart = v end)
+CreateToggle("Aim Wall Check", CombatPage, Settings.AimWallCheck, function(v) Settings.AimWallCheck = v end)
 CreateToggleWithValue("Show FOV Circle", CombatPage, Settings.ShowFOV, Settings.FOVRadius, function(v) Settings.ShowFOV = v end, function(val) Settings.FOVRadius = val end)
 CreateToggle("Silent Aim", CombatPage, Settings.SilentAim, function(v) Settings.SilentAim = v end)
 CreateToggle("Triggerbot", CombatPage, Settings.Triggerbot, function(v) Settings.Triggerbot = v end)
@@ -5213,9 +4689,6 @@ end, "Noclip")
 CreateToggle("Infinite Jump", PlayerPage, Settings.InfiniteJump, function(v)
     Settings.InfiniteJump = v
 end)
-
-CreateToggle("Normalize Animations", PlayerPage, Settings.NormalizeAnimations, SetNormalizeAnimations, "NormalizeAnimations")
-CreateToggle("Force Jump", PlayerPage, Settings.ForceJump, SetForceJump, "ForceJump")
 
 CreateToggle("Air Walk (E Up / Q Down)", PlayerPage, Settings.AirWalk, function(v)
     Settings.AirWalk = v
@@ -6951,15 +6424,6 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
         )
     end
     Settings.HitboxExpander = false
-    Settings.AimLock = false
-    Settings.RageMode = false
-    Settings.AntiAim = false
-    Settings.NormalizeAnimations = false
-    Settings.ForceJump = false
-    LockedAimTarget = nil
-    RestoreAntiAim()
-    RestoreNormalizedAnimations()
-    RestoreForceJump()
     Settings.FOVEnabled = false
     Settings.ForceShiftLock = false
     Settings.SmoothFly = false
@@ -7081,18 +6545,7 @@ end))
 
 AddConnection(UserInputService.JumpRequest:Connect(function()
     local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-
-    if not ScriptLoaded
-    or not Hum
-    or Hum.Health <= 0 then
-        return
-    end
-
-    if Settings.ForceJump then
-        EnforceForceJump(Hum)
-        Hum.Jump = true
-        Hum:ChangeState(Enum.HumanoidStateType.Jumping)
-    elseif Settings.InfiniteJump then
+    if ScriptLoaded and Settings.InfiniteJump and Hum and Hum.Health > 0 then
         Hum:ChangeState(Enum.HumanoidStateType.Jumping)
     end
 end))
@@ -7578,26 +7031,8 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         DestroyCarFlyMovers()
     end
 
-    if Settings.AntiAim and Root and Hum then
-        ApplyAntiAim(Root, Hum, delta)
-    elseif Settings.Spinbot and Root then
-        RestoreAntiAim()
+    if Settings.Spinbot and Root then
         Root.CFrame = Root.CFrame * CFrame.Angles(0, math.rad(Settings.SpinSpeed or 50), 0)
-    end
-
-    if Settings.ForceJump and Hum then
-        EnforceForceJump(Hum)
-    end
-
-    if Settings.NormalizeAnimations then
-        NormalizeAnimationClock += delta
-
-        if NormalizeAnimationClock >= 0.25 then
-            NormalizeAnimationClock = 0
-            NormalizeCurrentAnimations()
-        end
-    else
-        NormalizeAnimationClock = 0
     end
 
     local actualFlySpeed = (Settings.FlySpeed or 10) * 10
@@ -7660,27 +7095,12 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         CrosshairV.Visible = false
     end
 
-    local regularAim = Settings.Aimbot
-        and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
-    local rageAim = Settings.RageMode == true
-
-    if (regularAim or rageAim) and Root then
-        local target = GetLockedOrNewAimTarget(rageAim, Root)
-        local aimPosition = GetPredictedAimPosition(target)
-
-        if aimPosition then
-            if rageAim then
-                Camera.CFrame = CFrame.new(Camera.CFrame.Position, aimPosition)
-            else
-                local smooth = math.max(1, tonumber(Settings.AimbotSmoothness) or 2)
-                Camera.CFrame = Camera.CFrame:Lerp(
-                    CFrame.new(Camera.CFrame.Position, aimPosition),
-                    1 / smooth
-                )
-            end
+    if Settings.Aimbot and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+        local Target = GetClosestPlayerToMouse()
+        if Target then
+            local Smooth = Settings.AimbotSmoothness or 2
+            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, Target.Position), 1 / Smooth)
         end
-    else
-        LockedAimTarget = nil
     end
 
     if Settings.Triggerbot then
