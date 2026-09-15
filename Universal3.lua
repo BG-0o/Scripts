@@ -26,6 +26,9 @@ Settings.AntiAim = Settings.AntiAim == true
 Settings.AntiAimType = tostring(Settings.AntiAimType or "Shift")
 Settings.NormalizeAnimations = Settings.NormalizeAnimations == true
 Settings.ForceJump = Settings.ForceJump == true
+Settings.FixUnanchoredParts = Settings.FixUnanchoredParts == true
+Settings.StartHidden = Settings.StartHidden == true
+Settings.UnlockCursor = Settings.UnlockCursor == true
 
 env.Settings = Settings
 env.ToxUniversal3Token = instanceToken
@@ -44,6 +47,10 @@ local normalizeClock = 0
 local connections = {}
 local combatUIInstalled = false
 local playerUIInstalled = false
+local miscUIInstalled = false
+local configUIInstalled = false
+local cursorDefaults = nil
+local fixClock = 0
 local lastUniversalSection = nil
 
 local function AddConnection(connection)
@@ -488,6 +495,120 @@ local function RestoreForceJump()
     forceJumpDefaults = setmetatable({}, {__mode = "k"})
 end
 
+local function IsCharacterPart(part)
+    local model = part and part:FindFirstAncestorOfClass("Model")
+    return model ~= nil and model:FindFirstChildOfClass("Humanoid") ~= nil
+end
+
+local function SetUnlockCursor(enabled)
+    Settings.UnlockCursor = enabled == true
+
+    if Settings.UnlockCursor then
+        if not cursorDefaults then
+            cursorDefaults = {
+                MouseBehavior = UserInputService.MouseBehavior,
+                MouseIconEnabled = UserInputService.MouseIconEnabled
+            }
+        end
+
+        pcall(function()
+            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+            UserInputService.MouseIconEnabled = true
+        end)
+    elseif cursorDefaults then
+        pcall(function()
+            UserInputService.MouseBehavior = cursorDefaults.MouseBehavior
+            UserInputService.MouseIconEnabled = cursorDefaults.MouseIconEnabled
+        end)
+        cursorDefaults = nil
+    end
+end
+
+local function FixDangerousUnanchoredParts()
+    local character = Player.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+
+    if not root then
+        return
+    end
+
+    local params = OverlapParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {character}
+
+    local ok, parts = pcall(function()
+        return Workspace:GetPartBoundsInRadius(root.Position, 45, params)
+    end)
+
+    if not ok or typeof(parts) ~= "table" then
+        return
+    end
+
+    for _, part in ipairs(parts) do
+        if part:IsA("BasePart")
+        and not part.Anchored
+        and not IsCharacterPart(part) then
+            local linear = part.AssemblyLinearVelocity.Magnitude
+            local angular = part.AssemblyAngularVelocity.Magnitude
+
+            if linear > 120 or angular > 70 then
+                pcall(function()
+                    part.AssemblyLinearVelocity = Vector3.zero
+                    part.AssemblyAngularVelocity = Vector3.zero
+                end)
+            end
+        end
+    end
+end
+
+local function PanicDisable()
+    for key, value in pairs(Settings) do
+        if typeof(value) == "boolean"
+        and key ~= "StartHidden" then
+            Settings[key] = false
+            if type(env.SyncToggleVisuals) == "function" then
+                pcall(env.SyncToggleVisuals, key, false)
+            end
+        end
+    end
+
+    Settings.Render3D = true
+    SetUnlockCursor(false)
+
+    if type(env.ToxSetXRay) == "function" then
+        pcall(env.ToxSetXRay, false)
+    end
+
+    if type(env.ToxSetFakeLag) == "function" then
+        pcall(env.ToxSetFakeLag, false)
+    end
+
+    if type(env.ToxResetPart2Visuals) == "function" then
+        pcall(env.ToxResetPart2Visuals)
+    end
+
+    if type(env.ToxSetFreecam) == "function" then
+        pcall(env.ToxSetFreecam, false)
+    end
+
+    if type(env.ToxSetNoclipCamera) == "function" then
+        pcall(env.ToxSetNoclipCamera, false)
+    end
+
+    local main = env.Main
+    if main then
+        main.Visible = false
+    end
+
+    if type(env.CustomNotify) == "function" then
+        env.CustomNotify(
+            "PANIC • all toggles disabled",
+            Color3.fromRGB(255, 120, 120),
+            4
+        )
+    end
+end
+
 local function CreateNumberOption(name, page, defaultValue, minValue, maxValue, callback)
     if not page then
         return nil
@@ -726,6 +847,77 @@ local function InstallPlayerUI()
     )
 end
 
+local function InstallMiscUI()
+    if miscUIInstalled then
+        return
+    end
+
+    local page = env.FlingPage or env.UniversalPage
+    local CreateToggle = env.CreateToggle
+
+    if not page or type(CreateToggle) ~= "function" then
+        return
+    end
+
+    miscUIInstalled = true
+
+    CreateToggle(
+        "Fix Unanchored Parts",
+        page,
+        Settings.FixUnanchoredParts,
+        function(value)
+            Settings.FixUnanchoredParts = value == true
+        end,
+        "FixUnanchoredParts"
+    )
+end
+
+local function InstallConfigUI()
+    if configUIInstalled then
+        return
+    end
+
+    local page = env.ConfigPage
+    local CreateToggle = env.CreateToggle
+    local CreateKeybindButton = env.CreateKeybindButton
+
+    if not page
+    or type(CreateToggle) ~= "function"
+    or type(CreateKeybindButton) ~= "function" then
+        return
+    end
+
+    configUIInstalled = true
+
+    CreateKeybindButton(
+        "Panic Key",
+        page,
+        Settings.PanicKey,
+        function(key)
+            Settings.PanicKey = key
+            Save()
+        end
+    )
+
+    CreateToggle(
+        "Start Hidden",
+        page,
+        Settings.StartHidden,
+        function(value)
+            Settings.StartHidden = value == true
+        end,
+        "StartHidden"
+    )
+
+    CreateToggle(
+        "Unlock Cursor",
+        page,
+        Settings.UnlockCursor,
+        SetUnlockCursor,
+        "UnlockCursor"
+    )
+end
+
 local previousBeginUniversalSection = env.BeginUniversalSection or BeginUniversalSection
 
 function BeginUniversalSection(name)
@@ -743,11 +935,32 @@ function BeginUniversalSection(name)
         result = previousBeginUniversalSection(name)
     end
 
+    if nextKey == "MISC" then
+        InstallMiscUI()
+    end
+
     lastUniversalSection = nextKey
     return result
 end
 
 env.BeginUniversalSection = BeginUniversalSection
+env.ToxSetUnlockCursor = SetUnlockCursor
+
+InstallConfigUI()
+
+AddConnection(UserInputService.InputBegan:Connect(function(input, processed)
+    if processed
+    or env.Destroyed
+    or not env.ScriptLoaded
+    or not Settings.PanicKey
+    or input.UserInputType ~= Enum.UserInputType.Keyboard
+    or input.KeyCode ~= Settings.PanicKey
+    or UserInputService:GetFocusedTextBox() then
+        return
+    end
+
+    PanicDisable()
+end))
 
 AddConnection(UserInputService.JumpRequest:Connect(function()
     if not env.ScriptLoaded
@@ -788,6 +1001,21 @@ RunService:BindToRenderStep(
         local character = Player.Character
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         local root = character and character:FindFirstChild("HumanoidRootPart")
+
+        if Settings.UnlockCursor then
+            pcall(function()
+                UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+                UserInputService.MouseIconEnabled = true
+            end)
+        end
+
+        fixClock += math.max(tonumber(delta) or 0, 0)
+        if Settings.FixUnanchoredParts and fixClock >= 0.18 then
+            fixClock = 0
+            FixDangerousUnanchoredParts()
+        elseif not Settings.FixUnanchoredParts then
+            fixClock = 0
+        end
 
         if Settings.AntiAim and root and humanoid then
             ApplyAntiAim(root, humanoid, delta)
@@ -900,6 +1128,7 @@ env.ToxUniversal3Cleanup = function()
     RestoreAntiAim()
     RestoreAnimations()
     RestoreForceJump()
+    SetUnlockCursor(false)
 
     if env.ToxUniversal3Token == instanceToken then
         env.ToxUniversal3Token = nil
@@ -919,4 +1148,4 @@ task.spawn(function()
 end)
 
 env.ToxUniversal3Loaded = true
-env.ToxUniversal3Version = "2026-09-14-part1-split"
+env.ToxUniversal3Version = "2026-09-14-part1-plus-misc-config"
