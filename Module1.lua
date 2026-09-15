@@ -173,6 +173,9 @@ if HasRunningToxHub() then
     getgenv().ToxStartupOptionsApplied = nil
     getgenv().ToxHubActive = false
     getgenv().ToxUniversalLoaded = nil
+    getgenv().ToxChatLoaded = nil
+    getgenv().ToxSystemsLoaded = nil
+    getgenv().ToxControlGui = nil
     getgenv().ToxNDSModuleLoadedJobId = nil
     getgenv().ToxLBBModuleLoadedJobId = nil
     getgenv().ToxLBBModuleVersion = nil
@@ -195,6 +198,10 @@ if HasRunningToxHub() then
     getgenv().ToxGameModuleLoadedPage = nil
     getgenv().ToxGameModuleLoadingUrl = nil
     getgenv().ToxGameModuleLoadingPage = nil
+
+    if getgenv().ToxSystemsCleanup then
+        pcall(getgenv().ToxSystemsCleanup)
+    end
 
     if getgenv().ToxADMINCleanup then
         pcall(getgenv().ToxADMINCleanup)
@@ -3142,6 +3149,8 @@ local VisualsPage = UniversalPage
 local FlingPage = UniversalPage
 local ScriptsPage = CreatePage("SCRIPTS")
 local JoinPage = CreatePage("JOIN")
+local ChatPage = CreatePage("CHAT")
+local ControlPage = CreatePage("CONTROL")
 local ConfigPage = CreatePage("CONFIG")
 
 getgenv().GamePage = GamePage
@@ -3152,6 +3161,8 @@ getgenv().VisualsPage = VisualsPage
 getgenv().FlingPage = FlingPage
 getgenv().ScriptsPage = ScriptsPage
 getgenv().JoinPage = JoinPage
+getgenv().ChatPage = ChatPage
+getgenv().ControlPage = ControlPage
 getgenv().ConfigPage = ConfigPage
 
 getgenv().CurrentPage = UniversalPage
@@ -3210,6 +3221,8 @@ end
 local UniversalTab = CreateTab("UNIVERSAL", UniversalPage)
 local ScriptsTab = CreateTab("SCRIPTS", ScriptsPage)
 local JoinTab = CreateTab("JOIN", JoinPage)
+local ChatTab = CreateTab("CHAT", ChatPage)
+local ControlTab = CreateTab("CONTROL", ControlPage)
 local ConfigTab = CreateTab("CONFIG", ConfigPage)
 
 getgenv().GameTab = GameTab
@@ -3218,6 +3231,8 @@ getgenv().CombatTab = UniversalTab
 getgenv().PlayerTab = UniversalTab
 getgenv().VisualsTab = UniversalTab
 getgenv().FlingTab = UniversalTab
+getgenv().ChatTab = ChatTab
+getgenv().ControlTab = ControlTab
 
 UniversalPage.Visible = true
 UniversalTab.BackgroundColor3 = MAIN_COLOR
@@ -3284,6 +3299,16 @@ getgenv().ToxOpenPage = function(page)
     if tabButton and tabButton.Parent then
         tabButton.BackgroundColor3 = MAIN_COLOR
         tabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+
+    local toxChatGui = getgenv().ToxChatGui
+    if toxChatGui and toxChatGui.Parent then
+        toxChatGui.Visible = page == ChatPage
+    end
+
+    local toxControlGui = getgenv().ToxControlGui
+    if toxControlGui and toxControlGui.Parent then
+        toxControlGui.Visible = page == ControlPage
     end
 end
 
