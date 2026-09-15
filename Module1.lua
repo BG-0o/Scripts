@@ -352,6 +352,9 @@ getgenv().Settings = {
 
     FOVEnabled = false,
     FOVValue = 70,
+    NoclipCamera = false,
+    Freecam = false,
+    FreecamSpeed = 50,
     ForceShiftLock = false,
     ShiftLockKey = "Shift",
 
