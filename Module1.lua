@@ -366,6 +366,7 @@ getgenv().Settings = {
     ShiftLockKey = "Shift",
 
     Aimbot = false,
+    AimbotMode = "CAMERA",
     AimbotSmoothness = 2,
     AimPart = "Head",
     AimWallCheck = false,
@@ -419,6 +420,19 @@ getgenv().Settings = {
 	EspColorName = "White",
 	EspColor = Color3.fromRGB(255, 255, 255),
     ESPTeamColors = false,
+    ESPShowHealth = false,
+    ChamsOutlineColorName = "White",
+    ChamsOutlineOpacity = 50,
+    VisualRainbow = false,
+    RainbowSpeed = 10,
+    XRay = false,
+    XRayTransparency = 0.7,
+    FakeLag = false,
+    LagChance = 70,
+    FixUnanchoredParts = false,
+    StartHidden = false,
+    UnlockCursor = false,
+    PanicKey = nil,
 
     MusicAutoPlay = false,
     MusicLoop = false,
@@ -2930,17 +2944,29 @@ getgenv().ResetHitboxes = ResetHitboxes
 
 local function UpdateFullbright()
     if Settings.Fullbright then
+        if not getgenv().ToxFullbrightRuntimeDefaults then
+            getgenv().ToxFullbrightRuntimeDefaults = {
+                Ambient = Lighting.Ambient,
+                Brightness = Lighting.Brightness,
+                ClockTime = Lighting.ClockTime,
+                FogEnd = Lighting.FogEnd,
+                GlobalShadows = Lighting.GlobalShadows
+            }
+        end
+
         Lighting.Ambient = Color3.fromRGB(180, 180, 180)
         Lighting.Brightness = 1.2
         Lighting.ClockTime = 14
         Lighting.FogEnd = 100000
         Lighting.GlobalShadows = false
     else
-        Lighting.Ambient = OriginalLighting.Ambient
-        Lighting.Brightness = OriginalLighting.Brightness
-        Lighting.ClockTime = OriginalLighting.ClockTime
-        Lighting.FogEnd = OriginalLighting.FogEnd
-        Lighting.GlobalShadows = OriginalLighting.GlobalShadows
+        local restore = getgenv().ToxFullbrightRuntimeDefaults or OriginalLighting
+        Lighting.Ambient = restore.Ambient
+        Lighting.Brightness = restore.Brightness
+        Lighting.ClockTime = restore.ClockTime
+        Lighting.FogEnd = restore.FogEnd
+        Lighting.GlobalShadows = restore.GlobalShadows
+        getgenv().ToxFullbrightRuntimeDefaults = nil
     end
 end
 getgenv().UpdateFullbright = UpdateFullbright
