@@ -19,6 +19,7 @@ local Player = Players.LocalPlayer
 local Settings = env.Settings or {}
 local UniversalPage = env.UniversalPage
 local FREECAM_BIND = "ToxUniversalFreecam"
+local CAMERA_NOCLIP_BIND = "ToxCameraNoclip"
 local FREECAM_MOVEMENT_FREEZE_BIND = "ToxCameraMovementFreeze"
 local FREECAM_ROTATION_SPEED_MOUSE =
     Vector2.new(1, 0.77) * math.rad(0.5)
@@ -70,9 +71,8 @@ local freecamYaw = 0
 local freecamSaved = nil
 local cameraNoclipCaptured = false
 local originalOcclusionMode = nil
+local cameraNoclipDistance = nil
 local freecamMovementFrozen = false
-local freecamMovementControls = nil
-local freecamMovementControlsWereEnabled = nil
 local visualUIInstalled = false
 local visualConnections = {}
 local xrayDefaults = setmetatable({}, {__mode = "k"})
@@ -472,29 +472,10 @@ env.CreateKeybindButton = CreateKeybindButton
 env.CreateKeybindToggle = CreateKeybindToggle
 
 local function GetCameraMovementControls()
-    local playerScripts = Player:FindFirstChild("PlayerScripts")
-    local playerModule = playerScripts and playerScripts:FindFirstChild("PlayerModule")
-
-    if not playerModule or not playerModule:IsA("ModuleScript") then
-        return nil
-    end
-
-    local okModule, module = pcall(require, playerModule)
-
-    if not okModule
-    or type(module) ~= "table"
-    or type(module.GetControls) ~= "function" then
-        return nil
-    end
-
-    local okControls, controls = pcall(function()
-        return module:GetControls()
-    end)
-
-    if okControls then
-        return controls
-    end
-
+    -- Intentionally does not require PlayerModule.
+    -- Some executors block that ModuleScript access with
+    -- "lacking capability Plugin". ContextActionService below
+    -- is enough to sink movement while Freecam reads the same keys.
     return nil
 end
 
@@ -515,19 +496,7 @@ local function RestoreFreecamMovementFreeze(force)
         ContextActionService:UnbindAction(FREECAM_MOVEMENT_FREEZE_BIND)
     end)
 
-    if freecamMovementControls then
-        pcall(function()
-            if freecamMovementControlsWereEnabled == false then
-                freecamMovementControls:Disable()
-            else
-                freecamMovementControls:Enable()
-            end
-        end)
-    end
-
     freecamMovementFrozen = false
-    freecamMovementControls = nil
-    freecamMovementControlsWereEnabled = nil
 end
 
 local function ApplyFreecamMovementFreeze()
@@ -538,21 +507,6 @@ local function ApplyFreecamMovementFreeze()
 
     if not freecamMovementFrozen then
         freecamMovementFrozen = true
-        freecamMovementControls = GetCameraMovementControls()
-
-        if freecamMovementControls then
-            local okEnabled, enabled = pcall(function()
-                return freecamMovementControls.controlsEnabled
-            end)
-
-            freecamMovementControlsWereEnabled =
-                not okEnabled
-                or enabled ~= false
-
-            pcall(function()
-                freecamMovementControls:Disable()
-            end)
-        end
 
         pcall(function()
             ContextActionService:UnbindAction(FREECAM_MOVEMENT_FREEZE_BIND)
@@ -565,6 +519,10 @@ local function ApplyFreecamMovementFreeze()
                 Enum.KeyCode.A,
                 Enum.KeyCode.S,
                 Enum.KeyCode.D,
+                Enum.KeyCode.Up,
+                Enum.KeyCode.Down,
+                Enum.KeyCode.Left,
+                Enum.KeyCode.Right,
                 Enum.KeyCode.Space,
                 Enum.KeyCode.LeftControl,
                 Enum.KeyCode.RightControl,
@@ -593,19 +551,87 @@ local function ApplyFreecamMovementFreeze()
     end
 end
 
-local function RestoreCameraNoclip()
-    if not cameraNoclipCaptured then
-        return
+local function GetCameraFocusDistance(camera)
+    if not camera then
+        return nil
     end
 
-    pcall(function()
-        if originalOcclusionMode then
-            Player.DevCameraOcclusionMode = originalOcclusionMode
-        end
+    local ok, distance = pcall(function()
+        return (camera.CFrame.Position - camera.Focus.Position).Magnitude
     end)
+
+    if not ok or not distance then
+        return nil
+    end
+
+    return math.clamp(
+        distance,
+        math.max(0.05, tonumber(Player.CameraMinZoomDistance) or 0.05),
+        math.max(
+            tonumber(Player.CameraMaxZoomDistance) or 400,
+            tonumber(Player.CameraMinZoomDistance) or 0.05
+        )
+    )
+end
+
+local function RestoreCameraNoclip()
+    pcall(function()
+        RunService:UnbindFromRenderStep(CAMERA_NOCLIP_BIND)
+    end)
+
+    if cameraNoclipCaptured then
+        pcall(function()
+            if originalOcclusionMode then
+                Player.DevCameraOcclusionMode = originalOcclusionMode
+            end
+        end)
+    end
 
     cameraNoclipCaptured = false
     originalOcclusionMode = nil
+    cameraNoclipDistance = nil
+end
+
+local function UpdateCameraNoclip()
+    if Settings.NoclipCamera ~= true
+    or freecamActive
+    or env.Destroyed then
+        return
+    end
+
+    local camera = Workspace.CurrentCamera
+
+    if not camera
+    or camera.CameraType == Enum.CameraType.Scriptable then
+        return
+    end
+
+    local focus = camera.Focus
+    local currentDistance = GetCameraFocusDistance(camera)
+
+    if not cameraNoclipDistance then
+        cameraNoclipDistance = currentDistance or 12
+    end
+
+    local distance = math.clamp(
+        tonumber(cameraNoclipDistance) or 12,
+        math.max(0.05, tonumber(Player.CameraMinZoomDistance) or 0.05),
+        math.max(
+            tonumber(Player.CameraMaxZoomDistance) or 400,
+            tonumber(Player.CameraMinZoomDistance) or 0.05
+        )
+    )
+
+    cameraNoclipDistance = distance
+
+    -- Keep the normal Roblox camera rotation/focus, but restore the
+    -- user's requested distance AFTER Roblox performs wall collision.
+    -- This lets the camera physically cross the wall while the wall
+    -- remains fully opaque. No Invisicam / XRay transparency is used.
+    local rotation = camera.CFrame - camera.CFrame.Position
+    local position = focus.Position - camera.CFrame.LookVector * distance
+
+    camera.CFrame = CFrame.new(position) * rotation
 end
 
 local function SetNoclipCamera(enabled)
@@ -613,16 +639,32 @@ local function SetNoclipCamera(enabled)
     Settings.NoclipCamera = enabled
 
     if enabled then
+        local camera = Workspace.CurrentCamera
+
         if not cameraNoclipCaptured then
             pcall(function()
                 originalOcclusionMode = Player.DevCameraOcclusionMode
-                cameraNoclipCaptured = true
             end)
+
+            cameraNoclipCaptured = true
+            cameraNoclipDistance = GetCameraFocusDistance(camera) or 12
         end
 
+        -- Zoom mode keeps walls opaque. We bypass only the camera's
+        -- collision position in UpdateCameraNoclip.
         pcall(function()
-            Player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
+            Player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom
         end)
+
+        pcall(function()
+            RunService:UnbindFromRenderStep(CAMERA_NOCLIP_BIND)
+        end)
+
+        RunService:BindToRenderStep(
+            CAMERA_NOCLIP_BIND,
+            Enum.RenderPriority.Camera.Value + 50,
+            UpdateCameraNoclip
+        )
     else
         RestoreCameraNoclip()
     end
@@ -714,21 +756,31 @@ local function UpdateFreecam(delta)
 
         local mouseDelta = UserInputService:GetMouseDelta()
         local invertY = 1
+        local sensitivity = 1
 
         if UserGameSettings then
             pcall(function()
                 invertY = UserGameSettings:GetCameraYInvertValue()
             end)
+
+            pcall(function()
+                sensitivity = tonumber(UserGameSettings.MouseSensitivity) or 1
+            end)
         end
+
+        sensitivity = math.clamp(sensitivity, 0.01, 20)
 
         freecamYaw =
             freecamYaw
-            - mouseDelta.X * FREECAM_ROTATION_SPEED_MOUSE.X
+            - mouseDelta.X
+                * FREECAM_ROTATION_SPEED_MOUSE.X
+                * sensitivity
 
         freecamPitch = math.clamp(
             freecamPitch
             - mouseDelta.Y
                 * FREECAM_ROTATION_SPEED_MOUSE.Y
+                * sensitivity
                 * invertY,
             math.rad(-89),
             math.rad(89)
@@ -1300,6 +1352,39 @@ visualConnections[#visualConnections + 1] = Workspace.DescendantAdded:Connect(fu
     end
 end)
 
+visualConnections[#visualConnections + 1] = UserInputService.InputChanged:Connect(function(input, gameProcessed)
+    if gameProcessed
+    or Settings.NoclipCamera ~= true
+    or freecamActive
+    or input.UserInputType ~= Enum.UserInputType.MouseWheel then
+        return
+    end
+
+    local wheel = tonumber(input.Position.Z) or 0
+
+    if wheel == 0 then
+        return
+    end
+
+    local camera = Workspace.CurrentCamera
+    local distance = tonumber(cameraNoclipDistance)
+        or GetCameraFocusDistance(camera)
+        or 12
+
+    -- Match Roblox-style zoom direction while keeping our own desired
+    -- distance independent from wall collision.
+    distance = distance * math.pow(0.82, wheel)
+
+    cameraNoclipDistance = math.clamp(
+        distance,
+        math.max(0.05, tonumber(Player.CameraMinZoomDistance) or 0.05),
+        math.max(
+            tonumber(Player.CameraMaxZoomDistance) or 400,
+            tonumber(Player.CameraMinZoomDistance) or 0.05
+        )
+    )
+end)
+
 pcall(function()
     RunService:UnbindFromRenderStep(VISUAL_BIND)
 end)
@@ -1365,6 +1450,10 @@ env.ToxUniversal2Cleanup = function()
 
     pcall(function()
         RunService:UnbindFromRenderStep(VISUAL_BIND)
+    end)
+
+    pcall(function()
+        RunService:UnbindFromRenderStep(CAMERA_NOCLIP_BIND)
     end)
 
     for _, connection in ipairs(visualConnections) do
