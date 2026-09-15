@@ -3104,32 +3104,38 @@ end)
 local Pages = {}
 getgenv().Pages = Pages
 
-getgenv().CreatePage = function(Name)
+getgenv().CreatePage = function(Name, RawPage)
 	local Page = Instance.new("ScrollingFrame")
 	Page.Name = Name
 	Page.Size = UDim2.new(1, -16, 1, -126)
 	Page.Position = UDim2.new(0, 8, 0, 122)
 	Page.BackgroundTransparency = 1
 	Page.BorderSizePixel = 0
-	Page.ScrollBarThickness = 4
+	Page.ScrollBarThickness = RawPage and 0 or 4
 	Page.ScrollBarImageColor3 = MAIN_COLOR
 	Page.CanvasSize = UDim2.new(0, 0, 0, 0)
+	Page.ScrollingEnabled = not RawPage
 	Page.Visible = false
+	Page.ClipsDescendants = true
 	Page.Parent = Main
 
-	local Layout = Instance.new("UIListLayout")
-	Layout.Padding = UDim.new(0, 6)
-	Layout.SortOrder = Enum.SortOrder.LayoutOrder
-	Layout.Parent = Page
+	local Layout = nil
 
-	local Padding = Instance.new("UIPadding")
-	Padding.PaddingTop = UDim.new(0, 3)
-	Padding.PaddingBottom = UDim.new(0, 8)
-	Padding.Parent = Page
+	if not RawPage then
+		Layout = Instance.new("UIListLayout")
+		Layout.Padding = UDim.new(0, 6)
+		Layout.SortOrder = Enum.SortOrder.LayoutOrder
+		Layout.Parent = Page
 
-	Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-		Page.CanvasSize = UDim2.new(0, 0, 0, Layout.AbsoluteContentSize.Y + 15)
-	end)
+		local Padding = Instance.new("UIPadding")
+		Padding.PaddingTop = UDim.new(0, 3)
+		Padding.PaddingBottom = UDim.new(0, 8)
+		Padding.Parent = Page
+
+		Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+			Page.CanvasSize = UDim2.new(0, 0, 0, Layout.AbsoluteContentSize.Y + 15)
+		end)
+	end
 
 	Pages[Name] = Page
 	return Page, Layout
@@ -3149,8 +3155,8 @@ local VisualsPage = UniversalPage
 local FlingPage = UniversalPage
 local ScriptsPage = CreatePage("SCRIPTS")
 local JoinPage = CreatePage("JOIN")
-local ChatPage = CreatePage("CHAT")
-local ControlPage = CreatePage("CONTROL")
+local ChatPage = CreatePage("CHAT", true)
+local ControlPage = CreatePage("CONTROL", true)
 local ConfigPage = CreatePage("CONFIG")
 
 getgenv().GamePage = GamePage
@@ -4715,13 +4721,13 @@ MusicCloseBtn.MouseButton1Click:Connect(function() MusicGui.Visible = false end)
 
 ToxChatGui = Instance.new("Frame")
 ToxChatGui.Name = "ToxChatFrame"
-ToxChatGui.Size = UDim2.new(0, 370, 0, 310)
-ToxChatGui.Position = UDim2.new(0.5, -185, 0.5, -155)
-ToxChatGui.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+ToxChatGui.Size = UDim2.new(1, 0, 1, 0)
+ToxChatGui.Position = UDim2.new(0, 0, 0, 0)
+ToxChatGui.BackgroundColor3 = Color3.fromRGB(12, 12, 20)
 ToxChatGui.BorderSizePixel = 0
 ToxChatGui.ClipsDescendants = true
-ToxChatGui.Visible = false
-ToxChatGui.Parent = Gui
+ToxChatGui.Visible = true
+ToxChatGui.Parent = ChatPage
 getgenv().ToxChatGui = ToxChatGui
 
 ToxChatCorner = Instance.new("UICorner")
@@ -4735,12 +4741,12 @@ ToxChatStroke.Parent = ToxChatGui
 
 ToxChatTopBar = Instance.new("Frame")
 ToxChatTopBar.Size = UDim2.new(1, 0, 0, 32)
-ToxChatTopBar.BackgroundColor3 = MAIN_COLOR
+ToxChatTopBar.BackgroundColor3 = Color3.fromRGB(16, 16, 26)
 ToxChatTopBar.BorderSizePixel = 0
 ToxChatTopBar.Parent = ToxChatGui
 getgenv().ToxChatTopBar = ToxChatTopBar
 
-MakeDraggable(ToxChatGui, ToxChatTopBar)
+-- Embedded in the main CHAT page; no detached dragging.
 
 ToxChatTitle = Instance.new("TextLabel")
 ToxChatTitle.Size = UDim2.new(1, -70, 1, 0)
@@ -4763,6 +4769,7 @@ ToxChatCloseBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
 ToxChatCloseBtn.Font = Enum.Font.GothamBold
 ToxChatCloseBtn.TextSize = 11
 ToxChatCloseBtn.Parent = ToxChatTopBar
+ToxChatCloseBtn.Visible = false
 
 ToxChatCloseCorner = Instance.new("UICorner")
 ToxChatCloseCorner.CornerRadius = UDim.new(0, 4)
@@ -4781,8 +4788,8 @@ ToxChatStatus.Parent = ToxChatGui
 getgenv().ToxChatStatus = ToxChatStatus
 
 ToxChatScroll = Instance.new("ScrollingFrame")
-ToxChatScroll.Size = UDim2.new(1, -16, 1, -110)
-ToxChatScroll.Position = UDim2.new(0, 8, 0, 60)
+ToxChatScroll.Size = UDim2.new(1, -8, 1, -102)
+ToxChatScroll.Position = UDim2.new(0, 4, 0, 58)
 ToxChatScroll.BackgroundTransparency = 1
 ToxChatScroll.BorderSizePixel = 0
 ToxChatScroll.ScrollBarThickness = 4
@@ -4802,8 +4809,8 @@ ToxChatLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 end)
 
 ToxChatInput = Instance.new("TextBox")
-ToxChatInput.Size = UDim2.new(1, -88, 0, 32)
-ToxChatInput.Position = UDim2.new(0, 8, 1, -40)
+ToxChatInput.Size = UDim2.new(1, -78, 0, 30)
+ToxChatInput.Position = UDim2.new(0, 4, 1, -34)
 ToxChatInput.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
 ToxChatInput.BorderSizePixel = 0
 ToxChatInput.PlaceholderText = "Message..."
@@ -4821,8 +4828,8 @@ ToxChatInputCorner.CornerRadius = UDim.new(0, 4)
 ToxChatInputCorner.Parent = ToxChatInput
 
 ToxChatSendBtn = Instance.new("TextButton")
-ToxChatSendBtn.Size = UDim2.new(0, 68, 0, 32)
-ToxChatSendBtn.Position = UDim2.new(1, -76, 1, -40)
+ToxChatSendBtn.Size = UDim2.new(0, 66, 0, 30)
+ToxChatSendBtn.Position = UDim2.new(1, -70, 1, -34)
 ToxChatSendBtn.BackgroundColor3 = MAIN_COLOR
 ToxChatSendBtn.BorderSizePixel = 0
 ToxChatSendBtn.Text = "Send"
@@ -4902,7 +4909,9 @@ getgenv().ClearToxChatMessages = function()
 end
 
 ToxChatCloseBtn.MouseButton1Click:Connect(function()
-    ToxChatGui.Visible = false
+    if getgenv().ToxOpenPage and getgenv().UniversalPage then
+        getgenv().ToxOpenPage(getgenv().UniversalPage)
+    end
 end)
 
 JoinGamesGui = Instance.new("Frame")
