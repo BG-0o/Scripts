@@ -83,199 +83,6 @@ local fakeLagClock = 0
 local VISUAL_BIND = "ToxUniversal2Visuals"
 local healthBillboards = setmetatable({}, {__mode = "k"})
 
-local function BaseCtrlClickWouldReject(instance)
-    if not instance then
-        return true
-    end
-
-    if instance == Workspace.Terrain then
-        return true
-    end
-
-    if not instance:IsA("BasePart") then
-        return true
-    end
-
-    local lower = string.lower(
-        tostring(instance.Name or "")
-        .. " "
-        .. tostring(instance.Parent and instance.Parent.Name or "")
-    )
-
-    if string.find(lower, "barrier", 1, true)
-    or string.find(lower, "invisible", 1, true)
-    or string.find(lower, "kill", 1, true)
-    or string.find(lower, "void", 1, true)
-    or string.find(lower, "death", 1, true) then
-        return true
-    end
-
-    if instance.Transparency >= 0.985
-    and not instance.CanCollide then
-        return true
-    end
-
-    return false
-end
-
-local function GetEnhancedCtrlClickTeleportCFrame()
-    local character = Player.Character
-    local root = character and character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    local camera = Workspace.CurrentCamera
-    local mouse = Player:GetMouse()
-
-    if not character
-    or not root
-    or not humanoid
-    or humanoid.Health <= 0
-    or not camera
-    or not mouse then
-        return nil, false
-    end
-
-    local excluded = {character}
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.IgnoreWater = false
-
-    local ray = camera:ScreenPointToRay(mouse.X, mouse.Y)
-    local result = nil
-    local skippedBlockingHit = false
-
-    for _ = 1, 16 do
-        params.FilterDescendantsInstances = excluded
-
-        result = Workspace:Raycast(
-            ray.Origin,
-            ray.Direction * 100000,
-            params
-        )
-
-        if not result or not result.Instance then
-            return nil, false
-        end
-
-        local hit = result.Instance
-
-        if hit == Workspace.Terrain then
-            break
-        end
-
-        if hit:IsA("BasePart") then
-            local invisiblePassThrough =
-                hit.Transparency >= 0.985
-                and not hit.CanCollide
-
-            if not invisiblePassThrough then
-                break
-            end
-        end
-
-        skippedBlockingHit = true
-        table.insert(excluded, hit)
-        result = nil
-    end
-
-    if not result or not result.Instance then
-        return nil, false
-    end
-
-    local distance = (result.Position - ray.Origin).Magnitude
-    local needsFallback =
-        skippedBlockingHit
-        or distance > 4990
-        or BaseCtrlClickWouldReject(result.Instance)
-
-    if not needsFallback then
-        return nil, false
-    end
-
-    local normal = result.Normal
-
-    if normal.Magnitude <= 0 then
-        normal = Vector3.new(0, 1, 0)
-    else
-        normal = normal.Unit
-    end
-
-    local standHeight = math.max(
-        2.5,
-        (root.Size.Y * 0.5)
-        + (humanoid.HipHeight or 2)
-        + 0.2
-    )
-
-    local targetPosition
-
-    if normal.Y >= 0.35 then
-        targetPosition = result.Position + Vector3.new(0, standHeight, 0)
-    else
-        local sideClearance = math.max(root.Size.X, root.Size.Z) * 0.5 + 0.85
-        targetPosition = result.Position + normal * sideClearance
-    end
-
-    local _, yaw, _ = root.CFrame:ToOrientation()
-
-    return CFrame.new(targetPosition) * CFrame.Angles(0, yaw, 0), true
-end
-
-visualConnections[#visualConnections + 1] = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed
-    or env.ToxUniversal2Token ~= instanceToken
-    or env.Destroyed
-    or Settings.CtrlClickTP ~= true
-    or input.UserInputType ~= Enum.UserInputType.MouseButton1
-    or UserInputService:GetFocusedTextBox() then
-        return
-    end
-
-    if not UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)
-    and not UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
-        return
-    end
-
-    local targetCFrame, needsFallback = GetEnhancedCtrlClickTeleportCFrame()
-
-    if not targetCFrame or not needsFallback then
-        return
-    end
-
-    local character = Player.Character
-    local root = character and character:FindFirstChild("HumanoidRootPart")
-
-    if not root then
-        return
-    end
-
-    if type(env.ToxSafeTeleportToCFrame) == "function" then
-        pcall(
-            env.ToxSafeTeleportToCFrame,
-            targetCFrame,
-            false,
-            "Ctrl Click TP"
-        )
-        return
-    end
-
-    if type(env.RecordToxTeleportReturn) == "function" then
-        pcall(env.RecordToxTeleportReturn)
-    end
-
-    if type(env.AllowToxTeleport) == "function" then
-        pcall(env.AllowToxTeleport, 1.5, "Ctrl Click TP")
-    end
-
-    root.AssemblyLinearVelocity = Vector3.zero
-    root.AssemblyAngularVelocity = Vector3.zero
-
-    if character and character.Parent then
-        character:PivotTo(targetCFrame)
-    else
-        root.CFrame = targetCFrame
-    end
-end)
-
 local function ApplyUniversalSectionState(section)
     if typeof(section) ~= "table" then
         return
@@ -3163,4 +2970,205 @@ if not mergedFeaturesOk then
 end
 
 env.ToxUniversal2Loaded = true
-env.ToxUniversal2Version = "2026-09-15-ctrl-click-tp-fallback"
+env.ToxUniversal2Version = "2026-09-15-two-file-universal"
+
+pcall(function()
+    if env.ToxCtrlClickFallbackConnection then
+        pcall(function()
+            env.ToxCtrlClickFallbackConnection:Disconnect()
+        end)
+        env.ToxCtrlClickFallbackConnection = nil
+    end
+
+    if env.ToxCtrlClickFallbackCleanupWrapped ~= true then
+        env.ToxCtrlClickFallbackCleanupWrapped = true
+
+        local previousExtraCleanup = env.ToxUniversal2ExtraCleanup
+
+        env.ToxUniversal2ExtraCleanup = function()
+            if env.ToxCtrlClickFallbackConnection then
+                pcall(function()
+                    env.ToxCtrlClickFallbackConnection:Disconnect()
+                end)
+                env.ToxCtrlClickFallbackConnection = nil
+            end
+
+            if type(previousExtraCleanup) == "function" then
+                pcall(previousExtraCleanup)
+            end
+
+            env.ToxCtrlClickFallbackCleanupWrapped = nil
+        end
+    end
+
+    env.ToxCtrlClickFallbackConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed
+        or env.Destroyed
+        or Settings.CtrlClickTP ~= true
+        or input.UserInputType ~= Enum.UserInputType.MouseButton1
+        or UserInputService:GetFocusedTextBox() then
+            return
+        end
+
+        if not UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)
+        and not UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
+            return
+        end
+
+        local character = Player.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local camera = Workspace.CurrentCamera
+        local mouse = Player:GetMouse()
+
+        if not character
+        or not root
+        or not humanoid
+        or humanoid.Health <= 0
+        or not camera
+        or not mouse then
+            return
+        end
+
+        local originPosition = root.Position
+        local mouseX = mouse.X
+        local mouseY = mouse.Y
+
+        task.defer(function()
+            if env.Destroyed
+            or Settings.CtrlClickTP ~= true
+            or not character.Parent
+            or not root.Parent then
+                return
+            end
+
+            if (root.Position - originPosition).Magnitude > 4 then
+                return
+            end
+
+            local excluded = {character}
+
+            if env.Gui then
+                table.insert(excluded, env.Gui)
+            end
+
+            local params = RaycastParams.new()
+            params.FilterType = Enum.RaycastFilterType.Exclude
+            params.IgnoreWater = false
+
+            local ray = camera:ScreenPointToRay(mouseX, mouseY)
+            local result = nil
+
+            for _ = 1, 20 do
+                params.FilterDescendantsInstances = excluded
+
+                result = Workspace:Raycast(
+                    ray.Origin,
+                    ray.Direction * 100000,
+                    params
+                )
+
+                if not result or not result.Instance then
+                    return
+                end
+
+                local hit = result.Instance
+
+                if hit == Workspace.Terrain then
+                    break
+                end
+
+                if not hit:IsA("BasePart") then
+                    table.insert(excluded, hit)
+                    result = nil
+                    continue
+                end
+
+                local lower = string.lower(
+                    tostring(hit.Name or "")
+                    .. " "
+                    .. tostring(hit.Parent and hit.Parent.Name or "")
+                )
+
+                if string.find(lower, "kill", 1, true)
+                or string.find(lower, "void", 1, true)
+                or string.find(lower, "death", 1, true) then
+                    return
+                end
+
+                local passThrough =
+                    (hit.Transparency >= 0.985 and not hit.CanCollide)
+                    or string.find(lower, "barrier", 1, true)
+                    or string.find(lower, "invisible", 1, true)
+
+                if passThrough then
+                    table.insert(excluded, hit)
+                    result = nil
+                else
+                    break
+                end
+            end
+
+            if not result or not result.Instance then
+                return
+            end
+
+            local normal = result.Normal
+
+            if normal.Magnitude <= 0 then
+                normal = Vector3.new(0, 1, 0)
+            else
+                normal = normal.Unit
+            end
+
+            local standHeight = math.max(
+                2.5,
+                (root.Size.Y * 0.5)
+                + (humanoid.HipHeight or 2)
+                + 0.2
+            )
+
+            local targetPosition
+
+            if normal.Y >= 0.35 then
+                targetPosition = result.Position + Vector3.new(0, standHeight, 0)
+            else
+                targetPosition = result.Position
+                    + normal * (math.max(root.Size.X, root.Size.Z) * 0.5 + 0.85)
+            end
+
+            local _, yaw, _ = root.CFrame:ToOrientation()
+            local targetCFrame = CFrame.new(targetPosition) * CFrame.Angles(0, yaw, 0)
+
+            if type(env.ToxSafeTeleportToCFrame) == "function" then
+                pcall(
+                    env.ToxSafeTeleportToCFrame,
+                    targetCFrame,
+                    false,
+                    "Ctrl Click TP"
+                )
+                return
+            end
+
+            if type(env.RecordToxTeleportReturn) == "function" then
+                pcall(env.RecordToxTeleportReturn)
+            end
+
+            if type(env.AllowToxTeleport) == "function" then
+                pcall(env.AllowToxTeleport, 1.5, "Ctrl Click TP")
+            end
+
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+
+            if character.Parent then
+                character:PivotTo(targetCFrame)
+            else
+                root.CFrame = targetCFrame
+            end
+        end)
+    end)
+
+    env.ToxUniversal2Version = "2026-09-15-clicktp-isolated-fallback"
+end)
+
