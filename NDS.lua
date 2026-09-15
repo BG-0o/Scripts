@@ -195,6 +195,8 @@ local function PressHotbarTwo()
     end)
 end
 
+local FindAppleByName
+
 local function EquipAndGetHotbarTwo()
     local character, humanoid = GetCharacterState()
 
@@ -228,8 +230,6 @@ local function EquipAndGetHotbarTwo()
 
     return nil
 end
-
-local FindAppleByName
 
 FindAppleByName = function()
     local character = Player.Character
