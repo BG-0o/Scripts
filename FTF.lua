@@ -794,22 +794,20 @@ local function InstallNoHackFailHook()
     oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
         local args = {...}
         local method = getnamecallmethod()
-        local currentSettings = getgenv().Settings
 
         if game.PlaceId == FTFPlaceId
-        and currentSettings
-        and currentSettings.FTFNoHackFail
+        and Settings
+        and Settings.FTFNoHackFail
         and method == "FireServer"
         and tostring(self.Name) == "RemoteEvent"
         and args[1] == "SetPlayerMinigameResult"
         and args[2] == false then
-            local mode = tostring(currentSettings.FTFNoFailMethod or "Smart")
+            local mode = tostring(Settings.FTFNoFailMethod or "Smart")
 
             if mode == "Legit" then
                 local remote = self
                 task.delay(math.random(5, 12) / 100, function()
-                    local latestSettings = getgenv().Settings
-                    if latestSettings and latestSettings.FTFNoHackFail and remote and remote.Parent then
+                    if Settings and Settings.FTFNoHackFail and remote and remote.Parent then
                         pcall(function()
                             remote:FireServer("SetPlayerMinigameResult", true)
                         end)
