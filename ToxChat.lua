@@ -1,5 +1,19 @@
-if getgenv().ToxChatLoaded then
+local ToxChatEnv = getgenv()
+local ToxChatExecutionToken = ToxChatEnv.ToxExecutionToken
+
+local function ToxChatExecutionActive()
+    return getgenv().ToxExecutionToken == ToxChatExecutionToken
+        and not getgenv().Destroyed
+end
+
+if ToxChatEnv.ToxChatLoaded
+and ToxChatEnv.ToxChatLoadedToken == ToxChatExecutionToken
+and ToxChatEnv.Destroyed ~= true then
     return
+end
+
+if type(ToxChatEnv.ToxChatCleanup) == "function" then
+    pcall(ToxChatEnv.ToxChatCleanup)
 end
 
 if not getgenv().ToxUniversalLoaded then
@@ -828,6 +842,10 @@ local function DecodeToxChatResponse(
 end
 
 local function PollToxChat()
+    if not ToxChatExecutionActive() then
+        return false
+    end
+
     local response, ok =
         RelayRequest(
             "GET",
@@ -842,6 +860,10 @@ local function PollToxChat()
                 )
             )
         )
+
+    if not ToxChatExecutionActive() then
+        return false
+    end
 
     if ok
     and DecodeToxChatResponse(
@@ -1198,16 +1220,34 @@ if ToxChatInput then
     end)
 end
 
+getgenv().ToxChatCleanup = function()
+    if getgenv().ToxChatLoadedToken == ToxChatExecutionToken then
+        getgenv().ToxChatLoaded = nil
+        getgenv().ToxChatLoadedToken = nil
+    end
+
+    local chatGui = getgenv().ToxChatGui
+    if chatGui and chatGui.Parent then
+        pcall(function()
+            chatGui:Destroy()
+        end)
+    end
+
+    if getgenv().ToxChatGui == chatGui then
+        getgenv().ToxChatGui = nil
+    end
+end
+
 task.spawn(function()
-    while not getgenv().Destroyed do
+    while ToxChatExecutionActive() do
         PollToxChat()
         task.wait(1)
     end
 end)
 
-
 if ToxChatGui then
     ToxChatGui.Visible = true
 end
 
+getgenv().ToxChatLoadedToken = ToxChatExecutionToken
 getgenv().ToxChatLoaded = true
