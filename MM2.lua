@@ -2,8 +2,16 @@ if game.PlaceId ~= 142823291 then
     return
 end
 
-MM2ModuleVersion =
+local MM2ModuleVersion =
     "2026-09-13-mm2-target-refresh-fix"
+local MM2ExpectedCoreVersion =
+    "2026-09-13-mm2-killall-still-knife"
+local MM2ExecutionToken = getgenv().ToxExecutionToken
+
+local function MM2ExecutionActive()
+    return getgenv().ToxExecutionToken == MM2ExecutionToken
+        and not getgenv().Destroyed
+end
 
 local Settings = getgenv().Settings
 local GamePage = getgenv().GamePage
@@ -92,7 +100,7 @@ local coreRunOk, coreRunError = pcall(coreFunction)
 
 if not coreRunOk
 or getgenv().ToxMM2CoreReady ~= true
-or getgenv().ToxMM2CoreVersion ~= MM2ModuleVersion then
+or getgenv().ToxMM2CoreVersion ~= MM2ExpectedCoreVersion then
     CustomNotify(
         "MM2 core failed to load",
         Color3.fromRGB(255, 90, 90),
@@ -1123,7 +1131,7 @@ AutoShootLastAttempt = 0
 AutoGrabAttemptedDrops = setmetatable({}, {__mode = "k"})
 
 task.spawn(function()
-    while not getgenv().Destroyed and game.PlaceId == 142823291 do
+    while MM2ExecutionActive() and game.PlaceId == 142823291 do
         if not ToxScriptReady() then
             task.wait(0.1)
             continue
@@ -1404,7 +1412,7 @@ local function ApplyMM2SavedOptionsAfterLoad()
 end
 
 task.spawn(function()
-    while not getgenv().Destroyed
+    while MM2ExecutionActive()
     and not ToxScriptReady() do
         task.wait(0.05)
     end
