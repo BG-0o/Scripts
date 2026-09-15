@@ -7,12 +7,14 @@ end
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
 local Workspace = game:GetService("Workspace")
 
 local Player = Players.LocalPlayer
 local Settings = env.Settings or {}
 local UniversalPage = env.UniversalPage
 local FREECAM_BIND = "ToxUniversalFreecam"
+local CAMERA_FREEZE_BIND = "ToxCameraMovementFreeze"
 local instanceToken = {}
 
 env.ToxUniversal2Token = instanceToken
@@ -59,8 +61,9 @@ local freecamYaw = 0
 local freecamSaved = nil
 local cameraNoclipCaptured = false
 local originalOcclusionMode = nil
-local cameraNoclipRoot = nil
-local cameraNoclipRootAnchored = nil
+local cameraMovementFrozen = false
+local cameraMovementControls = nil
+local cameraMovementControlsWereEnabled = nil
 local visualUIInstalled = false
 local visualConnections = {}
 local xrayDefaults = setmetatable({}, {__mode = "k"})
@@ -459,38 +462,127 @@ env.CreateConfirmButton = CreateConfirmButton
 env.CreateKeybindButton = CreateKeybindButton
 env.CreateKeybindToggle = CreateKeybindToggle
 
-local function RestoreCameraNoclipFreeze()
-    if cameraNoclipRoot and cameraNoclipRoot.Parent then
-        pcall(function()
-            cameraNoclipRoot.Anchored = cameraNoclipRootAnchored == true
-            cameraNoclipRoot.AssemblyLinearVelocity = Vector3.zero
-            cameraNoclipRoot.AssemblyAngularVelocity = Vector3.zero
-        end)
+local function GetCameraMovementControls()
+    local playerScripts = Player:FindFirstChild("PlayerScripts")
+    local playerModule = playerScripts and playerScripts:FindFirstChild("PlayerModule")
+
+    if not playerModule or not playerModule:IsA("ModuleScript") then
+        return nil
     end
 
-    cameraNoclipRoot = nil
-    cameraNoclipRootAnchored = nil
+    local okModule, module = pcall(require, playerModule)
+
+    if not okModule
+    or type(module) ~= "table"
+    or type(module.GetControls) ~= "function" then
+        return nil
+    end
+
+    local okControls, controls = pcall(function()
+        return module:GetControls()
+    end)
+
+    if okControls then
+        return controls
+    end
+
+    return nil
 end
 
-local function ApplyCameraNoclipFreeze()
-    local character = Player.Character
-    local root = character and character:FindFirstChild("HumanoidRootPart")
+local function SinkCameraMovement()
+    return Enum.ContextActionResult.Sink
+end
 
-    if not root then
+local function ShouldFreezeCameraMovement()
+    return Settings.NoclipCamera == true
+        or freecamActive == true
+end
+
+local function RestoreCameraNoclipFreeze(force)
+    if not force and ShouldFreezeCameraMovement() then
         return
     end
 
-    if cameraNoclipRoot ~= root then
-        RestoreCameraNoclipFreeze()
-        cameraNoclipRoot = root
-        cameraNoclipRootAnchored = root.Anchored
+    pcall(function()
+        ContextActionService:UnbindAction(CAMERA_FREEZE_BIND)
+    end)
+
+    if cameraMovementControls then
+        pcall(function()
+            if cameraMovementControlsWereEnabled == false then
+                cameraMovementControls:Disable()
+            else
+                cameraMovementControls:Enable()
+            end
+        end)
     end
 
-    pcall(function()
-        root.AssemblyLinearVelocity = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
-        root.Anchored = true
-    end)
+    cameraMovementFrozen = false
+    cameraMovementControls = nil
+    cameraMovementControlsWereEnabled = nil
+end
+
+local function ApplyCameraNoclipFreeze()
+    if not ShouldFreezeCameraMovement() then
+        RestoreCameraNoclipFreeze(true)
+        return
+    end
+
+    if not cameraMovementFrozen then
+        cameraMovementFrozen = true
+        cameraMovementControls = GetCameraMovementControls()
+
+        if cameraMovementControls then
+            local okEnabled, enabled = pcall(function()
+                return cameraMovementControls.controlsEnabled
+            end)
+
+            cameraMovementControlsWereEnabled =
+                not okEnabled
+                or enabled ~= false
+
+            pcall(function()
+                cameraMovementControls:Disable()
+            end)
+        end
+
+        pcall(function()
+            ContextActionService:UnbindAction(CAMERA_FREEZE_BIND)
+            ContextActionService:BindActionAtPriority(
+                CAMERA_FREEZE_BIND,
+                SinkCameraMovement,
+                false,
+                3000,
+                Enum.KeyCode.W,
+                Enum.KeyCode.A,
+                Enum.KeyCode.S,
+                Enum.KeyCode.D,
+                Enum.KeyCode.Space,
+                Enum.KeyCode.LeftControl,
+                Enum.KeyCode.RightControl,
+                Enum.KeyCode.ButtonA,
+                Enum.KeyCode.Thumbstick1
+            )
+        end)
+    end
+
+    local character = Player.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+
+    if humanoid and humanoid.Health > 0 then
+        pcall(function()
+            humanoid:Move(Vector3.zero, false)
+            humanoid.Jump = false
+        end)
+    end
+
+    if root then
+        pcall(function()
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+        end)
+    end
 end
 
 local function RestoreCameraNoclip()
@@ -537,10 +629,12 @@ local function StopFreecam()
     end)
 
     if not freecamActive then
+        RestoreCameraNoclipFreeze()
         return
     end
 
     freecamActive = false
+    RestoreCameraNoclipFreeze()
 
     local camera = Workspace.CurrentCamera
     local saved = freecamSaved
@@ -704,6 +798,7 @@ local function StartFreecam()
     freecamPitch = pitch
     freecamYaw = yaw
     freecamActive = true
+    ApplyCameraNoclipFreeze()
 
     camera.CameraType = Enum.CameraType.Scriptable
 
@@ -1200,7 +1295,7 @@ RunService:BindToRenderStep(
             return
         end
 
-        if Settings.NoclipCamera then
+        if Settings.NoclipCamera or freecamActive then
             ApplyCameraNoclipFreeze()
         else
             RestoreCameraNoclipFreeze()
@@ -1274,6 +1369,7 @@ env.ToxUniversal2Cleanup = function()
 
     StopFreecam()
     SetNoclipCamera(false)
+    RestoreCameraNoclipFreeze(true)
 
     if env.ToxUniversal2Token == instanceToken then
         env.ToxUniversal2Token = nil
