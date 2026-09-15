@@ -1580,7 +1580,12 @@ local function StageOptionsUntilLoadScreen()
     for key, value in pairs(Settings) do
         if typeof(value) == "boolean" then
             staged[key] = value == true
-            Settings[key] = false
+
+            if key == "Render3D" then
+                Settings[key] = true
+            else
+                Settings[key] = false
+            end
         end
     end
 
