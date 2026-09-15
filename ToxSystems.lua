@@ -49,8 +49,6 @@ local CustomNotify =
     getgenv().CustomNotify
 local AddConnection =
     getgenv().AddConnection
-local CreateButton =
-    getgenv().CreateButton
 local Settings =
     getgenv().Settings or {}
 local AutoSaveConfiguration =
@@ -62,8 +60,7 @@ if not Player
 or not Gui
 or not ControlPage
 or not CustomNotify
-or not AddConnection
-or not CreateButton then
+or not AddConnection then
     return
 end
 
@@ -1636,38 +1633,42 @@ end
 
 local function InitToxControlGui()
     local controlGui =
-        Instance.new("Frame")
+        Instance.new("ScrollingFrame")
 
     controlGui.Name =
         "ToxControlFrame"
 
     controlGui.Size =
         UDim2.new(
+            1,
             0,
-            430,
-            0,
-            410
+            1,
+            0
         )
 
     controlGui.Position =
         UDim2.new(
-            0.5,
-            -215,
-            0.5,
-            -205
+            0,
+            0,
+            0,
+            0
         )
 
     controlGui.BackgroundColor3 =
         Color3.fromRGB(
-            10,
-            10,
-            16
+            12,
+            12,
+            20
         )
 
     controlGui.BorderSizePixel = 0
     controlGui.ClipsDescendants = true
-    controlGui.Visible = false
-    controlGui.Parent = Gui
+    controlGui.Visible = true
+    controlGui.ScrollBarThickness = 4
+    controlGui.ScrollBarImageColor3 = MAIN_COLOR
+    controlGui.CanvasSize = UDim2.new(0, 0, 0, 418)
+    controlGui.ScrollingDirection = Enum.ScrollingDirection.Y
+    controlGui.Parent = ControlPage
 
     MakeCorner(
         controlGui,
@@ -1693,7 +1694,7 @@ local function InitToxControlGui()
         )
 
     topBar.BackgroundColor3 =
-        MAIN_COLOR
+        Color3.fromRGB(16, 16, 26)
 
     topBar.BorderSizePixel = 0
     topBar.Parent = controlGui
@@ -1775,6 +1776,7 @@ local function InitToxControlGui()
 
     close.TextSize = 11
     close.Parent = topBar
+    close.Visible = false
 
     MakeCorner(
         close,
@@ -3178,100 +3180,7 @@ local function InitToxControlGui()
                 false
         end)
 
-    local dragging = false
-    local dragStart = nil
-    local startPosition = nil
-
-    topBar.InputBegan:
-        Connect(function(input)
-            if input.UserInputType
-                == Enum.UserInputType.MouseButton1
-            or input.UserInputType
-                == Enum.UserInputType.Touch then
-                dragging = true
-                dragStart =
-                    input.Position
-                startPosition =
-                    controlGui.Position
-            end
-        end)
-
-    AddConnection(
-        UserInputService.InputChanged:
-            Connect(function(input)
-                if not dragging
-                or not dragStart
-                or not startPosition then
-                    return
-                end
-
-                if input.UserInputType
-                    ~= Enum.UserInputType.MouseMovement
-                and input.UserInputType
-                    ~= Enum.UserInputType.Touch then
-                    return
-                end
-
-                local delta =
-                    input.Position
-                    - dragStart
-
-                controlGui.Position =
-                    UDim2.new(
-                        startPosition.X.Scale,
-                        startPosition.X.Offset
-                            + delta.X,
-                        startPosition.Y.Scale,
-                        startPosition.Y.Offset
-                            + delta.Y
-                    )
-            end)
-    )
-
-    AddConnection(
-        UserInputService.InputEnded:
-            Connect(function(input)
-                if input.UserInputType
-                    == Enum.UserInputType.MouseButton1
-                or input.UserInputType
-                    == Enum.UserInputType.Touch then
-                    dragging = false
-                end
-            end)
-    )
-
-    if getgenv().RegisterToxLinkedSubGui then
-        getgenv().RegisterToxLinkedSubGui(
-            "ToxControl",
-            controlGui
-        )
-    end
-
-    if getgenv().RegisterToxSubGuiMinimize then
-        getgenv().RegisterToxSubGuiMinimize(
-            controlGui,
-            -70
-        )
-    end
-
-    local controlPageButton =
-        CreateButton(
-            "Tox Control",
-            ControlPage,
-            function()
-                RefreshLock()
-                RefreshMode()
-                RefreshTarget()
-
-                controlGui.Visible =
-                    not controlGui.Visible
-            end
-        )
-
-    if controlPageButton then
-        controlPageButton.LayoutOrder =
-            990
-    end
+    -- Embedded in CONTROL page; no detached drag/minimize behavior.
 
     RefreshRole()
     RefreshMode()
@@ -3293,8 +3202,7 @@ if guiOk then
 
     getgenv().ToxControlGui = ControlGui
 
-    if ControlGui
-    and getgenv().CurrentPage == ControlPage then
+    if ControlGui then
         ControlGui.Visible = true
     end
 else
