@@ -2971,34 +2971,12 @@ end
 
 env.ToxUniversal2Loaded = true
 env.ToxUniversal2Version = "2026-09-15-two-file-universal"
-
 pcall(function()
     if env.ToxCtrlClickFallbackConnection then
         pcall(function()
             env.ToxCtrlClickFallbackConnection:Disconnect()
         end)
         env.ToxCtrlClickFallbackConnection = nil
-    end
-
-    if env.ToxCtrlClickFallbackCleanupWrapped ~= true then
-        env.ToxCtrlClickFallbackCleanupWrapped = true
-
-        local previousExtraCleanup = env.ToxUniversal2ExtraCleanup
-
-        env.ToxUniversal2ExtraCleanup = function()
-            if env.ToxCtrlClickFallbackConnection then
-                pcall(function()
-                    env.ToxCtrlClickFallbackConnection:Disconnect()
-                end)
-                env.ToxCtrlClickFallbackConnection = nil
-            end
-
-            if type(previousExtraCleanup) == "function" then
-                pcall(previousExtraCleanup)
-            end
-
-            env.ToxCtrlClickFallbackCleanupWrapped = nil
-        end
     end
 
     env.ToxCtrlClickFallbackConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -3034,7 +3012,7 @@ pcall(function()
         local mouseX = mouse.X
         local mouseY = mouse.Y
 
-        task.defer(function()
+        task.delay(0.08, function()
             if env.Destroyed
             or Settings.CtrlClickTP ~= true
             or not character.Parent
@@ -3047,26 +3025,15 @@ pcall(function()
             end
 
             local excluded = {character}
-
-            if env.Gui then
-                table.insert(excluded, env.Gui)
-            end
-
             local params = RaycastParams.new()
             params.FilterType = Enum.RaycastFilterType.Exclude
             params.IgnoreWater = false
-
             local ray = camera:ScreenPointToRay(mouseX, mouseY)
             local result = nil
 
-            for _ = 1, 20 do
+            for _ = 1, 25 do
                 params.FilterDescendantsInstances = excluded
-
-                result = Workspace:Raycast(
-                    ray.Origin,
-                    ray.Direction * 100000,
-                    params
-                )
+                result = Workspace:Raycast(ray.Origin, ray.Direction * 100000, params)
 
                 if not result or not result.Instance then
                     return
@@ -3096,12 +3063,9 @@ pcall(function()
                     return
                 end
 
-                local passThrough =
-                    (hit.Transparency >= 0.985 and not hit.CanCollide)
-                    or string.find(lower, "barrier", 1, true)
-                    or string.find(lower, "invisible", 1, true)
-
-                if passThrough then
+                if (hit.Transparency >= 0.985 and not hit.CanCollide)
+                or string.find(lower, "barrier", 1, true)
+                or string.find(lower, "invisible", 1, true) then
                     table.insert(excluded, hit)
                     result = nil
                 else
@@ -3114,7 +3078,6 @@ pcall(function()
             end
 
             local normal = result.Normal
-
             if normal.Magnitude <= 0 then
                 normal = Vector3.new(0, 1, 0)
             else
@@ -3129,7 +3092,6 @@ pcall(function()
             )
 
             local targetPosition
-
             if normal.Y >= 0.35 then
                 targetPosition = result.Position + Vector3.new(0, standHeight, 0)
             else
@@ -3141,12 +3103,7 @@ pcall(function()
             local targetCFrame = CFrame.new(targetPosition) * CFrame.Angles(0, yaw, 0)
 
             if type(env.ToxSafeTeleportToCFrame) == "function" then
-                pcall(
-                    env.ToxSafeTeleportToCFrame,
-                    targetCFrame,
-                    false,
-                    "Ctrl Click TP"
-                )
+                pcall(env.ToxSafeTeleportToCFrame, targetCFrame, false, "Ctrl Click TP")
                 return
             end
 
@@ -3169,6 +3126,7 @@ pcall(function()
         end)
     end)
 
-    env.ToxUniversal2Version = "2026-09-15-clicktp-isolated-fallback"
+    if visualConnections then
+        table.insert(visualConnections, env.ToxCtrlClickFallbackConnection)
+    end
 end)
-
