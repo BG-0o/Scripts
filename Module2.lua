@@ -1464,42 +1464,23 @@ env.ToxUniversal2Cleanup = function()
     end
     visualConnections = {}
 
-    -- Core Module2 toggles must not survive DESTROY/re-execution.
     Settings.ESPShowHealth = false
-    Settings.VisualRainbow = false
-    Settings.XRay = false
-    Settings.FakeLag = false
-    Settings.Freecam = false
-    Settings.NoclipCamera = false
-
-    RestoreXRay()
-    SetFakeLag(false)
     ClearHealthBillboards()
+
+    Settings.VisualRainbow = false
     ApplyRainbow()
 
+    SetXRay(false)
+    SetFakeLag(false)
+
+    Settings.Freecam = false
     StopFreecam()
+
     SetNoclipCamera(false)
     RestoreFreecamMovementFreeze(true)
 
-    -- Disabled 3D rendering is a temporary state; always restore Roblox's
-    -- normal renderer when the script shuts down.
+    Settings.Render3D = true
     ApplyRender3DState(true)
-
-    local cleanupToggleStates = {
-        ESPShowHealth = false,
-        VisualRainbow = false,
-        XRay = false,
-        FakeLag = false,
-        Freecam = false,
-        NoclipCamera = false,
-        Render3D = true
-    }
-
-    if type(env.SyncToggleVisuals) == "function" then
-        for key, value in pairs(cleanupToggleStates) do
-            pcall(env.SyncToggleVisuals, key, value)
-        end
-    end
 
     if env.ToxUniversal2Token == instanceToken then
         env.ToxUniversal2Token = nil
@@ -2953,32 +2934,15 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         connections = {}
         lockedTarget = nil
 
-        -- New and existing combat/misc toggles are explicitly reset here so
-        -- they cannot reactivate after Module2 is destroyed/re-executed.
         Settings.Aimbot = false
         Settings.AimbotBindEnabled = false
         Settings.AimbotBlatant = false
         Settings.AimLock = false
-
-        local extraToggleKeys = {
-            "Aimbot",
-            "AimbotBindEnabled",
-            "AimbotBlatant",
-            "AimLock",
-            "IgnoreFriends",
-            "NormalizeAnimations",
-            "ForceJump",
-            "FixUnanchoredParts",
-            "UnlockCursor"
-        }
-
-        for _, key in ipairs(extraToggleKeys) do
-            Settings[key] = false
-
-            if type(env.SyncToggleVisuals) == "function" then
-                pcall(env.SyncToggleVisuals, key, false)
-            end
-        end
+        Settings.IgnoreFriends = false
+        Settings.NormalizeAnimations = false
+        Settings.ForceJump = false
+        Settings.FixUnanchoredParts = false
+        Settings.UnlockCursor = false
 
         RestoreAnimations()
         RestoreForceJump()
