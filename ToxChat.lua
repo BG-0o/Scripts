@@ -30,8 +30,6 @@ local Player =
     Players.LocalPlayer
 local CustomNotify =
     getgenv().CustomNotify
-local CreateButton =
-    getgenv().CreateButton
 local ChatPage =
     getgenv().ChatPage
     or getgenv().FlingPage
@@ -40,7 +38,6 @@ local RequestFunction =
 
 if not Player
 or not CustomNotify
-or not CreateButton
 or not ChatPage then
     return
 end
@@ -992,29 +989,10 @@ task.spawn(function()
 end)
 
 
-local ToxChatPageButton =
-    CreateButton(
-        "Tox Chat",
-        ChatPage,
-        function()
-            if ToxChatGui then
-                ToxChatGui.Visible =
-                    not ToxChatGui.Visible
-            end
-        end
-    )
-
-if ToxChatPageButton then
-    ToxChatPageButton.LayoutOrder =
-        991
-end
-
 if ToxChatGui then
     getgenv().ToxChatGui = ToxChatGui
 
-    if getgenv().CurrentPage == ChatPage then
-        ToxChatGui.Visible = true
-    end
+    ToxChatGui.Visible = true
 end
 
 getgenv().ToxChatLoaded = true
