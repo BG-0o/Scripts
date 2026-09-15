@@ -5037,14 +5037,12 @@ ApplySavedGuiPosition("Main", Main)
 ApplySavedGuiPosition("ChatLog", ChatLogGui)
 ApplySavedGuiPosition("Waypoints", WaypointsGui)
 ApplySavedGuiPosition("Music", MusicGui)
-ApplySavedGuiPosition("ToxChat", ToxChatGui)
 ApplySavedGuiPosition("QuickJoin", JoinGamesGui)
 
 TrackGuiPosition("Main", Main)
 TrackGuiPosition("ChatLog", ChatLogGui)
 TrackGuiPosition("Waypoints", WaypointsGui)
 TrackGuiPosition("Music", MusicGui)
-TrackGuiPosition("ToxChat", ToxChatGui)
 TrackGuiPosition("QuickJoin", JoinGamesGui)
 
 getgenv().SharedToggleControls = {}
