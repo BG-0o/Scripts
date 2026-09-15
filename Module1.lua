@@ -12,7 +12,6 @@ local Lighting = game:GetService("Lighting")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local ToxParentContainer = (gethui and gethui()) or game:GetService("CoreGui")
-local ToxExecutionToken = {}
 
 local function HasRunningToxHub()
     local gui = getgenv().Gui
@@ -166,7 +165,6 @@ if HasRunningToxHub() then
         return
     end
 
-    getgenv().ToxExecutionToken = ToxExecutionToken
     getgenv().Destroyed = true
     getgenv().ScriptLoaded = false
     getgenv().ToxOptionsReady = nil
@@ -201,22 +199,6 @@ if HasRunningToxHub() then
     getgenv().ToxGameModuleLoadingUrl = nil
     getgenv().ToxGameModuleLoadingPage = nil
 
-    if getgenv().ToxUniversal2Cleanup then
-        pcall(getgenv().ToxUniversal2Cleanup)
-    end
-
-    if getgenv().ToxChatCleanup then
-        pcall(getgenv().ToxChatCleanup)
-    end
-
-    if getgenv().ToxMM2Cleanup then
-        pcall(getgenv().ToxMM2Cleanup)
-    end
-
-    if getgenv().ToxNDSCleanup then
-        pcall(getgenv().ToxNDSCleanup)
-    end
-
     if getgenv().ToxSystemsCleanup then
         pcall(getgenv().ToxSystemsCleanup)
     end
@@ -241,19 +223,8 @@ if HasRunningToxHub() then
         pcall(getgenv().ToxBABFTCleanup)
     end
 
-    if getgenv().ScriptConnections then
-        for _, connection in ipairs(getgenv().ScriptConnections) do
-            pcall(function()
-                connection:Disconnect()
-            end)
-        end
-        getgenv().ScriptConnections = {}
-    end
-
-    task.wait(1.05)
+    task.wait(0.18)
 end
-
-getgenv().ToxExecutionToken = ToxExecutionToken
 
 if getgenv().Gui then pcall(function() getgenv().Gui:Destroy() end) end
 if getgenv().NotifGui then pcall(function() getgenv().NotifGui:Destroy() end) end
@@ -517,26 +488,6 @@ getgenv().UIPositions = {}
 getgenv().GameSharedSettings = {}
 getgenv().GameSpecificSettings = {}
 getgenv().BaseSharedSettings = {}
-getgenv().ToxUniversalLoaded = nil
-getgenv().ToxUniversal2Loaded = nil
-getgenv().ToxUniversal2ExtraLoaded = nil
-getgenv().ToxChatLoaded = nil
-getgenv().ToxChatLoadedToken = nil
-getgenv().ToxSystemsLoaded = nil
-getgenv().ToxSystemsLoadedToken = nil
-getgenv().ToxControlGui = nil
-getgenv().ToxNDSModuleLoadedJobId = nil
-getgenv().ToxLBBModuleLoadedJobId = nil
-getgenv().ToxFTFModuleLoadedJobId = nil
-getgenv().ToxPLModuleLoadedJobId = nil
-getgenv().ToxBABFTModuleLoadedJobId = nil
-getgenv().ToxMM2ModuleLoadedJobId = nil
-getgenv().ToxMM2CoreReady = nil
-getgenv().ToxMM2CoreVersion = nil
-getgenv().ToxGameModuleLoadedUrl = nil
-getgenv().ToxGameModuleLoadedPage = nil
-getgenv().ToxGameModuleLoadingUrl = nil
-getgenv().ToxGameModuleLoadingPage = nil
 getgenv().Destroyed = false
 getgenv().ScriptLoaded = false
 getgenv().ToxOptionsReady = nil
