@@ -357,7 +357,7 @@ local function CreateToggleCycleControl(name, options, page, defaultToggle, defa
         env.RegisterToxSearchControl(name, page, box, options)
     end
 
-    return box
+    return box, setVisual
 end
 
 local raw = {
@@ -380,20 +380,23 @@ function CreateToggle(name, page, ...)
     end
 
     if name == "3D Rendering" then
-        return CreateToggleCycleControl(
+        local control, setVisual = CreateToggleCycleControl(
             "3D Rendering",
             {"WHITE", "BLACK", "RED", "BLUE"},
             page,
-            Settings.Render3D,
+            not Settings.Render3D,
             Settings.Render3DColor,
             function(value)
-                ApplyRender3DState(value)
+                ApplyRender3DState(not value)
             end,
             function(value)
                 ApplyRender3DColor(value)
             end,
-            "Render3D"
+            nil
         )
+
+        env.ToxRender3DSetVisual = setVisual
+        return control
     end
 
     return TrackUniversalControl(
@@ -1437,6 +1440,10 @@ task.spawn(function()
     and not env.Destroyed then
         ApplyRender3DColor(Settings.Render3DColor)
         ApplyRender3DState(Settings.Render3D)
+
+        if type(env.ToxRender3DSetVisual) == "function" then
+            env.ToxRender3DSetVisual(not Settings.Render3D)
+        end
 
         if Settings.XRay then
             ApplyXRayAll()
@@ -2971,162 +2978,3 @@ end
 
 env.ToxUniversal2Loaded = true
 env.ToxUniversal2Version = "2026-09-15-two-file-universal"
-pcall(function()
-    if env.ToxCtrlClickFallbackConnection then
-        pcall(function()
-            env.ToxCtrlClickFallbackConnection:Disconnect()
-        end)
-        env.ToxCtrlClickFallbackConnection = nil
-    end
-
-    env.ToxCtrlClickFallbackConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed
-        or env.Destroyed
-        or Settings.CtrlClickTP ~= true
-        or input.UserInputType ~= Enum.UserInputType.MouseButton1
-        or UserInputService:GetFocusedTextBox() then
-            return
-        end
-
-        if not UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)
-        and not UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
-            return
-        end
-
-        local character = Player.Character
-        local root = character and character:FindFirstChild("HumanoidRootPart")
-        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-        local camera = Workspace.CurrentCamera
-        local mouse = Player:GetMouse()
-
-        if not character
-        or not root
-        or not humanoid
-        or humanoid.Health <= 0
-        or not camera
-        or not mouse then
-            return
-        end
-
-        local originPosition = root.Position
-        local mouseX = mouse.X
-        local mouseY = mouse.Y
-
-        task.delay(0.08, function()
-            if env.Destroyed
-            or Settings.CtrlClickTP ~= true
-            or not character.Parent
-            or not root.Parent then
-                return
-            end
-
-            if (root.Position - originPosition).Magnitude > 4 then
-                return
-            end
-
-            local excluded = {character}
-            local params = RaycastParams.new()
-            params.FilterType = Enum.RaycastFilterType.Exclude
-            params.IgnoreWater = false
-            local ray = camera:ScreenPointToRay(mouseX, mouseY)
-            local result = nil
-
-            for _ = 1, 25 do
-                params.FilterDescendantsInstances = excluded
-                result = Workspace:Raycast(ray.Origin, ray.Direction * 100000, params)
-
-                if not result or not result.Instance then
-                    return
-                end
-
-                local hit = result.Instance
-
-                if hit == Workspace.Terrain then
-                    break
-                end
-
-                if not hit:IsA("BasePart") then
-                    table.insert(excluded, hit)
-                    result = nil
-                    continue
-                end
-
-                local lower = string.lower(
-                    tostring(hit.Name or "")
-                    .. " "
-                    .. tostring(hit.Parent and hit.Parent.Name or "")
-                )
-
-                if string.find(lower, "kill", 1, true)
-                or string.find(lower, "void", 1, true)
-                or string.find(lower, "death", 1, true) then
-                    return
-                end
-
-                if (hit.Transparency >= 0.985 and not hit.CanCollide)
-                or string.find(lower, "barrier", 1, true)
-                or string.find(lower, "invisible", 1, true) then
-                    table.insert(excluded, hit)
-                    result = nil
-                else
-                    break
-                end
-            end
-
-            if not result or not result.Instance then
-                return
-            end
-
-            local normal = result.Normal
-            if normal.Magnitude <= 0 then
-                normal = Vector3.new(0, 1, 0)
-            else
-                normal = normal.Unit
-            end
-
-            local standHeight = math.max(
-                2.5,
-                (root.Size.Y * 0.5)
-                + (humanoid.HipHeight or 2)
-                + 0.2
-            )
-
-            local targetPosition
-            if normal.Y >= 0.35 then
-                targetPosition = result.Position + Vector3.new(0, standHeight, 0)
-            else
-                targetPosition = result.Position
-                    + normal * (math.max(root.Size.X, root.Size.Z) * 0.5 + 0.85)
-            end
-
-            local _, yaw, _ = root.CFrame:ToOrientation()
-            local targetCFrame = CFrame.new(targetPosition) * CFrame.Angles(0, yaw, 0)
-
-            if type(env.ToxSafeTeleportToCFrame) == "function" then
-                pcall(env.ToxSafeTeleportToCFrame, targetCFrame, false, "Ctrl Click TP")
-                return
-            end
-
-            if type(env.RecordToxTeleportReturn) == "function" then
-                pcall(env.RecordToxTeleportReturn)
-            end
-
-            if type(env.AllowToxTeleport) == "function" then
-                pcall(env.AllowToxTeleport, 1.5, "Ctrl Click TP")
-            end
-
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.AssemblyAngularVelocity = Vector3.zero
-
-            if character.Parent then
-                character:PivotTo(targetCFrame)
-            else
-                root.CFrame = targetCFrame
-            end
-        end)
-    end)
-
-    if visualConnections then
-        table.insert(visualConnections, env.ToxCtrlClickFallbackConnection)
-    end
-end)
