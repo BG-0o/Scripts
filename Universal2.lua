@@ -10,11 +10,18 @@ local UserInputService = game:GetService("UserInputService")
 local ContextActionService = game:GetService("ContextActionService")
 local Workspace = game:GetService("Workspace")
 
+local UserGameSettings = nil
+pcall(function()
+    UserGameSettings = UserSettings():GetService("UserGameSettings")
+end)
+
 local Player = Players.LocalPlayer
 local Settings = env.Settings or {}
 local UniversalPage = env.UniversalPage
 local FREECAM_BIND = "ToxUniversalFreecam"
-local CAMERA_FREEZE_BIND = "ToxCameraMovementFreeze"
+local FREECAM_MOVEMENT_FREEZE_BIND = "ToxCameraMovementFreeze"
+local FREECAM_ROTATION_SPEED_MOUSE =
+    Vector2.new(1, 0.77) * math.rad(0.5)
 local instanceToken = {}
 
 env.ToxUniversal2Token = instanceToken
@@ -31,6 +38,8 @@ Settings.AimbotMode = string.upper(tostring(Settings.AimbotMode or "CAMERA"))
 if Settings.AimbotMode ~= "CAMERA" and Settings.AimbotMode ~= "MOUSE" then
     Settings.AimbotMode = "CAMERA"
 end
+Settings.AimbotBindEnabled = Settings.AimbotBindEnabled == true
+Settings.AimbotKey = Settings.AimbotKey or Enum.KeyCode.E
 Settings.Render3D = Settings.Render3D ~= false
 Settings.Render3DColor = string.upper(tostring(Settings.Render3DColor or "BLACK"))
 if Settings.Render3DColor ~= "WHITE"
@@ -61,9 +70,9 @@ local freecamYaw = 0
 local freecamSaved = nil
 local cameraNoclipCaptured = false
 local originalOcclusionMode = nil
-local cameraMovementFrozen = false
-local cameraMovementControls = nil
-local cameraMovementControlsWereEnabled = nil
+local freecamMovementFrozen = false
+local freecamMovementControls = nil
+local freecamMovementControlsWereEnabled = nil
 local visualUIInstalled = false
 local visualConnections = {}
 local xrayDefaults = setmetatable({}, {__mode = "k"})
@@ -493,63 +502,62 @@ local function SinkCameraMovement()
     return Enum.ContextActionResult.Sink
 end
 
-local function ShouldFreezeCameraMovement()
-    return Settings.NoclipCamera == true
-        or freecamActive == true
+local function ShouldFreezeFreecamMovement()
+    return freecamActive == true
 end
 
-local function RestoreCameraNoclipFreeze(force)
-    if not force and ShouldFreezeCameraMovement() then
+local function RestoreFreecamMovementFreeze(force)
+    if not force and ShouldFreezeFreecamMovement() then
         return
     end
 
     pcall(function()
-        ContextActionService:UnbindAction(CAMERA_FREEZE_BIND)
+        ContextActionService:UnbindAction(FREECAM_MOVEMENT_FREEZE_BIND)
     end)
 
-    if cameraMovementControls then
+    if freecamMovementControls then
         pcall(function()
-            if cameraMovementControlsWereEnabled == false then
-                cameraMovementControls:Disable()
+            if freecamMovementControlsWereEnabled == false then
+                freecamMovementControls:Disable()
             else
-                cameraMovementControls:Enable()
+                freecamMovementControls:Enable()
             end
         end)
     end
 
-    cameraMovementFrozen = false
-    cameraMovementControls = nil
-    cameraMovementControlsWereEnabled = nil
+    freecamMovementFrozen = false
+    freecamMovementControls = nil
+    freecamMovementControlsWereEnabled = nil
 end
 
-local function ApplyCameraNoclipFreeze()
-    if not ShouldFreezeCameraMovement() then
-        RestoreCameraNoclipFreeze(true)
+local function ApplyFreecamMovementFreeze()
+    if not ShouldFreezeFreecamMovement() then
+        RestoreFreecamMovementFreeze(true)
         return
     end
 
-    if not cameraMovementFrozen then
-        cameraMovementFrozen = true
-        cameraMovementControls = GetCameraMovementControls()
+    if not freecamMovementFrozen then
+        freecamMovementFrozen = true
+        freecamMovementControls = GetCameraMovementControls()
 
-        if cameraMovementControls then
+        if freecamMovementControls then
             local okEnabled, enabled = pcall(function()
-                return cameraMovementControls.controlsEnabled
+                return freecamMovementControls.controlsEnabled
             end)
 
-            cameraMovementControlsWereEnabled =
+            freecamMovementControlsWereEnabled =
                 not okEnabled
                 or enabled ~= false
 
             pcall(function()
-                cameraMovementControls:Disable()
+                freecamMovementControls:Disable()
             end)
         end
 
         pcall(function()
-            ContextActionService:UnbindAction(CAMERA_FREEZE_BIND)
+            ContextActionService:UnbindAction(FREECAM_MOVEMENT_FREEZE_BIND)
             ContextActionService:BindActionAtPriority(
-                CAMERA_FREEZE_BIND,
+                FREECAM_MOVEMENT_FREEZE_BIND,
                 SinkCameraMovement,
                 false,
                 3000,
@@ -615,10 +623,7 @@ local function SetNoclipCamera(enabled)
         pcall(function()
             Player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
         end)
-
-        ApplyCameraNoclipFreeze()
     else
-        RestoreCameraNoclipFreeze()
         RestoreCameraNoclip()
     end
 end
@@ -629,12 +634,12 @@ local function StopFreecam()
     end)
 
     if not freecamActive then
-        RestoreCameraNoclipFreeze()
+        RestoreFreecamMovementFreeze()
         return
     end
 
     freecamActive = false
-    RestoreCameraNoclipFreeze()
+    RestoreFreecamMovementFreeze()
 
     local camera = Workspace.CurrentCamera
     local saved = freecamSaved
@@ -708,9 +713,23 @@ local function UpdateFreecam(delta)
         UserInputService.MouseIconEnabled = false
 
         local mouseDelta = UserInputService:GetMouseDelta()
-        freecamYaw = freecamYaw - mouseDelta.X * 0.0025
+        local invertY = 1
+
+        if UserGameSettings then
+            pcall(function()
+                invertY = UserGameSettings:GetCameraYInvertValue()
+            end)
+        end
+
+        freecamYaw =
+            freecamYaw
+            - mouseDelta.X * FREECAM_ROTATION_SPEED_MOUSE.X
+
         freecamPitch = math.clamp(
-            freecamPitch - mouseDelta.Y * 0.0025,
+            freecamPitch
+            - mouseDelta.Y
+                * FREECAM_ROTATION_SPEED_MOUSE.Y
+                * invertY,
             math.rad(-89),
             math.rad(89)
         )
@@ -798,7 +817,7 @@ local function StartFreecam()
     freecamPitch = pitch
     freecamYaw = yaw
     freecamActive = true
-    ApplyCameraNoclipFreeze()
+    ApplyFreecamMovementFreeze()
 
     camera.CameraType = Enum.CameraType.Scriptable
 
@@ -1295,10 +1314,10 @@ RunService:BindToRenderStep(
             return
         end
 
-        if Settings.NoclipCamera or freecamActive then
-            ApplyCameraNoclipFreeze()
+        if freecamActive then
+            ApplyFreecamMovementFreeze()
         else
-            RestoreCameraNoclipFreeze()
+            RestoreFreecamMovementFreeze()
         end
 
         ApplyRainbow()
@@ -1369,7 +1388,7 @@ env.ToxUniversal2Cleanup = function()
 
     StopFreecam()
     SetNoclipCamera(false)
-    RestoreCameraNoclipFreeze(true)
+    RestoreFreecamMovementFreeze(true)
 
     if env.ToxUniversal2Token == instanceToken then
         env.ToxUniversal2Token = nil
@@ -1409,6 +1428,8 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
     if Settings.AimbotMode ~= "CAMERA" and Settings.AimbotMode ~= "MOUSE" then
         Settings.AimbotMode = "CAMERA"
     end
+    Settings.AimbotBindEnabled = Settings.AimbotBindEnabled == true
+    Settings.AimbotKey = Settings.AimbotKey or Enum.KeyCode.E
     Settings.AimLock = Settings.AimLock == true
     Settings.LockRadius = math.clamp(tonumber(Settings.LockRadius) or 110, 1, 2000)
     Settings.AimTargets = tostring(Settings.AimTargets or "Players Only")
@@ -1959,11 +1980,13 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         local CreateToggle = env.CreateToggle
         local CreateToggleWithValue = env.CreateToggleWithValue
         local CreateDropdown = env.CreateDropdown
+        local CreateKeybindToggle = env.CreateKeybindToggle
     
         if not page
         or type(CreateToggle) ~= "function"
         or type(CreateToggleWithValue) ~= "function"
-        or type(CreateDropdown) ~= "function" then
+        or type(CreateDropdown) ~= "function"
+        or type(CreateKeybindToggle) ~= "function" then
             return
         end
     
@@ -1987,6 +2010,31 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end,
             "Aimbot"
         )
+    
+        local aimbotBindControl = CreateKeybindToggle(
+            "Aimbot Bind",
+            page,
+            Settings.AimbotKey,
+            Settings.AimbotBindEnabled,
+            function(key)
+                Settings.AimbotKey = key
+                lockedTarget = nil
+            end,
+            function(value)
+                Settings.AimbotBindEnabled = value == true
+                lockedTarget = nil
+            end,
+            "AimbotBindEnabled"
+        )
+
+        if aimbotBindControl then
+            for _, object in ipairs(aimbotBindControl:GetDescendants()) do
+                if object:IsA("TextLabel")
+                and object.Text == "AUTO" then
+                    object.Text = "BIND"
+                end
+            end
+        end
     
         CreateToggleWithValue(
             "Aim Lock",
@@ -2324,6 +2372,8 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         local miscSection = FindSection("MISC")
 
         MoveBefore(combatSection, "Aimbot", "Aim Smoothness")
+        MoveAfter(combatSection, "Aimbot Bind", "Aimbot")
+        MoveAfter(combatSection, "Aim Smoothness", "Aimbot Bind")
         MoveAfter(combatSection, "Aim Lock", "Aim Smoothness")
         MoveAfter(combatSection, "Aim Targets", "Aim Lock")
         MoveAfter(combatSection, "Ignore Friends", "Aim Targets")
@@ -2660,10 +2710,23 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             local rightClick = UserInputService:IsMouseButtonPressed(
                 Enum.UserInputType.MouseButton2
             )
+            local activationPressed = rightClick
+
+            if Settings.AimbotBindEnabled == true then
+                local key = Settings.AimbotKey
+                activationPressed = false
+
+                if typeof(key) == "EnumItem"
+                and key.EnumType == Enum.KeyCode
+                and key ~= Enum.KeyCode.Unknown then
+                    activationPressed = UserInputService:IsKeyDown(key)
+                end
+            end
+
             local mode = string.upper(tostring(Settings.AimbotMode or "CAMERA"))
             local camera = Workspace.CurrentCamera
 
-            if Settings.Aimbot ~= true or not rightClick or not camera then
+            if Settings.Aimbot ~= true or not activationPressed or not camera then
                 lockedTarget = nil
                 return
             end
