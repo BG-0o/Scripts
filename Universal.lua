@@ -6817,6 +6817,8 @@ AddConnection(RunService.Stepped:Connect(function()
                 part.CanCollide = false
             end
         end
+    elseif next(NoclipDefaults) ~= nil then
+        RestoreNoclipDefaults()
     end
 
     if Settings.AntiFling then
@@ -7095,7 +7097,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         CrosshairV.Visible = false
     end
 
-    if Settings.Aimbot and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+    if Settings.Aimbot and string.upper(tostring(Settings.AimbotMode or "CAMERA")) ~= "MOUSE" and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
         local Target = GetClosestPlayerToMouse()
         if Target then
             local Smooth = Settings.AimbotSmoothness or 2
