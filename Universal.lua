@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-13-serverinfo-all-copy"
+ToxUpdateVersion = "2026-09-14-universal-sections-reorg"
 
 
 function ClearToxTable(target)
@@ -4639,6 +4639,179 @@ local function GetClosestPlayerToMouse()
     return Closest
 end
 
+Settings.UniversalCollapsedSections =
+    typeof(Settings.UniversalCollapsedSections) == "table"
+    and Settings.UniversalCollapsedSections
+    or {}
+
+local UniversalSections = {}
+local UniversalCurrentSection = nil
+
+local function ApplyUniversalSectionState(section)
+    if typeof(section) ~= "table" then
+        return
+    end
+
+    local collapsed = Settings.UniversalCollapsedSections[section.Key] == true
+
+    if section.Header and section.Header.Parent then
+        section.Header.Text = collapsed
+            and "  > " .. section.Name
+            or "  v " .. section.Name
+    end
+
+    for _, object in ipairs(section.Controls) do
+        if object
+        and object.Parent
+        and object:IsA("GuiObject") then
+            object.Visible = not collapsed
+        end
+    end
+end
+
+local function BeginUniversalSection(name)
+    if not UniversalPage then
+        return nil
+    end
+
+    local key = string.upper(tostring(name or "")):gsub("%s+", "")
+    local header = Instance.new("TextButton")
+    header.Size = UDim2.new(1, -5, 0, 30)
+    header.BackgroundColor3 = Color3.fromRGB(13, 13, 21)
+    header.BorderSizePixel = 0
+    header.TextColor3 = Color3.fromRGB(255, 255, 255)
+    header.Font = Enum.Font.GothamBold
+    header.TextSize = 12
+    header.TextXAlignment = Enum.TextXAlignment.Left
+    header.AutoButtonColor = false
+    header.Parent = UniversalPage
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 5)
+    corner.Parent = header
+
+    local section = {
+        Name = tostring(name),
+        Key = key,
+        Header = header,
+        Controls = {}
+    }
+
+    table.insert(UniversalSections, section)
+    UniversalCurrentSection = section
+
+    header.MouseButton1Click:Connect(function()
+        Settings.UniversalCollapsedSections[key] =
+            not Settings.UniversalCollapsedSections[key]
+
+        ApplyUniversalSectionState(section)
+
+        if AutoSaveConfiguration then
+            AutoSaveConfiguration()
+        end
+    end)
+
+    ApplyUniversalSectionState(section)
+    return section
+end
+
+local function TrackUniversalControl(object, page)
+    if page == UniversalPage
+    and UniversalCurrentSection
+    and object
+    and object:IsA("GuiObject") then
+        table.insert(UniversalCurrentSection.Controls, object)
+        ApplyUniversalSectionState(UniversalCurrentSection)
+    end
+
+    return object
+end
+
+local RawCreateToggle = CreateToggle
+local RawCreateToggleWithValue = CreateToggleWithValue
+local RawCreateInputWithButton = CreateInputWithButton
+local RawCreateInputWithTwoButtons = CreateInputWithTwoButtons
+local RawCreateDropdown = CreateDropdown
+local RawCreateButton = CreateButton
+local RawCreateConfirmButton = CreateConfirmButton
+local RawCreateKeybindButton = CreateKeybindButton
+local RawCreateKeybindToggle = CreateKeybindToggle
+
+CreateToggle = function(name, page, ...)
+    return TrackUniversalControl(
+        RawCreateToggle(name, page, ...),
+        page
+    )
+end
+
+CreateToggleWithValue = function(name, page, ...)
+    return TrackUniversalControl(
+        RawCreateToggleWithValue(name, page, ...),
+        page
+    )
+end
+
+CreateInputWithButton = function(name, page, ...)
+    return TrackUniversalControl(
+        RawCreateInputWithButton(name, page, ...),
+        page
+    )
+end
+
+CreateInputWithTwoButtons = function(name, page, ...)
+    return TrackUniversalControl(
+        RawCreateInputWithTwoButtons(name, page, ...),
+        page
+    )
+end
+
+CreateDropdown = function(name, options, page, ...)
+    return TrackUniversalControl(
+        RawCreateDropdown(name, options, page, ...),
+        page
+    )
+end
+
+CreateButton = function(name, page, ...)
+    return TrackUniversalControl(
+        RawCreateButton(name, page, ...),
+        page
+    )
+end
+
+CreateConfirmButton = function(name, page, ...)
+    return TrackUniversalControl(
+        RawCreateConfirmButton(name, page, ...),
+        page
+    )
+end
+
+CreateKeybindButton = function(name, page, ...)
+    return TrackUniversalControl(
+        RawCreateKeybindButton(name, page, ...),
+        page
+    )
+end
+
+CreateKeybindToggle = function(name, page, ...)
+    return TrackUniversalControl(
+        RawCreateKeybindToggle(name, page, ...),
+        page
+    )
+end
+
+getgenv().CreateToggle = CreateToggle
+getgenv().CreateToggleWithValue = CreateToggleWithValue
+getgenv().CreateInputWithButton = CreateInputWithButton
+getgenv().CreateInputWithTwoButtons = CreateInputWithTwoButtons
+getgenv().CreateDropdown = CreateDropdown
+getgenv().CreateButton = CreateButton
+getgenv().CreateConfirmButton = CreateConfirmButton
+getgenv().CreateKeybindButton = CreateKeybindButton
+getgenv().CreateKeybindToggle = CreateKeybindToggle
+
+BeginUniversalSection("Combat")
+
 CreateToggle("Aimbot (Right Click)", CombatPage, Settings.Aimbot, function(v) Settings.Aimbot = v end)
 CreateToggleWithValue("Aim Smoothness", CombatPage, false, Settings.AimbotSmoothness, function(v) end, function(val) Settings.AimbotSmoothness = val end)
 CreateDropdown("Aim Part", {"Head", "HumanoidRootPart", "Torso"}, CombatPage, Settings.AimPart, function(v) Settings.AimPart = v end)
@@ -4652,6 +4825,8 @@ CreateToggleWithValue("Hitbox Expander", CombatPage, Settings.HitboxExpander, Se
     if not v then RestoreHitboxDefaults() end
 end, function(val) Settings.HitboxSize = val end)
 CreateToggleWithValue("Kill Aura", CombatPage, Settings.KillAura, Settings.KillAuraRange, function(v) Settings.KillAura = v end, function(val) Settings.KillAuraRange = val end)
+
+BeginUniversalSection("Player")
 
 CreateToggleWithValue("Speed", PlayerPage, Settings.Speed, Settings.SpeedValue, function(v)
     if getgenv().ToxSetSharedOption then
@@ -4732,6 +4907,8 @@ CreateToggleWithValue("Car Fly", PlayerPage, Settings.CarFly, Settings.CarFlySpe
 end, function(val)
     Settings.CarFlySpeed = val
 end, "CarFly")
+
+BeginUniversalSection("Visuals")
 
 CreateToggle("ESP", VisualsPage, Settings.ESPEnabled, function(v)
     if getgenv().ToxSetSharedOption then
@@ -4879,7 +5056,7 @@ function CreateToggleCycleOption(name, page, enabled, options, currentValue, tog
         getgenv().RegisterToxSearchControl(name, page, box, options)
     end
 
-    return box
+    return TrackUniversalControl(box, page)
 end
 
 CreateToggleCycleOption("Tracers", VisualsPage, Settings.ESPTracers, {"DOWN", "UP", "MOUSE"}, Settings.TracerOrigin or "DOWN", function(v)
@@ -5470,6 +5647,8 @@ local function ClearESPForPlayer(p)
 
     ESPCharacterRefs[p] = nil
 end
+
+BeginUniversalSection("Misc")
 
 CreateToggle("Ctrl Click TP", FlingPage, Settings.CtrlClickTP, function(v)
     if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("CtrlClickTP", v) end
