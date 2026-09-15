@@ -2,14 +2,8 @@ if game.PlaceId ~= 142823291 then
     return
 end
 
-local MM2CoreVersion =
+MM2ModuleVersion =
     "2026-09-13-mm2-killall-still-knife"
-local MM2ExecutionToken = getgenv().ToxExecutionToken
-
-local function MM2ExecutionActive()
-    return getgenv().ToxExecutionToken == MM2ExecutionToken
-        and not getgenv().Destroyed
-end
 
 Players = game:GetService("Players")
 UserInputService = game:GetService("UserInputService")
@@ -1386,7 +1380,7 @@ function AttackKnifeTargetUntilDone(
     local started = os.clock()
     local attacked = false
 
-    while MM2ExecutionActive()
+    while not getgenv().Destroyed
     and knife
     and knife.Parent
     and target
@@ -1522,7 +1516,7 @@ function KillAll(force)
         pcall(function()
             local started = os.clock()
 
-            while MM2ExecutionActive()
+            while not getgenv().Destroyed
             and os.clock() - started < 4.5 do
                 targets = GetKnifeTargets()
 
@@ -1547,7 +1541,7 @@ function KillAll(force)
                 end
 
                 for _, target in ipairs(targets) do
-                    if not MM2ExecutionActive() then
+                    if getgenv().Destroyed then
                         break
                     end
 
@@ -1562,7 +1556,7 @@ function KillAll(force)
             targets = GetKnifeTargets()
 
             for _, target in ipairs(targets) do
-                if not MM2ExecutionActive() then
+                if getgenv().Destroyed then
                     break
                 end
 
@@ -1611,7 +1605,7 @@ function KillSelectedTargets()
             targets = GetKnifeTargets(targets)
 
             for _, target in ipairs(targets) do
-                if not MM2ExecutionActive() then
+                if getgenv().Destroyed then
                     break
                 end
 
@@ -3750,7 +3744,7 @@ function RefreshGunDropState()
 end
 
 task.spawn(function()
-    while MM2ExecutionActive()
+    while not getgenv().Destroyed
     and game.PlaceId
         == 142823291 do
         pcall(
@@ -5160,7 +5154,7 @@ AddConnection(RunService.Heartbeat:Connect(function()
 end))
 
 task.spawn(function()
-    while MM2ExecutionActive() and game.PlaceId == 142823291 do
+    while not getgenv().Destroyed and game.PlaceId == 142823291 do
         if not ToxScriptReady() then
             if AutoFarmPrepared then
                 StopAutoFarm(false)
@@ -5316,4 +5310,4 @@ function FlingSelectedRole()
 end
 
 getgenv().ToxMM2CoreReady = true
-getgenv().ToxMM2CoreVersion = MM2CoreVersion
+getgenv().ToxMM2CoreVersion = MM2ModuleVersion
