@@ -1263,14 +1263,6 @@ local function ResolveConfigReadPath()
         return ConfigFilePath, false
     end
 
-    if isfile(LegacyUserConfigFilePath) then
-        return LegacyUserConfigFilePath, true
-    end
-
-    if isfile(LegacyConfigFilePath) then
-        return LegacyConfigFilePath, true
-    end
-
     return nil, false
 end
 
@@ -1321,7 +1313,7 @@ getgenv().AutoSaveConfiguration = function()
     end
 
     local data = {
-        ConfigVersion = 5,
+        ConfigVersion = 6,
         UserId = Player.UserId,
         PlaceId = game.PlaceId,
         GlobalGUIKeybind = guiKeyName,
@@ -1365,6 +1357,7 @@ local function LoadConfiguration()
     end
 
     local loaded = false
+    local strictPlaceMigration = false
 
     pcall(function()
         local raw = readfile(sourcePath)
@@ -1379,9 +1372,22 @@ local function LoadConfiguration()
             return
         end
 
+        local savedPlaceId = tonumber(data.PlaceId)
+
+        if savedPlaceId
+        and savedPlaceId ~= game.PlaceId then
+            return
+        end
+
+        local configVersion = tonumber(data.ConfigVersion) or 0
+        strictPlaceMigration =
+            game.PlaceId == 189707
+            and configVersion < 6
+
         MigrateLegacyGameSettings(data)
 
-        if typeof(data.Settings) == "table" then
+        if typeof(data.Settings) == "table"
+        and not strictPlaceMigration then
             for key, savedValue in pairs(data.Settings) do
                 if not GetGameSettingOwner(key) then
                     ApplyLoadedSetting(
@@ -1505,7 +1511,7 @@ local function LoadConfiguration()
     end)
 
     if loaded
-    and migratedFromLegacy then
+    and (migratedFromLegacy or strictPlaceMigration) then
         getgenv().AutoSaveConfiguration()
     end
 end
