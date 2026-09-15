@@ -40,7 +40,9 @@ local MarketplaceService =
 
 local Player = Players.LocalPlayer
 local Gui = getgenv().Gui
-local FlingPage = getgenv().FlingPage
+local ControlPage =
+    getgenv().ControlPage
+    or getgenv().FlingPage
 local MAIN_COLOR =
     getgenv().MAIN_COLOR
 local CustomNotify =
@@ -58,7 +60,7 @@ local RequestFunction =
 
 if not Player
 or not Gui
-or not FlingPage
+or not ControlPage
 or not CustomNotify
 or not AddConnection
 or not CreateButton then
@@ -3255,7 +3257,7 @@ local function InitToxControlGui()
     local controlPageButton =
         CreateButton(
             "Tox Control",
-            FlingPage,
+            ControlPage,
             function()
                 RefreshLock()
                 RefreshMode()
@@ -3288,6 +3290,13 @@ local guiOk, guiResult =
 if guiOk then
     ControlGui =
         guiResult
+
+    getgenv().ToxControlGui = ControlGui
+
+    if ControlGui
+    and getgenv().CurrentPage == ControlPage then
+        ControlGui.Visible = true
+    end
 else
     CustomNotify(
         "Tox Control UI failed: "
@@ -3351,6 +3360,10 @@ getgenv().ToxSystemsCleanup =
         if ControlGui
         and ControlGui.Parent then
             ControlGui.Visible = false
+        end
+
+        if getgenv().ToxControlGui == ControlGui then
+            getgenv().ToxControlGui = nil
         end
     end
 
