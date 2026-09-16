@@ -167,8 +167,6 @@ if HasRunningToxHub() then
 
     getgenv().Destroyed = true
     getgenv().ScriptLoaded = false
-    Destroyed = true
-    ScriptLoaded = false
     getgenv().ToxOptionsReady = nil
     getgenv().ToxStartupBooleanState = nil
     getgenv().ToxStartupToggleCallbacks = nil
@@ -200,18 +198,6 @@ if HasRunningToxHub() then
     getgenv().ToxGameModuleLoadedPage = nil
     getgenv().ToxGameModuleLoadingUrl = nil
     getgenv().ToxGameModuleLoadingPage = nil
-
-    if getgenv().ToxUniversal2Cleanup then
-        pcall(getgenv().ToxUniversal2Cleanup)
-    end
-
-    if getgenv().ToxNDSCleanup then
-        pcall(getgenv().ToxNDSCleanup)
-    end
-
-    if getgenv().ToxMM2Cleanup then
-        pcall(getgenv().ToxMM2Cleanup)
-    end
 
     if getgenv().ToxSystemsCleanup then
         pcall(getgenv().ToxSystemsCleanup)
@@ -380,7 +366,6 @@ getgenv().Settings = {
     ShiftLockKey = "Shift",
 
     Aimbot = false,
-    AimbotMode = "CAMERA",
     AimbotSmoothness = 2,
     AimPart = "Head",
     AimWallCheck = false,
@@ -494,66 +479,6 @@ for key in pairs(getgenv().Settings) do
     PersistedSettingKeys[key] = true
 end
 
-local ToxEnv = getgenv()
-local ToxHadStaleRuntime =
-    ToxEnv.ToxUniversalLoaded == true
-    or ToxEnv.ToxUniversal2Loaded == true
-    or ToxEnv.ToxChatLoaded == true
-    or ToxEnv.ToxSystemsLoaded == true
-    or type(ToxEnv.ToxUniversal2Cleanup) == "function"
-    or type(ToxEnv.ToxSystemsCleanup) == "function"
-
-if ToxHadStaleRuntime then
-    ToxEnv.Destroyed = true
-    ToxEnv.ScriptLoaded = false
-
-    if type(ToxEnv.ToxUniversal2Cleanup) == "function" then
-        pcall(ToxEnv.ToxUniversal2Cleanup)
-    end
-
-    if type(ToxEnv.ToxNDSCleanup) == "function" then
-        pcall(ToxEnv.ToxNDSCleanup)
-    end
-
-    if type(ToxEnv.ToxMM2Cleanup) == "function" then
-        pcall(ToxEnv.ToxMM2Cleanup)
-    end
-
-    if type(ToxEnv.ToxSystemsCleanup) == "function" then
-        pcall(ToxEnv.ToxSystemsCleanup)
-    end
-
-    task.wait(1.05)
-end
-
-for _, guiKey in ipairs({
-    "ToxChatGui",
-    "ToxControlGui",
-    "ToxRenderBackdropGui"
-}) do
-    local oldGui = ToxEnv[guiKey]
-
-    if typeof(oldGui) == "Instance" and oldGui.Parent then
-        pcall(function()
-            oldGui:Destroy()
-        end)
-    end
-
-    ToxEnv[guiKey] = nil
-end
-
-ToxEnv.ToxUniversalLoaded = nil
-ToxEnv.ToxUniversal2Loaded = nil
-ToxEnv.ToxUniversal2ExtraLoaded = nil
-ToxEnv.ToxUniversal2Token = nil
-ToxEnv.ToxUniversal2ExtraToken = nil
-ToxEnv.ToxChatLoaded = nil
-ToxEnv.ToxSystemsLoaded = nil
-ToxEnv.ToxGameModuleLoadedUrl = nil
-ToxEnv.ToxGameModuleLoadedPage = nil
-ToxEnv.ToxGameModuleLoadingUrl = nil
-ToxEnv.ToxGameModuleLoadingPage = nil
-
 getgenv().SavedIDs = {}
 getgenv().SavedJoinGames = {}
 getgenv().SavedWaypoints = {}
@@ -564,8 +489,6 @@ getgenv().GameSpecificSettings = {}
 getgenv().BaseSharedSettings = {}
 getgenv().Destroyed = false
 getgenv().ScriptLoaded = false
-Destroyed = false
-ScriptLoaded = false
 getgenv().ToxOptionsReady = nil
 getgenv().ToxStartupBooleanState = {}
 getgenv().ToxStartupToggleCallbacks = {}
@@ -1656,12 +1579,7 @@ local function StageOptionsUntilLoadScreen()
     for key, value in pairs(Settings) do
         if typeof(value) == "boolean" then
             staged[key] = value == true
-
-            if key == "Render3D" then
-                Settings[key] = true
-            else
-                Settings[key] = false
-            end
+            Settings[key] = false
         end
     end
 
@@ -2336,11 +2254,11 @@ getgenv().ShowToxChatPopup =
     end
 
 AddConnection(Players.PlayerAdded:Connect(function(p)
-    if getgenv().ScriptLoaded then CustomNotify("(" .. p.Name .. ") joined", Color3.fromRGB(50, 255, 50), 3) end
+    if ScriptLoaded then CustomNotify("(" .. p.Name .. ") joined", Color3.fromRGB(50, 255, 50), 3) end
 end))
 
 AddConnection(Players.PlayerRemoving:Connect(function(p)
-    if getgenv().ScriptLoaded then CustomNotify("(" .. p.Name .. ") left", Color3.fromRGB(255, 50, 50), 3) end
+    if ScriptLoaded then CustomNotify("(" .. p.Name .. ") left", Color3.fromRGB(255, 50, 50), 3) end
 end))
 
 getgenv().MakeDraggable = function(Frame, DragHandle)
@@ -2686,7 +2604,7 @@ getgenv().MakeResizable =
                     if GuiSizeSaveTokens[
                         key
                     ] == token
-                    and not getgenv().Destroyed then
+                    and not Destroyed then
                         AutoSaveConfiguration()
                     end
                 end
@@ -2873,7 +2791,7 @@ getgenv().TrackGuiPosition = function(key, gui)
         local token = GuiPositionSaveTokens[key]
 
         task.delay(0.25, function()
-            if GuiPositionSaveTokens[key] == token and not getgenv().Destroyed then
+            if GuiPositionSaveTokens[key] == token and not Destroyed then
                 AutoSaveConfiguration()
             end
         end)
@@ -3025,29 +2943,17 @@ getgenv().ResetHitboxes = ResetHitboxes
 
 local function UpdateFullbright()
     if Settings.Fullbright then
-        if not getgenv().ToxFullbrightRuntimeDefaults then
-            getgenv().ToxFullbrightRuntimeDefaults = {
-                Ambient = Lighting.Ambient,
-                Brightness = Lighting.Brightness,
-                ClockTime = Lighting.ClockTime,
-                FogEnd = Lighting.FogEnd,
-                GlobalShadows = Lighting.GlobalShadows
-            }
-        end
-
         Lighting.Ambient = Color3.fromRGB(180, 180, 180)
         Lighting.Brightness = 1.2
         Lighting.ClockTime = 14
         Lighting.FogEnd = 100000
         Lighting.GlobalShadows = false
     else
-        local restore = getgenv().ToxFullbrightRuntimeDefaults or OriginalLighting
-        Lighting.Ambient = restore.Ambient
-        Lighting.Brightness = restore.Brightness
-        Lighting.ClockTime = restore.ClockTime
-        Lighting.FogEnd = restore.FogEnd
-        Lighting.GlobalShadows = restore.GlobalShadows
-        getgenv().ToxFullbrightRuntimeDefaults = nil
+        Lighting.Ambient = OriginalLighting.Ambient
+        Lighting.Brightness = OriginalLighting.Brightness
+        Lighting.ClockTime = OriginalLighting.ClockTime
+        Lighting.FogEnd = OriginalLighting.FogEnd
+        Lighting.GlobalShadows = OriginalLighting.GlobalShadows
     end
 end
 getgenv().UpdateFullbright = UpdateFullbright
@@ -3312,7 +3218,7 @@ getgenv().CreateTab = function(Name, Page)
 	local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 4) Corner.Parent = Button
 
 	Button.MouseButton1Click:Connect(function()
-		if getgenv().Destroyed then return end
+		if Destroyed then return end
 
         if getgenv().ToxOpenPage then
             getgenv().ToxOpenPage(Page)
@@ -3725,7 +3631,265 @@ end
 
 CreateToxInlineSearch()
 
-getgenv().ShowToxUpdateGui = nil
+local function NormalizeToxChanges(changes)
+    local categories = {
+        ADDED = {},
+        FIXED = {},
+        CHANGED = {},
+        REMOVED = {}
+    }
+
+    if typeof(changes) ~= "table" then
+        return categories
+    end
+
+    local keyMap = {
+        Added = "ADDED",
+        ADDED = "ADDED",
+        added = "ADDED",
+        Fixed = "FIXED",
+        FIXED = "FIXED",
+        fixed = "FIXED",
+        Changed = "CHANGED",
+        CHANGED = "CHANGED",
+        changed = "CHANGED",
+        Removed = "REMOVED",
+        REMOVED = "REMOVED",
+        removed = "REMOVED"
+    }
+
+    local hasNamed = false
+
+    for key, value in pairs(changes) do
+        local mapped = keyMap[key]
+
+        if mapped then
+            hasNamed = true
+
+            if typeof(value) == "table" then
+                for _, item in ipairs(value) do
+                    table.insert(categories[mapped], tostring(item))
+                end
+            elseif value ~= nil then
+                table.insert(categories[mapped], tostring(value))
+            end
+        end
+    end
+
+    if not hasNamed then
+        for _, item in ipairs(changes) do
+            table.insert(categories.CHANGED, tostring(item))
+        end
+    end
+
+    return categories
+end
+
+local function AddToxChangeText(parent, text, layoutOrder, isHeader)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -4, 0, isHeader and 26 or 34)
+    label.BackgroundColor3 = isHeader and MAIN_COLOR or Color3.fromRGB(18, 18, 28)
+    label.BorderSizePixel = 0
+    label.Text = tostring(text)
+    label.TextColor3 = Color3.fromRGB(245, 245, 245)
+    label.Font = isHeader and Enum.Font.GothamBold or Enum.Font.Gotham
+    label.TextSize = isHeader and 12 or 11
+    label.TextWrapped = true
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.LayoutOrder = layoutOrder
+    label.Parent = parent
+
+    local padding = Instance.new("UIPadding")
+    padding.PaddingLeft = UDim.new(0, 8)
+    padding.PaddingRight = UDim.new(0, 8)
+    padding.Parent = label
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = label
+
+    return label
+end
+
+getgenv().ShowToxUpdateGui = function(version, changes)
+    version = tostring(version or "")
+
+    if version == ""
+    or Settings.ToxLastChangelogVersion == version then
+        return
+    end
+
+    if not getgenv().ScriptLoaded then
+        local queuedVersion = version
+        local queuedChanges = changes
+
+        task.spawn(function()
+            local started = os.clock()
+
+            repeat
+                task.wait(0.05)
+            until getgenv().Destroyed
+            or getgenv().ScriptLoaded
+            or os.clock() - started > 20
+
+            if not getgenv().Destroyed
+            and getgenv().ScriptLoaded
+            and getgenv().ShowToxUpdateGui then
+                getgenv().ShowToxUpdateGui(
+                    queuedVersion,
+                    queuedChanges
+                )
+            end
+        end)
+
+        return
+    end
+
+    local old = Gui:FindFirstChild("ToxUpdatedFrame")
+
+    if old then
+        old:Destroy()
+    end
+
+    local frame = Instance.new("Frame")
+    frame.Name = "ToxUpdatedFrame"
+    frame.Size = UDim2.new(0, 410, 0, 350)
+    frame.Position = UDim2.new(0.5, -205, 0.5, -175)
+    frame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+    frame.BorderSizePixel = 0
+    frame.Active = true
+    frame.ClipsDescendants = true
+    frame.Parent = Gui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = MAIN_COLOR
+    stroke.Thickness = 2
+    stroke.Parent = frame
+
+    local topBar = Instance.new("Frame")
+    topBar.Size = UDim2.new(1, 0, 0, 38)
+    topBar.BackgroundColor3 = MAIN_COLOR
+    topBar.BorderSizePixel = 0
+    topBar.Parent = frame
+
+    if MakeDraggable then
+        MakeDraggable(frame, topBar)
+    end
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -20, 1, 0)
+    title.Position = UDim2.new(0, 10, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "UPDATED"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 16
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = topBar
+
+    local versionLabel = Instance.new("TextLabel")
+    versionLabel.Size = UDim2.new(1, -20, 0, 24)
+    versionLabel.Position = UDim2.new(0, 10, 0, 46)
+    versionLabel.BackgroundTransparency = 1
+    versionLabel.Text = "Version: " .. version
+    versionLabel.TextColor3 = Color3.fromRGB(180, 180, 205)
+    versionLabel.Font = Enum.Font.GothamMedium
+    versionLabel.TextSize = 11
+    versionLabel.TextXAlignment = Enum.TextXAlignment.Left
+    versionLabel.Parent = frame
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, -20, 1, -116)
+    scroll.Position = UDim2.new(0, 10, 0, 74)
+    scroll.BackgroundTransparency = 1
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 3
+    scroll.ScrollBarImageColor3 = MAIN_COLOR
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scroll.Parent = frame
+
+    local layout = Instance.new("UIListLayout")
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 5)
+    layout.Parent = scroll
+
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 8)
+    end)
+
+    local categories = NormalizeToxChanges(changes)
+    local order = 0
+    local names = {"ADDED", "FIXED", "CHANGED", "REMOVED"}
+
+    for _, category in ipairs(names) do
+        local list = categories[category]
+
+        if typeof(list) == "table"
+        and #list > 0 then
+            order += 1
+            AddToxChangeText(scroll, category, order, true)
+
+            for _, text in ipairs(list) do
+                order += 1
+                AddToxChangeText(scroll, "• " .. tostring(text), order, false)
+            end
+        end
+    end
+
+    if order == 0 then
+        AddToxChangeText(scroll, "CHANGED", 1, true)
+        AddToxChangeText(scroll, "• Update completed", 2, false)
+    end
+
+    local ok = Instance.new("TextButton")
+    ok.Size = UDim2.new(1, -20, 0, 32)
+    ok.Position = UDim2.new(0, 10, 1, -40)
+    ok.BackgroundColor3 = MAIN_COLOR
+    ok.BorderSizePixel = 0
+    ok.Text = "OK"
+    ok.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ok.Font = Enum.Font.GothamBold
+    ok.TextSize = 12
+    ok.Parent = frame
+
+    local okCorner = Instance.new("UICorner")
+    okCorner.CornerRadius = UDim.new(0, 5)
+    okCorner.Parent = ok
+
+    ok.MouseButton1Click:Connect(function()
+        Settings.ToxLastChangelogVersion = version
+
+        if getgenv().AutoSaveConfiguration then
+            getgenv().AutoSaveConfiguration()
+        end
+
+        frame:Destroy()
+    end)
+end
+
+getgenv().ShowToxUpdateGui("2026-09-14-universal-reorg-4", {
+    Added = {
+        "Build A Boat For Treasure (BABFT)",
+        "Prison Life (PL)",
+        "Flee the Facility (FTF)"
+    },
+    Fixed = {
+        "BABFT Autofarm no longer drops the player into the water between stages",
+        "BABFT final chest now stops after 3 teleport attempts with 1 second between each",
+        "Game settings remain separated and saved by Place ID",
+        "All saved options now stay disabled until the loading screen fully finishes"
+    },
+    Changed = {
+        "Combat, Player, Visuals and Misc are now organized inside the UNIVERSAL tab",
+        "UNIVERSAL categories now use collapsible sections",
+        "Updated game module registry and game-specific settings support"
+    }
+})
 
 local ChatLogGui = Instance.new("Frame")
 ChatLogGui.Name = "ChatLogFrame"
@@ -5051,7 +5215,7 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     RegisterStartupToggleCallback(SyncKey, Callback)
 
     Button.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if Destroyed or getgenv().ToxOptionsReady == false then return end
 
         Enabled = not Enabled
         Update()
@@ -5061,7 +5225,7 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
             getgenv().SyncToggleVisuals(SyncKey, Enabled)
         end
 
-        if getgenv().ScriptLoaded then
+        if ScriptLoaded then
             CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100))
         end
 
@@ -5158,7 +5322,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     RegisterStartupToggleCallback(SyncKey, CallbackToggle)
 
     ToggleButton.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if Destroyed or getgenv().ToxOptionsReady == false then return end
 
         Enabled = not Enabled
         UpdateToggle()
@@ -5168,7 +5332,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
             getgenv().SyncToggleVisuals(SyncKey, Enabled)
         end
 
-        if getgenv().ScriptLoaded then
+        if ScriptLoaded then
             CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100))
         end
 
@@ -5176,7 +5340,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     end)
 
     Input.FocusLost:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if Destroyed or getgenv().ToxOptionsReady == false then return end
 
         local Number = tonumber(Input.Text)
 
@@ -5247,7 +5411,7 @@ getgenv().CreateInputWithButton = function(Name, Page, DefaultText, ButtonText, 
 	local ButtonCorner = Instance.new("UICorner") ButtonCorner.CornerRadius = UDim.new(0, 4) ButtonCorner.Parent = Button
 
 	Button.MouseButton1Click:Connect(function()
-		if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+		if Destroyed or getgenv().ToxOptionsReady == false then return end
 		Callback(Input.Text)
 	end)
 
@@ -5315,12 +5479,12 @@ getgenv().CreateInputWithTwoButtons = function(Name, Page, DefaultText, Btn1Text
 	local B2Corner = Instance.new("UICorner") B2Corner.CornerRadius = UDim.new(0, 4) B2Corner.Parent = Button2
 
 	Button1.MouseButton1Click:Connect(function()
-		if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+		if Destroyed or getgenv().ToxOptionsReady == false then return end
 		Callback(Input.Text, "TP")
 	end)
 
     Button2.MouseButton1Click:Connect(function()
-		if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+		if Destroyed or getgenv().ToxOptionsReady == false then return end
 		Callback(Input.Text, "LOOP")
 	end)
 
@@ -5364,7 +5528,7 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback
 	for i, opt in ipairs(Options) do if opt == DefaultOption then CurrentIdx = i end end
 
 	Button.MouseButton1Click:Connect(function()
-		if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+		if Destroyed or getgenv().ToxOptionsReady == false then return end
 		CurrentIdx = CurrentIdx + 1
 		if CurrentIdx > #Options then CurrentIdx = 1 end
 		Button.Text = Options[CurrentIdx]
@@ -5392,7 +5556,7 @@ getgenv().CreateButton = function(Name, Page, Callback)
 	local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 4) Corner.Parent = Button
 
 	Button.MouseButton1Click:Connect(function()
-		if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+		if Destroyed or getgenv().ToxOptionsReady == false then return end
 		Callback(Button)
 	end)
 
@@ -5418,13 +5582,13 @@ getgenv().CreateConfirmButton = function(Name, Page, Callback)
     local Confirming = false
 
     Button.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if Destroyed or getgenv().ToxOptionsReady == false then return end
         if not Confirming then
             Confirming = true
             Button.Text = "CONFIRM " .. string.upper(Name) .. "? (Click Again)"
             Button.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
             task.delay(3.5, function()
-                if not getgenv().Destroyed and Confirming then
+                if not Destroyed and Confirming then
                     Confirming = false
                     Button.Text = Name
                     Button.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
@@ -5613,7 +5777,7 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     RegisterStartupToggleCallback(SyncKey, ToggleCallback)
 
     KeyButton.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false or Binding then return end
+        if Destroyed or getgenv().ToxOptionsReady == false or Binding then return end
 
         Binding = true
         KeyButton.Text = "..."
@@ -5647,7 +5811,7 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     end)
 
     Toggle.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if Destroyed or getgenv().ToxOptionsReady == false then return end
 
         Enabled = not Enabled
         UpdateToggle()
@@ -5659,7 +5823,7 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
 
         AutoSaveConfiguration()
 
-        if getgenv().ScriptLoaded then
+        if ScriptLoaded then
             CustomNotify(
                 Name .. " Auto " .. (Enabled and "Enabled" or "Disabled"),
                 Enabled
@@ -5720,19 +5884,6 @@ local function ApplyStagedOptionsAfterLoadScreen()
     getgenv().ToxStartupToggleCallbacks = nil
 end
 
-getgenv().ToxFinalizeStartup = function()
-    if getgenv().Destroyed then
-        return false
-    end
-
-    if not getgenv().ScriptLoaded then
-        return false
-    end
-
-    ApplyStagedOptionsAfterLoadScreen()
-    return getgenv().ToxOptionsReady == true
-end
-
 task.spawn(function()
     while not getgenv().Destroyed
     and not getgenv().ScriptLoaded do
@@ -5743,9 +5894,5 @@ task.spawn(function()
         return
     end
 
-    if getgenv().ToxFinalizeStartup then
-        getgenv().ToxFinalizeStartup()
-    else
-        ApplyStagedOptionsAfterLoadScreen()
-    end
+    ApplyStagedOptionsAfterLoadScreen()
 end)
