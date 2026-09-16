@@ -167,6 +167,8 @@ if HasRunningToxHub() then
 
     getgenv().Destroyed = true
     getgenv().ScriptLoaded = false
+    Destroyed = true
+    ScriptLoaded = false
     getgenv().ToxOptionsReady = nil
     getgenv().ToxStartupBooleanState = nil
     getgenv().ToxStartupToggleCallbacks = nil
@@ -194,10 +196,40 @@ if HasRunningToxHub() then
     getgenv().ToxMM2ModulePage = nil
     getgenv().ToxMM2CoreReady = nil
     getgenv().ToxMM2CoreVersion = nil
+    getgenv().ToxMM2LoaderJobId = nil
+    getgenv().ToxMM2LoaderVersion = nil
+    getgenv().ToxMM2LoaderPage = nil
     getgenv().ToxGameModuleLoadedUrl = nil
     getgenv().ToxGameModuleLoadedPage = nil
     getgenv().ToxGameModuleLoadingUrl = nil
     getgenv().ToxGameModuleLoadingPage = nil
+
+    if getgenv().ToxUniversal2ExtraCleanup then
+        pcall(getgenv().ToxUniversal2ExtraCleanup)
+    end
+
+    if getgenv().ToxUniversal2Cleanup then
+        pcall(getgenv().ToxUniversal2Cleanup)
+    end
+
+    if getgenv().ToxChatCleanup then
+        pcall(getgenv().ToxChatCleanup)
+    end
+
+    if getgenv().ToxNDSCleanup then
+        pcall(getgenv().ToxNDSCleanup)
+    end
+
+    if getgenv().ToxMM2Cleanup then
+        pcall(getgenv().ToxMM2Cleanup)
+    end
+
+    if getgenv().UpdateFullbright and getgenv().Settings then
+        pcall(function()
+            getgenv().Settings.Fullbright = false
+            getgenv().UpdateFullbright()
+        end)
+    end
 
     if getgenv().ToxSystemsCleanup then
         pcall(getgenv().ToxSystemsCleanup)
@@ -223,7 +255,15 @@ if HasRunningToxHub() then
         pcall(getgenv().ToxBABFTCleanup)
     end
 
-    task.wait(0.18)
+    if getgenv().ScriptConnections then
+        for _, conn in ipairs(getgenv().ScriptConnections) do
+            pcall(function()
+                conn:Disconnect()
+            end)
+        end
+    end
+
+    task.wait(0.25)
 end
 
 if getgenv().Gui then pcall(function() getgenv().Gui:Destroy() end) end
@@ -344,6 +384,7 @@ getgenv().Settings = {
 	AntiAFK = true,
 	ChatLogs = false,
 	Render3D = true,
+    Render3DDisabled = false,
     Render3DColor = "BLACK",
     AntiKick = false,
     FPSBooster = false,
@@ -366,6 +407,10 @@ getgenv().Settings = {
     ShiftLockKey = "Shift",
 
     Aimbot = false,
+    AimbotMode = "CAMERA",
+    AimbotBindEnabled = false,
+    AimbotKey = Enum.KeyCode.E,
+    AimbotBlatant = false,
     AimbotSmoothness = 2,
     AimPart = "Head",
     AimWallCheck = false,
@@ -373,12 +418,6 @@ getgenv().Settings = {
     LockRadius = 110,
     AimTargets = "Players Only",
     IgnoreFriends = false,
-    ProjectileSpeed = 200,
-    ProjectileDrop = 0,
-    RageMode = false,
-    RageDistance = 5,
-    AntiAim = false,
-    AntiAimType = "Shift",
     ShowFOV = false,
     FOVRadius = 120,
     SilentAim = false,
@@ -420,8 +459,6 @@ getgenv().Settings = {
 	EspColor = Color3.fromRGB(255, 255, 255),
     ESPTeamColors = false,
     ESPShowHealth = false,
-    ChamsOutlineColorName = "White",
-    ChamsOutlineOpacity = 50,
     VisualRainbow = false,
     RainbowSpeed = 10,
     XRay = false,
@@ -494,6 +531,24 @@ getgenv().ToxStartupBooleanState = {}
 getgenv().ToxStartupToggleCallbacks = {}
 getgenv().ToxStartupOptionsApplied = false
 getgenv().ToxHubActive = true
+getgenv().ToxUniversalLoaded = nil
+getgenv().ToxUniversal2Loaded = nil
+getgenv().ToxUniversal2Version = nil
+getgenv().ToxUniversal2ExtraLoaded = nil
+getgenv().ToxChatLoaded = nil
+getgenv().ToxSystemsLoaded = nil
+getgenv().ToxMM2LoaderJobId = nil
+getgenv().ToxMM2LoaderVersion = nil
+getgenv().ToxMM2LoaderPage = nil
+getgenv().ToxMM2CoreReady = nil
+getgenv().ToxMM2CoreVersion = nil
+getgenv().ToxControlGui = nil
+getgenv().ToxGameModuleLoadedUrl = nil
+getgenv().ToxGameModuleLoadedPage = nil
+getgenv().ToxGameModuleLoadingUrl = nil
+getgenv().ToxGameModuleLoadingPage = nil
+Destroyed = false
+ScriptLoaded = false
 
 if getgenv().ScriptConnections then
     for _, conn in ipairs(getgenv().ScriptConnections) do
@@ -1555,6 +1610,7 @@ local function NormalizeStartupDefaultToggles()
     Settings.AntiAFK = true
     Settings.AntiFling = true
     Settings.Render3D = true
+    Settings.Render3DDisabled = false
 end
 
 local function DisableUnsupportedGameActions()
@@ -1571,6 +1627,7 @@ local function DisableUnsupportedGameActions()
     Settings.AntiAFK = true
     Settings.AntiFling = true
     Settings.Render3D = true
+    Settings.Render3DDisabled = false
 end
 
 local function StageOptionsUntilLoadScreen()
@@ -1579,7 +1636,10 @@ local function StageOptionsUntilLoadScreen()
     for key, value in pairs(Settings) do
         if typeof(value) == "boolean" then
             staged[key] = value == true
-            Settings[key] = false
+
+            if key ~= "Render3D" then
+                Settings[key] = false
+            end
         end
     end
 
@@ -2254,11 +2314,11 @@ getgenv().ShowToxChatPopup =
     end
 
 AddConnection(Players.PlayerAdded:Connect(function(p)
-    if ScriptLoaded then CustomNotify("(" .. p.Name .. ") joined", Color3.fromRGB(50, 255, 50), 3) end
+    if getgenv().ScriptLoaded then CustomNotify("(" .. p.Name .. ") joined", Color3.fromRGB(50, 255, 50), 3) end
 end))
 
 AddConnection(Players.PlayerRemoving:Connect(function(p)
-    if ScriptLoaded then CustomNotify("(" .. p.Name .. ") left", Color3.fromRGB(255, 50, 50), 3) end
+    if getgenv().ScriptLoaded then CustomNotify("(" .. p.Name .. ") left", Color3.fromRGB(255, 50, 50), 3) end
 end))
 
 getgenv().MakeDraggable = function(Frame, DragHandle)
@@ -2941,19 +3001,32 @@ local function ResetHitboxes()
 end
 getgenv().ResetHitboxes = ResetHitboxes
 
+local FullbrightDefaults = nil
+
 local function UpdateFullbright()
     if Settings.Fullbright then
+        if not FullbrightDefaults then
+            FullbrightDefaults = {
+                Ambient = Lighting.Ambient,
+                Brightness = Lighting.Brightness,
+                ClockTime = Lighting.ClockTime,
+                FogEnd = Lighting.FogEnd,
+                GlobalShadows = Lighting.GlobalShadows
+            }
+        end
+
         Lighting.Ambient = Color3.fromRGB(180, 180, 180)
         Lighting.Brightness = 1.2
         Lighting.ClockTime = 14
         Lighting.FogEnd = 100000
         Lighting.GlobalShadows = false
-    else
-        Lighting.Ambient = OriginalLighting.Ambient
-        Lighting.Brightness = OriginalLighting.Brightness
-        Lighting.ClockTime = OriginalLighting.ClockTime
-        Lighting.FogEnd = OriginalLighting.FogEnd
-        Lighting.GlobalShadows = OriginalLighting.GlobalShadows
+    elseif FullbrightDefaults then
+        Lighting.Ambient = FullbrightDefaults.Ambient
+        Lighting.Brightness = FullbrightDefaults.Brightness
+        Lighting.ClockTime = FullbrightDefaults.ClockTime
+        Lighting.FogEnd = FullbrightDefaults.FogEnd
+        Lighting.GlobalShadows = FullbrightDefaults.GlobalShadows
+        FullbrightDefaults = nil
     end
 end
 getgenv().UpdateFullbright = UpdateFullbright
@@ -3871,6 +3944,8 @@ getgenv().ShowToxUpdateGui = function(version, changes)
         frame:Destroy()
     end)
 end
+
+getgenv().ShowToxUpdateGui = function() end
 
 getgenv().ShowToxUpdateGui("2026-09-14-universal-reorg-4", {
     Added = {
@@ -5106,6 +5181,8 @@ function RegisterSharedToggle(Key, Controller)
     table.insert(getgenv().SharedToggleControls[Key], Controller)
 end
 
+getgenv().RegisterSharedToggle = RegisterSharedToggle
+
 local function RegisterStartupToggleCallback(Key, Callback)
     if getgenv().ToxOptionsReady ~= false
     or not Key
@@ -5124,6 +5201,8 @@ local function RegisterStartupToggleCallback(Key, Callback)
         callbacks[Key] = Callback
     end
 end
+
+getgenv().RegisterStartupToggleCallback = RegisterStartupToggleCallback
 
 getgenv().SyncValueVisuals = function(Key, Value)
     if not Key then return end
@@ -5215,7 +5294,7 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     RegisterStartupToggleCallback(SyncKey, Callback)
 
     Button.MouseButton1Click:Connect(function()
-        if Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
 
         Enabled = not Enabled
         Update()
@@ -5225,7 +5304,7 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
             getgenv().SyncToggleVisuals(SyncKey, Enabled)
         end
 
-        if ScriptLoaded then
+        if getgenv().ScriptLoaded then
             CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100))
         end
 
@@ -5322,7 +5401,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     RegisterStartupToggleCallback(SyncKey, CallbackToggle)
 
     ToggleButton.MouseButton1Click:Connect(function()
-        if Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
 
         Enabled = not Enabled
         UpdateToggle()
@@ -5332,7 +5411,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
             getgenv().SyncToggleVisuals(SyncKey, Enabled)
         end
 
-        if ScriptLoaded then
+        if getgenv().ScriptLoaded then
             CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100))
         end
 
@@ -5340,7 +5419,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     end)
 
     Input.FocusLost:Connect(function()
-        if Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
 
         local Number = tonumber(Input.Text)
 
@@ -5411,7 +5490,7 @@ getgenv().CreateInputWithButton = function(Name, Page, DefaultText, ButtonText, 
 	local ButtonCorner = Instance.new("UICorner") ButtonCorner.CornerRadius = UDim.new(0, 4) ButtonCorner.Parent = Button
 
 	Button.MouseButton1Click:Connect(function()
-		if Destroyed or getgenv().ToxOptionsReady == false then return end
+		if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
 		Callback(Input.Text)
 	end)
 
@@ -5479,12 +5558,12 @@ getgenv().CreateInputWithTwoButtons = function(Name, Page, DefaultText, Btn1Text
 	local B2Corner = Instance.new("UICorner") B2Corner.CornerRadius = UDim.new(0, 4) B2Corner.Parent = Button2
 
 	Button1.MouseButton1Click:Connect(function()
-		if Destroyed or getgenv().ToxOptionsReady == false then return end
+		if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
 		Callback(Input.Text, "TP")
 	end)
 
     Button2.MouseButton1Click:Connect(function()
-		if Destroyed or getgenv().ToxOptionsReady == false then return end
+		if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
 		Callback(Input.Text, "LOOP")
 	end)
 
@@ -5528,7 +5607,7 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback
 	for i, opt in ipairs(Options) do if opt == DefaultOption then CurrentIdx = i end end
 
 	Button.MouseButton1Click:Connect(function()
-		if Destroyed or getgenv().ToxOptionsReady == false then return end
+		if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
 		CurrentIdx = CurrentIdx + 1
 		if CurrentIdx > #Options then CurrentIdx = 1 end
 		Button.Text = Options[CurrentIdx]
@@ -5556,7 +5635,7 @@ getgenv().CreateButton = function(Name, Page, Callback)
 	local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 4) Corner.Parent = Button
 
 	Button.MouseButton1Click:Connect(function()
-		if Destroyed or getgenv().ToxOptionsReady == false then return end
+		if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
 		Callback(Button)
 	end)
 
@@ -5582,13 +5661,13 @@ getgenv().CreateConfirmButton = function(Name, Page, Callback)
     local Confirming = false
 
     Button.MouseButton1Click:Connect(function()
-        if Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
         if not Confirming then
             Confirming = true
             Button.Text = "CONFIRM " .. string.upper(Name) .. "? (Click Again)"
             Button.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
             task.delay(3.5, function()
-                if not Destroyed and Confirming then
+                if not getgenv().Destroyed and Confirming then
                     Confirming = false
                     Button.Text = Name
                     Button.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
@@ -5811,7 +5890,7 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     end)
 
     Toggle.MouseButton1Click:Connect(function()
-        if Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
 
         Enabled = not Enabled
         UpdateToggle()
@@ -5823,7 +5902,7 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
 
         AutoSaveConfiguration()
 
-        if ScriptLoaded then
+        if getgenv().ScriptLoaded then
             CustomNotify(
                 Name .. " Auto " .. (Enabled and "Enabled" or "Disabled"),
                 Enabled
