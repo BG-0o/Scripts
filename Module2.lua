@@ -4,6 +4,8 @@ local UNIVERSAL_URL =
 local UNIVERSAL2_URL =
     "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Universal2.lua"
 
+local EXPECTED_UNIVERSAL2_VERSION = "2026-09-16-correct-universal-ui"
+
 local TOX_CHAT_URL =
     "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ToxChat.lua"
 
@@ -140,11 +142,32 @@ if not getgenv().ToxUniversalLoaded then
     end
 end
 
+if getgenv().ToxUniversal2Version ~= EXPECTED_UNIVERSAL2_VERSION then
+    getgenv().ToxUniversal2Loaded = nil
+end
+
 if not getgenv().ToxUniversal2Loaded then
-    LoadRemote(
+    if not LoadRemote(
         "Universal2.lua",
         UNIVERSAL2_URL
+    ) then
+        return
+    end
+end
+
+if getgenv().ToxUniversal2Version ~= EXPECTED_UNIVERSAL2_VERSION then
+    Notify(
+        "Universal2 version mismatch",
+        Color3.fromRGB(255, 100, 100),
+        7
     )
+    warn(
+        "[ToxHub Universal2 Version Error]: expected "
+        .. EXPECTED_UNIVERSAL2_VERSION
+        .. ", got "
+        .. tostring(getgenv().ToxUniversal2Version)
+    )
+    return
 end
 
 if not getgenv().ToxChatLoaded then
