@@ -1,4 +1,4 @@
-getgenv().ToxModule2SplitVersion = "2026-09-16-split-60-40-1"
+getgenv().ToxModule2SplitVersion = "2026-09-16-lighting-controller-2"
 local Players = game:GetService("Players")
 local TextChatService = game:GetService("TextChatService")
 local SoundService = game:GetService("SoundService")
@@ -881,6 +881,668 @@ if env.TrackGuiPosition then
     pcall(env.TrackGuiPosition, "ChatLog", env.ChatLogGui)
     pcall(env.TrackGuiPosition, "Waypoints", env.WaypointsGui)
     pcall(env.TrackGuiPosition, "Music", env.MusicGui)
+end
+
+
+if type(env.ToxLightingCleanup) == "function" then
+    pcall(env.ToxLightingCleanup)
+end
+
+local LightingService = game:GetService("Lighting")
+local LightingSettings = env.Settings or {}
+local ToxLighting = {}
+local ToxLightingState = {
+    Main = nil,
+    Effects = {},
+    RemovedAtmosphere = {},
+    RemovedSkyboxes = {},
+    RemovedGrading = {},
+    FixShadows = nil,
+    ChildConnection = nil
+}
+
+local ToxLightingEffects = {
+    SunRays = {
+        Class = "SunRaysEffect",
+        Name = "ToxSunRaysEffect",
+        EnabledKey = "LightingSunRays",
+        Properties = {
+            Intensity = "LightingSunRaysIntensity",
+            Spread = "LightingSunRaysSpread"
+        }
+    },
+    Bloom = {
+        Class = "BloomEffect",
+        Name = "ToxBloomEffect",
+        EnabledKey = "LightingBloom",
+        Properties = {
+            Intensity = "LightingBloomIntensity",
+            Size = "LightingBloomSize",
+            Threshold = "LightingBloomThreshold"
+        }
+    },
+    ColorCorrection = {
+        Class = "ColorCorrectionEffect",
+        Name = "ToxColorCorrectionEffect",
+        EnabledKey = "LightingColorCorrection",
+        Properties = {
+            Brightness = "LightingColorBrightness",
+            Contrast = "LightingColorContrast",
+            Saturation = "LightingColorSaturation"
+        }
+    },
+    Blur = {
+        Class = "BlurEffect",
+        Name = "ToxBlurEffect",
+        EnabledKey = "LightingBlur",
+        Properties = {
+            Size = "LightingBlurSize"
+        }
+    }
+}
+
+local function ToxLightingColor(name, fallback)
+    local map = env.ColorMap
+    local value = typeof(map) == "table" and map[tostring(name)] or nil
+    return typeof(value) == "Color3" and value or fallback
+end
+
+local function ToxLightingTechnology(name)
+    local wanted = tostring(name or "")
+
+    for _, item in ipairs(Enum.Technology:GetEnumItems()) do
+        if item.Name == wanted then
+            return item
+        end
+    end
+
+    return nil
+end
+
+local function ToxSetTechnology(value)
+    local technology = typeof(value) == "EnumItem"
+        and value
+        or ToxLightingTechnology(value)
+
+    if not technology then
+        return false
+    end
+
+    local ok = pcall(function()
+        LightingService.Technology = technology
+    end)
+
+    if not ok and type(sethiddenproperty) == "function" then
+        ok = pcall(function()
+            sethiddenproperty(LightingService, "Technology", technology)
+        end)
+    end
+
+    return ok
+end
+
+local function ToxCaptureLightingMain()
+    local snapshot = {
+        Ambient = LightingService.Ambient,
+        OutdoorAmbient = LightingService.OutdoorAmbient,
+        ClockTime = LightingService.ClockTime,
+        Brightness = LightingService.Brightness,
+        ShadowSoftness = LightingService.ShadowSoftness,
+        EnvironmentDiffuseScale = LightingService.EnvironmentDiffuseScale,
+        EnvironmentSpecularScale = LightingService.EnvironmentSpecularScale,
+        GlobalShadows = LightingService.GlobalShadows,
+        FogColor = LightingService.FogColor,
+        FogStart = LightingService.FogStart,
+        FogEnd = LightingService.FogEnd
+    }
+
+    pcall(function()
+        snapshot.Technology = LightingService.Technology
+    end)
+
+    return snapshot
+end
+
+local function ToxRestoreLightingMain()
+    local snapshot = ToxLightingState.Main
+    ToxLightingState.Main = nil
+
+    if not snapshot then
+        return
+    end
+
+    for property, value in pairs(snapshot) do
+        if property == "Technology" then
+            ToxSetTechnology(value)
+        else
+            pcall(function()
+                LightingService[property] = value
+            end)
+        end
+    end
+end
+
+local function ToxFindEffect(config)
+    for _, object in ipairs(LightingService:GetChildren()) do
+        if object:IsA(config.Class) then
+            return object
+        end
+    end
+
+    return nil
+end
+
+local function ToxCaptureEffect(key)
+    local config = ToxLightingEffects[key]
+
+    if not config then
+        return nil
+    end
+
+    local state = ToxLightingState.Effects[key]
+
+    if state
+    and state.Instance
+    and state.Instance.Parent then
+        return state
+    end
+
+    local effect = ToxFindEffect(config)
+    local created = false
+
+    if not effect then
+        effect = Instance.new(config.Class)
+        effect.Name = config.Name
+        effect.Parent = LightingService
+        created = true
+    end
+
+    local snapshot = {
+        Enabled = effect.Enabled
+    }
+
+    for property in pairs(config.Properties) do
+        pcall(function()
+            snapshot[property] = effect[property]
+        end)
+    end
+
+    state = {
+        Instance = effect,
+        Created = created,
+        Snapshot = snapshot
+    }
+
+    ToxLightingState.Effects[key] = state
+    return state
+end
+
+local function ToxRestoreEffect(key)
+    local state = ToxLightingState.Effects[key]
+    ToxLightingState.Effects[key] = nil
+
+    if not state or not state.Instance then
+        return
+    end
+
+    if state.Created then
+        pcall(function()
+            state.Instance:Destroy()
+        end)
+        return
+    end
+
+    if not state.Instance.Parent then
+        return
+    end
+
+    for property, value in pairs(state.Snapshot or {}) do
+        pcall(function()
+            state.Instance[property] = value
+        end)
+    end
+end
+
+local function ToxDetachLightingClass(className, store)
+    for _, object in ipairs(LightingService:GetChildren()) do
+        if object:IsA(className) and store[object] == nil then
+            store[object] = object.Parent
+            pcall(function()
+                object.Parent = nil
+            end)
+        end
+    end
+end
+
+local function ToxRestoreDetached(store)
+    local copy = {}
+
+    for object, parent in pairs(store) do
+        copy[object] = parent
+        store[object] = nil
+    end
+
+    for object, parent in pairs(copy) do
+        if object and object.Parent == nil and parent then
+            pcall(function()
+                object.Parent = parent
+            end)
+        end
+    end
+end
+
+local function ToxDisableGrading()
+    for _, object in ipairs(LightingService:GetChildren()) do
+        if object:IsA("ColorCorrectionEffect")
+        and ToxLightingState.RemovedGrading[object] == nil then
+            ToxLightingState.RemovedGrading[object] = object.Enabled
+            pcall(function()
+                object.Enabled = false
+            end)
+        end
+    end
+end
+
+local function ToxRestoreGrading()
+    local copy = {}
+
+    for object, enabled in pairs(ToxLightingState.RemovedGrading) do
+        copy[object] = enabled
+        ToxLightingState.RemovedGrading[object] = nil
+    end
+
+    for object, enabled in pairs(copy) do
+        if object and object.Parent then
+            pcall(function()
+                object.Enabled = enabled
+            end)
+        end
+    end
+end
+
+function ToxLighting.RefreshMain()
+    if not LightingSettings.AdjustLighting then
+        return
+    end
+
+    pcall(function()
+        LightingService.Ambient = ToxLightingColor(
+            LightingSettings.LightingAmbientColorName,
+            LightingService.Ambient
+        )
+    end)
+
+    pcall(function()
+        LightingService.OutdoorAmbient = ToxLightingColor(
+            LightingSettings.LightingOutdoorAmbientColorName,
+            LightingService.OutdoorAmbient
+        )
+    end)
+
+    pcall(function()
+        LightingService.ClockTime = math.clamp(
+            tonumber(LightingSettings.LightingClockTime) or 14,
+            0,
+            24
+        )
+    end)
+
+    pcall(function()
+        LightingService.Brightness = math.clamp(
+            tonumber(LightingSettings.LightingBrightness) or 1,
+            0,
+            10
+        )
+    end)
+
+    pcall(function()
+        LightingService.ShadowSoftness = math.clamp(
+            tonumber(LightingSettings.LightingShadowSoftness) or 0.5,
+            0,
+            1
+        )
+    end)
+
+    pcall(function()
+        LightingService.EnvironmentDiffuseScale = math.clamp(
+            tonumber(LightingSettings.LightingDiffuseScale) or 1,
+            0,
+            1
+        )
+    end)
+
+    pcall(function()
+        LightingService.EnvironmentSpecularScale = math.clamp(
+            tonumber(LightingSettings.LightingSpecularScale) or 1,
+            0,
+            1
+        )
+    end)
+
+    pcall(function()
+        LightingService.GlobalShadows = LightingSettings.LightingGlobalShadows == true
+    end)
+
+    pcall(function()
+        LightingService.FogColor = ToxLightingColor(
+            LightingSettings.LightingFogColorName,
+            LightingService.FogColor
+        )
+    end)
+
+    pcall(function()
+        LightingService.FogStart = math.clamp(
+            tonumber(LightingSettings.LightingFogStart) or 0,
+            0,
+            1000000
+        )
+    end)
+
+    pcall(function()
+        LightingService.FogEnd = math.clamp(
+            tonumber(LightingSettings.LightingFogEnd) or 100000,
+            0,
+            1000000
+        )
+    end)
+
+    ToxSetTechnology(LightingSettings.LightingTechnology)
+
+    if LightingSettings.LightingFixShadows then
+        pcall(function()
+            LightingService.GlobalShadows = false
+            LightingService.ShadowSoftness = 0
+        end)
+    end
+end
+
+function ToxLighting.SetAdjust(enabled)
+    enabled = enabled == true
+
+    if enabled and LightingSettings.Fullbright then
+        LightingSettings.Fullbright = false
+
+        if type(env.UpdateFullbright) == "function" then
+            pcall(env.UpdateFullbright)
+        end
+
+        if type(env.SyncToggleVisuals) == "function" then
+            pcall(env.SyncToggleVisuals, "Fullbright", false)
+        end
+    end
+
+    local keepFixShadows = LightingSettings.LightingFixShadows == true
+    LightingSettings.AdjustLighting = enabled
+
+    if enabled then
+        if not ToxLightingState.Main then
+            ToxLightingState.Main = ToxCaptureLightingMain()
+        end
+
+        ToxLighting.RefreshMain()
+    else
+        if keepFixShadows and type(ToxLighting.SetFixShadows) == "function" then
+            ToxLighting.SetFixShadows(false)
+        end
+
+        ToxRestoreLightingMain()
+
+        if keepFixShadows and type(ToxLighting.SetFixShadows) == "function" then
+            ToxLighting.SetFixShadows(true)
+        end
+    end
+end
+
+function ToxLighting.GetTechnology()
+    local result = "Unknown"
+
+    pcall(function()
+        result = LightingService.Technology.Name
+    end)
+
+    return result
+end
+
+function ToxLighting.SetTechnology(name)
+    LightingSettings.LightingTechnology = tostring(name or LightingSettings.LightingTechnology or "ShadowMap")
+
+    if not LightingSettings.AdjustLighting then
+        return true
+    end
+
+    return ToxSetTechnology(LightingSettings.LightingTechnology)
+end
+
+function ToxLighting.RefreshEffect(key)
+    local config = ToxLightingEffects[key]
+
+    if not config or LightingSettings[config.EnabledKey] ~= true then
+        return
+    end
+
+    local state = ToxCaptureEffect(key)
+    local effect = state and state.Instance
+
+    if not effect then
+        return
+    end
+
+    pcall(function()
+        effect.Enabled = true
+    end)
+
+    for property, settingKey in pairs(config.Properties) do
+        local value = tonumber(LightingSettings[settingKey])
+
+        if value ~= nil then
+            pcall(function()
+                effect[property] = value
+            end)
+        end
+    end
+end
+
+function ToxLighting.SetEffect(key, enabled)
+    local config = ToxLightingEffects[key]
+
+    if not config then
+        return
+    end
+
+    enabled = enabled == true
+
+    if key == "ColorCorrection"
+    and enabled
+    and LightingSettings.LightingRemoveGrading then
+        ToxLighting.SetRemoveGrading(false)
+
+        if type(env.SyncToggleVisuals) == "function" then
+            pcall(env.SyncToggleVisuals, "LightingRemoveGrading", false)
+        end
+    end
+
+    LightingSettings[config.EnabledKey] = enabled
+
+    if enabled then
+        ToxLighting.RefreshEffect(key)
+    else
+        ToxRestoreEffect(key)
+    end
+end
+
+function ToxLighting.SetFixShadows(enabled)
+    enabled = enabled == true
+    LightingSettings.LightingFixShadows = enabled
+
+    if enabled then
+        if not ToxLightingState.FixShadows then
+            ToxLightingState.FixShadows = {
+                GlobalShadows = LightingService.GlobalShadows,
+                ShadowSoftness = LightingService.ShadowSoftness
+            }
+        end
+
+        pcall(function()
+            LightingService.GlobalShadows = false
+            LightingService.ShadowSoftness = 0
+        end)
+    else
+        local snapshot = ToxLightingState.FixShadows
+        ToxLightingState.FixShadows = nil
+
+        if snapshot then
+            pcall(function()
+                LightingService.GlobalShadows = snapshot.GlobalShadows
+                LightingService.ShadowSoftness = snapshot.ShadowSoftness
+            end)
+        end
+
+        if LightingSettings.AdjustLighting then
+            ToxLighting.RefreshMain()
+        end
+    end
+end
+
+function ToxLighting.SetRemoveAtmosphere(enabled)
+    enabled = enabled == true
+    LightingSettings.LightingRemoveAtmosphere = enabled
+
+    if enabled then
+        ToxDetachLightingClass("Atmosphere", ToxLightingState.RemovedAtmosphere)
+    else
+        ToxRestoreDetached(ToxLightingState.RemovedAtmosphere)
+    end
+end
+
+function ToxLighting.SetRemoveSkyboxes(enabled)
+    enabled = enabled == true
+    LightingSettings.LightingRemoveSkyboxes = enabled
+
+    if enabled then
+        ToxDetachLightingClass("Sky", ToxLightingState.RemovedSkyboxes)
+    else
+        ToxRestoreDetached(ToxLightingState.RemovedSkyboxes)
+    end
+end
+
+function ToxLighting.SetRemoveGrading(enabled)
+    enabled = enabled == true
+
+    if enabled and LightingSettings.LightingColorCorrection then
+        ToxLighting.SetEffect("ColorCorrection", false)
+
+        if type(env.SyncToggleVisuals) == "function" then
+            pcall(env.SyncToggleVisuals, "LightingColorCorrection", false)
+        end
+    end
+
+    LightingSettings.LightingRemoveGrading = enabled
+
+    if enabled then
+        ToxDisableGrading()
+    else
+        ToxRestoreGrading()
+    end
+end
+
+function ToxLighting.Reset(syncVisuals)
+    ToxLighting.SetFixShadows(false)
+    ToxLighting.SetAdjust(false)
+    ToxLighting.SetEffect("SunRays", false)
+    ToxLighting.SetEffect("Bloom", false)
+    ToxLighting.SetEffect("ColorCorrection", false)
+    ToxLighting.SetEffect("Blur", false)
+    ToxLighting.SetRemoveAtmosphere(false)
+    ToxLighting.SetRemoveSkyboxes(false)
+    ToxLighting.SetRemoveGrading(false)
+
+    LightingSettings.AdjustLighting = false
+    LightingSettings.LightingSunRays = false
+    LightingSettings.LightingBloom = false
+    LightingSettings.LightingColorCorrection = false
+    LightingSettings.LightingBlur = false
+    LightingSettings.LightingFixShadows = false
+    LightingSettings.LightingRemoveAtmosphere = false
+    LightingSettings.LightingRemoveSkyboxes = false
+    LightingSettings.LightingRemoveGrading = false
+    LightingSettings.LightingGlobalShadows = false
+
+    if LightingSettings.Fullbright then
+        LightingSettings.Fullbright = false
+
+        if type(env.UpdateFullbright) == "function" then
+            pcall(env.UpdateFullbright)
+        end
+    end
+
+    if syncVisuals ~= false and type(env.SyncToggleVisuals) == "function" then
+        for _, key in ipairs({
+            "AdjustLighting",
+            "LightingSunRays",
+            "LightingBloom",
+            "LightingColorCorrection",
+            "LightingBlur",
+            "LightingFixShadows",
+            "LightingRemoveAtmosphere",
+            "LightingRemoveSkyboxes",
+            "LightingRemoveGrading",
+            "LightingGlobalShadows",
+            "Fullbright"
+        }) do
+            pcall(env.SyncToggleVisuals, key, false)
+        end
+    end
+end
+
+ToxLightingState.ChildConnection = LightingService.ChildAdded:Connect(function(object)
+    task.defer(function()
+        if LightingSettings.LightingRemoveAtmosphere and object:IsA("Atmosphere") then
+            if ToxLightingState.RemovedAtmosphere[object] == nil then
+                ToxLightingState.RemovedAtmosphere[object] = LightingService
+                pcall(function()
+                    object.Parent = nil
+                end)
+            end
+            return
+        end
+
+        if LightingSettings.LightingRemoveSkyboxes and object:IsA("Sky") then
+            if ToxLightingState.RemovedSkyboxes[object] == nil then
+                ToxLightingState.RemovedSkyboxes[object] = LightingService
+                pcall(function()
+                    object.Parent = nil
+                end)
+            end
+            return
+        end
+
+        if LightingSettings.LightingRemoveGrading and object:IsA("ColorCorrectionEffect") then
+            if ToxLightingState.RemovedGrading[object] == nil then
+                ToxLightingState.RemovedGrading[object] = object.Enabled
+                pcall(function()
+                    object.Enabled = false
+                end)
+            end
+        end
+    end)
+end)
+
+env.ToxLighting = ToxLighting
+env.ToxLightingCleanup = function()
+    pcall(function()
+        ToxLighting.Reset(false)
+    end)
+
+    if ToxLightingState.ChildConnection then
+        pcall(function()
+            ToxLightingState.ChildConnection:Disconnect()
+        end)
+        ToxLightingState.ChildConnection = nil
+    end
+
+    if env.ToxLighting == ToxLighting then
+        env.ToxLighting = nil
+    end
 end
 
 
