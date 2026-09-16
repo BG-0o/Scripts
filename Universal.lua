@@ -4099,12 +4099,12 @@ local function StartWalkFling()
 
             local multiplier =
                 game.PlaceId == NDSPlaceId
-                and 450
+                and 18
                 or 2500
 
             local verticalBoost =
                 game.PlaceId == NDSPlaceId
-                and 180
+                and 8
                 or 1500
 
             root.Velocity =
@@ -4667,7 +4667,7 @@ end
 BeginUniversalSection("Combat")
 
 CreateToggle("Aimbot (Right Click)", CombatPage, Settings.Aimbot, function(v) Settings.Aimbot = v end)
-CreateToggleWithValue("Aim Smoothness", CombatPage, false, Settings.AimbotSmoothness, function(v) end, function(val) Settings.AimbotSmoothness = val end)
+CreateToggleWithValue("Aim Smoothness", CombatPage, Settings.AimbotSmoothnessEnabled, Settings.AimbotSmoothness, function(v) Settings.AimbotSmoothnessEnabled = v == true end, function(val) Settings.AimbotSmoothness = val end, "AimbotSmoothnessEnabled")
 CreateDropdown("Aim Part", {"Head", "HumanoidRootPart", "Torso"}, CombatPage, Settings.AimPart, function(v) Settings.AimPart = v end)
 CreateToggle("Aim Wall Check", CombatPage, Settings.AimWallCheck, function(v) Settings.AimWallCheck = v end)
 CreateToggleWithValue("Show FOV Circle", CombatPage, Settings.ShowFOV, Settings.FOVRadius, function(v) Settings.ShowFOV = v end, function(val) Settings.FOVRadius = val end)
