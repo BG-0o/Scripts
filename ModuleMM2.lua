@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 MM2ModuleVersion =
-    "2026-09-13-mm2-killall-still-knife"
+    "2026-09-13-mm2-split-github-names"
 
 Players = game:GetService("Players")
 UserInputService = game:GetService("UserInputService")
@@ -55,6 +55,16 @@ function ClearToxTable(target)
     for key in pairs(target) do
         target[key] = nil
     end
+end
+
+if getgenv().ToxMM2ModuleLoadedJobId
+    == game.JobId
+and getgenv().ToxMM2ModuleVersion
+    == MM2ModuleVersion
+and getgenv().ToxMM2ModulePage
+    == GamePage
+and not getgenv().Destroyed then
+    return
 end
 
 if getgenv().ToxMM2Cleanup then
@@ -770,78 +780,6 @@ PlayerSelectorTitle = nil
 PlayerSelectorInput = nil
 PlayerSelectorAction = nil
 PlayerSelectorMode = "targets"
-MM2TargetLeaveKeepSeconds = 180
-RecentLeftMM2Targets = {}
-PlayerSelectorRefreshQueued = false
-
-function PruneRecentLeftTargets()
-    local changed = false
-    local now = os.clock()
-
-    for userId, item in pairs(RecentLeftMM2Targets) do
-        if typeof(item) ~= "table"
-        or not tonumber(item.LeftAt)
-        or now - item.LeftAt >= MM2TargetLeaveKeepSeconds then
-            RecentLeftMM2Targets[userId] = nil
-            KnifeTargetIds[userId] = nil
-            changed = true
-        end
-    end
-
-    return changed
-end
-
-function RememberLeftTarget(target)
-    if not target
-    or target == Player then
-        return
-    end
-
-    local userId = tonumber(target.UserId)
-
-    if not userId then
-        return
-    end
-
-    RecentLeftMM2Targets[userId] = {
-        UserId = userId,
-        Name = target.Name,
-        DisplayName = target.DisplayName,
-        LeftAt = os.clock()
-    }
-
-    AddTargetToHistory(target)
-
-    task.delay(MM2TargetLeaveKeepSeconds + 0.2, function()
-        local changed = PruneRecentLeftTargets()
-        CleanTargetHistory()
-
-        if changed
-        and PlayerSelectorFrame
-        and PlayerSelectorFrame.Visible then
-            RefreshPlayerSelector()
-        end
-    end)
-end
-
-function RequestPlayerSelectorRefresh()
-    if not PlayerSelectorFrame
-    or not PlayerSelectorFrame.Visible
-    or PlayerSelectorRefreshQueued then
-        return
-    end
-
-    PlayerSelectorRefreshQueued = true
-
-    task.delay(0.12, function()
-        PlayerSelectorRefreshQueued = false
-
-        if PlayerSelectorFrame
-        and PlayerSelectorFrame.Visible then
-            RefreshPlayerSelector()
-        end
-    end)
-end
 
 function IsWhitelisted(target)
     if not target then
@@ -942,14 +880,12 @@ end
 function CleanKnifeTargets()
     Settings.MM2AutoClearTarget = true
     Settings.MM2TargetLock = false
-    PruneRecentLeftTargets()
 
     for userId in pairs(KnifeTargetIds) do
         local target = FindTargetByUserId(userId)
 
-        if target and IsWhitelisted(target) then
-            KnifeTargetIds[userId] = nil
-        elseif not target and not RecentLeftMM2Targets[tonumber(userId)] then
+        if not target
+        or not IsTargetAlive(target) then
             KnifeTargetIds[userId] = nil
         end
     end
@@ -992,21 +928,13 @@ end
 
 function CleanTargetHistory()
     Settings.MM2TargetHistory = typeof(Settings.MM2TargetHistory) == "table" and Settings.MM2TargetHistory or {}
-    PruneRecentLeftTargets()
 
     for index = #Settings.MM2TargetHistory, 1, -1 do
         local item = Settings.MM2TargetHistory[index]
-        local userId = typeof(item) == "table" and tonumber(item.UserId) or nil
 
-        if not userId then
+        if typeof(item) ~= "table"
+        or not tonumber(item.UserId) then
             table.remove(Settings.MM2TargetHistory, index)
-        else
-            local current = FindTargetByUserId(userId)
-            local recentLeft = RecentLeftMM2Targets[userId]
-
-            if not current and not recentLeft then
-                table.remove(Settings.MM2TargetHistory, index)
-            end
         end
     end
 
@@ -1035,7 +963,7 @@ function GetSelectedKnifeTargets()
     return targets
 end
 
-KnifeTargetAlive = nil
+KnifeTargetAlive
 
 function GetKnifeTargetRoot(target)
     local character = target and target.Character
@@ -1101,6 +1029,18 @@ function TouchKnifeTarget(
         return false
     end
 
+    local targetCharacter = target.Character
+    local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+    local targetRoot = GetKnifeTargetRoot(target)
+    local handle = knife:FindFirstChild("Handle") or knife:FindFirstChildWhichIsA("BasePart", true)
+
+    if not targetHumanoid
+    or targetHumanoid.Health <= 0
+    or not targetRoot
+    or not handle then
+        return false
+    end
+
     local character, humanoid, root = GetCharacterState()
 
     if not character
@@ -1110,13 +1050,7 @@ function TouchKnifeTarget(
         return false
     end
 
-    local handle = knife:FindFirstChild("Handle")
-        or knife:FindFirstChildWhichIsA("BasePart", true)
-
-    if not handle then
-        return false
-    end
-
+    local oldCFrame = character:GetPivot()
     local touched = false
     local targetParts = {}
     local seen = {}
@@ -1127,60 +1061,49 @@ function TouchKnifeTarget(
         and part.Parent
         and not seen[part] then
             seen[part] = true
-
             pcall(function()
                 part.CanTouch = true
             end)
-
             table.insert(targetParts, part)
         end
     end
 
-    local function refreshParts()
-        targetParts = {}
-        seen = {}
+    for _, name in ipairs({
+        "HumanoidRootPart",
+        "UpperTorso",
+        "LowerTorso",
+        "Torso",
+        "Head",
+        "LeftUpperLeg",
+        "RightUpperLeg",
+        "LeftLowerLeg",
+        "RightLowerLeg",
+        "LeftFoot",
+        "RightFoot",
+        "Left Leg",
+        "Right Leg",
+        "LeftUpperArm",
+        "RightUpperArm",
+        "LeftLowerArm",
+        "RightLowerArm",
+        "LeftHand",
+        "RightHand",
+        "Left Arm",
+        "Right Arm"
+    }) do
+        addPart(targetCharacter:FindFirstChild(name, true))
+    end
 
-        local targetCharacter = target.Character
-
-        if not targetCharacter then
-            return false
+    for _, object in ipairs(targetCharacter:GetDescendants()) do
+        if #targetParts >= 24 then
+            break
         end
 
-        for _, name in ipairs({
-            "HumanoidRootPart",
-            "UpperTorso",
-            "LowerTorso",
-            "Torso",
-            "Head",
-            "LeftUpperLeg",
-            "RightUpperLeg",
-            "LeftLowerLeg",
-            "RightLowerLeg",
-            "LeftFoot",
-            "RightFoot",
-            "Left Leg",
-            "Right Leg",
-            "LeftUpperArm",
-            "RightUpperArm",
-            "LeftLowerArm",
-            "RightLowerArm",
-            "LeftHand",
-            "RightHand",
-            "Left Arm",
-            "Right Arm"
-        }) do
-            addPart(targetCharacter:FindFirstChild(name, true))
-        end
+        addPart(object)
+    end
 
-        for _, object in ipairs(targetCharacter:GetDescendants()) do
-            if #targetParts >= 28 then
-                break
-            end
-
-            addPart(object)
-        end
-
-        return #targetParts > 0
+    if #targetParts == 0 then
+        return false
     end
 
     local function activate()
@@ -1191,10 +1114,40 @@ function TouchKnifeTarget(
         end
     end
 
+    local function touchParts()
+        if not firetouchinterest then
+            return
+        end
+
+        pcall(function()
+            handle.CanTouch = true
+            handle.CanCollide = false
+        end)
+
+        for _, part in ipairs(targetParts) do
+            if part and part.Parent then
+                pcall(function()
+                    firetouchinterest(handle, part, 0)
+                    firetouchinterest(part, handle, 0)
+                    firetouchinterest(handle, part, 1)
+                    firetouchinterest(part, handle, 1)
+                end)
+
+                touched = true
+            end
+        end
+    end
+
+    local allow = getgenv().AllowToxTeleport
+
+    if allow then
+        allow(0.22, "MM2 Knife Attack")
+    end
+
     local function predictedPoint(mult)
-        local targetCharacter = target.Character
-        local targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
-        local targetRoot = GetKnifeTargetRoot(target)
+        targetCharacter = target.Character
+        targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
+        targetRoot = GetKnifeTargetRoot(target)
 
         if not targetCharacter
         or not targetHumanoid
@@ -1206,128 +1159,75 @@ function TouchKnifeTarget(
         local velocity = targetRoot.AssemblyLinearVelocity or Vector3.zero
         local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
 
-        if horizontal.Magnitude > 180 then
-            horizontal = horizontal.Unit * 180
+        if horizontal.Magnitude > 150 then
+            horizontal = horizontal.Unit * 150
         end
 
-        local moveDirection = targetHumanoid.MoveDirection or Vector3.zero
-        local vertical = math.clamp(velocity.Y, -120, 120)
+        local moveBoost = targetHumanoid.MoveDirection * math.max(targetHumanoid.WalkSpeed * 0.1, 2)
+        local vertical = math.clamp(velocity.Y, -100, 100)
 
         return targetRoot.Position
             + horizontal * mult
-            + moveDirection * math.max(targetHumanoid.WalkSpeed * 0.08, 1.5)
-            + Vector3.new(0, vertical * math.clamp(mult * 0.45, 0.02, 0.1), 0)
-    end
-
-    local function fireRemoteAt(point)
-        if typeof(point) ~= "Vector3" then
-            return
-        end
-
-        local origin = root.Position
-
-        for _, remote in ipairs(knife:GetDescendants()) do
-            if remote:IsA("RemoteEvent") then
-                local lower = string.lower(tostring(remote.Name or ""))
-                local parent = remote.Parent
-
-                if parent then
-                    lower = lower .. " " .. string.lower(tostring(parent.Name or ""))
-                end
-
-                if string.find(lower, "stab", 1, true)
-                or string.find(lower, "slash", 1, true)
-                or string.find(lower, "hit", 1, true)
-                or string.find(lower, "damage", 1, true)
-                or string.find(lower, "melee", 1, true) then
-                    pcall(function()
-                        remote:FireServer(CFrame.new(origin), CFrame.new(point))
-                    end)
-
-                    pcall(function()
-                        remote:FireServer(point)
-                    end)
-
-                    pcall(function()
-                        remote:FireServer(target.Character, GetKnifeTargetRoot(target), point)
-                    end)
-                end
-            end
-        end
-    end
-
-    local function touchAt(point)
-        if not refreshParts() then
-            return false
-        end
-
-        pcall(function()
-            handle.CanTouch = true
-            handle.CanCollide = false
-        end)
-
-        local oldHandleCFrame = handle.CFrame
-
-        if typeof(point) == "Vector3" then
-            pcall(function()
-                handle.CFrame = CFrame.lookAt(point, root.Position)
-            end)
-        end
-
-        if firetouchinterest then
-            for _, part in ipairs(targetParts) do
-                if part
-                and part.Parent then
-                    pcall(function()
-                        firetouchinterest(handle, part, 0)
-                        firetouchinterest(part, handle, 0)
-                        firetouchinterest(handle, part, 1)
-                        firetouchinterest(part, handle, 1)
-                    end)
-
-                    touched = true
-                end
-            end
-        end
-
-        fireRemoteAt(point or (GetKnifeTargetRoot(target) and GetKnifeTargetRoot(target).Position))
-
-        pcall(function()
-            if oldHandleCFrame then
-                handle.CFrame = oldHandleCFrame
-            end
-        end)
-
-        return true
+            + moveBoost
+            + Vector3.new(0, vertical * math.clamp(mult * 0.5, 0.03, 0.12), 0)
     end
 
     activate()
+    touchParts()
 
-    for pass = 1, 8 do
+    for pass = 1, 3 do
         if getgenv().Destroyed
         or not KnifeTargetAlive(target) then
             break
         end
 
-        local point = predictedPoint(0.025 + pass * 0.018)
+        local aim = predictedPoint(0.08 + pass * 0.04)
 
-        if not point then
+        if not aim then
             break
         end
 
-        if pass == 1
-        or pass == 4
-        or pass == 7 then
+        local currentRoot = GetKnifeTargetRoot(target)
+        local right = currentRoot and currentRoot.CFrame.RightVector or Vector3.new(1, 0, 0)
+        local look = currentRoot and currentRoot.CFrame.LookVector or Vector3.new(0, 0, -1)
+
+        local positions = {
+            aim + Vector3.new(0, 0.65, 0),
+            aim - look * 1.15 + Vector3.new(0, 0.9, 0),
+            aim + look * 1.15 + Vector3.new(0, 0.9, 0),
+            aim + right * 1.35 + Vector3.new(0, 0.45, 0),
+            aim - right * 1.35 + Vector3.new(0, 0.45, 0),
+            aim + Vector3.new(0, 1.85, 0),
+            aim + Vector3.new(0, -0.8, 0)
+        }
+
+        for _, position in ipairs(positions) do
+            if getgenv().Destroyed
+            or not targetRoot
+            or not targetRoot.Parent
+            or not KnifeTargetAlive(target) then
+                break
+            end
+
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+            character:PivotTo(CFrame.lookAt(position, targetRoot.Position))
             activate()
-        end
-
-        touchAt(point)
-
-        if pass % 2 == 0 then
-            RunService.Heartbeat:Wait()
-        else
+            touchParts()
             task.wait()
         end
+    end
+
+    if oldCFrame
+    and character
+    and character.Parent
+    and root
+    and root.Parent
+    and humanoid
+    and humanoid.Health > 0 then
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        character:PivotTo(oldCFrame)
     end
 
     return touched
@@ -1627,14 +1527,8 @@ function UpdateSelectorActionText()
     if PlayerSelectorMode == "targets" then
         local count = 0
 
-        for userId in pairs(KnifeTargetIds) do
-            local target = FindTargetByUserId(userId)
-
-            if target
-            and not IsWhitelisted(target)
-            and IsTargetAlive(target) then
-                count = count + 1
-            end
+        for _ in pairs(KnifeTargetIds) do
+            count = count + 1
         end
 
         PlayerSelectorAction.Text = "Kill Selected (" .. tostring(count) .. ")"
@@ -1648,7 +1542,6 @@ function RefreshPlayerSelector()
         return
     end
 
-    PlayerSelectorRefreshQueued = false
     CleanKnifeTargets()
 
     for _, child in ipairs(PlayerSelectorScroll:GetChildren()) do
@@ -1700,8 +1593,7 @@ function RefreshPlayerSelector()
 
             local userId = tonumber(item.UserId)
             local target = FindTargetByUserId(userId)
-            local recentLeft = userId and RecentLeftMM2Targets[userId] or nil
-            local status = target and GetTargetStatusText(target) or (recentLeft and "Left" or "Left")
+            local status = target and GetTargetStatusText(target) or "Left"
             local row = Instance.new("Frame")
             row.Size = UDim2.new(1, -4, 0, 36)
             row.BackgroundColor3 = Color3.fromRGB(15, 15, 24)
@@ -2192,23 +2084,24 @@ function OpenPlayerSelector(mode)
     RefreshPlayerSelector()
 end
 
-AddConnection(Players.PlayerAdded:Connect(function(target)
-    if target then
-        RecentLeftMM2Targets[target.UserId] = nil
+AddConnection(Players.PlayerAdded:Connect(function()
+    if PlayerSelectorFrame and PlayerSelectorFrame.Visible then
+        task.defer(RefreshPlayerSelector)
     end
-
-    RequestPlayerSelectorRefresh()
 end))
 
 AddConnection(Players.PlayerRemoving:Connect(function(target)
-    RememberLeftTarget(target)
-    RequestPlayerSelectorRefresh()
+    KnifeTargetIds[target.UserId] = nil
+
+    if PlayerSelectorFrame and PlayerSelectorFrame.Visible then
+        task.defer(RefreshPlayerSelector)
+    end
 end))
 
 LastTargetAutoClear = 0
 
 AddConnection(RunService.Heartbeat:Connect(function()
-    if os.clock() - LastTargetAutoClear < 5 then
+    if os.clock() - LastTargetAutoClear < 1 then
         return
     end
 
@@ -2216,12 +2109,14 @@ AddConnection(RunService.Heartbeat:Connect(function()
 
     local before = 0
 
+    Settings.MM2AutoClearTarget = true
+    Settings.MM2TargetLock = false
+
     for _ in pairs(KnifeTargetIds) do
         before = before + 1
     end
 
     CleanKnifeTargets()
-    CleanTargetHistory()
 
     local after = 0
 
@@ -2229,8 +2124,10 @@ AddConnection(RunService.Heartbeat:Connect(function()
         after = after + 1
     end
 
-    if before ~= after then
-        RequestPlayerSelectorRefresh()
+    if before ~= after
+    and PlayerSelectorFrame
+    and PlayerSelectorFrame.Visible then
+        RefreshPlayerSelector()
     end
 end))
 
@@ -2590,6 +2487,15 @@ AddConnection(RunService.Heartbeat:Connect(function()
     end
 end))
 
+task.spawn(function()
+    while not getgenv().Destroyed and game.PlaceId == 142823291 do
+        if PlayerSelectorFrame and PlayerSelectorFrame.Visible then
+            RefreshPlayerSelector()
+        end
+
+        task.wait(0.75)
+    end
+end)
 
 function NormalGunClick()
     local viewport = Camera.ViewportSize
