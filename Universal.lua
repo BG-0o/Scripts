@@ -5525,18 +5525,33 @@ CreateToggle("Anti Fling", FlingPage, Settings.AntiFling, function(v)
     if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("AntiFling", v) end
 end, "AntiFling")
 CreateToggle("Fullbright", FlingPage, Settings.Fullbright, function(v) Settings.Fullbright = v UpdateFullbright() end)
-CreateToggle("Force Shift Lock", FlingPage, Settings.ForceShiftLock, function(v)
-    if v then
-        CaptureShiftLockDefaults()
-    end
+CreateToggleCycleOption(
+    "Force Shift Lock",
+    FlingPage,
+    Settings.ForceShiftLock,
+    {"Shift", "Ctrl"},
+    Settings.ShiftLockKey or "Shift",
+    function(v)
+        if v then
+            CaptureShiftLockDefaults()
+        end
 
-    Settings.ForceShiftLock = v
+        Settings.ForceShiftLock = v == true
 
-    if not v then
-        RestoreShiftLockDefaults()
+        if not Settings.ForceShiftLock then
+            isShiftLockActive = false
+            RestoreShiftLockDefaults()
+        end
+    end,
+    function(v)
+        Settings.ShiftLockKey = v == "Ctrl" and "Ctrl" or "Shift"
+        isShiftLockActive = false
+
+        if Settings.ForceShiftLock then
+            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        end
     end
-end)
-CreateDropdown("Shift Lock Key", {"Shift", "Ctrl"}, FlingPage, Settings.ShiftLockKey, function(v) Settings.ShiftLockKey = v end)
+)
 
 local LoopFlingInput = nil
 local LoopFlingGeneration = 0
