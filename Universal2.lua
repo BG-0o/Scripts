@@ -2871,26 +2871,65 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
                     return
                 end
 
-                local mousePosition = UserInputService:GetMouseLocation()
-                local inset = Vector2.zero
+                -- Player:GetMouse().X/Y uses the same viewport space as
+                -- WorldToViewportPoint, avoiding top-bar/inset offsets.
+                local robloxMouse = Player:GetMouse()
+                local mouseX = tonumber(robloxMouse.X)
+                local mouseY = tonumber(robloxMouse.Y)
 
-                pcall(function()
-                    inset = select(1, GuiService:GetGuiInset())
-                end)
+                if not mouseX or not mouseY then
+                    return
+                end
 
-                mousePosition -= inset
+                local rawDX = screen.X - mouseX
+                local rawDY = screen.Y - mouseY
 
-                local dx = (screen.X - mousePosition.X) / smooth
-                local dy = (screen.Y - mousePosition.Y) / smooth
+                -- Do nothing inside a tiny dead-zone so the cursor does not
+                -- vibrate around the target every RenderStep.
+                if math.abs(rawDX) <= 1.25 and math.abs(rawDY) <= 1.25 then
+                    return
+                end
+
+                -- Mouse movement and Roblox camera lock fight each other.
+                -- In that situation aim the camera instead of throwing the
+                -- system cursor around the screen.
+                if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
+                    camera.CFrame = camera.CFrame:Lerp(
+                        CFrame.new(camera.CFrame.Position, target.Part.Position),
+                        1 / smooth
+                    )
+                    return
+                end
+
+                local dx = rawDX / smooth
+                local dy = rawDY / smooth
+
+                -- Executor mouse APIs can behave badly with very large
+                -- relative values. Limit each frame while preserving direction.
+                local maxStep = blatant and 120 or 45
+                local magnitude = Vector2.new(dx, dy).Magnitude
+
+                if magnitude > maxStep and magnitude > 0 then
+                    local scale = maxStep / magnitude
+                    dx *= scale
+                    dy *= scale
+                end
+
+                dx = math.floor(dx + (dx >= 0 and 0.5 or -0.5))
+                dy = math.floor(dy + (dy >= 0 and 0.5 or -0.5))
+
+                if dx == 0 and dy == 0 then
+                    return
+                end
 
                 if type(mousemoverel) == "function" then
                     pcall(mousemoverel, dx, dy)
                 elseif type(mouse_move_relative) == "function" then
                     pcall(mouse_move_relative, dx, dy)
                 else
-                    camera.CFrame = CFrame.new(
-                        camera.CFrame.Position,
-                        target.Part.Position
+                    camera.CFrame = camera.CFrame:Lerp(
+                        CFrame.new(camera.CFrame.Position, target.Part.Position),
+                        1 / smooth
                     )
                 end
 
