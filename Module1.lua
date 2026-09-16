@@ -3002,34 +3002,62 @@ end
 getgenv().ResetHitboxes = ResetHitboxes
 
 local FullbrightDefaults = nil
+local FullbrightActive = false
+
+local function CaptureFullbrightDefaults()
+    return {
+        Ambient = Lighting.Ambient,
+        OutdoorAmbient = Lighting.OutdoorAmbient,
+        Brightness = Lighting.Brightness,
+        ClockTime = Lighting.ClockTime,
+        FogStart = Lighting.FogStart,
+        FogEnd = Lighting.FogEnd,
+        FogColor = Lighting.FogColor,
+        GlobalShadows = Lighting.GlobalShadows,
+        ExposureCompensation = Lighting.ExposureCompensation,
+        ShadowSoftness = Lighting.ShadowSoftness,
+        EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
+        EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale
+    }
+end
+
+local function RestoreFullbrightDefaults()
+    local defaults = FullbrightDefaults
+    FullbrightDefaults = nil
+    FullbrightActive = false
+
+    if not defaults then
+        return
+    end
+
+    for property, value in pairs(defaults) do
+        pcall(function()
+            Lighting[property] = value
+        end)
+    end
+end
 
 local function UpdateFullbright()
     if Settings.Fullbright then
-        if not FullbrightDefaults then
-            FullbrightDefaults = {
-                Ambient = Lighting.Ambient,
-                Brightness = Lighting.Brightness,
-                ClockTime = Lighting.ClockTime,
-                FogEnd = Lighting.FogEnd,
-                GlobalShadows = Lighting.GlobalShadows
-            }
+        if not FullbrightActive then
+            FullbrightDefaults = CaptureFullbrightDefaults()
+            FullbrightActive = true
         end
 
-        Lighting.Ambient = Color3.fromRGB(180, 180, 180)
-        Lighting.Brightness = 1.2
-        Lighting.ClockTime = 14
-        Lighting.FogEnd = 100000
-        Lighting.GlobalShadows = false
-    elseif FullbrightDefaults then
-        Lighting.Ambient = FullbrightDefaults.Ambient
-        Lighting.Brightness = FullbrightDefaults.Brightness
-        Lighting.ClockTime = FullbrightDefaults.ClockTime
-        Lighting.FogEnd = FullbrightDefaults.FogEnd
-        Lighting.GlobalShadows = FullbrightDefaults.GlobalShadows
-        FullbrightDefaults = nil
+        pcall(function() Lighting.Ambient = Color3.fromRGB(180, 180, 180) end)
+        pcall(function() Lighting.OutdoorAmbient = Color3.fromRGB(180, 180, 180) end)
+        pcall(function() Lighting.Brightness = 1.2 end)
+        pcall(function() Lighting.ClockTime = 14 end)
+        pcall(function() Lighting.FogStart = 0 end)
+        pcall(function() Lighting.FogEnd = 100000 end)
+        pcall(function() Lighting.GlobalShadows = false end)
+        pcall(function() Lighting.ExposureCompensation = 0 end)
+    elseif FullbrightActive or FullbrightDefaults then
+        RestoreFullbrightDefaults()
     end
 end
 getgenv().UpdateFullbright = UpdateFullbright
+getgenv().RestoreFullbrightDefaults = RestoreFullbrightDefaults
 
 local ParentContainer = (gethui and gethui()) or game:GetService("CoreGui")
 local Gui = Instance.new("ScreenGui")
