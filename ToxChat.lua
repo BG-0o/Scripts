@@ -35,42 +35,6 @@ local ChatPage =
 local RequestFunction =
     getgenv().ToxRequestFunction
 
-local function ResolveRequestFunction()
-    local env = getgenv()
-    local resolved =
-        env.ToxRequestFunction
-
-    if type(resolved) ~= "function" then
-        if syn and type(syn.request) == "function" then
-            resolved = syn.request
-        elseif http and type(http.request) == "function" then
-            resolved = http.request
-        elseif fluxus and type(fluxus.request) == "function" then
-            resolved = fluxus.request
-        elseif krnl and type(krnl.request) == "function" then
-            resolved = krnl.request
-        elseif type(env.request) == "function" then
-            resolved = env.request
-        elseif type(env.http_request) == "function" then
-            resolved = env.http_request
-        elseif type(http_request) == "function" then
-            resolved = http_request
-        elseif type(request) == "function" then
-            resolved = request
-        end
-    end
-
-    if type(resolved) == "function" then
-        RequestFunction = resolved
-        env.ToxRequestFunction = resolved
-        return resolved
-    end
-
-    return nil
-end
-
-ResolveRequestFunction()
-
 if not Player
 or not CustomNotify
 or not ChatPage then
@@ -680,9 +644,9 @@ local function RelayRequest(
     path,
     body
 )
-    local url =
-        ToxChatRelayHost
-        .. path
+    if not RequestFunction then
+        return nil, false
+    end
 
     local headers = {
         ["Accept"] =
@@ -696,126 +660,25 @@ local function RelayRequest(
             "application/json"
     end
 
-    local requestFunction =
-        ResolveRequestFunction()
-
-    if requestFunction then
-        local ok, response =
-            pcall(function()
-                return requestFunction({
-                    Url = url,
-                    Method = method,
-                    Headers = headers,
-                    Body = body
-                })
-            end)
-
-        if not ok then
-            ok, response =
-                pcall(function()
-                    return requestFunction({
-                        URL = url,
-                        Method = method,
-                        Headers = headers,
-                        Body = body
-                    })
-                end)
-        end
-
-        if ok then
-            if typeof(response) == "string" then
-                return response, true
-            end
-
-            local responseBody, responseOk =
-                ReadRelayResponse(response)
-
-            if responseOk then
-                return responseBody, true
-            end
-        end
-    end
-
-    if method == "GET" then
-        local ok, response =
-            pcall(function()
-                return game:HttpGet(
-                    url,
-                    true
-                )
-            end)
-
-        if not ok then
-            ok, response =
-                pcall(function()
-                    return game:HttpGet(url)
-                end)
-        end
-
-        if ok
-        and typeof(response) == "string"
-        and response ~= "" then
-            return response, true
-        end
-    end
-
     local ok, response =
         pcall(function()
-            return HttpService:
-                RequestAsync({
-                    Url = url,
-                    Method = method,
-                    Headers = headers,
-                    Body = body
-                })
+            return RequestFunction({
+                Url =
+                    ToxChatRelayHost
+                    .. path,
+                Method = method,
+                Headers = headers,
+                Body = body
+            })
         end)
 
-    if ok
-    and typeof(response) == "table" then
-        local responseBody, responseOk =
-            ReadRelayResponse(response)
-
-        if responseOk then
-            return responseBody, true
-        end
+    if not ok then
+        return nil, false
     end
 
-    if method == "POST"
-    and typeof(body) == "string" then
-        local postOk, postResponse =
-            pcall(function()
-                return HttpService:
-                    PostAsync(
-                        url,
-                        body,
-                        Enum.HttpContentType.ApplicationJson,
-                        false
-                    )
-            end)
-
-        if postOk
-        and typeof(postResponse) == "string"
-        and postResponse ~= "" then
-            return postResponse, true
-        end
-    elseif method == "GET" then
-        local getOk, getResponse =
-            pcall(function()
-                return HttpService:
-                    GetAsync(
-                        url,
-                        true
-                    )
-            end)
-
-        if getOk
-        and typeof(getResponse) == "string"
-        and getResponse ~= "" then
-            return getResponse, true
-        end
-    end
-
-    return nil, false
+    return ReadRelayResponse(
+        response
+    )
 end
 
 local function DecodeToxChatResponse(
