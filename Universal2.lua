@@ -77,7 +77,7 @@ local freecamMovementFrozen = false
 local visualUIInstalled = false
 local visualConnections = {}
 local xrayDefaults = setmetatable({}, {__mode = "k"})
-local fakeLagSleeping = false
+local fakeLagSleeping = setmetatable({}, {__mode = "k"})
 local lastRainbowColor = nil
 local fakeLagClock = 0
 local VISUAL_BIND = "ToxUniversal2Visuals"
@@ -488,7 +488,7 @@ local function SinkCameraMovement()
 end
 
 local function ShouldFreezeFreecamMovement()
-    return freecamActive == true
+    return freecamActive == true or Settings.NoclipCamera == true
 end
 
 local function RestoreFreecamMovementFreeze(force)
@@ -978,12 +978,16 @@ end
 local function SetFakeLag(enabled)
     Settings.FakeLag = enabled == true
 
-    if not Settings.FakeLag and fakeLagSleeping then
-        local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-        if root and type(sethiddenproperty) == "function" then
-            pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
+    if not Settings.FakeLag then
+        if type(sethiddenproperty) == "function" then
+            for root in pairs(fakeLagSleeping) do
+                if root and root.Parent then
+                    pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
+                end
+            end
         end
-        fakeLagSleeping = false
+
+        fakeLagSleeping = setmetatable({}, {__mode = "k"})
     end
 end
 
@@ -992,10 +996,17 @@ local function SetNetworkSleeping(root, sleeping)
         return false
     end
 
-    local ok = pcall(sethiddenproperty, root, "NetworkIsSleeping", sleeping == true)
+    local sleepingState = sleeping == true
+    local ok = pcall(sethiddenproperty, root, "NetworkIsSleeping", sleepingState)
+
     if ok then
-        fakeLagSleeping = sleeping == true
+        if sleepingState then
+            fakeLagSleeping[root] = true
+        else
+            fakeLagSleeping[root] = nil
+        end
     end
+
     return ok
 end
 
@@ -1403,7 +1414,7 @@ RunService:BindToRenderStep(
             return
         end
 
-        if freecamActive then
+        if ShouldFreezeFreecamMovement() then
             ApplyFreecamMovementFreeze()
         else
             RestoreFreecamMovementFreeze()
@@ -1422,7 +1433,7 @@ RunService:BindToRenderStep(
             SetNetworkSleeping(root, shouldSleep)
         elseif not Settings.FakeLag then
             fakeLagClock = 0
-            if fakeLagSleeping then
+            if next(fakeLagSleeping) ~= nil then
                 SetFakeLag(false)
             end
         end
@@ -1474,6 +1485,17 @@ env.ToxUniversal2Cleanup = function()
     RestoreXRay()
     SetFakeLag(false)
     ClearHealthBillboards()
+
+    pcall(function()
+        RunService:Set3dRenderingEnabled(true)
+    end)
+
+    local renderGui = env.ToxRenderBackdropGui
+    local renderFrame = renderGui and renderGui:FindFirstChildOfClass("Frame")
+    if renderFrame then
+        renderFrame.Visible = false
+    end
+    Settings.Render3D = true
 
     if Settings.VisualRainbow then
         Settings.VisualRainbow = false
