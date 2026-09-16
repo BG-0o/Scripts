@@ -8,6 +8,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local ContextActionService = game:GetService("ContextActionService")
+local GuiService = game:GetService("GuiService")
 local Workspace = game:GetService("Workspace")
 
 local UserGameSettings = nil
@@ -41,6 +42,7 @@ end
 Settings.AimbotBindEnabled = Settings.AimbotBindEnabled == true
 Settings.AimbotKey = Settings.AimbotKey or Enum.KeyCode.E
 Settings.AimbotBlatant = Settings.AimbotBlatant == true
+Settings.AimbotSmoothnessEnabled = Settings.AimbotSmoothnessEnabled == true
 Settings.Render3DDisabled = Settings.Render3DDisabled == true
 Settings.Render3DColor = string.upper(tostring(Settings.Render3DColor or "BLACK"))
 Settings.FreecamSpeed = tonumber(Settings.FreecamSpeed) or 50
@@ -54,6 +56,7 @@ Settings.XRayTransparency = math.clamp(tonumber(Settings.XRayTransparency) or 0.
 Settings.FakeLag = Settings.FakeLag == true
 Settings.LagChance = math.clamp(tonumber(Settings.LagChance) or 70, 0, 100)
 Settings.ShiftLockKey = Settings.ShiftLockKey == "Ctrl" and "Ctrl" or "Shift"
+Settings.MaxZoom = Settings.MaxZoom == true
 Settings.MaxZoomDistance = math.clamp(
     tonumber(Settings.MaxZoomDistance) or originalCameraMaxZoomDistance,
     math.max(0.5, tonumber(Player.CameraMinZoomDistance) or 0.5),
@@ -438,15 +441,15 @@ function CreateToggle(name, page, ...)
     if name == "Aimbot (Right Click)" then
         return CreateToggleCycleControl(
             "Aimbot",
-            {"CAMERA", "MOUSE"},
+            {"Camera", "Mouse"},
             page,
             Settings.Aimbot,
-            Settings.AimbotMode,
+            Settings.AimbotMode == "MOUSE" and "Mouse" or "Camera",
             function(value)
                 Settings.Aimbot = value == true
             end,
             function(value)
-                Settings.AimbotMode = string.upper(tostring(value or "CAMERA"))
+                Settings.AimbotMode = string.upper(tostring(value or "Camera"))
             end,
             "Aimbot"
         )
@@ -544,7 +547,7 @@ env.CreateConfirmButton = CreateConfirmButton
 env.CreateKeybindButton = CreateKeybindButton
 env.CreateKeybindToggle = CreateKeybindToggle
 
-local function SetMaxZoomDistance(value)
+local function SetMaxZoomDistance(value, applyNow)
     local minimum = math.max(0.5, tonumber(Player.CameraMinZoomDistance) or 0.5)
     local maximum = math.max(minimum, 10000)
     local distance = math.clamp(
@@ -555,11 +558,25 @@ local function SetMaxZoomDistance(value)
 
     Settings.MaxZoomDistance = distance
 
-    pcall(function()
-        Player.CameraMaxZoomDistance = distance
-    end)
+    if applyNow ~= false and Settings.MaxZoom then
+        pcall(function()
+            Player.CameraMaxZoomDistance = distance
+        end)
+    end
 
     return distance
+end
+
+local function SetMaxZoom(enabled)
+    Settings.MaxZoom = enabled == true
+
+    if Settings.MaxZoom then
+        SetMaxZoomDistance(Settings.MaxZoomDistance, true)
+    else
+        pcall(function()
+            Player.CameraMaxZoomDistance = originalCameraMaxZoomDistance
+        end)
+    end
 end
 
 local function RestoreCameraNoclip()
@@ -611,7 +628,13 @@ local function SetNoclipCamera(enabled)
     end
 end
 
-SetMaxZoomDistance(Settings.MaxZoomDistance)
+if Settings.MaxZoom then
+    SetMaxZoomDistance(Settings.MaxZoomDistance, true)
+else
+    pcall(function()
+        Player.CameraMaxZoomDistance = originalCameraMaxZoomDistance
+    end)
+end
 
 local function StopFreecam()
     pcall(function()
@@ -699,31 +722,31 @@ local function UpdateFreecam(delta)
 
         local mouseDelta = UserInputService:GetMouseDelta()
         local invertY = 1
-        local sensitivity = 1
+        local inputSensitivity = 1
 
         if UserGameSettings then
             pcall(function()
                 invertY = UserGameSettings:GetCameraYInvertValue()
             end)
-
-            pcall(function()
-                sensitivity = tonumber(UserGameSettings.MouseSensitivity) or 1
-            end)
         end
 
-        sensitivity = math.clamp(sensitivity, 0.01, 20)
+        pcall(function()
+            inputSensitivity = tonumber(UserInputService.MouseDeltaSensitivity) or 1
+        end)
+
+        inputSensitivity = math.clamp(inputSensitivity, 0.05, 20)
 
         freecamYaw =
             freecamYaw
             - mouseDelta.X
                 * FREECAM_ROTATION_SPEED_MOUSE.X
-                * sensitivity
+                * inputSensitivity
 
         freecamPitch = math.clamp(
             freecamPitch
             - mouseDelta.Y
                 * FREECAM_ROTATION_SPEED_MOUSE.Y
-                * sensitivity
+                * inputSensitivity
                 * invertY,
             math.rad(-89),
             math.rad(89)
@@ -866,15 +889,24 @@ local function ApplyXRayPart(part)
     end
 
     if xrayDefaults[part] == nil then
-        local ok, value = pcall(function()
-            return part.LocalTransparencyModifier
+        local localTransparency = 0
+        local transparency = part.Transparency
+
+        pcall(function()
+            localTransparency = part.LocalTransparencyModifier
         end)
-        xrayDefaults[part] = ok and value or 0
+
+        xrayDefaults[part] = {
+            LocalTransparencyModifier = localTransparency,
+            Transparency = transparency
+        }
     end
+
+    local defaults = xrayDefaults[part]
 
     pcall(function()
         part.LocalTransparencyModifier = math.max(
-            tonumber(xrayDefaults[part]) or 0,
+            tonumber(defaults and defaults.LocalTransparencyModifier) or 0,
             math.clamp(tonumber(Settings.XRayTransparency) or 0.7, 0, 1)
         )
     end)
@@ -893,15 +925,36 @@ local function ApplyXRayAll()
 end
 
 local function RestoreXRay()
-    for part, value in pairs(xrayDefaults) do
-        if part and part.Parent then
-            pcall(function()
-                part.LocalTransparencyModifier = tonumber(value) or 0
-            end)
-        end
+    local restoreSnapshot = {}
+
+    for part, defaults in pairs(xrayDefaults) do
+        restoreSnapshot[part] = defaults
     end
 
     xrayDefaults = setmetatable({}, {__mode = "k"})
+
+    local function restoreSnapshotNow()
+        if Settings.XRay then
+            return
+        end
+
+        for part, defaults in pairs(restoreSnapshot) do
+            if part and part.Parent then
+                pcall(function()
+                    part.LocalTransparencyModifier =
+                        tonumber(defaults and defaults.LocalTransparencyModifier) or 0
+
+                    if defaults and defaults.Transparency ~= nil then
+                        part.Transparency = defaults.Transparency
+                    end
+                end)
+            end
+        end
+    end
+
+    restoreSnapshotNow()
+    task.defer(restoreSnapshotNow)
+    task.delay(0.08, restoreSnapshotNow)
 end
 
 local function SetXRay(enabled)
@@ -1377,6 +1430,10 @@ env.ToxUniversal2Cleanup = function()
 
     Settings.Freecam = false
     StopFreecam()
+    Settings.MaxZoom = false
+    pcall(function()
+        Player.CameraMaxZoomDistance = originalCameraMaxZoomDistance
+    end)
     Settings.NoclipCamera = false
     RestoreCameraNoclip()
     RestoreCameraMovementFreeze(true)
@@ -2122,15 +2179,16 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             "Freecam"
         )
 
-        CreateVisualNumberOption(
+        CreateToggleWithValue(
             "Max Zoom",
             page,
+            Settings.MaxZoom,
             Settings.MaxZoomDistance,
-            0.5,
-            10000,
+            SetMaxZoom,
             function(value)
-                SetMaxZoomDistance(value)
-            end
+                SetMaxZoomDistance(value, Settings.MaxZoom)
+            end,
+            "MaxZoom"
         )
     end
     
@@ -2402,14 +2460,15 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
 
         MoveAfter(playerSection, "Freecam", "Jump")
         MoveAfter(playerSection, "XRay", "Freecam")
-        MoveAfter(playerSection, "Max Zoom", "XRay")
+        MoveControlToSection("Noclip Camera", "PLAYER")
+        MoveAfter(playerSection, "Noclip Camera", "XRay")
+        MoveAfter(playerSection, "Max Zoom", "Noclip Camera")
         MoveAfter(playerSection, "Fullbright", "Air Walk (E Up / Q Down)")
 
         MoveAfter(visualSection, "Show Health", "Names")
         MoveBefore(visualSection, "Rainbow", "ESP Color")
 
         MoveBefore(miscSection, "Walk Fling", "Ctrl Click TP")
-        MoveAfter(miscSection, "Noclip Camera", "Ctrl Click TP")
         MoveAfter(miscSection, "Normalize Animations", "No Fall Damage")
         MoveAfter(miscSection, "Fix Unanchored Parts", "Normalize Animations")
         MoveAfter(miscSection, "Force Jump", "Fix Unanchored Parts")
@@ -2773,8 +2832,11 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end
 
             local target = nil
+            local persistentTarget =
+                Settings.AimLock == true
+                or Settings.AimbotMode == "MOUSE"
 
-            if Settings.AimLock then
+            if persistentTarget then
                 target = lockedTarget
 
                 if target and not TargetValid(target) then
@@ -2786,16 +2848,21 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
                 target = GetMouseTarget()
             end
 
-            lockedTarget = Settings.AimLock and target or nil
+            lockedTarget = persistentTarget and target or nil
 
             if not target or not target.Part then
                 return
             end
 
-            local smooth = blatant and 1 or math.max(
-                1,
-                tonumber(Settings.AimbotSmoothness) or 2
-            )
+            local smooth = 1
+
+            if not blatant
+            and Settings.AimbotSmoothnessEnabled == true then
+                smooth = math.max(
+                    1,
+                    tonumber(Settings.AimbotSmoothness) or 2
+                )
+            end
 
             if Settings.AimbotMode == "MOUSE" then
                 local screen, onScreen = camera:WorldToViewportPoint(target.Part.Position)
@@ -2805,6 +2872,14 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
                 end
 
                 local mousePosition = UserInputService:GetMouseLocation()
+                local inset = Vector2.zero
+
+                pcall(function()
+                    inset = select(1, GuiService:GetGuiInset())
+                end)
+
+                mousePosition -= inset
+
                 local dx = (screen.X - mousePosition.X) / smooth
                 local dy = (screen.Y - mousePosition.Y) / smooth
 
@@ -2813,9 +2888,9 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
                 elseif type(mouse_move_relative) == "function" then
                     pcall(mouse_move_relative, dx, dy)
                 else
-                    camera.CFrame = camera.CFrame:Lerp(
-                        CFrame.new(camera.CFrame.Position, target.Part.Position),
-                        1 / smooth
+                    camera.CFrame = CFrame.new(
+                        camera.CFrame.Position,
+                        target.Part.Position
                     )
                 end
 
@@ -2846,6 +2921,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         Settings.Aimbot = false
         Settings.AimbotBindEnabled = false
         Settings.AimbotBlatant = false
+        Settings.AimbotSmoothnessEnabled = false
         Settings.AimLock = false
         RestoreAnimations()
         RestoreForceJump()
