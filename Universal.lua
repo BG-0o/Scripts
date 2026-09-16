@@ -2852,19 +2852,23 @@ local function QueueAntiKickResume()
 
     local payload =
         "if not game:IsLoaded() then game.Loaded:Wait() end\n"
-        .. "getgenv().__ToxAntiKickResume = true\n"
-        .. "getgenv().__ToxAntiKickResumeFarm = "
+        .. "local env = getgenv()\n"
+        .. "env.__ToxAntiKickResume = true\n"
+        .. "env.__ToxAntiKickResumeFarm = "
         .. tostring(
             resumeFarm
         )
         .. "\n"
         .. "task.wait(0.6)\n"
-        .. "pcall(function() loadstring(game:HttpGet("
+        .. "if env.__ToxQueuedDestinationGame == game then return end\n"
+        .. "env.__ToxQueuedDestinationGame = game\n"
+        .. "local ok = pcall(function() loadstring(game:HttpGet("
         .. string.format(
             "%q",
             "https://raw.githubusercontent.com/BG-0o/Scripts/main/ToxHud.lua"
         )
-        .. "))() end)"
+        .. "))() end)\n"
+        .. "if not ok and env.__ToxQueuedDestinationGame == game then env.__ToxQueuedDestinationGame = nil end"
 
     return pcall(
         queueFunction,
