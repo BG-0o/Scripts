@@ -16,6 +16,7 @@ pcall(function()
 end)
 
 local Player = Players.LocalPlayer
+local originalCameraMaxZoomDistance = tonumber(Player.CameraMaxZoomDistance) or 400
 local Settings = env.Settings or {}
 local UniversalPage = env.UniversalPage
 local FREECAM_BIND = "ToxUniversalFreecam"
@@ -52,7 +53,12 @@ Settings.XRay = Settings.XRay == true
 Settings.XRayTransparency = math.clamp(tonumber(Settings.XRayTransparency) or 0.7, 0, 1)
 Settings.FakeLag = Settings.FakeLag == true
 Settings.LagChance = math.clamp(tonumber(Settings.LagChance) or 70, 0, 100)
-Settings.ShiftLockKey = "Shift"
+Settings.ShiftLockKey = Settings.ShiftLockKey == "Ctrl" and "Ctrl" or "Shift"
+Settings.MaxZoomDistance = math.clamp(
+    tonumber(Settings.MaxZoomDistance) or originalCameraMaxZoomDistance,
+    math.max(0.5, tonumber(Player.CameraMinZoomDistance) or 0.5),
+    10000
+)
 
 env.Settings = Settings
 env.ToxUniversalSections = {}
@@ -538,27 +544,22 @@ env.CreateConfirmButton = CreateConfirmButton
 env.CreateKeybindButton = CreateKeybindButton
 env.CreateKeybindToggle = CreateKeybindToggle
 
-local function GetCameraFocusDistance(camera)
-    if not camera then
-        return nil
-    end
+local function SetMaxZoomDistance(value)
+    local minimum = math.max(0.5, tonumber(Player.CameraMinZoomDistance) or 0.5)
+    local maximum = math.max(minimum, 10000)
+    local distance = math.clamp(
+        tonumber(value) or originalCameraMaxZoomDistance,
+        minimum,
+        maximum
+    )
 
-    local ok, distance = pcall(function()
-        return (camera.CFrame.Position - camera.Focus.Position).Magnitude
+    Settings.MaxZoomDistance = distance
+
+    pcall(function()
+        Player.CameraMaxZoomDistance = distance
     end)
 
-    if not ok or not distance then
-        return nil
-    end
-
-    return math.clamp(
-        distance,
-        math.max(0.05, tonumber(Player.CameraMinZoomDistance) or 0.05),
-        math.max(
-            tonumber(Player.CameraMaxZoomDistance) or 400,
-            tonumber(Player.CameraMinZoomDistance) or 0.05
-        )
-    )
+    return distance
 end
 
 local function RestoreCameraNoclip()
@@ -579,72 +580,29 @@ local function RestoreCameraNoclip()
     cameraNoclipDistance = nil
 end
 
-local function UpdateCameraNoclip()
-    if Settings.NoclipCamera ~= true
-    or freecamActive
-    or env.Destroyed then
-        return
-    end
-
-    local camera = Workspace.CurrentCamera
-
-    if not camera
-    or camera.CameraType == Enum.CameraType.Scriptable then
-        return
-    end
-
-    local focus = camera.Focus
-    local currentDistance = GetCameraFocusDistance(camera)
-
-    if not cameraNoclipDistance then
-        cameraNoclipDistance = currentDistance or 12
-    end
-
-    local distance = math.clamp(
-        tonumber(cameraNoclipDistance) or 12,
-        math.max(0.05, tonumber(Player.CameraMinZoomDistance) or 0.05),
-        math.max(
-            tonumber(Player.CameraMaxZoomDistance) or 400,
-            tonumber(Player.CameraMinZoomDistance) or 0.05
-        )
-    )
-
-    cameraNoclipDistance = distance
-
-    local rotation = camera.CFrame - camera.CFrame.Position
-    local position = focus.Position - camera.CFrame.LookVector * distance
-    camera.CFrame = CFrame.new(position) * rotation
-end
-
 local function SetNoclipCamera(enabled)
     enabled = enabled == true
     Settings.NoclipCamera = enabled
 
     if enabled then
-        local camera = Workspace.CurrentCamera
-
         if not cameraNoclipCaptured then
             pcall(function()
                 originalOcclusionMode = Player.DevCameraOcclusionMode
             end)
 
             cameraNoclipCaptured = true
-            cameraNoclipDistance = GetCameraFocusDistance(camera) or 12
         end
 
+        -- Invisicam keeps Roblox's native camera zoom/scroll behavior while
+        -- allowing the camera to remain behind/through obstructing geometry.
         pcall(function()
-            Player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom
+            Player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
         end)
 
+        -- Make sure the old manual camera override from previous versions is gone.
         pcall(function()
             RunService:UnbindFromRenderStep(CAMERA_NOCLIP_BIND)
         end)
-
-        RunService:BindToRenderStep(
-            CAMERA_NOCLIP_BIND,
-            Enum.RenderPriority.Camera.Value + 50,
-            UpdateCameraNoclip
-        )
 
         ApplyCameraMovementFreeze()
     else
@@ -652,6 +610,8 @@ local function SetNoclipCamera(enabled)
         RestoreCameraMovementFreeze()
     end
 end
+
+SetMaxZoomDistance(Settings.MaxZoomDistance)
 
 local function StopFreecam()
     pcall(function()
@@ -1343,37 +1303,6 @@ visualConnections[#visualConnections + 1] = Workspace.DescendantAdded:Connect(fu
     end
 end)
 
-visualConnections[#visualConnections + 1] = UserInputService.InputChanged:Connect(function(input, gameProcessed)
-    if gameProcessed
-    or Settings.NoclipCamera ~= true
-    or freecamActive
-    or input.UserInputType ~= Enum.UserInputType.MouseWheel then
-        return
-    end
-
-    local wheel = tonumber(input.Position.Z) or 0
-
-    if wheel == 0 then
-        return
-    end
-
-    local camera = Workspace.CurrentCamera
-    local distance = tonumber(cameraNoclipDistance)
-        or GetCameraFocusDistance(camera)
-        or 12
-
-    distance = distance * math.pow(0.82, wheel)
-
-    cameraNoclipDistance = math.clamp(
-        distance,
-        math.max(0.05, tonumber(Player.CameraMinZoomDistance) or 0.05),
-        math.max(
-            tonumber(Player.CameraMaxZoomDistance) or 400,
-            tonumber(Player.CameraMinZoomDistance) or 0.05
-        )
-    )
-end)
-
 pcall(function()
     RunService:UnbindFromRenderStep(VISUAL_BIND)
 end)
@@ -1451,6 +1380,10 @@ env.ToxUniversal2Cleanup = function()
     Settings.NoclipCamera = false
     RestoreCameraNoclip()
     RestoreCameraMovementFreeze(true)
+
+    pcall(function()
+        Player.CameraMaxZoomDistance = originalCameraMaxZoomDistance
+    end)
 
     Settings.Render3DDisabled = false
     if type(env.ToxSetRender3DEnabled) == "function" then
@@ -1639,6 +1572,10 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
     end
     
     local function IsVisible(target)
+        if Settings.AimbotBlatant then
+            return true
+        end
+
         if not Settings.AimWallCheck then
             return true
         end
@@ -1750,7 +1687,9 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         end
     
         local mousePosition = UserInputService:GetMouseLocation()
-        local radius = math.max(1, tonumber(Settings.LockRadius) or 110)
+        local radius = Settings.AimbotBlatant
+            and math.huge
+            or math.max(1, tonumber(Settings.LockRadius) or 110)
         local best = nil
         local bestDistance = radius
     
@@ -2088,7 +2027,12 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         if bindControl then
             for _, object in ipairs(bindControl:GetDescendants()) do
                 if object:IsA("TextLabel") and object.Text == "AUTO" then
-                    object.Text = "BIND"
+                    object.Text = ""
+                    object.Visible = false
+                elseif object:IsA("TextButton")
+                and object.Size.X.Offset == 62
+                and object.Size.Y.Offset == 27 then
+                    object.Position = UDim2.new(1, -108, 0.5, -13)
                 end
             end
         end
@@ -2176,6 +2120,17 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
                 )
             end,
             "Freecam"
+        )
+
+        CreateVisualNumberOption(
+            "Max Zoom",
+            page,
+            Settings.MaxZoomDistance,
+            0.5,
+            10000,
+            function(value)
+                SetMaxZoomDistance(value)
+            end
         )
     end
     
@@ -2428,8 +2383,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
     end
 
     local function RebuildUniversalLayout()
-        Settings.ShiftLockKey = "Shift"
-        DestroyControl("Shift Lock Key")
+        Settings.ShiftLockKey = Settings.ShiftLockKey == "Ctrl" and "Ctrl" or "Shift"
 
         MoveControlToSection("Fullbright", "PLAYER")
         MoveControlToSection("XRay", "PLAYER")
@@ -2448,9 +2402,11 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
 
         MoveAfter(playerSection, "Freecam", "Jump")
         MoveAfter(playerSection, "XRay", "Freecam")
+        MoveAfter(playerSection, "Max Zoom", "XRay")
         MoveAfter(playerSection, "Fullbright", "Air Walk (E Up / Q Down)")
 
         MoveAfter(visualSection, "Show Health", "Names")
+        MoveBefore(visualSection, "Rainbow", "ESP Color")
 
         MoveBefore(miscSection, "Walk Fling", "Ctrl Click TP")
         MoveAfter(miscSection, "Noclip Camera", "Ctrl Click TP")
@@ -2643,18 +2599,18 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end
 
             local hasShiftLock = FindControl("Force Shift Lock") ~= nil
-            local hasShiftKey = FindControl("Shift Lock Key") ~= nil
             local hasFullbright = FindControl("Fullbright") ~= nil
             local hasJump = FindControl("Jump") ~= nil
             local hasAirWalk = FindControl("Air Walk (E Up / Q Down)") ~= nil
             local hasCtrlClick = FindControl("Ctrl Click TP") ~= nil
+            local hasMaxZoom = FindControl("Max Zoom") ~= nil
 
             if hasShiftLock
-            and hasShiftKey
             and hasFullbright
             and hasJump
             and hasAirWalk
-            and hasCtrlClick then
+            and hasCtrlClick
+            and hasMaxZoom then
                 RebuildUniversalLayout()
                 break
             end
@@ -2796,11 +2752,15 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end
     
             local blatant = Settings.AimbotBlatant == true
-            local triggerActive = blatant
-                or aimbotBindHeld
-                or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+            local bindActive = Settings.AimbotBindEnabled == true
+                and aimbotBindHeld
+            local mainActive = Settings.Aimbot == true
+            local rightClickActive = mainActive
+                and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+            local blatantActive = blatant and (mainActive or bindActive)
+            local triggerActive = bindActive or rightClickActive or blatantActive
 
-            if Settings.Aimbot ~= true or not triggerActive then
+            if not triggerActive then
                 lockedTarget = nil
                 return
             end
@@ -2925,4 +2885,4 @@ if not mergedFeaturesOk then
 end
 
 env.ToxUniversal2Loaded = true
-env.ToxUniversal2Version = "2026-09-16-current-base-restored-1"
+env.ToxUniversal2Version = "2026-09-16-camera-aim-shift-zoom-1"
