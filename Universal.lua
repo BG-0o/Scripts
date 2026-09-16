@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-14-universal-sections-reorg"
+ToxUpdateVersion = "2026-09-16-universal-subtabs-lighting-1"
 
 
 function ClearToxTable(target)
@@ -4762,7 +4762,7 @@ end, function(val)
     Settings.CarFlySpeed = val
 end, "CarFly")
 
-BeginUniversalSection("Visuals")
+BeginUniversalSection("ESP")
 
 CreateToggle("ESP", VisualsPage, Settings.ESPEnabled, function(v)
     if getgenv().ToxSetSharedOption then
@@ -5502,6 +5502,80 @@ local function ClearESPForPlayer(p)
     ESPCharacterRefs[p] = nil
 end
 
+local function ClearAllESPVisuals()
+    local targets = {}
+
+    for p in pairs(ESPDrawings) do
+        targets[p] = true
+    end
+
+    for p in pairs(Highlights) do
+        targets[p] = true
+    end
+
+    for p in pairs(ESPLabels) do
+        targets[p] = true
+    end
+
+    for p in pairs(ESPCharacterRefs) do
+        targets[p] = true
+    end
+
+    for p in pairs(targets) do
+        ClearESPForPlayer(p)
+    end
+
+    for _, targetPlayer in ipairs(Players:GetPlayers()) do
+        local character = targetPlayer.Character
+
+        if character then
+            for _, object in ipairs(character:GetDescendants()) do
+                if object.Name == "ToxChams"
+                or object.Name == "ToxESPName"
+                or object.Name == "ToxESPHealth" then
+                    pcall(function()
+                        object:Destroy()
+                    end)
+                end
+            end
+        end
+    end
+
+    for key in pairs(ESPDrawings) do
+        ESPDrawings[key] = nil
+    end
+
+    for key in pairs(Highlights) do
+        Highlights[key] = nil
+    end
+
+    for key in pairs(ESPLabels) do
+        ESPLabels[key] = nil
+    end
+
+    for key in pairs(ESPCharacterRefs) do
+        ESPCharacterRefs[key] = nil
+    end
+
+    getgenv().ToxESPDrawings = ESPDrawings
+    getgenv().ToxESPHighlights = Highlights
+    getgenv().ToxESPLabels = ESPLabels
+end
+
+getgenv().ClearAllToxESPVisuals = ClearAllESPVisuals
+
+BeginUniversalSection("Lighting")
+
+CreateToggle(
+    "Fullbright",
+    getgenv().LightingPage or FlingPage,
+    Settings.Fullbright,
+    function(v)
+        Settings.Fullbright = v == true
+        UpdateFullbright()
+    end
+)
+
 BeginUniversalSection("Misc")
 
 CreateToggle("Ctrl Click TP", FlingPage, Settings.CtrlClickTP, function(v)
@@ -5524,7 +5598,6 @@ end, "AntiVoid")
 CreateToggle("Anti Fling", FlingPage, Settings.AntiFling, function(v)
     if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("AntiFling", v) end
 end, "AntiFling")
-CreateToggle("Fullbright", FlingPage, Settings.Fullbright, function(v) Settings.Fullbright = v UpdateFullbright() end)
 CreateToggleCycleOption(
     "Force Shift Lock",
     FlingPage,
@@ -6531,23 +6604,7 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
         getgenv().ActiveSound = nil
     end
 
-    for _, hl in pairs(Highlights) do
-        pcall(function()
-            hl:Destroy()
-        end)
-    end
-
-    Highlights = {}
-
-    for _, esp in pairs(ESPDrawings) do
-        for _, drawing in pairs(esp) do
-            pcall(function()
-                drawing:Remove()
-            end)
-        end
-    end
-
-    ESPDrawings = {}
+    ClearAllESPVisuals()
 
     if FOVCircle then
         pcall(function()
