@@ -32,8 +32,57 @@ local CustomNotify =
     getgenv().CustomNotify
 local ChatPage =
     getgenv().ChatPage
-local RequestFunction =
-    getgenv().ToxRequestFunction
+
+local function ResolveRequestFunction()
+    local env = getgenv()
+
+    if type(env.ToxRequestFunction) == "function" then
+        return env.ToxRequestFunction
+    end
+
+    if type(env.request) == "function" then
+        return env.request
+    end
+
+    if type(env.http_request) == "function" then
+        return env.http_request
+    end
+
+    if type(syn) == "table" and type(syn.request) == "function" then
+        return syn.request
+    end
+
+    if type(http) == "table" and type(http.request) == "function" then
+        return http.request
+    end
+
+    if type(fluxus) == "table" and type(fluxus.request) == "function" then
+        return fluxus.request
+    end
+
+    if type(krnl) == "table" and type(krnl.request) == "function" then
+        return krnl.request
+    end
+
+    if type(http_request) == "function" then
+        return http_request
+    end
+
+    if type(request) == "function" then
+        return request
+    end
+
+    return nil
+end
+
+local RequestFunction = ResolveRequestFunction()
+
+if RequestFunction then
+    getgenv().ToxRequestFunction = RequestFunction
+end
+
+local ToxChatToken = {}
+getgenv().ToxChatToken = ToxChatToken
 
 if not Player
 or not CustomNotify
@@ -660,25 +709,39 @@ local function RelayRequest(
             "application/json"
     end
 
-    local ok, response =
-        pcall(function()
-            return RequestFunction({
-                Url =
-                    ToxChatRelayHost
-                    .. path,
-                Method = method,
-                Headers = headers,
-                Body = body
-            })
+    local url = ToxChatRelayHost .. path
+
+    local function TryRequest(useUppercaseURL)
+        local payload = {
+            Method = method,
+            Headers = headers,
+            Body = body
+        }
+
+        if useUppercaseURL then
+            payload.URL = url
+        else
+            payload.Url = url
+        end
+
+        local ok, response = pcall(function()
+            return RequestFunction(payload)
         end)
 
-    if not ok then
-        return nil, false
+        if not ok then
+            return nil, false
+        end
+
+        return ReadRelayResponse(response)
     end
 
-    return ReadRelayResponse(
-        response
-    )
+    local responseBody, success = TryRequest(false)
+
+    if success then
+        return responseBody, true
+    end
+
+    return TryRequest(true)
 end
 
 local function DecodeToxChatResponse(
@@ -1198,13 +1261,25 @@ if ToxChatInput then
     end)
 end
 
+getgenv().ToxChatCleanup = function()
+    if getgenv().ToxChatToken == ToxChatToken then
+        getgenv().ToxChatToken = nil
+    end
+
+    if ToxChatGui and ToxChatGui.Parent then
+        ToxChatGui.Visible = false
+    end
+
+    getgenv().ToxChatLoaded = nil
+end
+
 task.spawn(function()
-    while not getgenv().Destroyed do
+    while getgenv().ToxChatToken == ToxChatToken
+    and not getgenv().Destroyed do
         PollToxChat()
         task.wait(1)
     end
 end)
-
 
 if ToxChatGui then
     ToxChatGui.Visible = true
