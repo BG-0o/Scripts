@@ -141,7 +141,7 @@ local function CreateNDSSection(text)
 end
 
 local NDSModuleVersion =
-    "2026-09-16-sections-safe-walkfling-2"
+    "2026-09-16-lighting-nds-extras-3"
 
 if getgenv().ToxNDSModuleLoadedJobId
     == game.JobId
@@ -1381,6 +1381,559 @@ getgenv().SetNDSNoTP = function(Value, Silent)
     end
 end
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
+
+local NDSExtraConnections = {}
+local NDSCheerDefaults = {}
+local NDSHazardDefaults = {
+    Meteors = {},
+    VolcanicLava = {},
+    VirusParticles = {},
+    TsunamiWave = {},
+    BarbedWire = {}
+}
+local NDSRockDefaults = {}
+local NDSDisasterSeen = {}
+local NDSDisasterStructure = nil
+local NDSDisasterClock = 0
+
+local NDSHazardSettingKeys = {
+    Meteors = "NDSRemoveMeteors",
+    VolcanicLava = "NDSRemoveVolcanicLava",
+    VirusParticles = "NDSRemoveVirusParticles",
+    TsunamiWave = "NDSRemoveTsunamiWave",
+    BarbedWire = "NDSRemoveBarbedWire"
+}
+
+local NDSDisasterPatterns = {
+    ["Acid Rain"] = {"acid rain", "acidrain"},
+    ["Blizzard"] = {"blizzard"},
+    ["Deadly Virus"] = {"deadly virus", "deadlyvirus"},
+    ["Earthquake"] = {"earthquake"},
+    ["Fire"] = {"fire disaster", "disaster fire"},
+    ["Flash Flood"] = {"flash flood", "flashflood"},
+    ["Meteor Shower"] = {"meteor shower", "meteorshower"},
+    ["Sandstorm"] = {"sandstorm"},
+    ["Thunderstorm"] = {"thunderstorm", "thunder storm"},
+    ["Tornado"] = {"tornado"},
+    ["Tsunami"] = {"tsunami"},
+    ["Volcanic Eruption"] = {"volcanic eruption", "volcaniceruption"}
+}
+
+local function TrackNDSExtraConnection(connection)
+    if connection then
+        NDSExtraConnections[#NDSExtraConnections + 1] = connection
+    end
+    return connection
+end
+
+local function NDSLowerPath(object)
+    local parts = {}
+    local current = object
+    local depth = 0
+
+    while current and current ~= game and depth < 6 do
+        parts[#parts + 1] = tostring(current.Name or "")
+        current = current.Parent
+        depth += 1
+    end
+
+    return string.lower(table.concat(parts, " "))
+end
+
+local function NDSMatchesHazard(feature, object)
+    local path = NDSLowerPath(object)
+
+    if feature == "Meteors" then
+        return string.find(path, "meteor", 1, true) ~= nil
+    elseif feature == "VolcanicLava" then
+        return string.find(path, "lava", 1, true) ~= nil
+    elseif feature == "VirusParticles" then
+        return string.find(path, "virus", 1, true) ~= nil
+    elseif feature == "TsunamiWave" then
+        return string.find(path, "tsunami", 1, true) ~= nil
+            or string.find(path, "tsunami wave", 1, true) ~= nil
+    elseif feature == "BarbedWire" then
+        return string.find(path, "barbed", 1, true) ~= nil
+            or string.find(path, "barbedwire", 1, true) ~= nil
+    end
+
+    return false
+end
+
+local function NDSApplyHazardObject(feature, object)
+    if not NDSMatchesHazard(feature, object) then
+        return
+    end
+
+    local store = NDSHazardDefaults[feature]
+
+    if feature == "VirusParticles"
+    and object:IsA("BasePart") then
+        return
+    end
+
+    if object:IsA("BasePart") then
+        if store[object] == nil then
+            store[object] = {
+                Type = "Part",
+                CanCollide = object.CanCollide,
+                CanTouch = object.CanTouch,
+                CanQuery = object.CanQuery,
+                LocalTransparencyModifier = object.LocalTransparencyModifier
+            }
+        end
+
+        pcall(function()
+            object.CanCollide = false
+            object.CanTouch = false
+            object.CanQuery = false
+            object.LocalTransparencyModifier = 1
+        end)
+        return
+    end
+
+    if object:IsA("ParticleEmitter")
+    or object:IsA("Trail")
+    or object:IsA("Beam")
+    or object:IsA("Smoke")
+    or object:IsA("Fire")
+    or object:IsA("Sparkles") then
+        if store[object] == nil then
+            store[object] = {
+                Type = "Effect",
+                Enabled = object.Enabled
+            }
+        end
+
+        pcall(function()
+            object.Enabled = false
+        end)
+    end
+end
+
+local function NDSRestoreHazard(feature)
+    local store = NDSHazardDefaults[feature]
+    local copy = {}
+
+    for object, snapshot in pairs(store) do
+        copy[object] = snapshot
+        store[object] = nil
+    end
+
+    for object, snapshot in pairs(copy) do
+        if object and object.Parent then
+            if snapshot.Type == "Part" then
+                pcall(function()
+                    object.CanCollide = snapshot.CanCollide
+                    object.CanTouch = snapshot.CanTouch
+                    object.CanQuery = snapshot.CanQuery
+                    object.LocalTransparencyModifier = snapshot.LocalTransparencyModifier
+                end)
+            elseif snapshot.Type == "Effect" then
+                pcall(function()
+                    object.Enabled = snapshot.Enabled
+                end)
+            end
+        end
+    end
+end
+
+local function SetNDSHazard(feature, enabled)
+    local settingKey = NDSHazardSettingKeys[feature]
+
+    if not settingKey then
+        return
+    end
+
+    enabled = enabled == true
+    Settings[settingKey] = enabled
+
+    if enabled then
+        for _, object in ipairs(workspace:GetDescendants()) do
+            NDSApplyHazardObject(feature, object)
+        end
+    else
+        NDSRestoreHazard(feature)
+    end
+end
+
+local function NDSIsIslandRock(object)
+    if not object:IsA("BasePart") then
+        return false
+    end
+
+    local path = NDSLowerPath(object)
+
+    if not string.find(path, "rock", 1, true)
+    and not string.find(path, "boulder", 1, true) then
+        return false
+    end
+
+    local structure = workspace:FindFirstChild("Structure")
+    return not structure or object:IsDescendantOf(structure)
+end
+
+local function NDSApplyRock(object)
+    if not NDSIsIslandRock(object) then
+        return
+    end
+
+    if NDSRockDefaults[object] == nil then
+        NDSRockDefaults[object] = object.CanCollide
+    end
+
+    pcall(function()
+        object.CanCollide = true
+    end)
+end
+
+local function SetNDSIslandRocksCollidable(enabled)
+    enabled = enabled == true
+    Settings.NDSIslandRocksCollidable = enabled
+
+    if enabled then
+        for _, object in ipairs(workspace:GetDescendants()) do
+            NDSApplyRock(object)
+        end
+    else
+        local copy = {}
+
+        for object, value in pairs(NDSRockDefaults) do
+            copy[object] = value
+            NDSRockDefaults[object] = nil
+        end
+
+        for object, value in pairs(copy) do
+            if object and object.Parent then
+                pcall(function()
+                    object.CanCollide = value
+                end)
+            end
+        end
+    end
+end
+
+local function NDSIsCheerSound(object)
+    if not object:IsA("Sound") then
+        return false
+    end
+
+    local path = NDSLowerPath(object)
+    return string.find(path, "cheer", 1, true) ~= nil
+        or string.find(path, "applause", 1, true) ~= nil
+        or string.find(path, "crowd", 1, true) ~= nil
+end
+
+local function NDSMuteCheerObject(object)
+    if not NDSIsCheerSound(object) then
+        return
+    end
+
+    if NDSCheerDefaults[object] == nil then
+        NDSCheerDefaults[object] = object.Volume
+    end
+
+    pcall(function()
+        object.Volume = 0
+    end)
+end
+
+local function SetNDSMuteCheer(enabled)
+    enabled = enabled == true
+    Settings.NDSMuteCheerSound = enabled
+
+    if enabled then
+        for _, object in ipairs(game:GetDescendants()) do
+            NDSMuteCheerObject(object)
+        end
+    else
+        local copy = {}
+
+        for object, volume in pairs(NDSCheerDefaults) do
+            copy[object] = volume
+            NDSCheerDefaults[object] = nil
+        end
+
+        for object, volume in pairs(copy) do
+            if object and object.Parent then
+                pcall(function()
+                    object.Volume = volume
+                end)
+            end
+        end
+    end
+end
+
+local function NDSDetectDisaster(text)
+    local lower = string.lower(tostring(text or ""))
+
+    if lower == "" then
+        return nil
+    end
+
+    if lower == "fire" then
+        return "Fire"
+    elseif lower == "virus" then
+        return "Deadly Virus"
+    end
+
+    for disaster, patterns in pairs(NDSDisasterPatterns) do
+        for _, pattern in ipairs(patterns) do
+            if string.find(lower, pattern, 1, true) then
+                return disaster
+            end
+        end
+    end
+
+    return nil
+end
+
+local function NDSNotifyDisaster(disaster)
+    if not disaster or NDSDisasterSeen[disaster] then
+        return
+    end
+
+    NDSDisasterSeen[disaster] = true
+
+    if CustomNotify then
+        CustomNotify(
+            "Disaster: " .. tostring(disaster),
+            Color3.fromRGB(255, 190, 80),
+            6
+        )
+    end
+end
+
+local function NDSInspectDisasterObject(object)
+    if not Settings.NDSNotifyDisasters or not object then
+        return
+    end
+
+    if not workspace:FindFirstChild("Structure") then
+        return
+    end
+
+    local toxGui = getgenv().Gui
+    local notifGui = getgenv().NotifGui
+
+    if typeof(toxGui) == "Instance"
+    and (object == toxGui or object:IsDescendantOf(toxGui)) then
+        return
+    end
+
+    if typeof(notifGui) == "Instance"
+    and (object == notifGui or object:IsDescendantOf(notifGui)) then
+        return
+    end
+
+    NDSNotifyDisaster(NDSDetectDisaster(object.Name))
+
+    if object:IsA("StringValue") then
+        NDSNotifyDisaster(NDSDetectDisaster(object.Value))
+    elseif object:IsA("TextLabel")
+    or object:IsA("TextButton")
+    or object:IsA("TextBox") then
+        NDSNotifyDisaster(NDSDetectDisaster(object.Text))
+    end
+end
+
+local function NDSScanDisasters()
+    if not Settings.NDSNotifyDisasters then
+        return
+    end
+
+    local structure = workspace:FindFirstChild("Structure")
+
+    if structure ~= NDSDisasterStructure then
+        NDSDisasterStructure = structure
+        NDSDisasterSeen = {}
+    end
+
+    if not structure then
+        return
+    end
+
+    for _, root in ipairs({ReplicatedStorage, Lighting, Player:FindFirstChildOfClass("PlayerGui")}) do
+        if root then
+            NDSInspectDisasterObject(root)
+
+            for _, object in ipairs(root:GetDescendants()) do
+                NDSInspectDisasterObject(object)
+            end
+        end
+    end
+
+    for _, object in ipairs(workspace:GetChildren()) do
+        NDSInspectDisasterObject(object)
+    end
+end
+
+local function SetNDSNotifyDisasters(enabled)
+    Settings.NDSNotifyDisasters = enabled == true
+    NDSDisasterSeen = {}
+    NDSDisasterStructure = workspace:FindFirstChild("Structure")
+    NDSDisasterClock = 0
+
+    if Settings.NDSNotifyDisasters then
+        NDSScanDisasters()
+    end
+end
+
+local function FindGreenBalloonTool()
+    local backpack = Player:FindFirstChildOfClass("Backpack")
+    local character = Player.Character
+
+    for _, container in ipairs({backpack, character}) do
+        if container then
+            for _, object in ipairs(container:GetChildren()) do
+                if object:IsA("Tool") then
+                    local name = string.lower(object.Name)
+                    if string.find(name, "green", 1, true)
+                    and string.find(name, "balloon", 1, true) then
+                        return object, true
+                    end
+                end
+            end
+        end
+    end
+
+    for _, root in ipairs({ReplicatedStorage, Lighting, workspace}) do
+        for _, object in ipairs(root:GetDescendants()) do
+            if object:IsA("Tool") then
+                local name = string.lower(object.Name)
+                if string.find(name, "green", 1, true)
+                and string.find(name, "balloon", 1, true) then
+                    return object, false
+                end
+            end
+        end
+    end
+
+    return nil, false
+end
+
+local function GiveGreenBalloon()
+    local backpack = Player:FindFirstChildOfClass("Backpack")
+        or Player:WaitForChild("Backpack", 2)
+
+    if not backpack then
+        CustomNotify("Backpack unavailable", Color3.fromRGB(255, 100, 100))
+        return
+    end
+
+    local source, owned = FindGreenBalloonTool()
+
+    if not source then
+        CustomNotify("Green Balloon source not found", Color3.fromRGB(255, 180, 70))
+        return
+    end
+
+    if owned then
+        if source.Parent == Player.Character then
+            pcall(function()
+                source.Parent = backpack
+            end)
+        end
+
+        CustomNotify("Green Balloon already given", Color3.fromRGB(100, 255, 100))
+        return
+    end
+
+    local ok, clone = pcall(function()
+        return source:Clone()
+    end)
+
+    if not ok or not clone then
+        CustomNotify("Could not give Green Balloon", Color3.fromRGB(255, 100, 100))
+        return
+    end
+
+    clone.Parent = backpack
+    CustomNotify("Green Balloon given", Color3.fromRGB(100, 255, 100))
+end
+
+local function InteractAll()
+    local count = 0
+
+    for _, object in ipairs(workspace:GetDescendants()) do
+        if object:IsA("ProximityPrompt")
+        and type(fireproximityprompt) == "function" then
+            local ok = pcall(fireproximityprompt, object)
+            if ok then
+                count += 1
+            end
+        elseif object:IsA("ClickDetector")
+        and type(fireclickdetector) == "function" then
+            local ok = pcall(fireclickdetector, object)
+            if ok then
+                count += 1
+            end
+        end
+    end
+
+    if CustomNotify then
+        CustomNotify(
+            "Interacted: " .. tostring(count),
+            count > 0 and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 180, 70),
+            4
+        )
+    end
+end
+
+TrackNDSExtraConnection(workspace.DescendantAdded:Connect(function(object)
+    for feature, settingKey in pairs(NDSHazardSettingKeys) do
+        if Settings[settingKey] then
+            task.defer(NDSApplyHazardObject, feature, object)
+        end
+    end
+
+    if Settings.NDSIslandRocksCollidable then
+        task.defer(NDSApplyRock, object)
+    end
+
+    if Settings.NDSMuteCheerSound then
+        task.defer(NDSMuteCheerObject, object)
+    end
+
+    if Settings.NDSNotifyDisasters then
+        task.defer(NDSInspectDisasterObject, object)
+    end
+end))
+
+TrackNDSExtraConnection(ReplicatedStorage.DescendantAdded:Connect(function(object)
+    if Settings.NDSNotifyDisasters then
+        task.defer(NDSInspectDisasterObject, object)
+    end
+end))
+
+TrackNDSExtraConnection(Lighting.DescendantAdded:Connect(function(object)
+    if Settings.NDSNotifyDisasters then
+        task.defer(NDSInspectDisasterObject, object)
+    end
+end))
+
+TrackNDSExtraConnection(game.DescendantAdded:Connect(function(object)
+    if Settings.NDSMuteCheerSound then
+        task.defer(NDSMuteCheerObject, object)
+    end
+end))
+
+TrackNDSExtraConnection(RunService.Heartbeat:Connect(function(delta)
+    if not Settings.NDSNotifyDisasters then
+        return
+    end
+
+    NDSDisasterClock += math.max(tonumber(delta) or 0, 0)
+
+    if NDSDisasterClock >= 0.6 then
+        NDSDisasterClock = 0
+        NDSScanDisasters()
+    end
+end))
+
+
 CreateNDSSection("PLAYER")
 
 NDSCreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
@@ -1453,6 +2006,52 @@ end, function(value)
     end
 end, "CarFly")
 
+CreateNDSSection("DISASTERS")
+
+NDSCreateToggle("Notify Disasters", GamePage, Settings.NDSNotifyDisasters, function(v)
+    SetNDSNotifyDisasters(v)
+end, "NDSNotifyDisasters")
+
+CreateNDSSection("EXTRAS")
+
+NDSCreateButton("Give Green Balloon", GamePage, function()
+    GiveGreenBalloon()
+end)
+
+NDSCreateButton("Interact All", GamePage, function()
+    InteractAll()
+end)
+
+NDSCreateToggle("Mute Cheer Sound", GamePage, Settings.NDSMuteCheerSound, function(v)
+    SetNDSMuteCheer(v)
+end, "NDSMuteCheerSound")
+
+CreateNDSSection("ISLAND")
+
+NDSCreateToggle("Remove Meteors", GamePage, Settings.NDSRemoveMeteors, function(v)
+    SetNDSHazard("Meteors", v)
+end, "NDSRemoveMeteors")
+
+NDSCreateToggle("Remove Volcanic Lava", GamePage, Settings.NDSRemoveVolcanicLava, function(v)
+    SetNDSHazard("VolcanicLava", v)
+end, "NDSRemoveVolcanicLava")
+
+NDSCreateToggle("Remove Virus Particles", GamePage, Settings.NDSRemoveVirusParticles, function(v)
+    SetNDSHazard("VirusParticles", v)
+end, "NDSRemoveVirusParticles")
+
+NDSCreateToggle("Remove Tsunami Wave", GamePage, Settings.NDSRemoveTsunamiWave, function(v)
+    SetNDSHazard("TsunamiWave", v)
+end, "NDSRemoveTsunamiWave")
+
+NDSCreateToggle("Remove Barbed Wire", GamePage, Settings.NDSRemoveBarbedWire, function(v)
+    SetNDSHazard("BarbedWire", v)
+end, "NDSRemoveBarbedWire")
+
+NDSCreateToggle("Island Rocks Collidable", GamePage, Settings.NDSIslandRocksCollidable, function(v)
+    SetNDSIslandRocksCollidable(v)
+end, "NDSIslandRocksCollidable")
+
 CreateNDSSection("TELEPORTS")
 
 NDSCreateButton("SPAWN", GamePage, function()
@@ -1485,6 +2084,24 @@ else
     StopNoTP()
 end
 
+if Settings.NDSNotifyDisasters then
+    SetNDSNotifyDisasters(true)
+end
+
+if Settings.NDSMuteCheerSound then
+    SetNDSMuteCheer(true)
+end
+
+for feature, settingKey in pairs(NDSHazardSettingKeys) do
+    if Settings[settingKey] then
+        SetNDSHazard(feature, true)
+    end
+end
+
+if Settings.NDSIslandRocksCollidable then
+    SetNDSIslandRocksCollidable(true)
+end
+
 getgenv().ToxNDSCleanup =
     function()
         pcall(function()
@@ -1502,6 +2119,30 @@ getgenv().ToxNDSCleanup =
         pcall(
             StopNoTP
         )
+
+        Settings.NDSNotifyDisasters = false
+
+        pcall(function()
+            SetNDSMuteCheer(false)
+        end)
+
+        for feature in pairs(NDSHazardSettingKeys) do
+            pcall(function()
+                SetNDSHazard(feature, false)
+            end)
+        end
+
+        pcall(function()
+            SetNDSIslandRocksCollidable(false)
+        end)
+
+        for _, connection in ipairs(NDSExtraConnections) do
+            pcall(function()
+                connection:Disconnect()
+            end)
+        end
+
+        NDSExtraConnections = {}
     end
 
 getgenv().ToxNDSModuleLoadedJobId =
