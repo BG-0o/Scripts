@@ -400,7 +400,7 @@ PLCreateButton("TOWER", GamePage, function()
 end)
 
 PLCreateButton("ARMORY", GamePage, function()
-    TeleportTo(CFrame.new(789, 100, 2260), "ARMORY")
+    TeleportTo(CFrame.new(854.087, 102.777, 2254.963), "ARMORY")
 end)
 
 getgenv().ToxPLCleanup = function()
