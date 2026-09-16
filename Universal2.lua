@@ -1512,6 +1512,8 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
     end
     Settings.AimbotBindEnabled = Settings.AimbotBindEnabled == true
     Settings.AimbotKey = Settings.AimbotKey or Enum.KeyCode.E
+    Settings.AimbotUseLeftClick = Settings.AimbotUseLeftClick == true
+    Settings.AimbotUseGuiInset = Settings.AimbotUseGuiInset == true
     Settings.AimbotBlatant = Settings.AimbotBlatant == true
     Settings.AimLock = Settings.AimLock == true
     Settings.LockRadius = math.clamp(tonumber(Settings.LockRadius) or 110, 1, 2000)
@@ -1543,6 +1545,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
     local connections = {}
     local combatUIInstalled = false
     local playerUIInstalled = false
+    local lightingUIInstalled = false
     local miscUIInstalled = false
     local configUIInstalled = false
     local cursorDefaults = nil
@@ -1755,6 +1758,27 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         return candidates
     end
     
+    local function GetAimMousePosition()
+        if Settings.AimbotUseGuiInset then
+            local position = UserInputService:GetMouseLocation()
+            return Vector2.new(position.X, position.Y)
+        end
+
+        local mouse = Player:GetMouse()
+        return Vector2.new(
+            tonumber(mouse.X) or 0,
+            tonumber(mouse.Y) or 0
+        )
+    end
+
+    local function ProjectAimPoint(camera, position)
+        if Settings.AimbotUseGuiInset then
+            return camera:WorldToScreenPoint(position)
+        end
+
+        return camera:WorldToViewportPoint(position)
+    end
+
     local function GetMouseTarget()
         local camera = Workspace.CurrentCamera
     
@@ -1762,7 +1786,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             return nil
         end
     
-        local mousePosition = UserInputService:GetMouseLocation()
+        local mousePosition = GetAimMousePosition()
         local radius = Settings.AimbotBlatant
             and math.huge
             or math.max(1, tonumber(Settings.LockRadius) or 110)
@@ -1771,7 +1795,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
     
         for _, target in ipairs(GetCandidates()) do
             if TargetValid(target) then
-                local screen, onScreen = camera:WorldToViewportPoint(target.Part.Position)
+                local screen, onScreen = ProjectAimPoint(camera, target.Part.Position)
     
                 if onScreen and screen.Z > 0 then
                     local distance = (
@@ -2113,6 +2137,28 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end
         end
     
+        CreateToggle(
+            "Use Left Click",
+            page,
+            Settings.AimbotUseLeftClick,
+            function(value)
+                Settings.AimbotUseLeftClick = value == true
+                lockedTarget = nil
+            end,
+            "AimbotUseLeftClick"
+        )
+
+        CreateToggle(
+            "Use Gui Inset",
+            page,
+            Settings.AimbotUseGuiInset,
+            function(value)
+                Settings.AimbotUseGuiInset = value == true
+                lockedTarget = nil
+            end,
+            "AimbotUseGuiInset"
+        )
+
         CreateToggleWithValue(
             "Aim Lock",
             page,
@@ -2211,6 +2257,404 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         )
     end
     
+    local function InstallLightingUI()
+        if lightingUIInstalled then
+            return
+        end
+
+        local page = env.LightingPage or env.UniversalPage
+        local CreateToggle = env.CreateToggle
+        local CreateDropdown = env.CreateDropdown
+        local CreateButton = env.CreateButton
+        local controller = env.ToxLighting
+
+        if not page
+        or type(CreateToggle) ~= "function"
+        or type(CreateDropdown) ~= "function"
+        or type(CreateButton) ~= "function"
+        or typeof(controller) ~= "table" then
+            return
+        end
+
+        lightingUIInstalled = true
+
+        local colors = {
+            "White", "Red", "Green", "Blue", "Yellow", "Cyan",
+            "Magenta", "Orange", "Purple", "Lime", "Pink", "Gold"
+        }
+
+        local technologies = {}
+        for _, item in ipairs(Enum.Technology:GetEnumItems()) do
+            technologies[#technologies + 1] = item.Name
+        end
+
+        if #technologies == 0 then
+            technologies = {"ShadowMap"}
+        end
+
+        CreateToggle(
+            "Adjust Lighting",
+            page,
+            Settings.AdjustLighting,
+            function(value)
+                controller.SetAdjust(value)
+            end,
+            "AdjustLighting"
+        )
+
+        CreateButton("Get Technology", page, function()
+            if type(env.CustomNotify) == "function" then
+                env.CustomNotify(
+                    "Technology: " .. tostring(controller.GetTechnology()),
+                    Color3.fromRGB(100, 200, 255),
+                    4
+                )
+            end
+        end)
+
+        CreateDropdown(
+            "Technology",
+            technologies,
+            page,
+            Settings.LightingTechnology,
+            function(value)
+                Settings.LightingTechnology = tostring(value)
+                local ok = controller.SetTechnology(value)
+
+                if Settings.AdjustLighting
+                and not ok
+                and type(env.CustomNotify) == "function" then
+                    env.CustomNotify(
+                        "Technology cannot be changed by this executor",
+                        Color3.fromRGB(255, 180, 70),
+                        4
+                    )
+                end
+            end
+        )
+
+        CreateDropdown(
+            "Ambient",
+            colors,
+            page,
+            Settings.LightingAmbientColorName,
+            function(value)
+                Settings.LightingAmbientColorName = tostring(value)
+                controller.RefreshMain()
+            end
+        )
+
+        CreateDropdown(
+            "Outdoor Ambient",
+            colors,
+            page,
+            Settings.LightingOutdoorAmbientColorName,
+            function(value)
+                Settings.LightingOutdoorAmbientColorName = tostring(value)
+                controller.RefreshMain()
+            end
+        )
+
+        CreateVisualNumberOption(
+            "Clock Time",
+            page,
+            Settings.LightingClockTime,
+            0,
+            24,
+            function(value)
+                Settings.LightingClockTime = value
+                controller.RefreshMain()
+            end
+        )
+
+        CreateVisualNumberOption(
+            "Brightness",
+            page,
+            Settings.LightingBrightness,
+            0,
+            10,
+            function(value)
+                Settings.LightingBrightness = value
+                controller.RefreshMain()
+            end
+        )
+
+        CreateVisualNumberOption(
+            "Shadow Softness",
+            page,
+            Settings.LightingShadowSoftness,
+            0,
+            1,
+            function(value)
+                Settings.LightingShadowSoftness = value
+                controller.RefreshMain()
+            end
+        )
+
+        CreateVisualNumberOption(
+            "Diffuse Scale",
+            page,
+            Settings.LightingDiffuseScale,
+            0,
+            1,
+            function(value)
+                Settings.LightingDiffuseScale = value
+                controller.RefreshMain()
+            end
+        )
+
+        CreateVisualNumberOption(
+            "Specular Scale",
+            page,
+            Settings.LightingSpecularScale,
+            0,
+            1,
+            function(value)
+                Settings.LightingSpecularScale = value
+                controller.RefreshMain()
+            end
+        )
+
+        CreateToggle(
+            "Global Shadows",
+            page,
+            Settings.LightingGlobalShadows,
+            function(value)
+                Settings.LightingGlobalShadows = value == true
+                controller.RefreshMain()
+            end,
+            "LightingGlobalShadows"
+        )
+
+        CreateDropdown(
+            "Fog Color",
+            colors,
+            page,
+            Settings.LightingFogColorName,
+            function(value)
+                Settings.LightingFogColorName = tostring(value)
+                controller.RefreshMain()
+            end
+        )
+
+        CreateVisualNumberOption(
+            "Fog Start",
+            page,
+            Settings.LightingFogStart,
+            0,
+            1000000,
+            function(value)
+                Settings.LightingFogStart = value
+                controller.RefreshMain()
+            end
+        )
+
+        CreateVisualNumberOption(
+            "Fog End",
+            page,
+            Settings.LightingFogEnd,
+            0,
+            1000000,
+            function(value)
+                Settings.LightingFogEnd = value
+                controller.RefreshMain()
+            end
+        )
+
+        CreateToggle(
+            "Sunrays Effect",
+            page,
+            Settings.LightingSunRays,
+            function(value)
+                controller.SetEffect("SunRays", value)
+            end,
+            "LightingSunRays"
+        )
+
+        CreateVisualNumberOption(
+            "Sunrays Intensity",
+            page,
+            Settings.LightingSunRaysIntensity,
+            0,
+            10,
+            function(value)
+                Settings.LightingSunRaysIntensity = value
+                controller.RefreshEffect("SunRays")
+            end
+        )
+
+        CreateVisualNumberOption(
+            "Sunrays Spread",
+            page,
+            Settings.LightingSunRaysSpread,
+            0,
+            1,
+            function(value)
+                Settings.LightingSunRaysSpread = value
+                controller.RefreshEffect("SunRays")
+            end
+        )
+
+        CreateToggle(
+            "Bloom Effect",
+            page,
+            Settings.LightingBloom,
+            function(value)
+                controller.SetEffect("Bloom", value)
+            end,
+            "LightingBloom"
+        )
+
+        CreateVisualNumberOption(
+            "Bloom Intensity",
+            page,
+            Settings.LightingBloomIntensity,
+            0,
+            10,
+            function(value)
+                Settings.LightingBloomIntensity = value
+                controller.RefreshEffect("Bloom")
+            end
+        )
+
+        CreateVisualNumberOption(
+            "Bloom Size",
+            page,
+            Settings.LightingBloomSize,
+            0,
+            100,
+            function(value)
+                Settings.LightingBloomSize = value
+                controller.RefreshEffect("Bloom")
+            end
+        )
+
+        CreateVisualNumberOption(
+            "Bloom Threshold",
+            page,
+            Settings.LightingBloomThreshold,
+            0,
+            20,
+            function(value)
+                Settings.LightingBloomThreshold = value
+                controller.RefreshEffect("Bloom")
+            end
+        )
+
+        CreateToggle(
+            "Color Correction Effect",
+            page,
+            Settings.LightingColorCorrection,
+            function(value)
+                controller.SetEffect("ColorCorrection", value)
+            end,
+            "LightingColorCorrection"
+        )
+
+        CreateVisualNumberOption(
+            "Color Brightness",
+            page,
+            Settings.LightingColorBrightness,
+            -1,
+            1,
+            function(value)
+                Settings.LightingColorBrightness = value
+                controller.RefreshEffect("ColorCorrection")
+            end
+        )
+
+        CreateVisualNumberOption(
+            "Color Contrast",
+            page,
+            Settings.LightingColorContrast,
+            -1,
+            1,
+            function(value)
+                Settings.LightingColorContrast = value
+                controller.RefreshEffect("ColorCorrection")
+            end
+        )
+
+        CreateVisualNumberOption(
+            "Color Saturation",
+            page,
+            Settings.LightingColorSaturation,
+            -1,
+            1,
+            function(value)
+                Settings.LightingColorSaturation = value
+                controller.RefreshEffect("ColorCorrection")
+            end
+        )
+
+        CreateToggle(
+            "Blur Effect",
+            page,
+            Settings.LightingBlur,
+            function(value)
+                controller.SetEffect("Blur", value)
+            end,
+            "LightingBlur"
+        )
+
+        CreateVisualNumberOption(
+            "Blur Size",
+            page,
+            Settings.LightingBlurSize,
+            0,
+            56,
+            function(value)
+                Settings.LightingBlurSize = value
+                controller.RefreshEffect("Blur")
+            end
+        )
+
+        CreateToggle(
+            "Fix Shadows",
+            page,
+            Settings.LightingFixShadows,
+            function(value)
+                controller.SetFixShadows(value)
+            end,
+            "LightingFixShadows"
+        )
+
+        CreateToggle(
+            "Remove Atmosphere",
+            page,
+            Settings.LightingRemoveAtmosphere,
+            function(value)
+                controller.SetRemoveAtmosphere(value)
+            end,
+            "LightingRemoveAtmosphere"
+        )
+
+        CreateToggle(
+            "Remove Skyboxes",
+            page,
+            Settings.LightingRemoveSkyboxes,
+            function(value)
+                controller.SetRemoveSkyboxes(value)
+            end,
+            "LightingRemoveSkyboxes"
+        )
+
+        CreateToggle(
+            "Remove Grading",
+            page,
+            Settings.LightingRemoveGrading,
+            function(value)
+                controller.SetRemoveGrading(value)
+            end,
+            "LightingRemoveGrading"
+        )
+
+        CreateButton("Reset Lighting", page, function()
+            controller.Reset(true)
+            Save()
+        end)
+    end
+
     local function InstallMiscUI()
         if miscUIInstalled then
             return
@@ -2479,7 +2923,9 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         local miscSection = FindSection("MISC")
 
         MoveAfter(combatSection, "Aimbot Bind", "Aimbot")
-        MoveAfter(combatSection, "Aim Smoothness", "Aimbot Bind")
+        MoveAfter(combatSection, "Use Left Click", "Aimbot Bind")
+        MoveAfter(combatSection, "Use Gui Inset", "Use Left Click")
+        MoveAfter(combatSection, "Aim Smoothness", "Use Gui Inset")
         MoveAfter(combatSection, "Aim Lock", "Aim Smoothness")
         MoveAfter(combatSection, "Blatant", "Aim Lock")
         MoveAfter(combatSection, "Aim Targets", "Blatant")
@@ -2495,6 +2941,19 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
 
         if lightingSection then
             MoveControlToSection("Fullbright", "LIGHTING")
+            MoveBefore(lightingSection, "Adjust Lighting", "Fullbright")
+            MoveAfter(lightingSection, "Get Technology", "Fullbright")
+            MoveAfter(lightingSection, "Technology", "Get Technology")
+            MoveAfter(lightingSection, "Ambient", "Technology")
+            MoveAfter(lightingSection, "Outdoor Ambient", "Ambient")
+            MoveAfter(lightingSection, "Clock Time", "Outdoor Ambient")
+            MoveAfter(lightingSection, "Brightness", "Clock Time")
+            MoveAfter(lightingSection, "Shadow Softness", "Brightness")
+            MoveAfter(lightingSection, "Diffuse Scale", "Shadow Softness")
+            MoveAfter(lightingSection, "Specular Scale", "Diffuse Scale")
+            MoveAfter(lightingSection, "Fog Color", "Global Shadows")
+            MoveAfter(lightingSection, "Fog Start", "Fog Color")
+            MoveAfter(lightingSection, "Fog End", "Fog Start")
         end
 
         MoveBefore(miscSection, "Walk Fling", "Ctrl Click TP")
@@ -2646,6 +3105,8 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             InstallCombatUI()
         elseif lastUniversalSection == "PLAYER" then
             InstallPlayerUI()
+        elseif lastUniversalSection == "LIGHTING" then
+            InstallLightingUI()
         end
     
         local result = nil
@@ -2693,6 +3154,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             local hasShiftLock = FindControl("Force Shift Lock") ~= nil
             local hasFullbright = FindControl("Fullbright") ~= nil
             local hasLighting = FindSection("LIGHTING") ~= nil
+            local hasLightingControls = FindControl("Adjust Lighting") ~= nil
             local hasJump = FindControl("Jump") ~= nil
             local hasAirWalk = FindControl("Air Walk (E Up / Q Down)") ~= nil
             local hasCtrlClick = FindControl("Ctrl Click TP") ~= nil
@@ -2701,6 +3163,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             if hasShiftLock
             and hasFullbright
             and hasLighting
+            and hasLightingControls
             and hasJump
             and hasAirWalk
             and hasCtrlClick
@@ -2851,8 +3314,11 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             local mainActive = Settings.Aimbot == true
             local rightClickActive = mainActive
                 and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
-            local blatantActive = blatant and (mainActive or bindActive)
-            local triggerActive = bindActive or rightClickActive or blatantActive
+            local leftClickActive = mainActive
+                and Settings.AimbotUseLeftClick == true
+                and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+            local blatantActive = blatant and (mainActive or bindActive or leftClickActive)
+            local triggerActive = bindActive or rightClickActive or leftClickActive or blatantActive
 
             if not triggerActive then
                 lockedTarget = nil
@@ -2900,24 +3366,15 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end
 
             if Settings.AimbotMode == "MOUSE" then
-                local screen, onScreen = camera:WorldToViewportPoint(target.Part.Position)
+                local screen, onScreen = ProjectAimPoint(camera, target.Part.Position)
 
                 if not onScreen or screen.Z <= 0 then
                     return
                 end
 
-                -- Player:GetMouse().X/Y uses the same viewport space as
-                -- WorldToViewportPoint, avoiding top-bar/inset offsets.
-                local robloxMouse = Player:GetMouse()
-                local mouseX = tonumber(robloxMouse.X)
-                local mouseY = tonumber(robloxMouse.Y)
-
-                if not mouseX or not mouseY then
-                    return
-                end
-
-                local rawDX = screen.X - mouseX
-                local rawDY = screen.Y - mouseY
+                local mousePosition = GetAimMousePosition()
+                local rawDX = screen.X - mousePosition.X
+                local rawDY = screen.Y - mousePosition.Y
 
                 -- Do nothing inside a tiny dead-zone so the cursor does not
                 -- vibrate around the target every RenderStep.
@@ -2994,6 +3451,8 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         aimbotBindHeld = false
         Settings.Aimbot = false
         Settings.AimbotBindEnabled = false
+        Settings.AimbotUseLeftClick = false
+        Settings.AimbotUseGuiInset = false
         Settings.AimbotBlatant = false
         Settings.AimbotSmoothnessEnabled = false
         Settings.AimLock = false
@@ -3035,4 +3494,4 @@ if not mergedFeaturesOk then
 end
 
 env.ToxUniversal2Loaded = true
-env.ToxUniversal2Version = "2026-09-16-camera-aim-shift-zoom-1"
+env.ToxUniversal2Version = "2026-09-16-lighting-combat-nds-2"
