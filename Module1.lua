@@ -212,6 +212,10 @@ if HasRunningToxHub() then
         pcall(getgenv().ToxUniversal2Cleanup)
     end
 
+    if getgenv().ToxLightingCleanup then
+        pcall(getgenv().ToxLightingCleanup)
+    end
+
     if getgenv().ToxChatCleanup then
         pcall(getgenv().ToxChatCleanup)
     end
@@ -405,12 +409,17 @@ getgenv().Settings = {
     FreecamSpeed = 50,
     ForceShiftLock = false,
     ShiftLockKey = "Shift",
+    MaxZoom = false,
+    MaxZoomDistance = 400,
 
     Aimbot = false,
     AimbotMode = "CAMERA",
     AimbotBindEnabled = false,
     AimbotKey = Enum.KeyCode.E,
+    AimbotUseLeftClick = false,
+    AimbotUseGuiInset = false,
     AimbotBlatant = false,
+    AimbotSmoothnessEnabled = false,
     AimbotSmoothness = 2,
     AimPart = "Head",
     AimWallCheck = false,
@@ -451,6 +460,36 @@ getgenv().Settings = {
     MouseIconID = "",
     MouseIconSize = 150,
     Fullbright = false,
+    AdjustLighting = false,
+    LightingTechnology = "ShadowMap",
+    LightingAmbientColorName = "White",
+    LightingOutdoorAmbientColorName = "White",
+    LightingClockTime = 14,
+    LightingBrightness = 1,
+    LightingShadowSoftness = 0.5,
+    LightingDiffuseScale = 1,
+    LightingSpecularScale = 1,
+    LightingGlobalShadows = false,
+    LightingFogColorName = "White",
+    LightingFogStart = 0,
+    LightingFogEnd = 100000,
+    LightingSunRays = false,
+    LightingSunRaysIntensity = 0.25,
+    LightingSunRaysSpread = 1,
+    LightingBloom = false,
+    LightingBloomIntensity = 1,
+    LightingBloomSize = 24,
+    LightingBloomThreshold = 2,
+    LightingColorCorrection = false,
+    LightingColorBrightness = 0,
+    LightingColorContrast = 0,
+    LightingColorSaturation = 0,
+    LightingBlur = false,
+    LightingBlurSize = 0,
+    LightingFixShadows = false,
+    LightingRemoveAtmosphere = false,
+    LightingRemoveSkyboxes = false,
+    LightingRemoveGrading = false,
     TracerOrigin = "DOWN",
     EspMaxDistance = 1000,
     EspMaxDistanceByPlace = {},
@@ -479,6 +518,14 @@ getgenv().Settings = {
     NDSWaterFly = false,
     NDSWaterFlySpeed = 40,
     NDSNoTP = false,
+    NDSNotifyDisasters = false,
+    NDSMuteCheerSound = false,
+    NDSRemoveMeteors = false,
+    NDSRemoveVolcanicLava = false,
+    NDSRemoveVirusParticles = false,
+    NDSRemoveTsunamiWave = false,
+    NDSRemoveBarbedWire = false,
+    NDSIslandRocksCollidable = false,
 
     MM2RoleESP = false,
     MM2AutoFarm = false,
