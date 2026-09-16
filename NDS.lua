@@ -43,8 +43,105 @@ or not CreateButton then
     return
 end
 
+Settings.NDSCollapsedSections =
+    typeof(Settings.NDSCollapsedSections) == "table"
+    and Settings.NDSCollapsedSections
+    or {}
+
+local NDSCurrentSection = nil
+local NDSSections = {}
+
+local function ApplyNDSSectionState(section)
+    if typeof(section) ~= "table" then
+        return
+    end
+
+    local collapsed = Settings.NDSCollapsedSections[section.Key] == true
+
+    if section.Header and section.Header.Parent then
+        section.Header.Text = collapsed
+            and "  > " .. section.Name
+            or "  v " .. section.Name
+    end
+
+    for _, object in ipairs(section.Controls) do
+        if object
+        and object.Parent
+        and object:IsA("GuiObject") then
+            object.Visible = not collapsed
+        end
+    end
+end
+
+local function TrackNDSControl(object)
+    if NDSCurrentSection
+    and object
+    and object:IsA("GuiObject") then
+        table.insert(NDSCurrentSection.Controls, object)
+        ApplyNDSSectionState(NDSCurrentSection)
+    end
+
+    return object
+end
+
+local function NDSCreateToggle(...)
+    return TrackNDSControl(CreateToggle(...))
+end
+
+local function NDSCreateToggleWithValue(...)
+    return TrackNDSControl(CreateToggleWithValue(...))
+end
+
+local function NDSCreateButton(...)
+    return TrackNDSControl(CreateButton(...))
+end
+
+local function CreateNDSSection(text)
+    local name = tostring(text)
+    local key = string.upper(name):gsub("%s+", "")
+    local button = Instance.new("TextButton")
+
+    button.Size = UDim2.new(1, -5, 0, 26)
+    button.BackgroundColor3 = Color3.fromRGB(13, 13, 21)
+    button.BorderSizePixel = 0
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 11
+    button.TextXAlignment = Enum.TextXAlignment.Left
+    button.AutoButtonColor = false
+    button.Parent = GamePage
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 5)
+    corner.Parent = button
+
+    local section = {
+        Name = name,
+        Key = key,
+        Header = button,
+        Controls = {}
+    }
+
+    table.insert(NDSSections, section)
+    NDSCurrentSection = section
+
+    button.MouseButton1Click:Connect(function()
+        Settings.NDSCollapsedSections[key] =
+            not Settings.NDSCollapsedSections[key]
+
+        ApplyNDSSectionState(section)
+
+        if AutoSaveConfiguration then
+            AutoSaveConfiguration()
+        end
+    end)
+
+    ApplyNDSSectionState(section)
+    return button
+end
+
 local NDSModuleVersion =
-    "2026-09-16-autowin-restore-1"
+    "2026-09-16-sections-safe-walkfling-2"
 
 if getgenv().ToxNDSModuleLoadedJobId
     == game.JobId
@@ -1284,7 +1381,9 @@ getgenv().SetNDSNoTP = function(Value, Silent)
     end
 end
 
-CreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
+CreateNDSSection("PLAYER")
+
+NDSCreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
     Settings.NDSAutoWin = v
 
     if v then
@@ -1294,7 +1393,29 @@ CreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
     end
 end, "NDSAutoWin")
 
-CreateToggle("Walk Fling", GamePage, Settings.WalkFling, function(v)
+NDSCreateToggle("No TP", GamePage, Settings.NDSNoTP, function(v)
+    getgenv().SetNDSNoTP(v, true)
+end, "NDSNoTP")
+
+NDSCreateToggle("Noclip", GamePage, Settings.Noclip, function(v)
+    SetShared("Noclip", v)
+end, "Noclip")
+
+NDSCreateToggle("No Fall Damage", GamePage, Settings.NoFallDamage, function(v)
+    SetShared("NoFallDamage", v)
+end, "NoFallDamage")
+
+NDSCreateToggle("Anti Void", GamePage, Settings.AntiVoid, function(v)
+    SetShared("AntiVoid", v)
+end, "AntiVoid")
+
+NDSCreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
+    SetShared("AntiFling", v)
+end, "AntiFling")
+
+CreateNDSSection("MOVEMENT")
+
+NDSCreateToggle("Walk Fling", GamePage, Settings.WalkFling, function(v)
     SetShared("WalkFling", v)
 
     if v then
@@ -1304,19 +1425,11 @@ CreateToggle("Walk Fling", GamePage, Settings.WalkFling, function(v)
     end
 end, "WalkFling")
 
-CreateToggle("Ctrl Click TP", GamePage, Settings.CtrlClickTP, function(v)
+NDSCreateToggle("Ctrl Click TP", GamePage, Settings.CtrlClickTP, function(v)
     SetShared("CtrlClickTP", v)
 end, "CtrlClickTP")
 
-CreateToggle("No TP", GamePage, Settings.NDSNoTP, function(v)
-    getgenv().SetNDSNoTP(v, true)
-end, "NDSNoTP")
-
-CreateToggle("Noclip", GamePage, Settings.Noclip, function(v)
-    SetShared("Noclip", v)
-end, "Noclip")
-
-CreateToggleWithValue("Water Fly", GamePage, Settings.NDSWaterFly, Settings.NDSWaterFlySpeed, function(v)
+NDSCreateToggleWithValue("Water Fly", GamePage, Settings.NDSWaterFly, Settings.NDSWaterFlySpeed, function(v)
     getgenv().SetNDSWaterFly(v, true)
 end, function(value)
     Settings.NDSWaterFlySpeed = math.clamp(
@@ -1330,7 +1443,7 @@ end, function(value)
     end
 end, "NDSWaterFly")
 
-CreateToggleWithValue("Car Fly", GamePage, Settings.CarFly, Settings.CarFlySpeed, function(v)
+NDSCreateToggleWithValue("Car Fly", GamePage, Settings.CarFly, Settings.CarFlySpeed, function(v)
     SetShared("CarFly", v)
 end, function(value)
     Settings.CarFlySpeed = math.clamp(tonumber(value) or 80, 5, 300)
@@ -1340,23 +1453,13 @@ end, function(value)
     end
 end, "CarFly")
 
-CreateToggle("No Fall Damage", GamePage, Settings.NoFallDamage, function(v)
-    SetShared("NoFallDamage", v)
-end, "NoFallDamage")
+CreateNDSSection("TELEPORTS")
 
-CreateToggle("Anti Void", GamePage, Settings.AntiVoid, function(v)
-    SetShared("AntiVoid", v)
-end, "AntiVoid")
-
-CreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
-    SetShared("AntiFling", v)
-end, "AntiFling")
-
-CreateButton("SPAWN", GamePage, function()
+NDSCreateButton("SPAWN", GamePage, function()
     TeleportTo(SpawnCFrame, "SPAWN")
 end)
 
-CreateButton("ISLAND", GamePage, function()
+NDSCreateButton("ISLAND", GamePage, function()
     TeleportTo(IslandCFrame, "ISLAND")
 end)
 
