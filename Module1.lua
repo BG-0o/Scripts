@@ -578,7 +578,7 @@ getgenv().ToxStartupBooleanState = {}
 getgenv().ToxStartupToggleCallbacks = {}
 getgenv().ToxStartupOptionsApplied = false
 getgenv().ToxHubActive = true
-getgenv().ToxModule1SplitVersion = "2026-09-16-split-60-40-1"
+getgenv().ToxModule1SplitVersion = "2026-09-16-config-v7-1"
 getgenv().ToxUniversalLoaded = nil
 getgenv().ToxUniversal2Loaded = nil
 getgenv().ToxUniversal2Version = nil
@@ -634,6 +634,15 @@ local ConfigFilePath =
     .. CurrentPlaceKey
     .. ".json"
 
+local PrimaryConfigFilePath =
+    LegacyUserConfigFilePath
+
+local ConfigBackupFilePath =
+    FolderName
+    .. "/config_"
+    .. tostring(Player.UserId)
+    .. "_backup.json"
+
 local MusicIDsFilePath =
     FolderName
     .. "/music_ids.json"
@@ -647,7 +656,13 @@ local LegacyConfigFilePath =
     .. "/config.json"
 
 getgenv().ToxConfigFilePath =
+    PrimaryConfigFilePath
+
+getgenv().ToxPlaceConfigFilePath =
     ConfigFilePath
+
+getgenv().ToxConfigBackupFilePath =
+    ConfigBackupFilePath
 
 getgenv().ToxLegacyUserConfigFilePath =
     LegacyUserConfigFilePath
@@ -1392,13 +1407,63 @@ local function MigrateLegacyGameSettings(data)
     end
 end
 
+local function ReadConfigMetadata(path)
+    if not isfile
+    or not readfile
+    or not path
+    or not isfile(path) then
+        return nil
+    end
+
+    local ok, data = pcall(function()
+        local raw = readfile(path)
+
+        if not raw
+        or raw == "" then
+            return nil
+        end
+
+        local decoded = HttpService:JSONDecode(raw)
+
+        if typeof(decoded) ~= "table" then
+            return nil
+        end
+
+        return decoded
+    end)
+
+    if ok then
+        return data
+    end
+
+    return nil
+end
+
 local function ResolveConfigReadPath()
     if not isfile then
         return nil, false
     end
 
+    local primaryData =
+        ReadConfigMetadata(
+            PrimaryConfigFilePath
+        )
+
+    if primaryData
+    and (tonumber(primaryData.ConfigVersion) or 0) >= 7 then
+        return PrimaryConfigFilePath, false
+    end
+
     if isfile(ConfigFilePath) then
-        return ConfigFilePath, false
+        return ConfigFilePath, true
+    end
+
+    if primaryData then
+        return PrimaryConfigFilePath, true
+    end
+
+    if isfile(LegacyConfigFilePath) then
+        return LegacyConfigFilePath, true
     end
 
     return nil, false
@@ -1406,17 +1471,19 @@ end
 
 getgenv().AutoSaveConfiguration = function()
     if getgenv().Destroyed then
-        return
+        return false
     end
 
     if getgenv().ToxOptionsReady == false then
-        return
+        return false
     end
 
     EnsureFolder()
 
     if not writefile then
-        return
+        getgenv().ToxConfigLastSaveOK = false
+        getgenv().ToxConfigLastSaveError = "writefile unavailable"
+        return false
     end
 
     local placeKey = tostring(game.PlaceId)
@@ -1426,12 +1493,9 @@ getgenv().AutoSaveConfiguration = function()
         and getgenv().GameSpecificSettings
         or {}
 
-    local currentGameSettings = {}
-
     if getgenv().CurrentGameModule then
-        local snapshot = BuildCurrentGameSettingsSnapshot()
-        getgenv().GameSpecificSettings[placeKey] = snapshot
-        currentGameSettings[placeKey] = snapshot
+        getgenv().GameSpecificSettings[placeKey] =
+            BuildCurrentGameSettingsSnapshot()
     end
 
     getgenv().SavedWaypointsByPlace =
@@ -1451,34 +1515,96 @@ getgenv().AutoSaveConfiguration = function()
     end
 
     local data = {
-        ConfigVersion = 6,
+        ConfigVersion = 7,
+        SavedAt = os.time(),
         UserId = Player.UserId,
         PlaceId = game.PlaceId,
+        ConfigScope = "USER_GLOBAL",
         GlobalGUIKeybind = guiKeyName,
         Settings = BuildGlobalSettingsSnapshot(),
         GameSpecificSettings = SerializeConfigValue(
-            currentGameSettings
+            getgenv().GameSpecificSettings
         ),
         SavedWaypoints = SerializeConfigValue(
             getgenv().SavedWaypoints
         ),
-        SavedWaypointsByPlace = SerializeConfigValue({
-            [placeKey] = getgenv().SavedWaypointsByPlace[placeKey]
-        }),
+        SavedWaypointsByPlace = SerializeConfigValue(
+            getgenv().SavedWaypointsByPlace
+        ),
         UIPositions = SerializeConfigValue(
             getgenv().UIPositions
         )
     }
 
-    pcall(function()
-        writefile(
-            ConfigFilePath,
-            HttpService:JSONEncode(data)
-        )
-    end)
+    local encodeOK, encoded =
+        pcall(function()
+            return HttpService:JSONEncode(data)
+        end)
+
+    if not encodeOK
+    or typeof(encoded) ~= "string"
+    or encoded == "" then
+        getgenv().ToxConfigLastSaveOK = false
+        getgenv().ToxConfigLastSaveError =
+            tostring(encoded or "JSON encode failed")
+        return false
+    end
+
+    local oldPrimary = nil
+
+    if readfile
+    and isfile
+    and isfile(PrimaryConfigFilePath) then
+        pcall(function()
+            oldPrimary = readfile(PrimaryConfigFilePath)
+        end)
+    end
+
+    local primaryOK, primaryError =
+        pcall(function()
+            writefile(
+                PrimaryConfigFilePath,
+                encoded
+            )
+        end)
+
+    local mirrorOK =
+        pcall(function()
+            writefile(
+                ConfigFilePath,
+                encoded
+            )
+        end)
+
+    if primaryOK
+    and oldPrimary
+    and oldPrimary ~= ""
+    and oldPrimary ~= encoded then
+        pcall(function()
+            writefile(
+                ConfigBackupFilePath,
+                oldPrimary
+            )
+        end)
+    end
+
+    getgenv().ToxConfigLastSaveOK =
+        primaryOK == true
+
+    getgenv().ToxConfigLastSaveError =
+        primaryOK
+        and nil
+        or tostring(primaryError)
+
+    getgenv().ToxConfigLastSavedAt =
+        primaryOK
+        and data.SavedAt
+        or getgenv().ToxConfigLastSavedAt
 
     SaveSharedMusicIDs()
     SaveSharedJoinGames()
+
+    return primaryOK or mirrorOK
 end
 
 local function LoadConfiguration()
@@ -1493,6 +1619,8 @@ local function LoadConfiguration()
     if not sourcePath then
         return
     end
+
+    getgenv().ToxConfigLoadedFrom = sourcePath
 
     local loaded = false
     local strictPlaceMigration = false
@@ -1510,14 +1638,14 @@ local function LoadConfiguration()
             return
         end
 
+        local configVersion = tonumber(data.ConfigVersion) or 0
         local savedPlaceId = tonumber(data.PlaceId)
 
-        if savedPlaceId
+        if configVersion < 7
+        and savedPlaceId
         and savedPlaceId ~= game.PlaceId then
             return
         end
-
-        local configVersion = tonumber(data.ConfigVersion) or 0
         strictPlaceMigration =
             game.PlaceId == 189707
             and configVersion < 6
@@ -1834,11 +1962,41 @@ for _ = 1, 20 do
         local readPath = nil
 
         if isfile then
-            if isfile(configPath) then
+            if isfile(legacyUserPath) then
+                local useGlobal = false
+
+                if readfile then
+                    pcall(function()
+                        local HttpService =
+                            game:GetService("HttpService")
+                        local globalRaw =
+                            readfile(legacyUserPath)
+
+                        if globalRaw
+                        and globalRaw ~= "" then
+                            local globalData =
+                                HttpService:JSONDecode(globalRaw)
+
+                            useGlobal =
+                                typeof(globalData) == "table"
+                                and (tonumber(globalData.ConfigVersion) or 0) >= 7
+                        end
+                    end)
+                end
+
+                if useGlobal then
+                    readPath = legacyUserPath
+                end
+            end
+
+            if not readPath
+            and isfile(configPath) then
                 readPath = configPath
-            elseif isfile(legacyUserPath) then
+            elseif not readPath
+            and isfile(legacyUserPath) then
                 readPath = legacyUserPath
-            elseif isfile(legacyPath) then
+            elseif not readPath
+            and isfile(legacyPath) then
                 readPath = legacyPath
             end
         end
