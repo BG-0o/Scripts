@@ -1,6 +1,9 @@
 local UNIVERSAL_URL =
     "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Universal.lua"
 
+local UNIVERSAL2_URL =
+    "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Universal2.lua"
+
 local TOX_CHAT_URL =
     "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ToxChat.lua"
 
@@ -135,6 +138,13 @@ if not getgenv().ToxUniversalLoaded then
     ) then
         return
     end
+end
+
+if not getgenv().ToxUniversal2Loaded then
+    LoadRemote(
+        "Universal2.lua",
+        UNIVERSAL2_URL
+    )
 end
 
 if not getgenv().ToxChatLoaded then
