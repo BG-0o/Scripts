@@ -7,23 +7,6 @@ local TOX_CHAT_URL =
 local TOX_SYSTEMS_URL =
     "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ToxSystems.lua"
 
-local function AddToxCacheBuster(url)
-    url = tostring(url or "")
-
-    if url == "" then
-        return url
-    end
-
-    local separator = string.find(url, "?", 1, true) and "&" or "?"
-
-    return url
-        .. separator
-        .. "toxcache="
-        .. tostring(os.time())
-        .. "_"
-        .. tostring(math.random(1000, 999999))
-end
-
 local function Notify(
     text,
     color,
@@ -45,12 +28,9 @@ local function LoadRemote(
     name,
     url
 )
-    local requestUrl =
-        AddToxCacheBuster(url)
-
     local fetchOk, source =
         pcall(function()
-            return game:HttpGet(requestUrl)
+            return game:HttpGet(url)
         end)
 
     if not fetchOk then
@@ -174,14 +154,6 @@ and getgenv().GamePage then
             detected.Url
         )
 
-    if detected.ShortName == "MM2"
-    and detected.CoreUrl then
-        env.ToxMM2CoreURL =
-            tostring(
-                detected.CoreUrl
-            )
-    end
-
     local alreadyLoaded =
         env.ToxGameModuleLoadedPage
             == gamePage
@@ -207,7 +179,7 @@ and getgenv().GamePage then
                 pcall(function()
                     local source =
                         game:HttpGet(
-                            AddToxCacheBuster(moduleUrl)
+                            moduleUrl
                         )
 
                     local chunk,
