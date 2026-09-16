@@ -2737,6 +2737,10 @@ RenderBackdrop.Position =
 
 RenderBackdrop.BorderSizePixel = 0
 RenderBackdrop.ZIndex = 1
+RenderBackdrop.Visible = false
+RenderBackdrop.BackgroundColor3 =
+    Render3DColorMap[Settings.Render3DColor]
+    or Render3DColorMap.BLACK
 RenderBackdrop.Parent =
     RenderBackdropGui
 
@@ -2753,8 +2757,6 @@ local function RefreshRenderBackdrop()
     RenderBackdrop.Visible =
         Settings.Render3D == false
 end
-
-RefreshRenderBackdrop()
 
 local function SetRender3DEnabled(
     enabled
@@ -2796,6 +2798,9 @@ local function SetRender3DColor(
 
     return true
 end
+
+getgenv().ToxSetRender3DEnabled = SetRender3DEnabled
+getgenv().ToxSetRender3DColor = SetRender3DColor
 
 local AntiKickRejoining = false
 
@@ -4638,7 +4643,25 @@ local function GetClosestPlayerToMouse()
 end
 
 do
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Universal2.lua"))()
+    local universal2Url =
+        "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Universal2.lua"
+        .. "?toxcache="
+        .. tostring(os.time())
+        .. "_"
+        .. tostring(math.random(1000, 999999))
+
+    local source = game:HttpGet(universal2Url)
+    local chunk, compileError = loadstring(source)
+
+    if not chunk then
+        error("Universal2 compile error: " .. tostring(compileError))
+    end
+
+    local ok, runtimeError = pcall(chunk)
+
+    if not ok then
+        error("Universal2 runtime error: " .. tostring(runtimeError))
+    end
 end
 
 BeginUniversalSection("Combat")
@@ -6347,6 +6370,23 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     getgenv().Destroyed = true
     ScriptLoaded = false
     getgenv().ScriptLoaded = false
+    getgenv().ToxOptionsReady = false
+
+    if getgenv().ToxUniversal2ExtraCleanup then
+        pcall(getgenv().ToxUniversal2ExtraCleanup)
+    end
+
+    if getgenv().ToxUniversal2Cleanup then
+        pcall(getgenv().ToxUniversal2Cleanup)
+    end
+
+    if getgenv().ToxChatCleanup then
+        pcall(getgenv().ToxChatCleanup)
+    end
+
+    if getgenv().ToxNDSCleanup then
+        pcall(getgenv().ToxNDSCleanup)
+    end
 
     if getgenv().ToxMM2Cleanup then
         pcall(getgenv().ToxMM2Cleanup)
@@ -7095,7 +7135,9 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         CrosshairV.Visible = false
     end
 
-    if Settings.Aimbot and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+    if not getgenv().ToxUniversal2OwnsAimbot
+    and Settings.Aimbot
+    and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
         local Target = GetClosestPlayerToMouse()
         if Target then
             local Smooth = Settings.AimbotSmoothness or 2
@@ -7523,13 +7565,25 @@ function ShowCenterLoadSequence()
         Position = UDim2.new(0.5, 0, 1.3, 0),
         BackgroundTransparency = 1
     })
-    fallTween:Play()
-    fallTween.Completed:Connect(function()
-        SplashFrame:Destroy()
+    local finished = false
+
+    local function FinishLoading()
+        if finished then
+            return
+        end
+
+        finished = true
+
+        pcall(function()
+            if SplashFrame and SplashFrame.Parent then
+                SplashFrame:Destroy()
+            end
+        end)
+
         ScriptLoaded = true
         getgenv().ScriptLoaded = true
 
-        if not Destroyed then
+        if not Destroyed and not getgenv().Destroyed then
             local finalPosition = (getgenv().GetSavedGuiPosition and getgenv().GetSavedGuiPosition("Main")) or UDim2.new(0.5, -165, 0.5, -197)
 
             local finalSize =
@@ -7552,17 +7606,8 @@ function ShowCenterLoadSequence()
                     395
                 )
 
-            Main.Size =
-                UDim2.new(
-                    0,
-                    0,
-                    0,
-                    0
-                )
-
-            Main.Position =
-                finalPosition
-
+            Main.Size = UDim2.new(0, 0, 0, 0)
+            Main.Position = finalPosition
             Main.Visible = true
 
             Main:TweenSizeAndPosition(
@@ -7576,10 +7621,31 @@ function ShowCenterLoadSequence()
 
             CustomNotify("ToxHub v1 Loaded Successfully!", Color3.fromRGB(100, 255, 100))
         end
+    end
+
+    fallTween.Completed:Connect(FinishLoading)
+    fallTween:Play()
+
+    task.delay(0.75, function()
+        if not finished then
+            FinishLoading()
+        end
     end)
 end
 
-task.spawn(ShowCenterLoadSequence)
+task.spawn(function()
+    local ok, err = pcall(ShowCenterLoadSequence)
+
+    if not ok then
+        warn("[ToxHub Loading Error]: " .. tostring(err))
+        ScriptLoaded = true
+        getgenv().ScriptLoaded = true
+
+        if Main and Main.Parent and not getgenv().Destroyed then
+            Main.Visible = true
+        end
+    end
+end)
 
 SubGuisPreMinimizedState = {}
 Minimize = getgenv().Minimize
