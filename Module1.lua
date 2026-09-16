@@ -199,6 +199,18 @@ if HasRunningToxHub() then
     getgenv().ToxGameModuleLoadingUrl = nil
     getgenv().ToxGameModuleLoadingPage = nil
 
+    if getgenv().ToxUniversal2Cleanup then
+        pcall(getgenv().ToxUniversal2Cleanup)
+    end
+
+    if getgenv().ToxNDSCleanup then
+        pcall(getgenv().ToxNDSCleanup)
+    end
+
+    if getgenv().ToxMM2Cleanup then
+        pcall(getgenv().ToxMM2Cleanup)
+    end
+
     if getgenv().ToxSystemsCleanup then
         pcall(getgenv().ToxSystemsCleanup)
     end
