@@ -3272,6 +3272,8 @@ getgenv().ToxSystemsCleanup =
         if getgenv().ToxControlGui == ControlGui then
             getgenv().ToxControlGui = nil
         end
+
+        getgenv().ToxSystemsLoaded = nil
     end
 
 getgenv().ToxSystemsLoaded = true
