@@ -178,16 +178,32 @@ end
 
 env.ApplyUniversalSectionState = ApplyUniversalSectionState
 
+local function GetUniversalSectionPage(key)
+    local pages = {
+        COMBAT = env.CombatPage,
+        PLAYER = env.PlayerPage,
+        VISUALS = env.VisualsPage,
+        VISUAL = env.VisualsPage,
+        ESP = env.VisualsPage,
+        LIGHTING = env.LightingPage,
+        MISC = env.FlingPage
+    }
+
+    return pages[key] or env.UniversalPage or UniversalPage
+end
+
 local function BaseBeginUniversalSection(name)
     if not UniversalPage then
         UniversalPage = env.UniversalPage
     end
 
-    if not UniversalPage then
+    local key = string.upper(tostring(name or "")):gsub("%s+", "")
+    local page = GetUniversalSectionPage(key)
+
+    if not page then
         return nil
     end
 
-    local key = string.upper(tostring(name or "")):gsub("%s+", "")
     local header = Instance.new("TextButton")
     header.Size = UDim2.new(1, -5, 0, 30)
     header.BackgroundColor3 = Color3.fromRGB(13, 13, 21)
@@ -197,7 +213,7 @@ local function BaseBeginUniversalSection(name)
     header.TextSize = 12
     header.TextXAlignment = Enum.TextXAlignment.Left
     header.AutoButtonColor = false
-    header.Parent = UniversalPage
+    header.Parent = page
 
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 5)
@@ -206,6 +222,7 @@ local function BaseBeginUniversalSection(name)
     local section = {
         Name = tostring(name),
         Key = key,
+        Page = page,
         Header = header,
         Controls = {}
     }
@@ -232,10 +249,9 @@ end
 
 local function TrackUniversalControl(object, page)
     local currentSection = env.ToxUniversalCurrentSection
-    local universalPage = env.UniversalPage or UniversalPage
 
-    if page == universalPage
-    and currentSection
+    if currentSection
+    and currentSection.Page == page
     and object
     and object:IsA("GuiObject") then
         table.insert(currentSection.Controls, object)
@@ -1326,8 +1342,11 @@ end
 
 function BeginUniversalSection(name)
     local key = string.upper(tostring(name or "")):gsub("%s+", "")
+    local section = BaseBeginUniversalSection(name)
 
-    if key == "MISC" then
+    if key == "ESP"
+    or key == "VISUALS"
+    or key == "VISUAL" then
         local visualPage = env.VisualsPage or UniversalPage
 
         if not visualUIInstalled then
@@ -1335,7 +1354,7 @@ function BeginUniversalSection(name)
         end
     end
 
-    return BaseBeginUniversalSection(name)
+    return section
 end
 
 env.BeginUniversalSection = BeginUniversalSection
@@ -2375,6 +2394,12 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             table.insert(targetSection.Controls, control)
         end
 
+        if targetSection.Page
+        and control.Parent ~= targetSection.Page then
+            control.Parent = targetSection.Page
+        end
+
+        ApplyUniversalSectionState(targetSection)
         return true
     end
 
@@ -2443,12 +2468,14 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
     local function RebuildUniversalLayout()
         Settings.ShiftLockKey = Settings.ShiftLockKey == "Ctrl" and "Ctrl" or "Shift"
 
-        MoveControlToSection("Fullbright", "PLAYER")
+        MoveControlToSection("Fullbright", "LIGHTING")
         MoveControlToSection("XRay", "PLAYER")
+        MoveControlToSection("Noclip Camera", "PLAYER")
 
         local combatSection = FindSection("COMBAT")
         local playerSection = FindSection("PLAYER")
-        local visualSection = FindSection("VISUALS") or FindSection("VISUAL")
+        local visualSection = FindSection("ESP") or FindSection("VISUALS") or FindSection("VISUAL")
+        local lightingSection = FindSection("LIGHTING")
         local miscSection = FindSection("MISC")
 
         MoveAfter(combatSection, "Aimbot Bind", "Aimbot")
@@ -2460,13 +2487,15 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
 
         MoveAfter(playerSection, "Freecam", "Jump")
         MoveAfter(playerSection, "XRay", "Freecam")
-        MoveControlToSection("Noclip Camera", "PLAYER")
         MoveAfter(playerSection, "Noclip Camera", "XRay")
         MoveAfter(playerSection, "Max Zoom", "Noclip Camera")
-        MoveAfter(playerSection, "Fullbright", "Air Walk (E Up / Q Down)")
 
         MoveAfter(visualSection, "Show Health", "Names")
         MoveBefore(visualSection, "Rainbow", "ESP Color")
+
+        if lightingSection then
+            MoveControlToSection("Fullbright", "LIGHTING")
+        end
 
         MoveBefore(miscSection, "Walk Fling", "Ctrl Click TP")
         MoveAfter(miscSection, "Normalize Animations", "No Fall Damage")
@@ -2474,9 +2503,9 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         MoveAfter(miscSection, "Force Jump", "Fix Unanchored Parts")
         MoveAfter(miscSection, "Fake Lag (%)", "Force Shift Lock")
 
-        local layoutOrder = 1
-
         for _, section in ipairs(env.ToxUniversalSections or {}) do
+            local layoutOrder = 1
+
             if section.Header and section.Header.Parent then
                 section.Header.LayoutOrder = layoutOrder
                 layoutOrder += 1
@@ -2486,6 +2515,10 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
 
             for _, control in ipairs(section.Controls or {}) do
                 if control and control.Parent and control:IsA("GuiObject") then
+                    if section.Page and control.Parent ~= section.Page then
+                        control.Parent = section.Page
+                    end
+
                     validControls[#validControls + 1] = control
                     control.LayoutOrder = layoutOrder
                     layoutOrder += 1
@@ -2659,6 +2692,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
 
             local hasShiftLock = FindControl("Force Shift Lock") ~= nil
             local hasFullbright = FindControl("Fullbright") ~= nil
+            local hasLighting = FindSection("LIGHTING") ~= nil
             local hasJump = FindControl("Jump") ~= nil
             local hasAirWalk = FindControl("Air Walk (E Up / Q Down)") ~= nil
             local hasCtrlClick = FindControl("Ctrl Click TP") ~= nil
@@ -2666,6 +2700,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
 
             if hasShiftLock
             and hasFullbright
+            and hasLighting
             and hasJump
             and hasAirWalk
             and hasCtrlClick
