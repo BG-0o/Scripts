@@ -7,22 +7,12 @@ end
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local ContextActionService = game:GetService("ContextActionService")
 local Workspace = game:GetService("Workspace")
-
-local UserGameSettings = nil
-pcall(function()
-    UserGameSettings = UserSettings():GetService("UserGameSettings")
-end)
 
 local Player = Players.LocalPlayer
 local Settings = env.Settings or {}
 local UniversalPage = env.UniversalPage
 local FREECAM_BIND = "ToxUniversalFreecam"
-local CAMERA_NOCLIP_BIND = "ToxCameraNoclip"
-local FREECAM_MOVEMENT_FREEZE_BIND = "ToxCameraMovementFreeze"
-local FREECAM_ROTATION_SPEED_MOUSE =
-    Vector2.new(1, 0.77) * math.rad(0.5)
 local instanceToken = {}
 
 env.ToxUniversal2Token = instanceToken
@@ -35,21 +25,6 @@ Settings.UniversalCollapsedSections =
 Settings.NoclipCamera = Settings.NoclipCamera == true
 Settings.Freecam = Settings.Freecam == true
 Settings.FreecamSpeed = tonumber(Settings.FreecamSpeed) or 50
-Settings.AimbotMode = string.upper(tostring(Settings.AimbotMode or "CAMERA"))
-if Settings.AimbotMode ~= "CAMERA" and Settings.AimbotMode ~= "MOUSE" then
-    Settings.AimbotMode = "CAMERA"
-end
-Settings.AimbotBindEnabled = Settings.AimbotBindEnabled == true
-Settings.AimbotKey = Settings.AimbotKey or Enum.KeyCode.E
-Settings.AimbotBlatant = Settings.AimbotBlatant == true
-Settings.Render3D = Settings.Render3D ~= false
-Settings.Render3DColor = string.upper(tostring(Settings.Render3DColor or "BLACK"))
-if Settings.Render3DColor ~= "WHITE"
-and Settings.Render3DColor ~= "BLACK"
-and Settings.Render3DColor ~= "RED"
-and Settings.Render3DColor ~= "BLUE" then
-    Settings.Render3DColor = "BLACK"
-end
 Settings.ESPShowHealth = Settings.ESPShowHealth == true
 Settings.ChamsOutlineColorName = nil
 Settings.ChamsOutlineOpacity = nil
@@ -72,12 +47,10 @@ local freecamYaw = 0
 local freecamSaved = nil
 local cameraNoclipCaptured = false
 local originalOcclusionMode = nil
-local cameraNoclipDistance = nil
-local freecamMovementFrozen = false
 local visualUIInstalled = false
 local visualConnections = {}
 local xrayDefaults = setmetatable({}, {__mode = "k"})
-local fakeLagSleeping = setmetatable({}, {__mode = "k"})
+local fakeLagSleeping = false
 local lastRainbowColor = nil
 local fakeLagClock = 0
 local VISUAL_BIND = "ToxUniversal2Visuals"
@@ -176,190 +149,6 @@ end
 
 env.TrackUniversalControl = TrackUniversalControl
 
-local function SaveUniversal2Settings()
-    if env.ToxOptionsReady == false then
-        return
-    end
-
-    if type(env.AutoSaveConfiguration) == "function" then
-        pcall(env.AutoSaveConfiguration)
-    end
-end
-
-local function ApplyRender3DState(enabled)
-    Settings.Render3D = enabled == true
-
-    pcall(function()
-        RunService:Set3dRenderingEnabled(Settings.Render3D)
-    end)
-
-    local gui = env.ToxRenderBackdropGui
-    local frame = gui and gui:FindFirstChildOfClass("Frame")
-
-    if frame then
-        frame.Visible = not Settings.Render3D
-    end
-end
-
-local function ApplyRender3DColor(colorName)
-    local name = string.upper(tostring(colorName or "BLACK"))
-    local colors = {
-        WHITE = Color3.fromRGB(190, 190, 200),
-        BLACK = Color3.fromRGB(5, 5, 8),
-        RED = Color3.fromRGB(95, 8, 12),
-        BLUE = Color3.fromRGB(9, 0, 110)
-    }
-
-    if not colors[name] then
-        return
-    end
-
-    Settings.Render3DColor = name
-
-    local gui = env.ToxRenderBackdropGui
-    local frame = gui and gui:FindFirstChildOfClass("Frame")
-
-    if frame then
-        frame.BackgroundColor3 = colors[name]
-    end
-end
-
-local function CreateToggleCycleControl(name, options, page, defaultToggle, defaultMode, toggleCallback, modeCallback, syncKey)
-    if not page then
-        return nil
-    end
-
-    local box = Instance.new("Frame")
-    box.Size = UDim2.new(1, -5, 0, 48)
-    box.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-    box.BorderSizePixel = 0
-    box.Parent = page
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -190, 1, 0)
-    label.Position = UDim2.new(0, 12, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = name
-    label.TextColor3 = Color3.fromRGB(240, 240, 240)
-    label.TextSize = 13
-    label.Font = Enum.Font.GothamMedium
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = box
-
-    local modeButton = Instance.new("TextButton")
-    modeButton.Size = UDim2.new(0, 92, 0, 27)
-    modeButton.Position = UDim2.new(1, -145, 0.5, -13)
-    modeButton.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
-    modeButton.BorderSizePixel = 0
-    modeButton.Text = tostring(defaultMode or options[1])
-    modeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    modeButton.TextSize = 11
-    modeButton.Font = Enum.Font.Gotham
-    modeButton.Parent = box
-
-    local modeCorner = Instance.new("UICorner")
-    modeCorner.CornerRadius = UDim.new(0, 4)
-    modeCorner.Parent = modeButton
-
-    local toggleButton = Instance.new("TextButton")
-    toggleButton.Size = UDim2.new(0, 42, 0, 22)
-    toggleButton.Position = UDim2.new(1, -47, 0.5, -11)
-    toggleButton.BorderSizePixel = 0
-    toggleButton.Text = ""
-    toggleButton.AutoButtonColor = false
-    toggleButton.Parent = box
-
-    local toggleCorner = Instance.new("UICorner")
-    toggleCorner.CornerRadius = UDim.new(0, 4)
-    toggleCorner.Parent = toggleButton
-
-    local indicator = Instance.new("Frame")
-    indicator.Size = UDim2.new(0, 14, 0, 14)
-    indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    indicator.BorderSizePixel = 0
-    indicator.Parent = toggleButton
-
-    local indicatorCorner = Instance.new("UICorner")
-    indicatorCorner.CornerRadius = UDim.new(0, 3)
-    indicatorCorner.Parent = indicator
-
-    local state = env.ToxOptionsReady == false and false or defaultToggle == true
-
-    local function updateToggle()
-        if state then
-            toggleButton.BackgroundColor3 = Color3.fromRGB(50, 180, 70)
-            indicator.Position = UDim2.new(1, -17, 0.5, -7)
-        else
-            toggleButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-            indicator.Position = UDim2.new(0, 3, 0.5, -7)
-        end
-    end
-
-    local function setVisual(value)
-        state = value == true
-        updateToggle()
-    end
-
-    if syncKey and type(RegisterSharedToggle) == "function" then
-        pcall(RegisterSharedToggle, syncKey, {
-            Button = box,
-            SetVisual = setVisual
-        })
-    end
-
-    if syncKey and type(RegisterStartupToggleCallback) == "function" then
-        pcall(RegisterStartupToggleCallback, syncKey, toggleCallback)
-    end
-
-    toggleButton.MouseButton1Click:Connect(function()
-        if env.Destroyed or env.ToxOptionsReady == false then
-            return
-        end
-
-        state = not state
-        updateToggle()
-        toggleCallback(state)
-
-        if syncKey and type(env.SyncToggleVisuals) == "function" then
-            pcall(env.SyncToggleVisuals, syncKey, state)
-        end
-
-        SaveUniversal2Settings()
-    end)
-
-    modeButton.MouseButton1Click:Connect(function()
-        if env.Destroyed or env.ToxOptionsReady == false then
-            return
-        end
-
-        local index = 1
-        for i, option in ipairs(options) do
-            if tostring(option) == tostring(modeButton.Text) then
-                index = i
-                break
-            end
-        end
-
-        index += 1
-        if index > #options then
-            index = 1
-        end
-
-        modeButton.Text = tostring(options[index])
-        modeCallback(options[index])
-        SaveUniversal2Settings()
-    end)
-
-    updateToggle()
-    TrackUniversalControl(box, page)
-
-    if type(env.RegisterToxSearchControl) == "function" then
-        env.RegisterToxSearchControl(name, page, box, options)
-    end
-
-    return box, setVisual
-end
-
 local raw = {
     CreateToggle = env.CreateToggle,
     CreateToggleWithValue = env.CreateToggleWithValue,
@@ -375,30 +164,6 @@ local raw = {
 env.ToxUniversalRawCreators = raw
 
 function CreateToggle(name, page, ...)
-    if name == "Aimbot (Right Click)" then
-        return nil
-    end
-
-    if name == "3D Rendering" then
-        local control, setVisual = CreateToggleCycleControl(
-            "3D Rendering",
-            {"WHITE", "BLACK", "RED", "BLUE"},
-            page,
-            not Settings.Render3D,
-            Settings.Render3DColor,
-            function(value)
-                ApplyRender3DState(not value)
-            end,
-            function(value)
-                ApplyRender3DColor(value)
-            end,
-            nil
-        )
-
-        env.ToxRender3DSetVisual = setVisual
-        return control
-    end
-
     return TrackUniversalControl(
         raw.CreateToggle(name, page, ...),
         page
@@ -427,10 +192,6 @@ function CreateInputWithTwoButtons(name, page, ...)
 end
 
 function CreateDropdown(name, options, page, ...)
-    if name == "3D Background" then
-        return nil
-    end
-
     return TrackUniversalControl(
         raw.CreateDropdown(name, options, page, ...),
         page
@@ -475,167 +236,19 @@ env.CreateConfirmButton = CreateConfirmButton
 env.CreateKeybindButton = CreateKeybindButton
 env.CreateKeybindToggle = CreateKeybindToggle
 
-local function GetCameraMovementControls()
-    -- Intentionally does not require PlayerModule.
-    -- Some executors block that ModuleScript access with
-    -- "lacking capability Plugin". ContextActionService below
-    -- is enough to sink movement while Freecam reads the same keys.
-    return nil
-end
-
-local function SinkCameraMovement()
-    return Enum.ContextActionResult.Sink
-end
-
-local function ShouldFreezeFreecamMovement()
-    return freecamActive == true or Settings.NoclipCamera == true
-end
-
-local function RestoreFreecamMovementFreeze(force)
-    if not force and ShouldFreezeFreecamMovement() then
-        return
-    end
-
-    pcall(function()
-        ContextActionService:UnbindAction(FREECAM_MOVEMENT_FREEZE_BIND)
-    end)
-
-    freecamMovementFrozen = false
-end
-
-local function ApplyFreecamMovementFreeze()
-    if not ShouldFreezeFreecamMovement() then
-        RestoreFreecamMovementFreeze(true)
-        return
-    end
-
-    if not freecamMovementFrozen then
-        freecamMovementFrozen = true
-
-        pcall(function()
-            ContextActionService:UnbindAction(FREECAM_MOVEMENT_FREEZE_BIND)
-            ContextActionService:BindActionAtPriority(
-                FREECAM_MOVEMENT_FREEZE_BIND,
-                SinkCameraMovement,
-                false,
-                3000,
-                Enum.KeyCode.W,
-                Enum.KeyCode.A,
-                Enum.KeyCode.S,
-                Enum.KeyCode.D,
-                Enum.KeyCode.Up,
-                Enum.KeyCode.Down,
-                Enum.KeyCode.Left,
-                Enum.KeyCode.Right,
-                Enum.KeyCode.Space,
-                Enum.KeyCode.LeftControl,
-                Enum.KeyCode.RightControl,
-                Enum.KeyCode.ButtonA,
-                Enum.KeyCode.Thumbstick1
-            )
-        end)
-    end
-
-    local character = Player.Character
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    local root = character and character:FindFirstChild("HumanoidRootPart")
-
-    if humanoid and humanoid.Health > 0 then
-        pcall(function()
-            humanoid:Move(Vector3.zero, false)
-            humanoid.Jump = false
-        end)
-    end
-
-    if root then
-        pcall(function()
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.AssemblyAngularVelocity = Vector3.zero
-        end)
-    end
-end
-
-local function GetCameraFocusDistance(camera)
-    if not camera then
-        return nil
-    end
-
-    local ok, distance = pcall(function()
-        return (camera.CFrame.Position - camera.Focus.Position).Magnitude
-    end)
-
-    if not ok or not distance then
-        return nil
-    end
-
-    return math.clamp(
-        distance,
-        math.max(0.05, tonumber(Player.CameraMinZoomDistance) or 0.05),
-        math.max(
-            tonumber(Player.CameraMaxZoomDistance) or 400,
-            tonumber(Player.CameraMinZoomDistance) or 0.05
-        )
-    )
-end
-
 local function RestoreCameraNoclip()
-    pcall(function()
-        RunService:UnbindFromRenderStep(CAMERA_NOCLIP_BIND)
-    end)
-
-    if cameraNoclipCaptured then
-        pcall(function()
-            if originalOcclusionMode then
-                Player.DevCameraOcclusionMode = originalOcclusionMode
-            end
-        end)
+    if not cameraNoclipCaptured then
+        return
     end
+
+    pcall(function()
+        if originalOcclusionMode then
+            Player.DevCameraOcclusionMode = originalOcclusionMode
+        end
+    end)
 
     cameraNoclipCaptured = false
     originalOcclusionMode = nil
-    cameraNoclipDistance = nil
-end
-
-local function UpdateCameraNoclip()
-    if Settings.NoclipCamera ~= true
-    or freecamActive
-    or env.Destroyed then
-        return
-    end
-
-    local camera = Workspace.CurrentCamera
-
-    if not camera
-    or camera.CameraType == Enum.CameraType.Scriptable then
-        return
-    end
-
-    local focus = camera.Focus
-    local currentDistance = GetCameraFocusDistance(camera)
-
-    if not cameraNoclipDistance then
-        cameraNoclipDistance = currentDistance or 12
-    end
-
-    local distance = math.clamp(
-        tonumber(cameraNoclipDistance) or 12,
-        math.max(0.05, tonumber(Player.CameraMinZoomDistance) or 0.05),
-        math.max(
-            tonumber(Player.CameraMaxZoomDistance) or 400,
-            tonumber(Player.CameraMinZoomDistance) or 0.05
-        )
-    )
-
-    cameraNoclipDistance = distance
-
-    -- Keep the normal Roblox camera rotation/focus, but restore the
-    -- user's requested distance AFTER Roblox performs wall collision.
-    -- This lets the camera physically cross the wall while the wall
-    -- remains fully opaque. No Invisicam / XRay transparency is used.
-    local rotation = camera.CFrame - camera.CFrame.Position
-    local position = focus.Position - camera.CFrame.LookVector * distance
-
-    camera.CFrame = CFrame.new(position) * rotation
 end
 
 local function SetNoclipCamera(enabled)
@@ -643,32 +256,16 @@ local function SetNoclipCamera(enabled)
     Settings.NoclipCamera = enabled
 
     if enabled then
-        local camera = Workspace.CurrentCamera
-
         if not cameraNoclipCaptured then
             pcall(function()
                 originalOcclusionMode = Player.DevCameraOcclusionMode
+                cameraNoclipCaptured = true
             end)
-
-            cameraNoclipCaptured = true
-            cameraNoclipDistance = GetCameraFocusDistance(camera) or 12
         end
 
-        -- Zoom mode keeps walls opaque. We bypass only the camera's
-        -- collision position in UpdateCameraNoclip.
         pcall(function()
-            Player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom
+            Player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
         end)
-
-        pcall(function()
-            RunService:UnbindFromRenderStep(CAMERA_NOCLIP_BIND)
-        end)
-
-        RunService:BindToRenderStep(
-            CAMERA_NOCLIP_BIND,
-            Enum.RenderPriority.Camera.Value + 50,
-            UpdateCameraNoclip
-        )
     else
         RestoreCameraNoclip()
     end
@@ -680,12 +277,10 @@ local function StopFreecam()
     end)
 
     if not freecamActive then
-        RestoreFreecamMovementFreeze()
         return
     end
 
     freecamActive = false
-    RestoreFreecamMovementFreeze()
 
     local camera = Workspace.CurrentCamera
     local saved = freecamSaved
@@ -759,33 +354,9 @@ local function UpdateFreecam(delta)
         UserInputService.MouseIconEnabled = false
 
         local mouseDelta = UserInputService:GetMouseDelta()
-        local invertY = 1
-        local sensitivity = 1
-
-        if UserGameSettings then
-            pcall(function()
-                invertY = UserGameSettings:GetCameraYInvertValue()
-            end)
-
-            pcall(function()
-                sensitivity = tonumber(UserGameSettings.MouseSensitivity) or 1
-            end)
-        end
-
-        sensitivity = math.clamp(sensitivity, 0.01, 20)
-
-        freecamYaw =
-            freecamYaw
-            - mouseDelta.X
-                * FREECAM_ROTATION_SPEED_MOUSE.X
-                * sensitivity
-
+        freecamYaw = freecamYaw - mouseDelta.X * 0.0025
         freecamPitch = math.clamp(
-            freecamPitch
-            - mouseDelta.Y
-                * FREECAM_ROTATION_SPEED_MOUSE.Y
-                * sensitivity
-                * invertY,
+            freecamPitch - mouseDelta.Y * 0.0025,
             math.rad(-89),
             math.rad(89)
         )
@@ -873,7 +444,6 @@ local function StartFreecam()
     freecamPitch = pitch
     freecamYaw = yaw
     freecamActive = true
-    ApplyFreecamMovementFreeze()
 
     camera.CameraType = Enum.CameraType.Scriptable
 
@@ -978,16 +548,12 @@ end
 local function SetFakeLag(enabled)
     Settings.FakeLag = enabled == true
 
-    if not Settings.FakeLag then
-        if type(sethiddenproperty) == "function" then
-            for root in pairs(fakeLagSleeping) do
-                if root and root.Parent then
-                    pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
-                end
-            end
+    if not Settings.FakeLag and fakeLagSleeping then
+        local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+        if root and type(sethiddenproperty) == "function" then
+            pcall(sethiddenproperty, root, "NetworkIsSleeping", false)
         end
-
-        fakeLagSleeping = setmetatable({}, {__mode = "k"})
+        fakeLagSleeping = false
     end
 end
 
@@ -996,17 +562,10 @@ local function SetNetworkSleeping(root, sleeping)
         return false
     end
 
-    local sleepingState = sleeping == true
-    local ok = pcall(sethiddenproperty, root, "NetworkIsSleeping", sleepingState)
-
+    local ok = pcall(sethiddenproperty, root, "NetworkIsSleeping", sleeping == true)
     if ok then
-        if sleepingState then
-            fakeLagSleeping[root] = true
-        else
-            fakeLagSleeping[root] = nil
-        end
+        fakeLagSleeping = sleeping == true
     end
-
     return ok
 end
 
@@ -1301,21 +860,28 @@ local function InstallVisualUI(page)
         "ESPShowHealth"
     )
 
-    ToggleWithValue(
+    Toggle(
         "Rainbow",
         page,
         Settings.VisualRainbow,
-        Settings.RainbowSpeed,
         function(value)
             Settings.VisualRainbow = value == true
             if not Settings.VisualRainbow then
                 ApplyRainbow()
             end
         end,
-        function(value)
-            Settings.RainbowSpeed = math.clamp(tonumber(value) or 10, 0.1, 100)
-        end,
         "VisualRainbow"
+    )
+
+    CreateVisualNumberOption(
+        "Rainbow Speed",
+        page,
+        Settings.RainbowSpeed,
+        0.1,
+        100,
+        function(value)
+            Settings.RainbowSpeed = value
+        end
     )
 
     ToggleWithValue(
@@ -1367,39 +933,6 @@ visualConnections[#visualConnections + 1] = Workspace.DescendantAdded:Connect(fu
     end
 end)
 
-visualConnections[#visualConnections + 1] = UserInputService.InputChanged:Connect(function(input, gameProcessed)
-    if gameProcessed
-    or Settings.NoclipCamera ~= true
-    or freecamActive
-    or input.UserInputType ~= Enum.UserInputType.MouseWheel then
-        return
-    end
-
-    local wheel = tonumber(input.Position.Z) or 0
-
-    if wheel == 0 then
-        return
-    end
-
-    local camera = Workspace.CurrentCamera
-    local distance = tonumber(cameraNoclipDistance)
-        or GetCameraFocusDistance(camera)
-        or 12
-
-    -- Match Roblox-style zoom direction while keeping our own desired
-    -- distance independent from wall collision.
-    distance = distance * math.pow(0.82, wheel)
-
-    cameraNoclipDistance = math.clamp(
-        distance,
-        math.max(0.05, tonumber(Player.CameraMinZoomDistance) or 0.05),
-        math.max(
-            tonumber(Player.CameraMaxZoomDistance) or 400,
-            tonumber(Player.CameraMinZoomDistance) or 0.05
-        )
-    )
-end)
-
 pcall(function()
     RunService:UnbindFromRenderStep(VISUAL_BIND)
 end)
@@ -1412,12 +945,6 @@ RunService:BindToRenderStep(
         or env.Destroyed
         or not env.ScriptLoaded then
             return
-        end
-
-        if ShouldFreezeFreecamMovement() then
-            ApplyFreecamMovementFreeze()
-        else
-            RestoreFreecamMovementFreeze()
         end
 
         ApplyRainbow()
@@ -1433,7 +960,7 @@ RunService:BindToRenderStep(
             SetNetworkSleeping(root, shouldSleep)
         elseif not Settings.FakeLag then
             fakeLagClock = 0
-            if next(fakeLagSleeping) ~= nil then
+            if fakeLagSleeping then
                 SetFakeLag(false)
             end
         end
@@ -1448,17 +975,9 @@ task.spawn(function()
     end
 
     if env.ToxUniversal2Token == instanceToken
-    and not env.Destroyed then
-        ApplyRender3DColor(Settings.Render3DColor)
-        ApplyRender3DState(Settings.Render3D)
-
-        if type(env.ToxRender3DSetVisual) == "function" then
-            env.ToxRender3DSetVisual(not Settings.Render3D)
-        end
-
-        if Settings.XRay then
-            ApplyXRayAll()
-        end
+    and not env.Destroyed
+    and Settings.XRay then
+        ApplyXRayAll()
     end
 end)
 
@@ -1469,10 +988,6 @@ env.ToxUniversal2Cleanup = function()
 
     pcall(function()
         RunService:UnbindFromRenderStep(VISUAL_BIND)
-    end)
-
-    pcall(function()
-        RunService:UnbindFromRenderStep(CAMERA_NOCLIP_BIND)
     end)
 
     for _, connection in ipairs(visualConnections) do
@@ -1486,17 +1001,6 @@ env.ToxUniversal2Cleanup = function()
     SetFakeLag(false)
     ClearHealthBillboards()
 
-    pcall(function()
-        RunService:Set3dRenderingEnabled(true)
-    end)
-
-    local renderGui = env.ToxRenderBackdropGui
-    local renderFrame = renderGui and renderGui:FindFirstChildOfClass("Frame")
-    if renderFrame then
-        renderFrame.Visible = false
-    end
-    Settings.Render3D = true
-
     if Settings.VisualRainbow then
         Settings.VisualRainbow = false
         ApplyRainbow()
@@ -1506,8 +1010,7 @@ env.ToxUniversal2Cleanup = function()
     end
 
     StopFreecam()
-    SetNoclipCamera(false)
-    RestoreFreecamMovementFreeze(true)
+    RestoreCameraNoclip()
 
     if env.ToxUniversal2Token == instanceToken then
         env.ToxUniversal2Token = nil
@@ -1543,13 +1046,6 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
     local RENDER_BIND = "ToxUniversal2Combat"
     local instanceToken = {}
     
-    Settings.AimbotMode = string.upper(tostring(Settings.AimbotMode or "CAMERA"))
-    if Settings.AimbotMode ~= "CAMERA" and Settings.AimbotMode ~= "MOUSE" then
-        Settings.AimbotMode = "CAMERA"
-    end
-    Settings.AimbotBindEnabled = Settings.AimbotBindEnabled == true
-    Settings.AimbotKey = Settings.AimbotKey or Enum.KeyCode.E
-    Settings.AimbotBlatant = Settings.AimbotBlatant == true
     Settings.AimLock = Settings.AimLock == true
     Settings.LockRadius = math.clamp(tonumber(Settings.LockRadius) or 110, 1, 2000)
     Settings.AimTargets = tostring(Settings.AimTargets or "Players Only")
@@ -1787,7 +1283,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         return candidates
     end
     
-    local function GetMouseTarget(radiusOverride)
+    local function GetMouseTarget()
         local camera = Workspace.CurrentCamera
     
         if not camera then
@@ -1795,7 +1291,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         end
     
         local mousePosition = UserInputService:GetMouseLocation()
-        local radius = math.max(1, tonumber(radiusOverride) or tonumber(Settings.LockRadius) or 110)
+        local radius = math.max(1, tonumber(Settings.LockRadius) or 110)
         local best = nil
         local bestDistance = radius
     
@@ -2098,91 +1594,39 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
     
         local page = env.CombatPage or env.UniversalPage
         local CreateToggle = env.CreateToggle
-        local CreateToggleWithValue = env.CreateToggleWithValue
         local CreateDropdown = env.CreateDropdown
-        local CreateKeybindToggle = env.CreateKeybindToggle
     
         if not page
         or type(CreateToggle) ~= "function"
-        or type(CreateToggleWithValue) ~= "function"
-        or type(CreateDropdown) ~= "function"
-        or type(CreateKeybindToggle) ~= "function" then
+        or type(CreateDropdown) ~= "function" then
             return
         end
     
         combatUIInstalled = true
-
-        CreateToggleCycleControl(
-            "Aimbot",
-            {"CAMERA", "MOUSE"},
-            page,
-            Settings.Aimbot,
-            Settings.AimbotMode,
-            function(value)
-                Settings.Aimbot = value == true
-                if not Settings.Aimbot then
-                    lockedTarget = nil
-                end
-            end,
-            function(value)
-                Settings.AimbotMode = string.upper(tostring(value or "CAMERA"))
-                lockedTarget = nil
-            end,
-            "Aimbot"
-        )
     
-        local aimbotBindControl = CreateKeybindToggle(
-            "Aimbot Bind",
-            page,
-            Settings.AimbotKey,
-            Settings.AimbotBindEnabled,
-            function(key)
-                Settings.AimbotKey = key
-                lockedTarget = nil
-            end,
-            function(value)
-                Settings.AimbotBindEnabled = value == true
-                lockedTarget = nil
-            end,
-            "AimbotBindEnabled"
-        )
-
-        if aimbotBindControl then
-            for _, object in ipairs(aimbotBindControl:GetDescendants()) do
-                if object:IsA("TextLabel")
-                and object.Text == "AUTO" then
-                    object.Text = "BIND"
-                end
-            end
-        end
-    
-        CreateToggleWithValue(
+        CreateToggle(
             "Aim Lock",
             page,
             Settings.AimLock,
-            Settings.LockRadius,
             function(value)
                 Settings.AimLock = value == true
                 if not Settings.AimLock then
                     lockedTarget = nil
                 end
             end,
-            function(value)
-                Settings.LockRadius = math.clamp(tonumber(value) or 110, 1, 2000)
-                lockedTarget = nil
-            end,
             "AimLock"
         )
-
-        CreateToggle(
-            "Blatant",
+    
+        CreateNumberOption(
+            "Lock Radius",
             page,
-            Settings.AimbotBlatant,
+            Settings.LockRadius,
+            1,
+            2000,
             function(value)
-                Settings.AimbotBlatant = value == true
+                Settings.LockRadius = value
                 lockedTarget = nil
-            end,
-            "AimbotBlatant"
+            end
         )
     
         CreateDropdown(
@@ -2428,37 +1872,6 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         return true
     end
 
-    local function MoveBefore(section, name, anchorName)
-        if not section then
-            return false
-        end
-
-        local controlIndex = nil
-        local anchorIndex = nil
-
-        for index, control in ipairs(section.Controls or {}) do
-            if ControlHasName(control, name) then
-                controlIndex = index
-            end
-            if ControlHasName(control, anchorName) then
-                anchorIndex = index
-            end
-        end
-
-        if not controlIndex or not anchorIndex or controlIndex == anchorIndex then
-            return false
-        end
-
-        local control = table.remove(section.Controls, controlIndex)
-
-        if controlIndex < anchorIndex then
-            anchorIndex -= 1
-        end
-
-        table.insert(section.Controls, math.max(1, anchorIndex), control)
-        return true
-    end
-
     local function MoveAfter(section, name, anchorName)
         if not section then
             return false
@@ -2495,28 +1908,13 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         DestroyControl("Shift Lock Key")
 
         MoveControlToSection("Fullbright", "PLAYER")
-        MoveControlToSection("XRay", "PLAYER")
 
-        local combatSection = FindSection("COMBAT")
         local playerSection = FindSection("PLAYER")
-        local visualSection = FindSection("VISUAL")
         local miscSection = FindSection("MISC")
 
-        MoveBefore(combatSection, "Aimbot", "Aim Smoothness")
-        MoveAfter(combatSection, "Aimbot Bind", "Aimbot")
-        MoveAfter(combatSection, "Aim Smoothness", "Aimbot Bind")
-        MoveAfter(combatSection, "Aim Lock", "Aim Smoothness")
-        MoveAfter(combatSection, "Blatant", "Aim Lock")
-        MoveAfter(combatSection, "Aim Targets", "Blatant")
-        MoveAfter(combatSection, "Ignore Friends", "Aim Targets")
-
         MoveAfter(playerSection, "Freecam", "Jump")
-        MoveAfter(playerSection, "XRay", "Freecam")
         MoveAfter(playerSection, "Fullbright", "Air Walk (E Up / Q Down)")
 
-        MoveAfter(visualSection, "Show Health", "Names")
-
-        MoveBefore(miscSection, "Walk Fling", "Ctrl Click TP")
         MoveAfter(miscSection, "Noclip Camera", "Ctrl Click TP")
         MoveAfter(miscSection, "Normalize Animations", "No Fall Damage")
         MoveAfter(miscSection, "Fix Unanchored Parts", "Normalize Animations")
@@ -2547,48 +1945,6 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
                 env.ApplyUniversalSectionState(section)
             end
         end
-    end
-
-    local function RebuildConfigLayout()
-        local page = env.ConfigPage
-        if not page then
-            return false
-        end
-
-        local controls = {}
-        local panic = nil
-        local guiToggle = nil
-
-        for _, child in ipairs(page:GetChildren()) do
-            if child:IsA("GuiObject") then
-                if ControlHasName(child, "Panic Key") then
-                    panic = child
-                elseif ControlHasName(child, "GUI Toggle") or ControlHasName(child, "GUI Keybind") then
-                    guiToggle = child
-                end
-                controls[#controls + 1] = child
-            end
-        end
-
-        if not panic or not guiToggle then
-            return false
-        end
-
-        local reordered = {}
-        for _, control in ipairs(controls) do
-            if control ~= panic then
-                reordered[#reordered + 1] = control
-                if control == guiToggle then
-                    reordered[#reordered + 1] = panic
-                end
-            end
-        end
-
-        for index, control in ipairs(reordered) do
-            control.LayoutOrder = index
-        end
-
-        return true
     end
 
     local function RenameGuiToggleLabel()
@@ -2690,20 +2046,18 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end
 
             local hasShiftLock = FindControl("Force Shift Lock") ~= nil
+            local hasShiftKey = FindControl("Shift Lock Key") ~= nil
             local hasFullbright = FindControl("Fullbright") ~= nil
             local hasJump = FindControl("Jump") ~= nil
             local hasAirWalk = FindControl("Air Walk (E Up / Q Down)") ~= nil
             local hasCtrlClick = FindControl("Ctrl Click TP") ~= nil
-            local hasAimSmoothness = FindControl("Aim Smoothness") ~= nil
-            local hasNames = FindControl("Names") ~= nil
 
             if hasShiftLock
+            and hasShiftKey
             and hasFullbright
             and hasJump
             and hasAirWalk
-            and hasCtrlClick
-            and hasAimSmoothness
-            and hasNames then
+            and hasCtrlClick then
                 RebuildUniversalLayout()
                 break
             end
@@ -2722,7 +2076,6 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         if env.ToxUniversal2ExtraToken == instanceToken
         and not env.Destroyed then
             RenameGuiToggleLabel()
-            RebuildConfigLayout()
     
             if Settings.StartHidden and env.Main then
                 task.wait()
@@ -2733,22 +2086,6 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         end
     end)
     
-    task.spawn(function()
-        for _ = 1, 180 do
-            if env.ToxUniversal2ExtraToken ~= instanceToken
-            or env.Destroyed then
-                return
-            end
-
-            RenameGuiToggleLabel()
-            if RebuildConfigLayout() then
-                return
-            end
-
-            task.wait(0.05)
-        end
-    end)
-
     AddConnection(UserInputService.InputBegan:Connect(function(input, processed)
         if processed
         or env.Destroyed
@@ -2839,81 +2176,20 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
                 end
             end
     
-            local blatant = Settings.AimbotBlatant == true
-            local activationPressed = false
-
-            if blatant then
-                activationPressed = true
-            elseif Settings.AimbotBindEnabled == true then
-                local key = Settings.AimbotKey
-
-                if typeof(key) == "EnumItem"
-                and key.EnumType == Enum.KeyCode
-                and key ~= Enum.KeyCode.Unknown then
-                    activationPressed = UserInputService:IsKeyDown(key)
-                end
-            else
-                activationPressed = UserInputService:IsMouseButtonPressed(
+            local aimLockActive = Settings.AimLock == true
+                and Settings.Aimbot == true
+                and UserInputService:IsMouseButtonPressed(
                     Enum.UserInputType.MouseButton2
                 )
-            end
 
-            local mode = string.upper(tostring(Settings.AimbotMode or "CAMERA"))
-            local camera = Workspace.CurrentCamera
-
-            if Settings.Aimbot ~= true or not activationPressed or not camera then
+            if not aimLockActive then
                 lockedTarget = nil
                 return
             end
 
-            if mode == "MOUSE" then
-                local target = Settings.AimLock and lockedTarget or nil
+            local camera = Workspace.CurrentCamera
 
-                if target and not TargetValid(target) then
-                    target = nil
-                end
-
-                if not target then
-                    target = GetMouseTarget(
-                        Settings.AimLock and Settings.LockRadius or Settings.FOVRadius
-                    )
-                end
-
-                if Settings.AimLock then
-                    lockedTarget = target
-                else
-                    lockedTarget = nil
-                end
-
-                if not target or not target.Part then
-                    return
-                end
-
-                local screen, onScreen = camera:WorldToViewportPoint(target.Part.Position)
-                if not onScreen or screen.Z <= 0 then
-                    return
-                end
-
-                local mousePosition = UserInputService:GetMouseLocation()
-                local smooth = blatant and 1 or math.max(1, tonumber(Settings.AimbotSmoothness) or 2)
-                local dx = (screen.X - mousePosition.X) / smooth
-                local dy = (screen.Y - mousePosition.Y) / smooth
-
-                if type(mousemoverel) == "function" then
-                    pcall(mousemoverel, dx, dy)
-                elseif type(mouse_move_relative) == "function" then
-                    pcall(mouse_move_relative, dx, dy)
-                else
-                    camera.CFrame = camera.CFrame:Lerp(
-                        CFrame.new(camera.CFrame.Position, target.Part.Position),
-                        1 / smooth
-                    )
-                end
-
-                return
-            end
-
-            if Settings.AimLock ~= true and not blatant then
+            if not camera then
                 lockedTarget = nil
                 return
             end
@@ -2935,7 +2211,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end
 
             local aimPosition = target.Part.Position
-            local smooth = blatant and 1 or math.max(
+            local smooth = math.max(
                 1,
                 tonumber(Settings.AimbotSmoothness) or 2
             )
@@ -2963,7 +2239,6 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         RestoreAnimations()
         RestoreForceJump()
         SetUnlockCursor(false)
-        lockedTarget = nil
     
         if env.ToxUniversal2ExtraToken == instanceToken then
             env.ToxUniversal2ExtraToken = nil
@@ -2999,4 +2274,4 @@ if not mergedFeaturesOk then
 end
 
 env.ToxUniversal2Loaded = true
-env.ToxUniversal2Version = "2026-09-16-correct-universal-ui"
+env.ToxUniversal2Version = "2026-09-15-two-file-universal"
