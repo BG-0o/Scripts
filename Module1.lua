@@ -1,3 +1,20 @@
+do
+    local env = getgenv()
+    local current = env.__ToxHubBootLock
+    local now = os.clock()
+
+    if typeof(current) == "table"
+    and current.Game == game
+    and now - (tonumber(current.StartedAt) or now) < 8 then
+        return
+    end
+
+    env.__ToxHubBootLock = {
+        Game = game,
+        StartedAt = now
+    }
+end
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -162,6 +179,7 @@ end
 
 if HasRunningToxHub() then
     if not ShowReexecuteConfirm() then
+        getgenv().__ToxHubBootLock = nil
         return
     end
 
@@ -578,7 +596,8 @@ getgenv().ToxStartupBooleanState = {}
 getgenv().ToxStartupToggleCallbacks = {}
 getgenv().ToxStartupOptionsApplied = false
 getgenv().ToxHubActive = true
-getgenv().ToxModule1SplitVersion = "2026-09-16-config-v7-1"
+getgenv().__ToxHubBootLock = nil
+getgenv().ToxModule1SplitVersion = "2026-09-16-autoexecute-single-v8-1"
 getgenv().ToxUniversalLoaded = nil
 getgenv().ToxUniversal2Loaded = nil
 getgenv().ToxUniversal2Version = nil
@@ -1919,12 +1938,6 @@ end
 
 local env = getgenv()
 
-if env.__ToxAutoExecuteDestinationStarted then
-    return
-end
-
-env.__ToxAutoExecuteDestinationStarted = true
-
 task.wait(0.55)
 
 local shouldExecute = true
@@ -2024,27 +2037,38 @@ for _ = 1, 20 do
     task.wait(0.25)
 end
 
-if shouldExecute then
-    local ok = pcall(function()
-        loadstring(
-            game:HttpGet(
-                "https://raw.githubusercontent.com/BG-0o/Scripts/main/ToxHud.lua"
-            )
-        )()
-    end)
+if not shouldExecute then
+    return
+end
 
-    if not ok then
-        env.__ToxAutoExecuteDestinationStarted = nil
-    end
-else
-    env.__ToxAutoExecuteDestinationStarted = nil
+if env.__ToxQueuedDestinationGame == game then
+    return
+end
+
+env.__ToxQueuedDestinationGame = game
+
+local ok = pcall(function()
+    loadstring(
+        game:HttpGet(
+            "https://raw.githubusercontent.com/BG-0o/Scripts/main/ToxHud.lua"
+        )
+    )()
+end)
+
+if not ok
+and env.__ToxQueuedDestinationGame == game then
+    env.__ToxQueuedDestinationGame = nil
 end
 ]]
 
-getgenv().ToxAutoExecuteQueued = false
+if getgenv().ToxAutoExecuteQueuedGame ~= game then
+    getgenv().ToxAutoExecuteQueued = false
+    getgenv().ToxAutoExecuteQueuedGame = game
+end
 
 getgenv().QueueToxAutoExecute = function()
-    if getgenv().ToxAutoExecuteQueued then
+    if getgenv().ToxAutoExecuteQueued
+    and getgenv().ToxAutoExecuteQueuedGame == game then
         return true
     end
 
@@ -2060,6 +2084,7 @@ getgenv().QueueToxAutoExecute = function()
 
     if ok then
         getgenv().ToxAutoExecuteQueued = true
+        getgenv().ToxAutoExecuteQueuedGame = game
     end
 
     return ok
