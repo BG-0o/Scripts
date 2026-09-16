@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-16-universal-subtabs-lighting-1"
+ToxUpdateVersion = "2026-09-16-lighting-combat-nds-2"
 
 
 function ClearToxTable(target)
@@ -5571,9 +5571,21 @@ CreateToggle(
     getgenv().LightingPage or FlingPage,
     Settings.Fullbright,
     function(v)
+        if v == true
+        and getgenv().ToxLighting
+        and type(getgenv().ToxLighting.SetAdjust) == "function" then
+            pcall(getgenv().ToxLighting.SetAdjust, false)
+            Settings.AdjustLighting = false
+
+            if getgenv().SyncToggleVisuals then
+                pcall(getgenv().SyncToggleVisuals, "AdjustLighting", false)
+            end
+        end
+
         Settings.Fullbright = v == true
         UpdateFullbright()
-    end
+    end,
+    "Fullbright"
 )
 
 BeginUniversalSection("Misc")
@@ -6466,6 +6478,10 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
 
     if getgenv().ToxUniversal2Cleanup then
         pcall(getgenv().ToxUniversal2Cleanup)
+    end
+
+    if getgenv().ToxLightingCleanup then
+        pcall(getgenv().ToxLightingCleanup)
     end
 
     if getgenv().ToxChatCleanup then
