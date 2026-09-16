@@ -6272,6 +6272,7 @@ local function ShowCenterLoadSequence()
     end
 
     ScriptLoaded = true
+    getgenv().ScriptLoaded = true
     if blur then blur:Destroy() end
 
     local fallTween = TweenService:Create(SplashFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
