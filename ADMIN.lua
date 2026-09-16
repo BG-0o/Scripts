@@ -2,6 +2,10 @@ if game.PlaceId ~= 4522347649 then
     return
 end
 
+if getgenv().ToxADMINCleanup then
+    pcall(getgenv().ToxADMINCleanup)
+end
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextChatService = game:GetService("TextChatService")
@@ -898,6 +902,22 @@ local function StartLoop(id, callback)
             task.wait(seconds)
         end
     end)
+end
+
+getgenv().ToxADMINCleanup = function()
+    for key, value in pairs(Settings) do
+        if typeof(value) == "boolean"
+        and string.find(
+            key,
+            "^ADMINLoop"
+        ) then
+            Settings[key] = false
+        end
+    end
+
+    for id in pairs(LoopGeneration) do
+        StopLoop(id)
+    end
 end
 
 local function CreateLoopControls(
