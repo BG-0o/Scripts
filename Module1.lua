@@ -3227,29 +3227,32 @@ TabLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 	Tabs.CanvasSize = UDim2.new(0, TabLayout.AbsoluteContentSize.X + 5, 0, 0)
 end)
 
-local UniversalTabs = Instance.new("ScrollingFrame")
-UniversalTabs.Name = "UniversalSubTabs"
-UniversalTabs.Size = UDim2.new(1, -10, 0, 32)
-UniversalTabs.Position = UDim2.new(0, 5, 0, 118)
-UniversalTabs.BackgroundTransparency = 1
-UniversalTabs.BorderSizePixel = 0
-UniversalTabs.ScrollBarThickness = 2
-UniversalTabs.ScrollBarImageColor3 = MAIN_COLOR
-UniversalTabs.ScrollingDirection = Enum.ScrollingDirection.X
-UniversalTabs.CanvasSize = UDim2.new(0, 0, 0, 0)
-UniversalTabs.Visible = true
-UniversalTabs.Parent = Main
-getgenv().UniversalTabs = UniversalTabs
+getgenv().UniversalTabs = Instance.new("ScrollingFrame")
+getgenv().UniversalTabs.Name = "UniversalSubTabs"
+getgenv().UniversalTabs.Size = UDim2.new(1, -10, 0, 32)
+getgenv().UniversalTabs.Position = UDim2.new(0, 5, 0, 118)
+getgenv().UniversalTabs.BackgroundTransparency = 1
+getgenv().UniversalTabs.BorderSizePixel = 0
+getgenv().UniversalTabs.ScrollBarThickness = 2
+getgenv().UniversalTabs.ScrollBarImageColor3 = MAIN_COLOR
+getgenv().UniversalTabs.ScrollingDirection = Enum.ScrollingDirection.X
+getgenv().UniversalTabs.CanvasSize = UDim2.new(0, 0, 0, 0)
+getgenv().UniversalTabs.Visible = true
+getgenv().UniversalTabs.Parent = Main
 
-local UniversalTabLayout = Instance.new("UIListLayout")
-UniversalTabLayout.FillDirection = Enum.FillDirection.Horizontal
-UniversalTabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-UniversalTabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-UniversalTabLayout.Padding = UDim.new(0, 4)
-UniversalTabLayout.Parent = UniversalTabs
+getgenv().UniversalTabLayout = Instance.new("UIListLayout")
+getgenv().UniversalTabLayout.FillDirection = Enum.FillDirection.Horizontal
+getgenv().UniversalTabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+getgenv().UniversalTabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+getgenv().UniversalTabLayout.Padding = UDim.new(0, 4)
+getgenv().UniversalTabLayout.Parent = getgenv().UniversalTabs
 
-UniversalTabLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    UniversalTabs.CanvasSize = UDim2.new(0, UniversalTabLayout.AbsoluteContentSize.X + 5, 0, 0)
+getgenv().UniversalTabLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    local tabs = getgenv().UniversalTabs
+    local layout = getgenv().UniversalTabLayout
+    if tabs and tabs.Parent and layout and layout.Parent then
+        tabs.CanvasSize = UDim2.new(0, layout.AbsoluteContentSize.X + 5, 0, 0)
+    end
 end)
 
 local Pages = {}
@@ -3302,7 +3305,7 @@ end
 local CombatPage = CreatePage("UNIVERSAL_COMBAT")
 local PlayerPage = CreatePage("UNIVERSAL_PLAYER")
 local VisualsPage = CreatePage("UNIVERSAL_ESP")
-local LightingPage = CreatePage("UNIVERSAL_LIGHTING")
+getgenv().LightingPage = CreatePage("UNIVERSAL_LIGHTING")
 local FlingPage = CreatePage("UNIVERSAL_MISC")
 local UniversalPage = CombatPage
 local ScriptsPage = CreatePage("SCRIPTS")
@@ -3311,15 +3314,15 @@ local ChatPage = CreatePage("CHAT", true)
 local ControlPage = CreatePage("CONTROL", true)
 local ConfigPage = CreatePage("CONFIG")
 
-local UniversalSubPages = {
+getgenv().UniversalSubPages = {
     [CombatPage] = "COMBAT",
     [PlayerPage] = "PLAYER",
     [VisualsPage] = "ESP",
-    [LightingPage] = "LIGHTING",
+    [getgenv().LightingPage] = "LIGHTING",
     [FlingPage] = "MISC"
 }
 
-for page in pairs(UniversalSubPages) do
+for page in pairs(getgenv().UniversalSubPages) do
     page.Position = UDim2.new(0, 8, 0, 154)
     page.Size = UDim2.new(1, -16, 1, -158)
 end
@@ -3329,9 +3332,7 @@ getgenv().UniversalPage = UniversalPage
 getgenv().CombatPage = CombatPage
 getgenv().PlayerPage = PlayerPage
 getgenv().VisualsPage = VisualsPage
-getgenv().LightingPage = LightingPage
 getgenv().FlingPage = FlingPage
-getgenv().UniversalSubPages = UniversalSubPages
 getgenv().ScriptsPage = ScriptsPage
 getgenv().JoinPage = JoinPage
 getgenv().ChatPage = ChatPage
@@ -3366,7 +3367,7 @@ getgenv().CreateTab = function(Name, Page)
 
         if Page == UniversalPage
         and getgenv().LastUniversalSubPage
-        and UniversalSubPages[getgenv().LastUniversalSubPage] then
+        and getgenv().UniversalSubPages[getgenv().LastUniversalSubPage] then
             targetPage = getgenv().LastUniversalSubPage
         end
 
@@ -3406,9 +3407,9 @@ local ChatTab = CreateTab("CHAT", ChatPage)
 local ControlTab = CreateTab("CONTROL", ControlPage)
 local ConfigTab = CreateTab("CONFIG", ConfigPage)
 
-local UniversalSubButtonsByPage = {}
+getgenv().UniversalSubButtonsByPage = {}
 
-local function CreateUniversalSubTab(name, page)
+getgenv().CreateUniversalSubTabInternal = function(name, page)
     local button = Instance.new("TextButton")
     button.Size = UDim2.new(0, name == "LIGHTING" and 82 or 75, 0, 27)
     button.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
@@ -3418,13 +3419,13 @@ local function CreateUniversalSubTab(name, page)
     button.TextSize = 10
     button.Font = Enum.Font.GothamBold
     button.AutoButtonColor = false
-    button.Parent = UniversalTabs
+    button.Parent = getgenv().UniversalTabs
 
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 4)
     corner.Parent = button
 
-    UniversalSubButtonsByPage[page] = button
+    getgenv().UniversalSubButtonsByPage[page] = button
 
     button.MouseButton1Click:Connect(function()
         if Destroyed then
@@ -3439,29 +3440,24 @@ local function CreateUniversalSubTab(name, page)
     return button
 end
 
-local CombatTab = CreateUniversalSubTab("COMBAT", CombatPage)
-local PlayerTab = CreateUniversalSubTab("PLAYER", PlayerPage)
-local VisualsTab = CreateUniversalSubTab("ESP", VisualsPage)
-local LightingTab = CreateUniversalSubTab("LIGHTING", LightingPage)
-local FlingTab = CreateUniversalSubTab("MISC", FlingPage)
+getgenv().CombatTab = getgenv().CreateUniversalSubTabInternal("COMBAT", CombatPage)
+getgenv().PlayerTab = getgenv().CreateUniversalSubTabInternal("PLAYER", PlayerPage)
+getgenv().VisualsTab = getgenv().CreateUniversalSubTabInternal("ESP", VisualsPage)
+getgenv().LightingTab = getgenv().CreateUniversalSubTabInternal("LIGHTING", getgenv().LightingPage)
+getgenv().FlingTab = getgenv().CreateUniversalSubTabInternal("MISC", FlingPage)
+getgenv().CreateUniversalSubTabInternal = nil
 
-getgenv().UniversalSubButtonsByPage = UniversalSubButtonsByPage
 getgenv().GameTab = GameTab
 getgenv().UniversalTab = UniversalTab
-getgenv().CombatTab = CombatTab
-getgenv().PlayerTab = PlayerTab
-getgenv().VisualsTab = VisualsTab
-getgenv().LightingTab = LightingTab
-getgenv().FlingTab = FlingTab
 getgenv().ChatTab = ChatTab
 getgenv().ControlTab = ControlTab
 
 UniversalPage.Visible = true
-UniversalTabs.Visible = true
+getgenv().UniversalTabs.Visible = true
 UniversalTab.BackgroundColor3 = MAIN_COLOR
 UniversalTab.TextColor3 = Color3.fromRGB(255, 255, 255)
-CombatTab.BackgroundColor3 = MAIN_COLOR
-CombatTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+getgenv().CombatTab.BackgroundColor3 = MAIN_COLOR
+getgenv().CombatTab.TextColor3 = Color3.fromRGB(255, 255, 255)
 
 
 getgenv().ToxPageButtonsByPage = getgenv().ToxPageButtonsByPage or {}
@@ -3469,7 +3465,7 @@ getgenv().ToxPageNamesByPage = getgenv().ToxPageNamesByPage or {}
 getgenv().ToxPageNamesByPage[CombatPage] = "UNIVERSAL / COMBAT"
 getgenv().ToxPageNamesByPage[PlayerPage] = "UNIVERSAL / PLAYER"
 getgenv().ToxPageNamesByPage[VisualsPage] = "UNIVERSAL / ESP"
-getgenv().ToxPageNamesByPage[LightingPage] = "UNIVERSAL / LIGHTING"
+getgenv().ToxPageNamesByPage[getgenv().LightingPage] = "UNIVERSAL / LIGHTING"
 getgenv().ToxPageNamesByPage[FlingPage] = "UNIVERSAL / MISC"
 getgenv().ToxSearchControls = {}
 
@@ -3517,8 +3513,8 @@ getgenv().ToxOpenPage = function(page)
     page.Visible = true
     getgenv().CurrentPage = page
 
-    local isUniversalSubPage = UniversalSubPages[page] ~= nil
-    UniversalTabs.Visible = isUniversalSubPage
+    local isUniversalSubPage = getgenv().UniversalSubPages and getgenv().UniversalSubPages[page] ~= nil
+    getgenv().UniversalTabs.Visible = isUniversalSubPage
 
     for _, object in ipairs(Tabs:GetChildren()) do
         if object:IsA("TextButton") then
@@ -3527,7 +3523,7 @@ getgenv().ToxOpenPage = function(page)
         end
     end
 
-    for _, object in ipairs(UniversalTabs:GetChildren()) do
+    for _, object in ipairs(getgenv().UniversalTabs:GetChildren()) do
         if object:IsA("TextButton") then
             object.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
             object.TextColor3 = Color3.fromRGB(170, 170, 185)
@@ -3540,7 +3536,7 @@ getgenv().ToxOpenPage = function(page)
         getgenv().LastUniversalSubPage = page
         tabButton = UniversalTab
 
-        local subButton = UniversalSubButtonsByPage[page]
+        local subButton = getgenv().UniversalSubButtonsByPage and getgenv().UniversalSubButtonsByPage[page]
         if subButton and subButton.Parent then
             subButton.BackgroundColor3 = MAIN_COLOR
             subButton.TextColor3 = Color3.fromRGB(255, 255, 255)
