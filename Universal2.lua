@@ -1779,6 +1779,156 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         return camera:WorldToViewportPoint(position)
     end
 
+    local function RoundAimMouseDelta(value)
+        value = tonumber(value) or 0
+
+        if value >= 0 then
+            return math.floor(value + 0.5)
+        end
+
+        return math.ceil(value - 0.5)
+    end
+
+    local function MoveAimMouse(screen, mousePosition, smooth, blatant, delta)
+        local rawDX = screen.X - mousePosition.X
+        local rawDY = screen.Y - mousePosition.Y
+
+        if rawDX ~= rawDX
+        or rawDY ~= rawDY
+        or math.abs(rawDX) > 100000
+        or math.abs(rawDY) > 100000 then
+            return false
+        end
+
+        local distance =
+            Vector2.new(
+                rawDX,
+                rawDY
+            ).Magnitude
+
+        if distance <= 2 then
+            return true
+        end
+
+        local divisor =
+            math.max(
+                1,
+                tonumber(smooth) or 1
+            )
+
+        local dx = rawDX / divisor
+        local dy = rawDY / divisor
+
+        local frameDelta =
+            math.clamp(
+                tonumber(delta) or (1 / 60),
+                1 / 240,
+                1 / 20
+            )
+
+        local maxSpeed =
+            blatant
+            and 2200
+            or 900
+
+        local maxStep =
+            math.clamp(
+                maxSpeed * frameDelta,
+                3,
+                blatant and 70 or 24
+            )
+
+        local movementMagnitude =
+            Vector2.new(
+                dx,
+                dy
+            ).Magnitude
+
+        if movementMagnitude > maxStep
+        and movementMagnitude > 0 then
+            local scale =
+                maxStep
+                / movementMagnitude
+
+            dx *= scale
+            dy *= scale
+        end
+
+        dx = RoundAimMouseDelta(dx)
+        dy = RoundAimMouseDelta(dy)
+
+        if dx == 0
+        and dy == 0 then
+            return true
+        end
+
+        local relativeMover =
+            type(mousemoverel) == "function"
+            and mousemoverel
+            or (
+                type(env.mousemoverel) == "function"
+                and env.mousemoverel
+                or (
+                    type(mouse_move_relative) == "function"
+                    and mouse_move_relative
+                    or (
+                        type(env.mouse_move_relative) == "function"
+                        and env.mouse_move_relative
+                        or nil
+                    )
+                )
+            )
+
+        if type(relativeMover) == "function" then
+            local ok =
+                pcall(
+                    relativeMover,
+                    dx,
+                    dy
+                )
+
+            if ok then
+                return true
+            end
+        end
+
+        local absoluteMover =
+            type(mousemoveabs) == "function"
+            and mousemoveabs
+            or (
+                type(env.mousemoveabs) == "function"
+                and env.mousemoveabs
+                or (
+                    type(mouse_move_abs) == "function"
+                    and mouse_move_abs
+                    or (
+                        type(env.mouse_move_abs) == "function"
+                        and env.mouse_move_abs
+                        or nil
+                    )
+                )
+            )
+
+        if type(absoluteMover) == "function" then
+            local ok =
+                pcall(
+                    absoluteMover,
+                    RoundAimMouseDelta(
+                        mousePosition.X + dx
+                    ),
+                    RoundAimMouseDelta(
+                        mousePosition.Y + dy
+                    )
+                )
+
+            if ok then
+                return true
+            end
+        end
+
+        return false
+    end
+
     local function GetMouseTarget()
         local camera = Workspace.CurrentCamera
     
@@ -3335,7 +3485,6 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             local target = nil
             local persistentTarget =
                 Settings.AimLock == true
-                or Settings.AimbotMode == "MOUSE"
 
             if persistentTarget then
                 target = lockedTarget
@@ -3366,63 +3515,52 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end
 
             if Settings.AimbotMode == "MOUSE" then
-                local screen, onScreen = ProjectAimPoint(camera, target.Part.Position)
-
-                if not onScreen or screen.Z <= 0 then
-                    return
-                end
-
-                local mousePosition = GetAimMousePosition()
-                local rawDX = screen.X - mousePosition.X
-                local rawDY = screen.Y - mousePosition.Y
-
-                -- Do nothing inside a tiny dead-zone so the cursor does not
-                -- vibrate around the target every RenderStep.
-                if math.abs(rawDX) <= 1.25 and math.abs(rawDY) <= 1.25 then
-                    return
-                end
-
-                -- Mouse movement and Roblox camera lock fight each other.
-                -- In that situation aim the camera instead of throwing the
-                -- system cursor around the screen.
-                if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
-                    camera.CFrame = camera.CFrame:Lerp(
-                        CFrame.new(camera.CFrame.Position, target.Part.Position),
-                        1 / smooth
+                local screen, onScreen =
+                    ProjectAimPoint(
+                        camera,
+                        target.Part.Position
                     )
+
+                if not onScreen
+                or screen.Z <= 0 then
                     return
                 end
 
-                local dx = rawDX / smooth
-                local dy = rawDY / smooth
+                if UserInputService.MouseBehavior
+                    ~= Enum.MouseBehavior.Default then
+                    camera.CFrame =
+                        camera.CFrame:Lerp(
+                            CFrame.new(
+                                camera.CFrame.Position,
+                                target.Part.Position
+                            ),
+                            1 / smooth
+                        )
 
-                -- Executor mouse APIs can behave badly with very large
-                -- relative values. Limit each frame while preserving direction.
-                local maxStep = blatant and 120 or 45
-                local magnitude = Vector2.new(dx, dy).Magnitude
-
-                if magnitude > maxStep and magnitude > 0 then
-                    local scale = maxStep / magnitude
-                    dx *= scale
-                    dy *= scale
-                end
-
-                dx = math.floor(dx + (dx >= 0 and 0.5 or -0.5))
-                dy = math.floor(dy + (dy >= 0 and 0.5 or -0.5))
-
-                if dx == 0 and dy == 0 then
                     return
                 end
 
-                if type(mousemoverel) == "function" then
-                    pcall(mousemoverel, dx, dy)
-                elseif type(mouse_move_relative) == "function" then
-                    pcall(mouse_move_relative, dx, dy)
-                else
-                    camera.CFrame = camera.CFrame:Lerp(
-                        CFrame.new(camera.CFrame.Position, target.Part.Position),
-                        1 / smooth
+                local mousePosition =
+                    GetAimMousePosition()
+
+                local moved =
+                    MoveAimMouse(
+                        screen,
+                        mousePosition,
+                        smooth,
+                        blatant,
+                        delta
                     )
+
+                if not moved then
+                    camera.CFrame =
+                        camera.CFrame:Lerp(
+                            CFrame.new(
+                                camera.CFrame.Position,
+                                target.Part.Position
+                            ),
+                            1 / smooth
+                        )
                 end
 
                 return
