@@ -29,7 +29,7 @@ or not CreateDropdown then
     return
 end
 
-local BABFTModuleVersion = "2026-09-17-unbox-invoke-v6"
+local BABFTModuleVersion = "2026-09-17-unbox-hide-legendary-v7"
 
 if getgenv().ToxBABFTModuleLoadedJobId == game.JobId
 and getgenv().ToxBABFTModuleVersion == BABFTModuleVersion
@@ -54,6 +54,7 @@ Settings.BABFTAutoUnbox = Settings.BABFTAutoUnbox == true
 Settings.BABFTUnboxCrate = tostring(Settings.BABFTUnboxCrate or "Common")
 Settings.BABFTUnboxAmount = math.clamp(math.floor(tonumber(Settings.BABFTUnboxAmount) or 2), 1, 100)
 Settings.BABFTUnboxThreads = math.clamp(math.floor(tonumber(Settings.BABFTUnboxThreads) or 5), 1, 25)
+Settings.BABFTHideUnboxItems = Settings.BABFTHideUnboxItems == true
 Settings.BABFTAutoSafeWater = Settings.BABFTAutoSafeWater == true
 Settings.BABFTCollapsedSections = typeof(Settings.BABFTCollapsedSections) == "table"
     and Settings.BABFTCollapsedSections
@@ -77,6 +78,7 @@ local BABFTSections = {}
 local AutofarmGeneration = 0
 local AutoUnboxGeneration = 0
 local ShutdownServerGeneration = 0
+local UnboxVisualGeneration = 0
 local ShutdownServerEnabled = false
 local ShutdownOverlay = nil
 local SafetyPlatform = nil
@@ -651,6 +653,10 @@ local ChestRemoteNames = {
     Uncommon = "Uncommon Chest",
     Rare = "Rare Chest",
     Epic = "Epic Chest",
+    Legendary = "Legendary Chest"
+}
+
+local ChestRemoteFallbackNames = {
     Legendary = "Legendaries"
 }
 
@@ -681,11 +687,76 @@ end
 
 local function InvokeChest(remote, chest, amount)
     if not remote or not remote:IsA("RemoteFunction") then
-        return false
+        return false, nil
     end
 
-    return pcall(function()
-        remote:InvokeServer(chest, amount)
+    local ok, result = pcall(function()
+        return remote:InvokeServer(chest, amount)
+    end)
+
+    return ok, result
+end
+
+local function IsToxOwnedGui(object)
+    local current = object
+
+    while current and current ~= Player.PlayerGui do
+        local name = tostring(current.Name or "")
+
+        if name == "ToxV1Gui"
+        or name == "ToxNotifs"
+        or name == "ToxReexecuteConfirm"
+        or name == "ToxChatGui" then
+            return true
+        end
+
+        current = current.Parent
+    end
+
+    return false
+end
+
+local function StartUnboxVisualSuppressor()
+    UnboxVisualGeneration += 1
+    local generation = UnboxVisualGeneration
+
+    if not Settings.BABFTAutoUnbox
+    or not Settings.BABFTHideUnboxItems then
+        return
+    end
+
+    local baseline = {}
+
+    for _, object in ipairs(Player.PlayerGui:GetDescendants()) do
+        if object:IsA("GuiObject") then
+            baseline[object] = object.Visible
+        end
+    end
+
+    task.spawn(function()
+        while Settings.BABFTAutoUnbox
+        and Settings.BABFTHideUnboxItems
+        and generation == UnboxVisualGeneration
+        and not getgenv().Destroyed do
+            for _, object in ipairs(Player.PlayerGui:GetDescendants()) do
+                if object:IsA("GuiObject")
+                and not IsToxOwnedGui(object) then
+                    local originalVisible = baseline[object]
+
+                    if originalVisible == nil then
+                        baseline[object] = false
+                        if object.Visible then
+                            object.Visible = false
+                        end
+                    elseif originalVisible == false
+                    and object.Visible then
+                        object.Visible = false
+                    end
+                end
+            end
+
+            task.wait()
+        end
     end)
 end
 
@@ -708,9 +779,21 @@ local function OpenSelectedCrateBatch()
 
     for _ = 1, threads do
         task.spawn(function()
-            if InvokeChest(remote, chest, amount) then
+            local invokeOK = false
+            local ok = InvokeChest(remote, chest, amount)
+
+            if ok then
+                invokeOK = true
+            elseif Settings.BABFTUnboxCrate == "Legendary" then
+                local fallback = ChestRemoteFallbackNames.Legendary
+                local fallbackOK = InvokeChest(remote, fallback, amount)
+                invokeOK = fallbackOK == true
+            end
+
+            if invokeOK then
                 succeeded += 1
             end
+
             completed += 1
         end)
     end
@@ -735,8 +818,11 @@ local function StartAutoUnbox()
     local generation = AutoUnboxGeneration
 
     if not Settings.BABFTAutoUnbox then
+        UnboxVisualGeneration += 1
         return
     end
+
+    StartUnboxVisualSuppressor()
 
     task.spawn(function()
         local failureNotified = false
@@ -1101,6 +1187,24 @@ CreateNumberRow(
 )
 
 BABFTCreateToggle(
+    "Hide Unbox Items",
+    GamePage,
+    Settings.BABFTHideUnboxItems,
+    function(value)
+        Settings.BABFTHideUnboxItems = value == true
+        UnboxVisualGeneration += 1
+
+        if Settings.BABFTAutoUnbox
+        and Settings.BABFTHideUnboxItems then
+            StartUnboxVisualSuppressor()
+        end
+
+        AutoSaveConfiguration()
+    end,
+    "BABFTHideUnboxItems"
+)
+
+BABFTCreateToggle(
     "Auto Safe Water",
     GamePage,
     Settings.BABFTAutoSafeWater,
@@ -1150,6 +1254,7 @@ end
 getgenv().ToxBABFTCleanup = function()
     AutofarmGeneration += 1
     AutoUnboxGeneration += 1
+    UnboxVisualGeneration += 1
     SetShutdownServer(false, true)
     DestroySafetyPlatform()
     DestroyFarmPlatform()
