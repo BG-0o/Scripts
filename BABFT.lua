@@ -29,7 +29,7 @@ or not CreateDropdown then
     return
 end
 
-local BABFTModuleVersion = "2026-09-17-unbox-combined-v8"
+local BABFTModuleVersion = "2026-09-17-unbox-open-hide-restore-v9"
 
 if getgenv().ToxBABFTModuleLoadedJobId == game.JobId
 and getgenv().ToxBABFTModuleVersion == BABFTModuleVersion
@@ -53,7 +53,7 @@ Settings.BABFTAutofarmDelay = math.clamp(tonumber(Settings.BABFTAutofarmDelay) o
 Settings.BABFTAutoUnbox = Settings.BABFTAutoUnbox == true
 Settings.BABFTUnboxCrate = tostring(Settings.BABFTUnboxCrate or "Common")
 Settings.BABFTUnboxAmount = math.clamp(math.floor(tonumber(Settings.BABFTUnboxAmount) or 2), 1, 100)
-Settings.BABFTUnboxThreads = math.clamp(math.floor(tonumber(Settings.BABFTUnboxThreads) or 5), 1, 25)
+Settings.BABFTUnboxThreads = nil
 Settings.BABFTHideUnboxItems = Settings.BABFTHideUnboxItems == true
 Settings.BABFTAutoSafeWater = Settings.BABFTAutoSafeWater == true
 Settings.BABFTCollapsedSections = typeof(Settings.BABFTCollapsedSections) == "table"
@@ -79,6 +79,7 @@ local AutofarmGeneration = 0
 local AutoUnboxGeneration = 0
 local ShutdownServerGeneration = 0
 local UnboxVisualGeneration = 0
+local UnboxHiddenObjects = {}
 local ShutdownServerEnabled = false
 local ShutdownOverlay = nil
 local SafetyPlatform = nil
@@ -716,12 +717,28 @@ local function IsToxOwnedGui(object)
     return false
 end
 
+local function RestoreUnboxVisuals()
+    UnboxVisualGeneration += 1
+
+    for object, originalVisible in pairs(UnboxHiddenObjects) do
+        if typeof(object) == "Instance"
+        and object.Parent
+        and object:IsA("GuiObject") then
+            pcall(function()
+                object.Visible = originalVisible
+            end)
+        end
+    end
+
+    table.clear(UnboxHiddenObjects)
+end
+
 local function StartUnboxVisualSuppressor()
     UnboxVisualGeneration += 1
     local generation = UnboxVisualGeneration
 
-    if not Settings.BABFTAutoUnbox
-    or not Settings.BABFTHideUnboxItems then
+    if not Settings.BABFTHideUnboxItems then
+        RestoreUnboxVisuals()
         return
     end
 
@@ -734,8 +751,7 @@ local function StartUnboxVisualSuppressor()
     end
 
     task.spawn(function()
-        while Settings.BABFTAutoUnbox
-        and Settings.BABFTHideUnboxItems
+        while Settings.BABFTHideUnboxItems
         and generation == UnboxVisualGeneration
         and not getgenv().Destroyed do
             for _, object in ipairs(Player.PlayerGui:GetDescendants()) do
@@ -744,12 +760,21 @@ local function StartUnboxVisualSuppressor()
                     local originalVisible = baseline[object]
 
                     if originalVisible == nil then
-                        baseline[object] = false
+                        baseline[object] = object.Visible
+
                         if object.Visible then
+                            if UnboxHiddenObjects[object] == nil then
+                                UnboxHiddenObjects[object] = true
+                            end
+
                             object.Visible = false
                         end
                     elseif originalVisible == false
                     and object.Visible then
+                        if UnboxHiddenObjects[object] == nil then
+                            UnboxHiddenObjects[object] = true
+                        end
+
                         object.Visible = false
                     end
                 end
@@ -773,44 +798,24 @@ local function OpenSelectedCrateBatch()
 
     local chest = GetSelectedChestName()
     local amount = math.clamp(math.floor(tonumber(Settings.BABFTUnboxAmount) or 2), 1, 100)
-    local threads = math.clamp(math.floor(tonumber(Settings.BABFTUnboxThreads) or 5), 1, 25)
-    local completed = 0
-    local succeeded = 0
+    local ok = InvokeChest(remote, chest, amount)
 
-    for _ = 1, threads do
-        task.spawn(function()
-            local invokeOK = false
-            local ok = InvokeChest(remote, chest, amount)
+    if not ok
+    and Settings.BABFTUnboxCrate == "Legendary" then
+        local fallback = ChestRemoteFallbackNames.Legendary
+        local fallbackOK = InvokeChest(remote, fallback, amount)
+        ok = fallbackOK == true
 
-            if ok then
-                invokeOK = true
-            elseif Settings.BABFTUnboxCrate == "Legendary" then
-                local fallback = ChestRemoteFallbackNames.Legendary
-                local fallbackOK = InvokeChest(remote, fallback, amount)
-                invokeOK = fallbackOK == true
-            end
-
-            if invokeOK then
-                succeeded += 1
-            end
-
-            completed += 1
-        end)
+        if ok then
+            chest = fallback
+        end
     end
 
-    local deadline = tick() + 5
-
-    repeat
-        task.wait()
-    until completed >= threads
-        or tick() >= deadline
-        or getgenv().Destroyed
-
-    if succeeded <= 0 then
+    if not ok then
         return false, "InvokeServer failed"
     end
 
-    return true, string.format("%s x%d • %d/%d", chest, amount, succeeded, threads)
+    return true, string.format("%s x%d", chest, amount)
 end
 
 local function StartAutoUnbox()
@@ -818,11 +823,12 @@ local function StartAutoUnbox()
     local generation = AutoUnboxGeneration
 
     if not Settings.BABFTAutoUnbox then
-        UnboxVisualGeneration += 1
         return
     end
 
-    StartUnboxVisualSuppressor()
+    if Settings.BABFTHideUnboxItems then
+        StartUnboxVisualSuppressor()
+    end
 
     task.spawn(function()
         local failureNotified = false
@@ -1130,12 +1136,12 @@ local function CreateAutoUnboxCombinedRow()
     local crateOrder = {"Common", "Uncommon", "Rare", "Epic", "Legendary"}
 
     local crateButton = Instance.new("TextButton")
-    crateButton.Size = UDim2.new(0, 86, 0, 26)
-    crateButton.Position = UDim2.new(1, -190, 0.5, -13)
+    crateButton.Size = UDim2.new(0, 74, 0, 26)
+    crateButton.Position = UDim2.new(1, -210, 0.5, -13)
     crateButton.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
     crateButton.BorderSizePixel = 0
     crateButton.TextColor3 = Color3.fromRGB(235, 235, 245)
-    crateButton.TextSize = 11
+    crateButton.TextSize = 10
     crateButton.Font = Enum.Font.GothamMedium
     crateButton.AutoButtonColor = false
     crateButton.Parent = row
@@ -1145,15 +1151,15 @@ local function CreateAutoUnboxCombinedRow()
     crateCorner.Parent = crateButton
 
     local amountBox = Instance.new("TextBox")
-    amountBox.Size = UDim2.new(0, 42, 0, 26)
-    amountBox.Position = UDim2.new(1, -99, 0.5, -13)
+    amountBox.Size = UDim2.new(0, 36, 0, 26)
+    amountBox.Position = UDim2.new(1, -132, 0.5, -13)
     amountBox.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
     amountBox.BorderSizePixel = 0
     amountBox.Text = tostring(Settings.BABFTUnboxAmount)
     amountBox.PlaceholderText = "QTY"
     amountBox.TextColor3 = Color3.fromRGB(255, 255, 255)
     amountBox.PlaceholderColor3 = Color3.fromRGB(145, 145, 160)
-    amountBox.TextSize = 11
+    amountBox.TextSize = 10
     amountBox.Font = Enum.Font.GothamMedium
     amountBox.ClearTextOnFocus = false
     amountBox.Parent = row
@@ -1162,11 +1168,27 @@ local function CreateAutoUnboxCombinedRow()
     amountCorner.CornerRadius = UDim.new(0, 4)
     amountCorner.Parent = amountBox
 
+    local openButton = Instance.new("TextButton")
+    openButton.Size = UDim2.new(0, 42, 0, 26)
+    openButton.Position = UDim2.new(1, -92, 0.5, -13)
+    openButton.BackgroundColor3 = Color3.fromRGB(42, 72, 110)
+    openButton.BorderSizePixel = 0
+    openButton.Text = "OPEN"
+    openButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    openButton.TextSize = 9
+    openButton.Font = Enum.Font.GothamBold
+    openButton.AutoButtonColor = false
+    openButton.Parent = row
+
+    local openCorner = Instance.new("UICorner")
+    openCorner.CornerRadius = UDim.new(0, 4)
+    openCorner.Parent = openButton
+
     local toggle = Instance.new("TextButton")
-    toggle.Size = UDim2.new(0, 48, 0, 26)
-    toggle.Position = UDim2.new(1, -52, 0.5, -13)
+    toggle.Size = UDim2.new(0, 42, 0, 26)
+    toggle.Position = UDim2.new(1, -46, 0.5, -13)
     toggle.BorderSizePixel = 0
-    toggle.TextSize = 10
+    toggle.TextSize = 9
     toggle.Font = Enum.Font.GothamBold
     toggle.AutoButtonColor = false
     toggle.Parent = row
@@ -1177,7 +1199,7 @@ local function CreateAutoUnboxCombinedRow()
 
     local function RefreshCrate()
         local text = tostring(Settings.BABFTUnboxCrate or "Common")
-        crateButton.Text = text == "Legendary" and "Legendary" or text
+        crateButton.Text = text == "Legendary" and "Legend" or text
     end
 
     local function RefreshToggle()
@@ -1189,6 +1211,12 @@ local function CreateAutoUnboxCombinedRow()
         toggle.TextColor3 = enabled
             and Color3.fromRGB(255, 255, 255)
             or Color3.fromRGB(205, 205, 215)
+    end
+
+    local function CommitAmount()
+        local value = math.floor(tonumber(amountBox.Text) or Settings.BABFTUnboxAmount or 2)
+        Settings.BABFTUnboxAmount = math.clamp(value, 1, 100)
+        amountBox.Text = tostring(Settings.BABFTUnboxAmount)
     end
 
     RefreshCrate()
@@ -1212,10 +1240,39 @@ local function CreateAutoUnboxCombinedRow()
     end))
 
     TrackConnection(amountBox.FocusLost:Connect(function()
-        local value = math.floor(tonumber(amountBox.Text) or Settings.BABFTUnboxAmount or 2)
-        Settings.BABFTUnboxAmount = math.clamp(value, 1, 100)
-        amountBox.Text = tostring(Settings.BABFTUnboxAmount)
+        CommitAmount()
         AutoSaveConfiguration()
+    end))
+
+    local openBusy = false
+
+    TrackConnection(openButton.MouseButton1Click:Connect(function()
+        if openBusy then
+            return
+        end
+
+        openBusy = true
+        CommitAmount()
+        openButton.Text = "..."
+        openButton.BackgroundColor3 = Color3.fromRGB(58, 58, 72)
+
+        task.spawn(function()
+            local ok, reason = OpenSelectedCrateBatch()
+
+            if not ok then
+                CustomNotify(
+                    "Unbox: " .. tostring(reason),
+                    Color3.fromRGB(255, 180, 70)
+                )
+            end
+
+            if openButton and openButton.Parent then
+                openButton.Text = "OPEN"
+                openButton.BackgroundColor3 = Color3.fromRGB(42, 72, 110)
+            end
+
+            openBusy = false
+        end)
     end))
 
     TrackConnection(toggle.MouseButton1Click:Connect(function()
@@ -1281,26 +1338,6 @@ CreateNumberRow(
     end
 )
 
-CreateAutoUnboxCombinedRow()
-
-BABFTCreateToggle(
-    "Hide Unbox Items",
-    GamePage,
-    Settings.BABFTHideUnboxItems,
-    function(value)
-        Settings.BABFTHideUnboxItems = value == true
-        UnboxVisualGeneration += 1
-
-        if Settings.BABFTAutoUnbox
-        and Settings.BABFTHideUnboxItems then
-            StartUnboxVisualSuppressor()
-        end
-
-        AutoSaveConfiguration()
-    end,
-    "BABFTHideUnboxItems"
-)
-
 BABFTCreateToggle(
     "Auto Safe Water",
     GamePage,
@@ -1315,6 +1352,26 @@ BABFTCreateToggle(
         AutoSaveConfiguration()
     end,
     "BABFTAutoSafeWater"
+)
+
+CreateAutoUnboxCombinedRow()
+
+BABFTCreateToggle(
+    "Hide",
+    GamePage,
+    Settings.BABFTHideUnboxItems,
+    function(value)
+        Settings.BABFTHideUnboxItems = value == true
+
+        if Settings.BABFTHideUnboxItems then
+            StartUnboxVisualSuppressor()
+        else
+            RestoreUnboxVisuals()
+        end
+
+        AutoSaveConfiguration()
+    end,
+    "BABFTHideUnboxItems"
 )
 
 CreateStatusRow()
@@ -1344,6 +1401,10 @@ if Settings.BABFTAutofarm then
     StartAutofarm()
 end
 
+if Settings.BABFTHideUnboxItems then
+    StartUnboxVisualSuppressor()
+end
+
 if Settings.BABFTAutoUnbox then
     StartAutoUnbox()
 end
@@ -1351,7 +1412,7 @@ end
 getgenv().ToxBABFTCleanup = function()
     AutofarmGeneration += 1
     AutoUnboxGeneration += 1
-    UnboxVisualGeneration += 1
+    RestoreUnboxVisuals()
     SetShutdownServer(false, true)
     DestroySafetyPlatform()
     DestroyFarmPlatform()
