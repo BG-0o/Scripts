@@ -6,7 +6,7 @@ end
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 local GuiService = game:GetService("GuiService")
 
 local Player = Players.LocalPlayer
@@ -29,7 +29,7 @@ or not CreateDropdown then
     return
 end
 
-local BABFTModuleVersion = "2026-09-17-unbox-verified-v5"
+local BABFTModuleVersion = "2026-09-17-unbox-invoke-v6"
 
 if getgenv().ToxBABFTModuleLoadedJobId == game.JobId
 and getgenv().ToxBABFTModuleVersion == BABFTModuleVersion
@@ -52,6 +52,8 @@ Settings.BABFTAutofarm = Settings.BABFTAutofarm == true
 Settings.BABFTAutofarmDelay = math.clamp(tonumber(Settings.BABFTAutofarmDelay) or 1, 0.2, 10)
 Settings.BABFTAutoUnbox = Settings.BABFTAutoUnbox == true
 Settings.BABFTUnboxCrate = tostring(Settings.BABFTUnboxCrate or "Common")
+Settings.BABFTUnboxAmount = math.clamp(math.floor(tonumber(Settings.BABFTUnboxAmount) or 2), 1, 100)
+Settings.BABFTUnboxThreads = math.clamp(math.floor(tonumber(Settings.BABFTUnboxThreads) or 5), 1, 25)
 Settings.BABFTAutoSafeWater = Settings.BABFTAutoSafeWater == true
 Settings.BABFTCollapsedSections = typeof(Settings.BABFTCollapsedSections) == "table"
     and Settings.BABFTCollapsedSections
@@ -644,88 +646,26 @@ local function StartAutofarm()
     end)
 end
 
-local function GetShopRemote(waitTime)
-    local function FindRemote()
-        local direct = workspace:FindFirstChild("ItemBoughtFromShop")
+local ChestRemoteNames = {
+    Common = "Common Chest",
+    Uncommon = "Uncommon Chest",
+    Rare = "Rare Chest",
+    Epic = "Epic Chest",
+    Legendary = "Legendaries"
+}
 
-        if direct
-        and (direct:IsA("RemoteEvent") or direct:IsA("RemoteFunction")) then
-            return direct
-        end
+local function GetBuyRemote(waitTime)
+    local remote = Workspace:FindFirstChild("ItemBoughtFromShop")
 
-        for _, object in ipairs(workspace:GetDescendants()) do
-            if object.Name == "ItemBoughtFromShop"
-            and (object:IsA("RemoteEvent") or object:IsA("RemoteFunction")) then
-                return object
-            end
-        end
-
-        return nil
-    end
-
-    local remote = FindRemote()
-
-    if remote or not waitTime or waitTime <= 0 then
+    if remote then
         return remote
     end
 
-    local deadline = tick() + waitTime
-
-    repeat
-        task.wait(0.1)
-        remote = FindRemote()
-    until remote
-        or tick() >= deadline
-        or getgenv().Destroyed
-
-    return remote
-end
-
-local function GetPlayerDataSignature()
-    local data = Player:FindFirstChild("Data")
-
-    if not data then
-        return nil
+    if waitTime and waitTime > 0 then
+        return Workspace:WaitForChild("ItemBoughtFromShop", waitTime)
     end
 
-    local values = {}
-
-    for _, object in ipairs(data:GetDescendants()) do
-        if object:IsA("IntValue")
-        or object:IsA("NumberValue") then
-            values[#values + 1] = object:GetFullName() .. "=" .. tostring(object.Value)
-        end
-    end
-
-    table.sort(values)
-
-    if #values == 0 then
-        return nil
-    end
-
-    return table.concat(values, "|")
-end
-
-local function WaitForPurchaseChange(beforeSignature, timeout)
-    if not beforeSignature then
-        task.wait(0.35)
-        return true
-    end
-
-    local deadline = tick() + (tonumber(timeout) or 1)
-
-    repeat
-        task.wait(0.05)
-
-        local current = GetPlayerDataSignature()
-
-        if current and current ~= beforeSignature then
-            return true
-        end
-    until tick() >= deadline
-        or getgenv().Destroyed
-
-    return false
+    return nil
 end
 
 local function GetSelectedChestName()
@@ -736,181 +676,58 @@ local function GetSelectedChestName()
         Settings.BABFTUnboxCrate = crate
     end
 
-    return crate .. " Chest"
+    return ChestRemoteNames[crate] or "Common Chest"
 end
 
-local function FireShopRemote(chestName)
-    local remote = GetShopRemote(1.5)
-
-    if not remote then
-        return false, "REMOTE_NOT_FOUND"
-    end
-
-    local beforeSignature = GetPlayerDataSignature()
-    local fired = pcall(function()
-        if remote:IsA("RemoteFunction") then
-            remote:InvokeServer(chestName)
-        else
-            remote:FireServer(chestName)
-        end
-    end)
-
-    if not fired then
-        return false, "REMOTE_ERROR"
-    end
-
-    if WaitForPurchaseChange(beforeSignature, 1.1) then
-        return true, "REMOTE"
-    end
-
-    return false, "NO_CHANGE"
-end
-
-local function FindChestShopButton(chestName)
-    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
-
-    if not playerGui then
-        return nil
-    end
-
-    local wantedChest = string.lower(chestName)
-    local wantedCrate = string.lower(chestName:gsub("%s+[Cc]hest$", ""))
-    local best = nil
-    local bestScore = -1
-
-    for _, object in ipairs(playerGui:GetDescendants()) do
-        if object:IsA("GuiButton") then
-            local parts = {string.lower(object.Name)}
-
-            if object:IsA("TextButton") then
-                parts[#parts + 1] = string.lower(tostring(object.Text or ""))
-            end
-
-            local descendantCount = 0
-
-            for _, child in ipairs(object:GetDescendants()) do
-                if child:IsA("TextLabel") or child:IsA("TextButton") then
-                    parts[#parts + 1] = string.lower(tostring(child.Text or ""))
-                    descendantCount += 1
-
-                    if descendantCount >= 10 then
-                        break
-                    end
-                end
-            end
-
-            local text = table.concat(parts, " ")
-            local score = 0
-
-            if string.find(text, wantedChest, 1, true) then
-                score += 10
-            elseif string.find(text, wantedCrate, 1, true)
-            and (string.find(text, "chest", 1, true)
-                or string.find(text, "crate", 1, true)
-                or string.find(text, "buy", 1, true)
-                or string.find(text, "open", 1, true)) then
-                score += 6
-            end
-
-            if object.Visible then
-                score += 2
-            end
-
-            if object.AbsoluteSize.X > 2 and object.AbsoluteSize.Y > 2 then
-                score += 1
-            end
-
-            if score > bestScore and score >= 6 then
-                best = object
-                bestScore = score
-            end
-        end
-    end
-
-    return best
-end
-
-local function PressGuiButton(button)
-    if not button or not button.Parent then
+local function InvokeChest(remote, chest, amount)
+    if not remote or not remote:IsA("RemoteFunction") then
         return false
     end
 
-    local pressed = false
+    return pcall(function()
+        remote:InvokeServer(chest, amount)
+    end)
+end
 
-    if typeof(firesignal) == "function" then
-        pressed = pcall(function()
-            firesignal(button.Activated)
-        end) or pressed
+local function OpenSelectedCrateBatch()
+    local remote = GetBuyRemote(3)
 
-        pressed = pcall(function()
-            firesignal(button.MouseButton1Click)
-        end) or pressed
+    if not remote then
+        return false, "ItemBoughtFromShop not found"
     end
 
-    if typeof(getconnections) == "function" then
-        pcall(function()
-            for _, connection in ipairs(getconnections(button.Activated)) do
-                if connection.Fire then
-                    connection:Fire()
-                    pressed = true
-                elseif connection.Function then
-                    task.spawn(connection.Function)
-                    pressed = true
-                end
-            end
-        end)
+    if not remote:IsA("RemoteFunction") then
+        return false, "ItemBoughtFromShop is not RemoteFunction"
+    end
 
-        pcall(function()
-            for _, connection in ipairs(getconnections(button.MouseButton1Click)) do
-                if connection.Fire then
-                    connection:Fire()
-                    pressed = true
-                elseif connection.Function then
-                    task.spawn(connection.Function)
-                    pressed = true
-                end
+    local chest = GetSelectedChestName()
+    local amount = math.clamp(math.floor(tonumber(Settings.BABFTUnboxAmount) or 2), 1, 100)
+    local threads = math.clamp(math.floor(tonumber(Settings.BABFTUnboxThreads) or 5), 1, 25)
+    local completed = 0
+    local succeeded = 0
+
+    for _ = 1, threads do
+        task.spawn(function()
+            if InvokeChest(remote, chest, amount) then
+                succeeded += 1
             end
+            completed += 1
         end)
     end
 
-    return pressed
-end
+    local deadline = tick() + 5
 
-local function TryShopGui(chestName)
-    local button = FindChestShopButton(chestName)
+    repeat
+        task.wait()
+    until completed >= threads
+        or tick() >= deadline
+        or getgenv().Destroyed
 
-    if not button then
-        return false, "BUTTON_NOT_FOUND"
+    if succeeded <= 0 then
+        return false, "InvokeServer failed"
     end
 
-    local beforeSignature = GetPlayerDataSignature()
-
-    if not PressGuiButton(button) then
-        return false, "BUTTON_UNSUPPORTED"
-    end
-
-    if WaitForPurchaseChange(beforeSignature, 1.1) then
-        return true, "GUI"
-    end
-
-    return false, "NO_CHANGE"
-end
-
-local function OpenSelectedCrate()
-    local chestName = GetSelectedChestName()
-    local ok, method = FireShopRemote(chestName)
-
-    if ok then
-        return true, method
-    end
-
-    local guiOK, guiMethod = TryShopGui(chestName)
-
-    if guiOK then
-        return true, guiMethod
-    end
-
-    return false, method .. "/" .. guiMethod
+    return true, string.format("%s x%d • %d/%d", chest, amount, succeeded, threads)
 end
 
 local function StartAutoUnbox()
@@ -922,36 +739,26 @@ local function StartAutoUnbox()
     end
 
     task.spawn(function()
-        local successNotified = false
         local failureNotified = false
 
         while Settings.BABFTAutoUnbox
         and generation == AutoUnboxGeneration
         and not getgenv().Destroyed do
-            local ok, reason = OpenSelectedCrate()
+            local ok, reason = OpenSelectedCrateBatch()
 
             if ok then
                 failureNotified = false
-
-                if not successNotified then
-                    successNotified = true
-                    CustomNotify(
-                        "Auto Unbox active • " .. tostring(reason),
-                        Color3.fromRGB(100, 255, 100)
-                    )
-                end
-
-                task.wait(0.45)
+                task.wait(0.08)
             else
                 if not failureNotified then
                     failureNotified = true
                     CustomNotify(
-                        "Auto Unbox: purchase not detected • " .. tostring(reason),
+                        "Auto Unbox: " .. tostring(reason),
                         Color3.fromRGB(255, 180, 70)
                     )
                 end
 
-                task.wait(0.8)
+                task.wait(0.75)
             end
         end
     end)
@@ -1272,6 +1079,24 @@ BABFTCreateDropdown(
     function(value)
         Settings.BABFTUnboxCrate = tostring(value)
         AutoSaveConfiguration()
+    end
+)
+
+CreateNumberRow(
+    "Unbox Amount",
+    Settings.BABFTUnboxAmount,
+    function(value)
+        Settings.BABFTUnboxAmount = math.clamp(math.floor(tonumber(value) or 2), 1, 100)
+        return Settings.BABFTUnboxAmount
+    end
+)
+
+CreateNumberRow(
+    "Unbox Threads",
+    Settings.BABFTUnboxThreads,
+    function(value)
+        Settings.BABFTUnboxThreads = math.clamp(math.floor(tonumber(value) or 5), 1, 25)
+        return Settings.BABFTUnboxThreads
     end
 )
 
