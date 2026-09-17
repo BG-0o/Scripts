@@ -597,7 +597,7 @@ getgenv().ToxStartupToggleCallbacks = {}
 getgenv().ToxStartupOptionsApplied = false
 getgenv().ToxHubActive = true
 getgenv().__ToxHubBootLock = nil
-getgenv().ToxModule1SplitVersion = "2026-09-16-autoexecute-single-v8-1"
+getgenv().ToxModule1SplitVersion = "2026-09-17-place-save-only-v9-1"
 getgenv().ToxUniversalLoaded = nil
 getgenv().ToxUniversal2Loaded = nil
 getgenv().ToxUniversal2Version = nil
@@ -654,12 +654,14 @@ local ConfigFilePath =
     .. ".json"
 
 local PrimaryConfigFilePath =
-    LegacyUserConfigFilePath
+    ConfigFilePath
 
 local ConfigBackupFilePath =
     FolderName
     .. "/config_"
     .. tostring(Player.UserId)
+    .. "_"
+    .. CurrentPlaceKey
     .. "_backup.json"
 
 local MusicIDsFilePath =
@@ -1459,30 +1461,18 @@ local function ReadConfigMetadata(path)
 end
 
 local function ResolveConfigReadPath()
-    if not isfile then
+    if not getgenv().CurrentGameModule
+    or not isfile then
         return nil, false
     end
 
-    local primaryData =
-        ReadConfigMetadata(
-            PrimaryConfigFilePath
-        )
-
-    if primaryData
-    and (tonumber(primaryData.ConfigVersion) or 0) >= 7 then
-        return PrimaryConfigFilePath, false
-    end
-
     if isfile(ConfigFilePath) then
-        return ConfigFilePath, true
-    end
+        local metadata = ReadConfigMetadata(ConfigFilePath)
+        local version = metadata
+            and tonumber(metadata.ConfigVersion)
+            or 0
 
-    if primaryData then
-        return PrimaryConfigFilePath, true
-    end
-
-    if isfile(LegacyConfigFilePath) then
-        return LegacyConfigFilePath, true
+        return ConfigFilePath, version < 8
     end
 
     return nil, false
@@ -1494,6 +1484,12 @@ getgenv().AutoSaveConfiguration = function()
     end
 
     if getgenv().ToxOptionsReady == false then
+        return false
+    end
+
+    if not getgenv().CurrentGameModule then
+        SaveSharedMusicIDs()
+        SaveSharedJoinGames()
         return false
     end
 
@@ -1534,11 +1530,11 @@ getgenv().AutoSaveConfiguration = function()
     end
 
     local data = {
-        ConfigVersion = 7,
+        ConfigVersion = 8,
         SavedAt = os.time(),
         UserId = Player.UserId,
         PlaceId = game.PlaceId,
-        ConfigScope = "USER_GLOBAL",
+        ConfigScope = "PLACE_ONLY",
         GlobalGUIKeybind = guiKeyName,
         Settings = BuildGlobalSettingsSnapshot(),
         GameSpecificSettings = SerializeConfigValue(
@@ -1573,21 +1569,13 @@ getgenv().AutoSaveConfiguration = function()
 
     if readfile
     and isfile
-    and isfile(PrimaryConfigFilePath) then
+    and isfile(ConfigFilePath) then
         pcall(function()
-            oldPrimary = readfile(PrimaryConfigFilePath)
+            oldPrimary = readfile(ConfigFilePath)
         end)
     end
 
     local primaryOK, primaryError =
-        pcall(function()
-            writefile(
-                PrimaryConfigFilePath,
-                encoded
-            )
-        end)
-
-    local mirrorOK =
         pcall(function()
             writefile(
                 ConfigFilePath,
@@ -1623,11 +1611,12 @@ getgenv().AutoSaveConfiguration = function()
     SaveSharedMusicIDs()
     SaveSharedJoinGames()
 
-    return primaryOK or mirrorOK
+    return primaryOK
 end
 
 local function LoadConfiguration()
-    if not readfile then
+    if not getgenv().CurrentGameModule
+    or not readfile then
         return
     end
 
@@ -1660,8 +1649,7 @@ local function LoadConfiguration()
         local configVersion = tonumber(data.ConfigVersion) or 0
         local savedPlaceId = tonumber(data.PlaceId)
 
-        if configVersion < 7
-        and savedPlaceId
+        if savedPlaceId
         and savedPlaceId ~= game.PlaceId then
             return
         end
@@ -1672,6 +1660,7 @@ local function LoadConfiguration()
         MigrateLegacyGameSettings(data)
 
         if typeof(data.Settings) == "table"
+        and configVersion >= 8
         and not strictPlaceMigration then
             for key, savedValue in pairs(data.Settings) do
                 if not GetGameSettingOwner(key) then
@@ -1717,7 +1706,8 @@ local function LoadConfiguration()
             end
         end
 
-        if data.GlobalGUIKeybind ~= nil then
+        if configVersion >= 8
+        and data.GlobalGUIKeybind ~= nil then
             local keyName = tostring(
                 data.GlobalGUIKeybind
             )
@@ -1782,7 +1772,8 @@ local function LoadConfiguration()
             getgenv().SavedWaypoints = getgenv().SavedWaypointsByPlace[currentPlaceKey]
         end
 
-        if data.UIPositions ~= nil then
+        if configVersion >= 8
+        and data.UIPositions ~= nil then
             local value = DeserializeConfigValue(
                 data.UIPositions
             )
@@ -1940,7 +1931,7 @@ local env = getgenv()
 
 task.wait(0.55)
 
-local shouldExecute = true
+local shouldExecute = false
 local configWasRead = false
 
 for _ = 1, 20 do
@@ -1964,66 +1955,22 @@ for _ = 1, 20 do
             .. tostring(game.PlaceId)
             .. ".json"
 
-        local legacyUserPath =
-            "ToxV1_Data/config_"
-            .. userId
-            .. ".json"
-
-        local legacyPath =
-            "ToxV1_Data/config.json"
-
-        local readPath = nil
-
-        if isfile then
-            if isfile(legacyUserPath) then
-                local useGlobal = false
-
-                if readfile then
-                    pcall(function()
-                        local HttpService =
-                            game:GetService("HttpService")
-                        local globalRaw =
-                            readfile(legacyUserPath)
-
-                        if globalRaw
-                        and globalRaw ~= "" then
-                            local globalData =
-                                HttpService:JSONDecode(globalRaw)
-
-                            useGlobal =
-                                typeof(globalData) == "table"
-                                and (tonumber(globalData.ConfigVersion) or 0) >= 7
-                        end
-                    end)
-                end
-
-                if useGlobal then
-                    readPath = legacyUserPath
-                end
-            end
-
-            if not readPath
-            and isfile(configPath) then
-                readPath = configPath
-            elseif not readPath
-            and isfile(legacyUserPath) then
-                readPath = legacyUserPath
-            elseif not readPath
-            and isfile(legacyPath) then
-                readPath = legacyPath
-            end
-        end
-
         if readfile
-        and readPath then
-            local HttpService = game:GetService("HttpService")
-            local raw = readfile(readPath)
+        and isfile
+        and isfile(configPath) then
+            local HttpService =
+                game:GetService("HttpService")
+            local raw = readfile(configPath)
 
             if raw and raw ~= "" then
-                local data = HttpService:JSONDecode(raw)
+                local data =
+                    HttpService:JSONDecode(raw)
 
-                if data and data.Settings then
-                    shouldExecute = data.Settings.AutoExecute == true
+                if data
+                and tonumber(data.PlaceId) == game.PlaceId
+                and data.Settings then
+                    shouldExecute =
+                        data.Settings.AutoExecute == true
                     configWasRead = true
                 end
             end
