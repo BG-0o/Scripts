@@ -6,6 +6,8 @@ end
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local GuiService = game:GetService("GuiService")
 
 local Player = Players.LocalPlayer
 local Settings = getgenv().Settings
@@ -27,7 +29,7 @@ or not CreateDropdown then
     return
 end
 
-local BABFTModuleVersion = "2026-09-14-babft-treasure-3x-3"
+local BABFTModuleVersion = "2026-09-17-unbox-shutdown-v4"
 
 if getgenv().ToxBABFTModuleLoadedJobId == game.JobId
 and getgenv().ToxBABFTModuleVersion == BABFTModuleVersion
@@ -72,6 +74,9 @@ local BABFTCurrentSection = nil
 local BABFTSections = {}
 local AutofarmGeneration = 0
 local AutoUnboxGeneration = 0
+local ShutdownServerGeneration = 0
+local ShutdownServerEnabled = false
+local ShutdownOverlay = nil
 local SafetyPlatform = nil
 local FarmPlatform = nil
 local StatusLabel = nil
@@ -639,38 +644,74 @@ local function StartAutofarm()
     end)
 end
 
-local function GetShopRemote()
-    local remote = workspace:FindFirstChild("ItemBoughtFromShop")
+local function GetShopRemote(waitTime)
+    local function FindIn(container)
+        if not container then
+            return nil
+        end
 
-    if remote and remote:IsA("RemoteEvent") then
+        local direct = container:FindFirstChild("ItemBoughtFromShop")
+
+        if direct
+        and (direct:IsA("RemoteEvent") or direct:IsA("RemoteFunction")) then
+            return direct
+        end
+
+        for _, object in ipairs(container:GetDescendants()) do
+            if object.Name == "ItemBoughtFromShop"
+            and (object:IsA("RemoteEvent") or object:IsA("RemoteFunction")) then
+                return object
+            end
+        end
+
+        return nil
+    end
+
+    local remote = FindIn(workspace)
+        or FindIn(ReplicatedStorage)
+
+    if remote or not waitTime or waitTime <= 0 then
         return remote
     end
 
-    for _, object in ipairs(workspace:GetDescendants()) do
-        if object.Name == "ItemBoughtFromShop" and object:IsA("RemoteEvent") then
-            return object
-        end
-    end
+    local deadline = tick() + waitTime
 
-    return nil
+    repeat
+        task.wait(0.1)
+        remote = FindIn(workspace)
+            or FindIn(ReplicatedStorage)
+    until remote
+        or tick() >= deadline
+        or getgenv().Destroyed
+
+    return remote
 end
 
 local function OpenSelectedCrate()
-    local remote = GetShopRemote()
+    local remote = GetShopRemote(2)
 
     if not remote then
-        return false
+        return false, "ItemBoughtFromShop not found"
     end
 
     local crate = tostring(Settings.BABFTUnboxCrate or "Common")
 
     if not ValidCrates[crate] then
         crate = "Common"
+        Settings.BABFTUnboxCrate = crate
     end
 
-    return pcall(function()
-        remote:FireServer(crate .. " Chest")
+    local chestName = crate .. " Chest"
+    local ok, result = pcall(function()
+        if remote:IsA("RemoteFunction") then
+            return remote:InvokeServer(chestName)
+        end
+
+        remote:FireServer(chestName)
+        return true
     end)
+
+    return ok, result
 end
 
 local function StartAutoUnbox()
@@ -682,11 +723,166 @@ local function StartAutoUnbox()
     end
 
     task.spawn(function()
+        local failureNotified = false
+
         while Settings.BABFTAutoUnbox
         and generation == AutoUnboxGeneration
         and not getgenv().Destroyed do
-            OpenSelectedCrate()
-            task.wait(0.55)
+            local ok, reason = OpenSelectedCrate()
+
+            if not ok then
+                if not failureNotified then
+                    failureNotified = true
+                    CustomNotify(
+                        "Auto Unbox waiting for shop remote",
+                        Color3.fromRGB(255, 180, 70)
+                    )
+                end
+                task.wait(0.75)
+            else
+                failureNotified = false
+                task.wait(0.65)
+            end
+        end
+    end)
+end
+
+local function DestroyShutdownOverlay()
+    if ShutdownOverlay and ShutdownOverlay.Parent then
+        pcall(function()
+            ShutdownOverlay:Destroy()
+        end)
+    end
+
+    ShutdownOverlay = nil
+end
+
+local function FindTeamInsensitive(name)
+    local wanted = string.lower(tostring(name or ""))
+
+    for _, team in ipairs(game:GetService("Teams"):GetTeams()) do
+        if string.lower(team.Name) == wanted then
+            return team
+        end
+    end
+
+    return nil
+end
+
+local function SetShutdownServer(enabled, silent)
+    enabled = enabled == true
+    ShutdownServerGeneration += 1
+    local generation = ShutdownServerGeneration
+    ShutdownServerEnabled = enabled
+
+    if not enabled then
+        DestroyShutdownOverlay()
+
+        if getgenv().SyncToggleVisuals then
+            pcall(function()
+                getgenv().SyncToggleVisuals(
+                    "BABFTShutdownServerSession",
+                    false
+                )
+            end)
+        end
+
+        return
+    end
+
+    local remote = workspace:FindFirstChild("ChangeTeam")
+
+    if not remote or not remote:IsA("RemoteEvent") then
+        ShutdownServerEnabled = false
+
+        if not silent then
+            CustomNotify(
+                "ChangeTeam remote not found",
+                Color3.fromRGB(255, 100, 100)
+            )
+        end
+
+        if getgenv().SyncToggleVisuals then
+            pcall(function()
+                getgenv().SyncToggleVisuals(
+                    "BABFTShutdownServerSession",
+                    false
+                )
+            end)
+        end
+
+        return
+    end
+
+    DestroyShutdownOverlay()
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "ToxBABFTShutdownOverlay"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.Parent = Player:WaitForChild("PlayerGui")
+    ShutdownOverlay = gui
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0, 250, 0, 50)
+    label.Position = UDim2.new(0.5, 0, 0.5, 0)
+    label.AnchorPoint = Vector2.new(0.5, 0.5)
+    label.BackgroundTransparency = 1
+    label.Text = "Shutdowning hold still..."
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.TextStrokeTransparency = 0
+    label.TextScaled = true
+    label.Font = Enum.Font.GothamBold
+    label.Parent = gui
+
+    task.spawn(function()
+        while ShutdownServerEnabled
+        and generation == ShutdownServerGeneration
+        and not getgenv().Destroyed
+        and Player.Parent do
+            if label.Parent then
+                label.Visible = not label.Visible
+            end
+            task.wait(0.5)
+        end
+    end)
+
+    task.spawn(function()
+        local names = {
+            "blue",
+            "red",
+            "magenta",
+            "black",
+            "white",
+            "yellow"
+        }
+
+        while ShutdownServerEnabled
+        and generation == ShutdownServerGeneration
+        and not getgenv().Destroyed
+        and Player.Parent do
+            for _, name in ipairs(names) do
+                if not ShutdownServerEnabled
+                or generation ~= ShutdownServerGeneration
+                or getgenv().Destroyed then
+                    break
+                end
+
+                local team = FindTeamInsensitive(name)
+
+                if team then
+                    pcall(function()
+                        remote:FireServer(team)
+                    end)
+                end
+
+                task.wait(0.01)
+            end
+        end
+
+        if generation == ShutdownServerGeneration then
+            ShutdownServerEnabled = false
+            DestroyShutdownOverlay()
         end
     end)
 end
@@ -809,6 +1005,20 @@ TrackConnection(RunService.Heartbeat:Connect(function()
     UpdateSafetyPlatform()
 end))
 
+TrackConnection(GuiService.ErrorMessageChanged:Connect(function(message)
+    if ShutdownServerEnabled
+    and tostring(message or "") ~= "" then
+        SetShutdownServer(false, true)
+    end
+end))
+
+TrackConnection(Players.PlayerRemoving:Connect(function(leavingPlayer)
+    if leavingPlayer == Player
+    and ShutdownServerEnabled then
+        SetShutdownServer(false, true)
+    end
+end))
+
 CreateBABFTSection("AUTOFARM")
 
 BABFTCreateToggle(
@@ -882,6 +1092,18 @@ for _, definition in ipairs(ZoneDefinitions) do
     end)
 end
 
+CreateBABFTSection("SERVER")
+
+BABFTCreateToggle(
+    "Shutdown Server",
+    GamePage,
+    false,
+    function(value)
+        SetShutdownServer(value == true, false)
+    end,
+    "BABFTShutdownServerSession"
+)
+
 if Settings.BABFTAutofarm then
     StartAutofarm()
 end
@@ -893,6 +1115,7 @@ end
 getgenv().ToxBABFTCleanup = function()
     AutofarmGeneration += 1
     AutoUnboxGeneration += 1
+    SetShutdownServer(false, true)
     DestroySafetyPlatform()
     DestroyFarmPlatform()
 
