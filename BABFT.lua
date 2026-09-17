@@ -29,7 +29,7 @@ or not CreateDropdown then
     return
 end
 
-local BABFTModuleVersion = "2026-09-17-unbox-hide-legendary-v7"
+local BABFTModuleVersion = "2026-09-17-unbox-combined-v8"
 
 if getgenv().ToxBABFTModuleLoadedJobId == game.JobId
 and getgenv().ToxBABFTModuleVersion == BABFTModuleVersion
@@ -1104,6 +1104,142 @@ local function TeleportToZone(definition)
     return MoveCharacter(targetCFrame, definition.Label)
 end
 
+
+local function CreateAutoUnboxCombinedRow()
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, -5, 0, 42)
+    row.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    row.BorderSizePixel = 0
+    row.Parent = GamePage
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = row
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0, 82, 1, 0)
+    label.Position = UDim2.new(0, 12, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "Auto Unbox"
+    label.TextColor3 = Color3.fromRGB(240, 240, 240)
+    label.TextSize = 13
+    label.Font = Enum.Font.GothamMedium
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = row
+
+    local crateOrder = {"Common", "Uncommon", "Rare", "Epic", "Legendary"}
+
+    local crateButton = Instance.new("TextButton")
+    crateButton.Size = UDim2.new(0, 86, 0, 26)
+    crateButton.Position = UDim2.new(1, -190, 0.5, -13)
+    crateButton.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    crateButton.BorderSizePixel = 0
+    crateButton.TextColor3 = Color3.fromRGB(235, 235, 245)
+    crateButton.TextSize = 11
+    crateButton.Font = Enum.Font.GothamMedium
+    crateButton.AutoButtonColor = false
+    crateButton.Parent = row
+
+    local crateCorner = Instance.new("UICorner")
+    crateCorner.CornerRadius = UDim.new(0, 4)
+    crateCorner.Parent = crateButton
+
+    local amountBox = Instance.new("TextBox")
+    amountBox.Size = UDim2.new(0, 42, 0, 26)
+    amountBox.Position = UDim2.new(1, -99, 0.5, -13)
+    amountBox.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    amountBox.BorderSizePixel = 0
+    amountBox.Text = tostring(Settings.BABFTUnboxAmount)
+    amountBox.PlaceholderText = "QTY"
+    amountBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    amountBox.PlaceholderColor3 = Color3.fromRGB(145, 145, 160)
+    amountBox.TextSize = 11
+    amountBox.Font = Enum.Font.GothamMedium
+    amountBox.ClearTextOnFocus = false
+    amountBox.Parent = row
+
+    local amountCorner = Instance.new("UICorner")
+    amountCorner.CornerRadius = UDim.new(0, 4)
+    amountCorner.Parent = amountBox
+
+    local toggle = Instance.new("TextButton")
+    toggle.Size = UDim2.new(0, 48, 0, 26)
+    toggle.Position = UDim2.new(1, -52, 0.5, -13)
+    toggle.BorderSizePixel = 0
+    toggle.TextSize = 10
+    toggle.Font = Enum.Font.GothamBold
+    toggle.AutoButtonColor = false
+    toggle.Parent = row
+
+    local toggleCorner = Instance.new("UICorner")
+    toggleCorner.CornerRadius = UDim.new(0, 4)
+    toggleCorner.Parent = toggle
+
+    local function RefreshCrate()
+        local text = tostring(Settings.BABFTUnboxCrate or "Common")
+        crateButton.Text = text == "Legendary" and "Legendary" or text
+    end
+
+    local function RefreshToggle()
+        local enabled = Settings.BABFTAutoUnbox == true
+        toggle.Text = enabled and "ON" or "OFF"
+        toggle.BackgroundColor3 = enabled
+            and Color3.fromRGB(50, 150, 85)
+            or Color3.fromRGB(48, 48, 62)
+        toggle.TextColor3 = enabled
+            and Color3.fromRGB(255, 255, 255)
+            or Color3.fromRGB(205, 205, 215)
+    end
+
+    RefreshCrate()
+    RefreshToggle()
+
+    TrackConnection(crateButton.MouseButton1Click:Connect(function()
+        local current = tostring(Settings.BABFTUnboxCrate or "Common")
+        local index = 1
+
+        for i, name in ipairs(crateOrder) do
+            if name == current then
+                index = i
+                break
+            end
+        end
+
+        index = (index % #crateOrder) + 1
+        Settings.BABFTUnboxCrate = crateOrder[index]
+        RefreshCrate()
+        AutoSaveConfiguration()
+    end))
+
+    TrackConnection(amountBox.FocusLost:Connect(function()
+        local value = math.floor(tonumber(amountBox.Text) or Settings.BABFTUnboxAmount or 2)
+        Settings.BABFTUnboxAmount = math.clamp(value, 1, 100)
+        amountBox.Text = tostring(Settings.BABFTUnboxAmount)
+        AutoSaveConfiguration()
+    end))
+
+    TrackConnection(toggle.MouseButton1Click:Connect(function()
+        Settings.BABFTAutoUnbox = not Settings.BABFTAutoUnbox
+        RefreshToggle()
+        StartAutoUnbox()
+        AutoSaveConfiguration()
+    end))
+
+    if getgenv().RegisterToxSearchControl then
+        getgenv().RegisterToxSearchControl("Auto Unbox", GamePage, row)
+    end
+
+    getgenv().BABFTRefreshAutoUnboxCombined = function()
+        if row and row.Parent then
+            RefreshCrate()
+            RefreshToggle()
+            amountBox.Text = tostring(Settings.BABFTUnboxAmount)
+        end
+    end
+
+    return TrackControl(row)
+end
+
 TrackConnection(RunService.Heartbeat:Connect(function()
     UpdateSafetyPlatform()
 end))
@@ -1145,46 +1281,7 @@ CreateNumberRow(
     end
 )
 
-BABFTCreateToggle(
-    "Auto Unbox",
-    GamePage,
-    Settings.BABFTAutoUnbox,
-    function(value)
-        Settings.BABFTAutoUnbox = value == true
-        StartAutoUnbox()
-        AutoSaveConfiguration()
-    end,
-    "BABFTAutoUnbox"
-)
-
-BABFTCreateDropdown(
-    "Unbox Crate",
-    {"Common", "Uncommon", "Rare", "Epic", "Legendary"},
-    GamePage,
-    Settings.BABFTUnboxCrate,
-    function(value)
-        Settings.BABFTUnboxCrate = tostring(value)
-        AutoSaveConfiguration()
-    end
-)
-
-CreateNumberRow(
-    "Unbox Amount",
-    Settings.BABFTUnboxAmount,
-    function(value)
-        Settings.BABFTUnboxAmount = math.clamp(math.floor(tonumber(value) or 2), 1, 100)
-        return Settings.BABFTUnboxAmount
-    end
-)
-
-CreateNumberRow(
-    "Unbox Threads",
-    Settings.BABFTUnboxThreads,
-    function(value)
-        Settings.BABFTUnboxThreads = math.clamp(math.floor(tonumber(value) or 5), 1, 25)
-        return Settings.BABFTUnboxThreads
-    end
-)
+CreateAutoUnboxCombinedRow()
 
 BABFTCreateToggle(
     "Hide Unbox Items",
