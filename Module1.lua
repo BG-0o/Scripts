@@ -1793,8 +1793,6 @@ local function LoadConfiguration()
 end
 
 local function NormalizeStartupDefaultToggles()
-    Settings.AntiAFK = true
-    Settings.AntiFling = true
     Settings.Render3D = true
     Settings.Render3DDisabled = false
 end
@@ -1810,10 +1808,9 @@ local function DisableUnsupportedGameActions()
         end
     end
 
-    Settings.AntiAFK = true
-    Settings.AntiFling = true
     Settings.Render3D = true
     Settings.Render3DDisabled = false
+    getgenv().ToxUnsupportedGameDefaultsForced = true
 end
 
 local function StageOptionsUntilLoadScreen()
