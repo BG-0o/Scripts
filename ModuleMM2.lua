@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 MM2ModuleVersion =
-    "2026-09-17-mm2-compile-fix"
+    "2026-09-18-mm2-killall-stationary-1"
 
 Players = game:GetService("Players")
 UserInputService = game:GetService("UserInputService")
@@ -1018,7 +1018,8 @@ end
 function TouchKnifeTarget(
     knife,
     target,
-    activateKnife
+    activateKnife,
+    stationary
 )
     if not knife
     or not target
@@ -1173,6 +1174,10 @@ function TouchKnifeTarget(
     activate()
     touchParts()
 
+    if stationary == true then
+        return touched
+    end
+
     for pass = 1, 3 do
         if getgenv().Destroyed
         or not KnifeTargetAlive(target) then
@@ -1271,7 +1276,8 @@ end
 function AttackKnifeTargetUntilDone(
     knife,
     target,
-    timeout
+    timeout,
+    stationary
 )
     timeout = tonumber(timeout) or 2
 
@@ -1285,7 +1291,7 @@ function AttackKnifeTargetUntilDone(
     and target.Parent == Players
     and KnifeTargetAlive(target)
     and os.clock() - started < timeout do
-        if TouchKnifeTarget(knife, target, true) then
+        if TouchKnifeTarget(knife, target, true, stationary) then
             attacked = true
         end
 
@@ -1299,7 +1305,8 @@ end
 
 function OneSlashTargets(
     knife,
-    targets
+    targets,
+    stationary
 )
     if not knife
     or not knife.Parent
@@ -1324,7 +1331,12 @@ function OneSlashTargets(
             and target.Parent == Players
             and not IsWhitelisted(target)
             and KnifeTargetAlive(target) then
-                if TouchKnifeTarget(knife, target, pass == 1) then
+                if TouchKnifeTarget(
+                    knife,
+                    target,
+                    pass == 1,
+                    stationary
+                ) then
                     touchedAny = true
                 end
             end
@@ -1430,7 +1442,7 @@ function KillAll(force)
                 end
 
                 EquipTool(knife)
-                OneSlashTargets(knife, targets)
+                OneSlashTargets(knife, targets, true)
 
                 targets = GetKnifeTargets(targets)
 
@@ -1444,7 +1456,7 @@ function KillAll(force)
                     end
 
                     if KnifeTargetAlive(target) then
-                        TouchKnifeTarget(knife, target, true)
+                        TouchKnifeTarget(knife, target, true, true)
                     end
                 end
 
@@ -1459,7 +1471,12 @@ function KillAll(force)
                 end
 
                 if KnifeTargetAlive(target) then
-                    AttackKnifeTargetUntilDone(knife, target, 0.9)
+                    AttackKnifeTargetUntilDone(
+                        knife,
+                        target,
+                        0.9,
+                        true
+                    )
                 end
             end
         end)
