@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 MM2ModuleVersion =
-    "2026-09-13-mm2-split-github-names"
+    "2026-09-17-mm2-compile-fix"
 
 Players = game:GetService("Players")
 UserInputService = game:GetService("UserInputService")
@@ -962,8 +962,6 @@ function GetSelectedKnifeTargets()
 
     return targets
 end
-
-KnifeTargetAlive
 
 function GetKnifeTargetRoot(target)
     local character = target and target.Character
