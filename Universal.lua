@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-16-lighting-combat-nds-2"
+ToxUpdateVersion = "2026-09-18-mm2-role-esp-stable-1"
 
 
 function ClearToxTable(target)
@@ -5011,6 +5011,7 @@ local MM2DeadCache = {}
 local MM2RoleCacheTime = 0
 local MM2PlayerDataRemote = nil
 local MM2HasAuthoritativeData = false
+getgenv().ToxMM2StableRoleCache = getgenv().ToxMM2StableRoleCache or {}
 
 local RoleColors = {
     Murderer = Color3.fromRGB(255, 50, 50),
@@ -5176,6 +5177,10 @@ local function ApplyMM2PlayerData(data)
     end
 
     if foundCurrentPlayer then
+        for target, role in pairs(newRoles) do
+            getgenv().ToxMM2StableRoleCache[target] = role
+        end
+
         MM2RoleCache = newRoles
         MM2DeadCache = newDead
         MM2HasAuthoritativeData = true
@@ -5206,6 +5211,11 @@ local function ApplyMM2PlayerUpdate(playerKey, info)
         MM2RoleCache[target] = nil
     else
         MM2RoleCache[target] = NormalizeRoleName(info.Role)
+
+        if MM2RoleCache[target] then
+            getgenv().ToxMM2StableRoleCache[target] =
+                MM2RoleCache[target]
+        end
     end
 
     return true
@@ -5320,6 +5330,10 @@ local function BuildMM2FallbackRoles()
             end
         end
 
+        for target, role in pairs(newCache) do
+            getgenv().ToxMM2StableRoleCache[target] = role
+        end
+
         MM2RoleCache = newCache
         MM2DeadCache = {}
         MM2RoleCacheTime = tick()
@@ -5357,17 +5371,10 @@ local function RefreshMM2Roles(force)
             if applied then
                 return
             end
-
-            MM2RoleCache = {}
-            MM2DeadCache = {}
-            MM2HasAuthoritativeData = false
         end
     end
 
-    if not BuildMM2FallbackRoles() then
-        MM2RoleCache = {}
-        MM2DeadCache = {}
-    end
+    BuildMM2FallbackRoles()
 end
 
 getgenv().ToxRefreshMM2Roles = RefreshMM2Roles
@@ -5424,6 +5431,7 @@ if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
 
                 if normalized then
                     MM2RoleCache[Player] = normalized
+                    getgenv().ToxMM2StableRoleCache[Player] = normalized
                     MM2DeadCache[Player] = false
                     MM2RoleCacheTime = tick()
                     break
@@ -5439,6 +5447,7 @@ if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
     AddConnection(Players.PlayerRemoving:Connect(function(p)
         MM2RoleCache[p] = nil
         MM2DeadCache[p] = nil
+        getgenv().ToxMM2StableRoleCache[p] = nil
     end))
 
     task.spawn(function()
@@ -5459,13 +5468,21 @@ local function GetESPVisualInfo(p)
     end
 
     if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
-        local role = getgenv().ToxGetMM2Role and getgenv().ToxGetMM2Role(p) or nil
+        local role = getgenv().ToxGetMM2Role
+            and getgenv().ToxGetMM2Role(p)
+            or nil
+
+        if role then
+            getgenv().ToxMM2StableRoleCache[p] = role
+        else
+            role = getgenv().ToxMM2StableRoleCache[p]
+        end
 
         if role then
             return RoleColors[role] or MM2UnknownColor, role
         end
 
-        return MM2UnknownColor, nil
+        return defaultColor, nil
     end
 
     local attributeRole = GetAttributeRole(p)
