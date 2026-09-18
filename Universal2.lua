@@ -1199,21 +1199,37 @@ local function ApplyOutlineSettings()
 
     local colors = env.ColorMap
     local outline = typeof(colors) == "table"
+        and Settings.ChamsOutlineColorName ~= nil
         and colors[Settings.ChamsOutlineColorName]
-        or Color3.fromRGB(255, 255, 255)
-    local transparency = 1 - (
-        math.clamp(tonumber(Settings.ChamsOutlineOpacity) or 50, 0, 100) / 100
-    )
+        or nil
+
+    local hasCustomOpacity =
+        Settings.ChamsOutlineOpacity ~= nil
+
+    local transparency = hasCustomOpacity
+        and (
+            1 - (
+                math.clamp(
+                    tonumber(Settings.ChamsOutlineOpacity) or 100,
+                    0,
+                    100
+                ) / 100
+            )
+        )
+        or nil
 
     for _, highlight in pairs(highlights) do
         if highlight and highlight.Parent then
             pcall(function()
                 if Settings.VisualRainbow and lastRainbowColor then
                     highlight.OutlineColor = lastRainbowColor
-                else
+                elseif typeof(outline) == "Color3" then
                     highlight.OutlineColor = outline
                 end
-                highlight.OutlineTransparency = transparency
+
+                if transparency ~= nil then
+                    highlight.OutlineTransparency = transparency
+                end
             end)
         end
     end
@@ -3632,4 +3648,4 @@ if not mergedFeaturesOk then
 end
 
 env.ToxUniversal2Loaded = true
-env.ToxUniversal2Version = "2026-09-16-lighting-combat-nds-2"
+env.ToxUniversal2Version = "2026-09-18-esp-white-flicker-fix-1"
