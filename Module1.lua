@@ -597,7 +597,7 @@ getgenv().ToxStartupToggleCallbacks = {}
 getgenv().ToxStartupOptionsApplied = false
 getgenv().ToxHubActive = true
 getgenv().__ToxHubBootLock = nil
-getgenv().ToxModule1SplitVersion = "2026-09-17-place-save-only-v9-1"
+getgenv().ToxModule1SplitVersion = "2026-09-19-toxhub-save-folder-v11-1"
 getgenv().ToxUniversalLoaded = nil
 getgenv().ToxUniversal2Loaded = nil
 getgenv().ToxUniversal2Version = nil
@@ -637,7 +637,8 @@ getgenv().AddConnection = function(conn)
     return conn
 end
 
-local FolderName = "ToxV1_Data"
+local FolderName = "ToxHub"
+local LegacyFolderName = "ToxV1_Data"
 local CurrentPlaceKey = tostring(game.PlaceId)
 local LegacyUserConfigFilePath =
     FolderName
@@ -676,6 +677,26 @@ local LegacyConfigFilePath =
     FolderName
     .. "/config.json"
 
+local OldPlaceConfigFilePath =
+    LegacyFolderName
+    .. "/config_"
+    .. tostring(Player.UserId)
+    .. "_"
+    .. CurrentPlaceKey
+    .. ".json"
+
+local OldMusicIDsFilePath =
+    LegacyFolderName
+    .. "/music_ids.json"
+
+local OldJoinGamesFilePath =
+    LegacyFolderName
+    .. "/saved_join_games.json"
+
+local OldLegacyConfigFilePath =
+    LegacyFolderName
+    .. "/config.json"
+
 getgenv().ToxConfigFilePath =
     PrimaryConfigFilePath
 
@@ -700,10 +721,70 @@ getgenv().ToxJoinGamesFilePath =
 local function EnsureFolder()
     if makefolder and isfolder then
         pcall(function()
-            if not isfolder(FolderName) then makefolder(FolderName) end
+            if not isfolder(FolderName) then
+                makefolder(FolderName)
+            end
         end)
     end
 end
+
+local function MigrateLegacySaveFolder()
+    EnsureFolder()
+
+    if not isfolder
+    or not isfolder(LegacyFolderName)
+    or not listfiles
+    or not readfile
+    or not writefile then
+        return
+    end
+
+    pcall(function()
+        for _, sourcePath in ipairs(listfiles(LegacyFolderName)) do
+            local normalized = tostring(sourcePath):gsub("\\", "/")
+            local fileName = string.match(normalized, "([^/]+)$")
+
+            if fileName and fileName ~= "" then
+                local targetPath = FolderName .. "/" .. fileName
+                local migrated = isfile and isfile(targetPath) or false
+
+                if not migrated then
+                    local readOK, raw = pcall(function()
+                        return readfile(sourcePath)
+                    end)
+
+                    if readOK and raw ~= nil then
+                        local writeOK = pcall(function()
+                            writefile(targetPath, raw)
+                        end)
+
+                        migrated = writeOK
+                            and (not isfile or isfile(targetPath))
+                    end
+                end
+
+                if migrated and delfile then
+                    pcall(function()
+                        delfile(sourcePath)
+                    end)
+                end
+            end
+        end
+
+        if delfolder and isfolder(LegacyFolderName) then
+            local remaining = listfiles(LegacyFolderName)
+
+            if typeof(remaining) == "table"
+            and #remaining == 0 then
+                pcall(function()
+                    delfolder(LegacyFolderName)
+                end)
+            end
+        end
+    end)
+end
+
+MigrateLegacySaveFolder()
 
 local SharedPersistentKeys = {
     Speed = true,
@@ -1063,7 +1144,21 @@ local function LoadSharedMusicIDs()
     if not saved then
         saved =
             DecodeSavedIDsFromFile(
+                OldMusicIDsFilePath
+            )
+    end
+
+    if not saved then
+        saved =
+            DecodeSavedIDsFromFile(
                 LegacyConfigFilePath
+            )
+    end
+
+    if not saved then
+        saved =
+            DecodeSavedIDsFromFile(
+                OldLegacyConfigFilePath
             )
     end
 
@@ -1217,7 +1312,21 @@ local function LoadSharedJoinGames()
     if not saved then
         saved =
             DecodeSavedJoinGamesFromFile(
+                OldJoinGamesFilePath
+            )
+    end
+
+    if not saved then
+        saved =
+            DecodeSavedJoinGamesFromFile(
                 LegacyConfigFilePath
+            )
+    end
+
+    if not saved then
+        saved =
+            DecodeSavedJoinGamesFromFile(
+                OldLegacyConfigFilePath
             )
     end
 
@@ -1473,6 +1582,10 @@ local function ResolveConfigReadPath()
             or 0
 
         return ConfigFilePath, version < 8
+    end
+
+    if isfile(OldPlaceConfigFilePath) then
+        return OldPlaceConfigFilePath, true
     end
 
     return nil, false
@@ -1946,18 +2059,32 @@ for _ = 1, 20 do
         )
 
         local configPath =
+            "ToxHub/config_"
+            .. userId
+            .. "_"
+            .. tostring(game.PlaceId)
+            .. ".json"
+
+        local legacyConfigPath =
             "ToxV1_Data/config_"
             .. userId
             .. "_"
             .. tostring(game.PlaceId)
             .. ".json"
 
+        local readPath = nil
+
+        if isfile and isfile(configPath) then
+            readPath = configPath
+        elseif isfile and isfile(legacyConfigPath) then
+            readPath = legacyConfigPath
+        end
+
         if readfile
-        and isfile
-        and isfile(configPath) then
+        and readPath then
             local HttpService =
                 game:GetService("HttpService")
-            local raw = readfile(configPath)
+            local raw = readfile(readPath)
 
             if raw and raw ~= "" then
                 local data =
