@@ -597,7 +597,7 @@ getgenv().ToxStartupToggleCallbacks = {}
 getgenv().ToxStartupOptionsApplied = false
 getgenv().ToxHubActive = true
 getgenv().__ToxHubBootLock = nil
-getgenv().ToxModule1SplitVersion = "2026-09-19-toxhub-save-folder-v11-1"
+getgenv().ToxModule1SplitVersion = "2026-10-19-kick-autoreexec-persist-v12"
 getgenv().ToxUniversalLoaded = nil
 getgenv().ToxUniversal2Loaded = nil
 getgenv().ToxUniversal2Version = nil
@@ -2039,6 +2039,10 @@ end
 
 local env = getgenv()
 
+-- O payload atual ja foi consumido; libera o Auto Execute para armar a proxima rodada.
+env.ToxAutoExecuteQueued = false
+env.ToxAutoExecuteQueuedGame = nil
+
 task.wait(0.55)
 
 local shouldExecute = false
@@ -2112,11 +2116,25 @@ if not shouldExecute then
     return
 end
 
-if env.__ToxQueuedDestinationGame == game then
+local guardNow = tick()
+local previousGuardAt = tonumber(env.__ToxQueuedDestinationAt) or 0
+
+-- Bloqueia apenas payloads duplicados quase simultaneos, nao futuros kicks.
+if env.__ToxQueuedDestinationGame == game
+and guardNow - previousGuardAt < 2 then
     return
 end
 
 env.__ToxQueuedDestinationGame = game
+env.__ToxQueuedDestinationAt = guardNow
+
+task.delay(2, function()
+    if env.__ToxQueuedDestinationGame == game
+    and env.__ToxQueuedDestinationAt == guardNow then
+        env.__ToxQueuedDestinationGame = nil
+        env.__ToxQueuedDestinationAt = nil
+    end
+end)
 
 local ok = pcall(function()
     loadstring(
@@ -2127,8 +2145,9 @@ local ok = pcall(function()
 end)
 
 if not ok
-and env.__ToxQueuedDestinationGame == game then
+and env.__ToxQueuedDestinationAt == guardNow then
     env.__ToxQueuedDestinationGame = nil
+    env.__ToxQueuedDestinationAt = nil
 end
 ]]
 
