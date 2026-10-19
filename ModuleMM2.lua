@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 MM2ModuleVersion =
-    "2026-10-19-mm2-autofarm-round-resume-1"
+    "2026-10-19-mm2-autofarm-alive-round-2"
 
 Players = game:GetService("Players")
 UserInputService = game:GetService("UserInputService")
@@ -3879,12 +3879,81 @@ AutoFarmMapContainerCache = nil
 AutoFarmMapRootScanTime = 0
 AutoFarmLastTravelY = nil
 AutoFarmRandomNextCoin = false
+AutoFarmDeathObservedAt = nil
+AutoFarmRoleRefreshAttempt = 0
 getgenv().ToxMM2AutoWinBusy = false
 getgenv().ToxMM2AutoWinGeneration = getgenv().ToxMM2AutoWinGeneration or 0
 
 function IsAliveCharacter()
     local character, humanoid, root = GetCharacterState()
     return character, humanoid, root, humanoid and humanoid.Health > 0 and root ~= nil
+end
+
+function IsAutoFarmPlayerEligible()
+    local character, humanoid, root, alive = IsAliveCharacter()
+    local now = os.clock()
+
+    if not alive or not character or not humanoid or not root then
+        AutoFarmDeathObservedAt = AutoFarmDeathObservedAt or now
+        return false
+    end
+
+    if now - (MM2RoleDataCacheTime or 0) > 0.75
+    and now - (AutoFarmRoleRefreshAttempt or 0) > 0.65 then
+        AutoFarmRoleRefreshAttempt = now
+        pcall(function()
+            GetMM2RoleData(true)
+        end)
+    end
+
+    local data = MM2RoleDataCache
+    local dataAge = now - (MM2RoleDataCacheTime or 0)
+
+    if typeof(data) ~= "table" or dataAge > 1.5 then
+        return false
+    end
+
+    local info = data[Player.Name]
+        or data[tostring(Player.UserId)]
+        or data[Player]
+
+    if typeof(info) ~= "table" then
+        return false
+    end
+
+    local role = NormalizeMM2Role(info.Role or info.role)
+
+    if not role
+    or info.Dead == true
+    or info.dead == true then
+        return false
+    end
+
+    -- After a death, wait for fresh server role data before allowing farming again.
+    if AutoFarmDeathObservedAt then
+        if (MM2RoleDataCacheTime or 0) <= AutoFarmDeathObservedAt then
+            return false
+        end
+
+        AutoFarmDeathObservedAt = nil
+    end
+
+    -- MM2's Game panel is shown during an active round and hidden in the lobby.
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+    local mainGui = playerGui and playerGui:FindFirstChild("MainGUI")
+    local gameGui = mainGui and mainGui:FindFirstChild("Game")
+    local lobbyGui = mainGui and mainGui:FindFirstChild("Lobby")
+
+    if gameGui and not gameGui.Visible then
+        return false
+    end
+
+    if lobbyGui and lobbyGui.Visible
+    and (not gameGui or not gameGui.Visible) then
+        return false
+    end
+
+    return true
 end
 
 
@@ -4712,6 +4781,10 @@ getgenv().ToxMM2FlingMurdererForAutoWin = ToxMM2FlingMurdererForAutoWin
 getgenv().ToxMM2RunAutoWinFromFull = ToxMM2RunAutoWinFromFull
 
 function CompleteAutoFarm()
+    if not IsAutoFarmPlayerEligible() then
+        return
+    end
+
     RefreshFarmBagState()
 
     if AutoFarmCompleting
@@ -4936,7 +5009,8 @@ function TweenFarmRoot(targetPosition, duration, coin)
     and AutoFarmRoot
     and AutoFarmRoot.Parent
     and AutoFarmHumanoid
-    and AutoFarmHumanoid.Health > 0 do
+    and AutoFarmHumanoid.Health > 0
+    and IsAutoFarmPlayerEligible() do
         if coin and not IsCoinValid(coin) then
             return false
         end
@@ -4977,7 +5051,7 @@ function TouchCoin(coin)
 
     local character, humanoid, root, alive = IsAliveCharacter()
 
-    if not alive then
+    if not alive or not IsAutoFarmPlayerEligible() then
         return false
     end
 
@@ -5075,6 +5149,7 @@ function CollectFarmCoin(coin)
     and AutoFarmRoot.Parent
     and AutoFarmHumanoid
     and AutoFarmHumanoid.Health > 0
+    and IsAutoFarmPlayerEligible()
     and os.clock() <= holdUntil do
         TouchCoin(coin)
 
@@ -5091,7 +5166,8 @@ function CollectFarmCoin(coin)
 end
 
 function AutoFarmCoin(coin)
-    if not IsAutoFarmRoundActive()
+    if not IsAutoFarmPlayerEligible()
+    or not IsAutoFarmRoundActive()
     or not IsCoinValid(coin)
     or not PrepareAutoFarm() then
         return false
@@ -5174,7 +5250,8 @@ AddConnection(RunService.Heartbeat:Connect(function()
 
     if not AutoFarmHumanoid
     or not AutoFarmHumanoid.Parent
-    or AutoFarmHumanoid.Health <= 0 then
+    or AutoFarmHumanoid.Health <= 0
+    or not IsAutoFarmPlayerEligible() then
         StopAutoFarm(false)
         return
     end
@@ -5210,6 +5287,7 @@ task.spawn(function()
                 root,
                 alive =
                 IsAliveCharacter()
+            local farmPlayerEligible = IsAutoFarmPlayerEligible()
 
             if AutoFarmPausedFull then
                 local bagReset =
@@ -5242,7 +5320,7 @@ task.spawn(function()
 
                     task.wait(0.2)
                 end
-            elseif not alive then
+            elseif not alive or not farmPlayerEligible then
                 if AutoFarmPrepared then
                     StopAutoFarm(false)
                 end
