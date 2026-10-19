@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 MM2ModuleVersion =
-    "2026-09-18-mm2-killall-stationary-1"
+    "2026-10-19-mm2-autofarm-round-resume-1"
 
 Players = game:GetService("Players")
 UserInputService = game:GetService("UserInputService")
@@ -3869,6 +3869,14 @@ AutoFarmPausedFull = false
 AutoFarmResetTriggered = false
 AutoFarmPauseCharacter = nil
 AutoFarmPauseMap = nil
+AutoFarmPauseContainer = nil
+AutoFarmSawRoundEnd = false
+AutoFarmRoundWasActive = false
+AutoFarmLastObservedMap = nil
+AutoFarmLastObservedContainer = nil
+AutoFarmMapRootCache = nil
+AutoFarmMapContainerCache = nil
+AutoFarmMapRootScanTime = 0
 AutoFarmLastTravelY = nil
 AutoFarmRandomNextCoin = false
 getgenv().ToxMM2AutoWinBusy = false
@@ -3973,31 +3981,96 @@ if coinCollectedRemote and coinCollectedRemote:IsA("RemoteEvent") then
     end))
 end
 
-function GetAutoFarmMapRoot()
-    local normal = workspace:FindFirstChild("Normal")
-
-    if normal
-    and normal ~= workspace:FindFirstChild("Lobby") then
-        local container = normal:FindFirstChild("CoinContainer", true)
-
-        if container then
-            return normal, container
-        end
+function HasPotentialFarmCoins(container)
+    if not container or not container.Parent then
+        return false
     end
 
-    for _, object in ipairs(workspace:GetChildren()) do
-        if object ~= Player.Character
-        and object.Name ~= "Lobby"
-        and object:IsA("Model") then
-            local container = object:FindFirstChild("CoinContainer", true)
+    for _, object in ipairs(container:GetDescendants()) do
+        if object:IsA("BasePart")
+        and IsCoinTouchPart(object)
+        and not object:GetAttribute("Collected")
+        and not object:GetAttribute("Delete") then
+            local model = object:FindFirstAncestorOfClass("Model")
+            local hasTouch = object:FindFirstChild("TouchInterest")
+                or object:FindFirstChildWhichIsA("TouchTransmitter", true)
 
-            if container then
-                return object, container
+            if not (model and model:FindFirstChildOfClass("Humanoid"))
+            and (object.Transparency < 1 or hasTouch) then
+                return true
             end
         end
     end
 
-    return nil, nil
+    return false
+end
+
+function GetAutoFarmMapRoot(forceRefresh)
+    local now = os.clock()
+    local cachedRoot = AutoFarmMapRootCache
+    local cachedContainer = AutoFarmMapContainerCache
+
+    if not forceRefresh
+    and now - (AutoFarmMapRootScanTime or 0) < 0.12 then
+        if cachedRoot
+        and cachedContainer
+        and cachedRoot.Parent
+        and cachedContainer.Parent
+        and cachedContainer:IsDescendantOf(cachedRoot) then
+            return cachedRoot, cachedContainer
+        end
+
+        if not cachedRoot and not cachedContainer then
+            return nil, nil
+        end
+    end
+
+    AutoFarmMapRootScanTime = now
+
+    local normal = workspace:FindFirstChild("Normal")
+    local normalContainer = normal
+        and normal:FindFirstChild("CoinContainer", true)
+        or nil
+
+    local selectedRoot = nil
+    local selectedContainer = nil
+    local fallbackRoot = normalContainer and normal or nil
+    local fallbackContainer = normalContainer
+
+    if normalContainer and HasPotentialFarmCoins(normalContainer) then
+        selectedRoot = normal
+        selectedContainer = normalContainer
+    else
+        for _, object in ipairs(workspace:GetChildren()) do
+            if object ~= Player.Character
+            and object ~= normal
+            and object.Name ~= "Lobby"
+            and object:IsA("Model") then
+                local container = object:FindFirstChild("CoinContainer", true)
+
+                if container then
+                    if HasPotentialFarmCoins(container) then
+                        selectedRoot = object
+                        selectedContainer = container
+                        break
+                    elseif not fallbackContainer then
+                        fallbackRoot = object
+                        fallbackContainer = container
+                    end
+                end
+            end
+        end
+    end
+
+    if not selectedContainer then
+        selectedRoot = fallbackRoot
+        selectedContainer = fallbackContainer
+    end
+
+    AutoFarmMapRootCache = selectedRoot
+    AutoFarmMapContainerCache = selectedContainer
+
+    return selectedRoot, selectedContainer
 end
 
 function IsCoinTouchPart(part)
@@ -4479,7 +4552,48 @@ function ResetAutoFarmFullPause()
     AutoFarmResetTriggered = false
     AutoFarmPauseCharacter = nil
     AutoFarmPauseMap = nil
+    AutoFarmPauseContainer = nil
+    AutoFarmSawRoundEnd = false
     AutoFarmSessionCollected = 0
+end
+
+function UpdateAutoFarmRoundLifecycle()
+    local currentMap, currentContainer = GetAutoFarmMapRoot(true)
+    local roundActive = currentContainer ~= nil
+        and #GetMM2Coins(true) > 0
+
+    local mapChanged = AutoFarmLastObservedMap ~= nil
+        and (
+            currentMap ~= AutoFarmLastObservedMap
+            or currentContainer ~= AutoFarmLastObservedContainer
+        )
+
+    if not roundActive then
+        if AutoFarmRoundWasActive or mapChanged then
+            AutoFarmSawRoundEnd = true
+        end
+
+        AutoFarmRoundWasActive = false
+    else
+        if not AutoFarmRoundWasActive or mapChanged then
+            if AutoFarmPausedFull
+            and (AutoFarmSawRoundEnd or mapChanged) then
+                ResetAutoFarmFullPause()
+                AutoFarmBagKnown = false
+                AutoFarmBagCoins = 0
+                RefreshFarmBagState()
+            end
+
+            AutoFarmSawRoundEnd = false
+        end
+
+        AutoFarmRoundWasActive = true
+    end
+
+    AutoFarmLastObservedMap = currentMap
+    AutoFarmLastObservedContainer = currentContainer
+
+    return roundActive, currentMap, currentContainer
 end
 
 
@@ -4610,11 +4724,9 @@ function CompleteAutoFarm()
     AutoFarmPausedFull = true
     AutoFarmPauseCharacter =
         Player.Character
-    AutoFarmPauseMap =
-        workspace:
-            FindFirstChild(
-                "Normal"
-            )
+    AutoFarmPauseMap, AutoFarmPauseContainer =
+        GetAutoFarmMapRoot(true)
+    AutoFarmSawRoundEnd = false
 
     StopAutoFarm(true)
 
@@ -5088,6 +5200,11 @@ task.spawn(function()
         if Settings.MM2AutoFarmV2 then
             RefreshFarmBagState()
 
+            local roundActive,
+                currentMap,
+                currentContainer =
+                UpdateAutoFarmRoundLifecycle()
+
             local _,
                 humanoid,
                 root,
@@ -5095,24 +5212,25 @@ task.spawn(function()
                 IsAliveCharacter()
 
             if AutoFarmPausedFull then
-                local currentMap =
-                    workspace:
-                        FindFirstChild(
-                            "Normal"
-                        )
-
                 local bagReset =
                     AutoFarmBagKnown
                     and not IsFarmBagFull()
 
                 local roundChanged =
-                    AutoFarmPauseMap
-                    and currentMap
-                    and currentMap
-                        ~= AutoFarmPauseMap
+                    (
+                        AutoFarmPauseMap
+                        and currentMap
+                        and currentMap ~= AutoFarmPauseMap
+                    )
+                    or (
+                        AutoFarmPauseContainer
+                        and currentContainer
+                        and currentContainer ~= AutoFarmPauseContainer
+                    )
 
                 if bagReset
-                or roundChanged then
+                or roundChanged
+                or (AutoFarmSawRoundEnd and roundActive) then
                     ResetAutoFarmFullPause()
                     AutoFarmBagKnown = false
                     AutoFarmBagCoins = 0
@@ -5130,7 +5248,7 @@ task.spawn(function()
                 end
 
                 task.wait(0.15)
-            elseif not IsAutoFarmRoundActive() then
+            elseif not roundActive then
                 if AutoFarmPrepared then
                     StopAutoFarm(false)
                 end
