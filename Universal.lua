@@ -47,7 +47,7 @@ Settings.EspMaxDistanceByPlace =
     and Settings.EspMaxDistanceByPlace
     or {}
 
-ToxUpdateVersion = "2026-09-18-mm2-role-esp-stable-1"
+ToxUpdateVersion = "2026-10-19-kick-autoreexec-persist-v10"
 
 
 function ClearToxTable(target)
@@ -2853,6 +2853,8 @@ local function QueueAntiKickResume()
     local payload =
         "if not game:IsLoaded() then game.Loaded:Wait() end\n"
         .. "local env = getgenv()\n"
+        .. "env.ToxAutoExecuteQueued = false\n"
+        .. "env.ToxAutoExecuteQueuedGame = nil\n"
         .. "env.__ToxAntiKickResume = true\n"
         .. "env.__ToxAntiKickResumeFarm = "
         .. tostring(
@@ -2860,15 +2862,19 @@ local function QueueAntiKickResume()
         )
         .. "\n"
         .. "task.wait(0.6)\n"
-        .. "if env.__ToxQueuedDestinationGame == game then return end\n"
+        .. "local guardNow = tick()\n"
+        .. "local previousGuardAt = tonumber(env.__ToxQueuedDestinationAt) or 0\n"
+        .. "if env.__ToxQueuedDestinationGame == game and guardNow - previousGuardAt < 2 then return end\n"
         .. "env.__ToxQueuedDestinationGame = game\n"
+        .. "env.__ToxQueuedDestinationAt = guardNow\n"
+        .. "task.delay(2, function() if env.__ToxQueuedDestinationGame == game and env.__ToxQueuedDestinationAt == guardNow then env.__ToxQueuedDestinationGame = nil; env.__ToxQueuedDestinationAt = nil end end)\n"
         .. "local ok = pcall(function() loadstring(game:HttpGet("
         .. string.format(
             "%q",
             "https://raw.githubusercontent.com/BG-0o/Scripts/main/ToxHud.lua"
         )
         .. "))() end)\n"
-        .. "if not ok and env.__ToxQueuedDestinationGame == game then env.__ToxQueuedDestinationGame = nil end"
+        .. "if not ok and env.__ToxQueuedDestinationAt == guardNow then env.__ToxQueuedDestinationGame = nil; env.__ToxQueuedDestinationAt = nil end"
 
     return pcall(
         queueFunction,
@@ -2933,6 +2939,11 @@ local function TryAntiKickRejoin(
         )
     ) then
         return
+    end
+
+    -- Salva o estado atual antes do teleport/kick; o proximo boot restaura as opcoes ativas.
+    if getgenv().AutoSaveConfiguration then
+        pcall(getgenv().AutoSaveConfiguration)
     end
 
     AntiKickRejoining = true
@@ -5852,8 +5863,8 @@ end)
 
 CreateToggle("Chat Logs", ConfigPage, Settings.ChatLogs, function(v)
     Settings.ChatLogs = v
-    ChatLogGui.Visible = v
-end)
+    ChatLogGui.Visible = v == true
+end, "ChatLogs")
 
 CreateToggle(
     "Kick Bypass",
@@ -5881,8 +5892,8 @@ CreateToggle(
 )
 
 CreateToggle("Anti AFK", ConfigPage, Settings.AntiAFK, function(v)
-    Settings.AntiAFK = v
-end)
+    Settings.AntiAFK = v == true
+end, "AntiAFK")
 
 CreateToggle("Auto Execute", ConfigPage, Settings.AutoExecute, function(v)
     Settings.AutoExecute = v == true
@@ -5907,7 +5918,12 @@ CreateToggle("Auto Execute", ConfigPage, Settings.AutoExecute, function(v)
             Color3.fromRGB(255, 180, 70)
         )
     end
-end)
+
+    -- O callback tambem roda ao restaurar a configuracao no boot, sem clique manual.
+    if getgenv().AutoSaveConfiguration then
+        pcall(getgenv().AutoSaveConfiguration)
+    end
+end, "AutoExecute")
 
 CreateToggle(
     "FPS Booster",
