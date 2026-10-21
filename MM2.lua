@@ -226,6 +226,34 @@ CreateToggle(
     "MM2AutoFarmResetOnFull"
 )
 
+CreateToggle(
+    "Kill On Full",
+    GamePage,
+    Settings.MM2KillOnFull,
+    function(v)
+        Settings.MM2KillOnFull =
+            v == true
+
+        if not Settings.MM2KillOnFull then
+            AutoFarmKillTriggered = false
+        end
+
+        AutoSaveConfiguration()
+    end,
+    "MM2KillOnFull"
+)
+
+CreateDropdown(
+    "Kill On Full Target",
+    {"Both", "Murderer", "Sheriff"},
+    GamePage,
+    Settings.MM2KillOnFullTarget or "Both",
+    function(value)
+        Settings.MM2KillOnFullTarget = value
+        AutoSaveConfiguration()
+    end
+)
+
 CreateMM2Section(
     "PLAYER"
 )
