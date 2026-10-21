@@ -121,6 +121,17 @@ Settings.MM2AutoFarmV2 =
 Settings.MM2AutoFarmResetOnFull =
     Settings.MM2AutoFarmResetOnFull == true
 
+Settings.MM2KillOnFull =
+    Settings.MM2KillOnFull == true
+
+Settings.MM2KillOnFullTarget =
+    tostring(Settings.MM2KillOnFullTarget or "Both")
+if Settings.MM2KillOnFullTarget ~= "Murderer"
+and Settings.MM2KillOnFullTarget ~= "Sheriff"
+and Settings.MM2KillOnFullTarget ~= "Both" then
+    Settings.MM2KillOnFullTarget = "Both"
+end
+
 Settings.MM2AutoWin =
     Settings.MM2AutoWin == true
 
@@ -3867,6 +3878,7 @@ AutoFarmGeneration = 0
 AutoFarmSessionCollected = 0
 AutoFarmPausedFull = false
 AutoFarmResetTriggered = false
+AutoFarmKillTriggered = false
 AutoFarmPauseCharacter = nil
 AutoFarmPauseMap = nil
 AutoFarmPauseContainer = nil
@@ -4619,6 +4631,7 @@ end
 function ResetAutoFarmFullPause()
     AutoFarmPausedFull = false
     AutoFarmResetTriggered = false
+    AutoFarmKillTriggered = false
     AutoFarmPauseCharacter = nil
     AutoFarmPauseMap = nil
     AutoFarmPauseContainer = nil
@@ -4780,6 +4793,163 @@ end
 getgenv().ToxMM2FlingMurdererForAutoWin = ToxMM2FlingMurdererForAutoWin
 getgenv().ToxMM2RunAutoWinFromFull = ToxMM2RunAutoWinFromFull
 
+local KillOnFullBusy = false
+local KillOnFullGeneration = 0
+
+function ToxMM2RunKillOnFull()
+    if KillOnFullBusy then
+        return
+    end
+
+    KillOnFullBusy = true
+    KillOnFullGeneration = KillOnFullGeneration + 1
+    local generation = KillOnFullGeneration
+
+    task.spawn(function()
+        local function active()
+            local _, humanoid, root, alive = IsAliveCharacter()
+            return alive == true
+                and humanoid ~= nil
+                and root ~= nil
+                and not getgenv().Destroyed
+                and game.PlaceId == 142823291
+                and generation == KillOnFullGeneration
+        end
+
+        task.wait(0.15)
+
+        if not active() then
+            KillOnFullBusy = false
+            return
+        end
+
+        local role = GetRole(Player)
+        local knife = FindNamedTool({"knife"})
+        local gun = FindNamedTool({"gun", "revolver"})
+        local targetMode = tostring(Settings.MM2KillOnFullTarget or "Both")
+
+        if role == "Murderer" or knife then
+            CustomNotify(
+                "Bag full • Murderer Killing All",
+                Color3.fromRGB(255, 60, 60)
+            )
+            pcall(function()
+                KillAll(true)
+            end)
+
+        elseif role == "Sheriff" or gun then
+            if targetMode == "Murderer" or targetMode == "Both" then
+                CustomNotify(
+                    "Bag full • Sheriff Shooting Murderer",
+                    Color3.fromRGB(80, 180, 255)
+                )
+
+                if not gun then
+                    pcall(function()
+                        GrabGun(true)
+                    end)
+
+                    local started = os.clock()
+                    repeat
+                        task.wait(0.08)
+                        gun = FindNamedTool({"gun", "revolver"})
+                    until gun or not active() or os.clock() - started >= 2.5
+                end
+
+                if active() then
+                    pcall(function()
+                        ShootMurderer(true)
+                    end)
+                end
+            elseif targetMode == "Sheriff" then
+                CustomNotify(
+                    "Bag full • You are Sheriff",
+                    Color3.fromRGB(255, 180, 70)
+                )
+            end
+
+        else
+            local fling = getgenv().ToxFlingPlayer
+
+            if not fling then
+                CustomNotify(
+                    "Fling system unavailable",
+                    Color3.fromRGB(255, 100, 100)
+                )
+                KillOnFullBusy = false
+                return
+            end
+
+            local function flingTarget(targetPlayer, label)
+                if not targetPlayer or not IsMM2PlayerAlive(targetPlayer) then
+                    return false
+                end
+
+                CustomNotify(
+                    "Bag full • Flinging " .. label,
+                    Color3.fromRGB(255, 170, 50)
+                )
+
+                local restoreAntiFling = Settings.AntiFling == true
+                if restoreAntiFling then
+                    SetSharedTemporary("AntiFling", false)
+                end
+
+                local ok, res = pcall(function()
+                    return fling(targetPlayer)
+                end)
+
+                if restoreAntiFling then
+                    SetSharedTemporary("AntiFling", true)
+                end
+
+                return ok and res ~= false
+            end
+
+            local murderTarget = GetPlayerByRole("Murderer")
+            local sheriffTarget = GetPlayerByRole("Sheriff")
+
+            if targetMode == "Murderer" then
+                if murderTarget then
+                    flingTarget(murderTarget, "Murderer")
+                else
+                    CustomNotify(
+                        "Murderer not found to fling",
+                        Color3.fromRGB(255, 180, 70)
+                    )
+                end
+            elseif targetMode == "Sheriff" then
+                if sheriffTarget then
+                    flingTarget(sheriffTarget, "Sheriff")
+                else
+                    CustomNotify(
+                        "Sheriff not found to fling",
+                        Color3.fromRGB(255, 180, 70)
+                    )
+                end
+            elseif targetMode == "Both" then
+                if murderTarget and IsMM2PlayerAlive(murderTarget) then
+                    flingTarget(murderTarget, "Murderer")
+                    task.wait(0.5)
+                end
+
+                if active() and sheriffTarget and IsMM2PlayerAlive(sheriffTarget) then
+                    flingTarget(sheriffTarget, "Sheriff")
+                elseif not murderTarget and not sheriffTarget then
+                    CustomNotify(
+                        "Targets not found to fling",
+                        Color3.fromRGB(255, 180, 70)
+                    )
+                end
+            end
+        end
+
+        KillOnFullBusy = false
+    end)
+end
+
+getgenv().ToxMM2RunKillOnFull = ToxMM2RunKillOnFull
+
 function CompleteAutoFarm()
     if not IsAutoFarmPlayerEligible() then
         return
@@ -4815,6 +4985,11 @@ function CompleteAutoFarm()
         )
 
         getgenv().ToxMM2RunAutoWinFromFull()
+    elseif Settings.MM2KillOnFull
+    and not AutoFarmKillTriggered then
+        AutoFarmKillTriggered = true
+
+        ToxMM2RunKillOnFull()
     elseif Settings.MM2AutoFarmResetOnFull
     and not AutoFarmResetTriggered then
         AutoFarmResetTriggered = true
