@@ -3907,6 +3907,8 @@ function IsAutoFarmPlayerEligible()
 
     if not alive or not character or not humanoid or not root then
         AutoFarmDeathObservedAt = AutoFarmDeathObservedAt or now
+        AutoFarmBagCoins = 0
+        AutoFarmBagKnown = false
         return false
     end
 
@@ -3982,22 +3984,26 @@ function ReadCoinBagFromGui()
             local current, maximum = text:match("(%d+)%s*/%s*(%d+)")
 
             if current and maximum then
-                local blob = string.lower(tostring(obj.Name or ""))
-                local parent = obj.Parent
+                local curNum = tonumber(current)
+                local maxNum = tonumber(maximum)
 
-                for _ = 1, 4 do
-                    if not parent then
-                        break
+                if curNum and maxNum and maxNum >= 10 then
+                    local blob = string.lower(tostring(obj.Name or ""))
+                    local parent = obj.Parent
+
+                    for _ = 1, 4 do
+                        if not parent then
+                            break
+                        end
+
+                        blob = blob .. " " .. string.lower(tostring(parent.Name or ""))
+                        parent = parent.Parent
                     end
 
-                    blob = blob .. " " .. string.lower(tostring(parent.Name or ""))
-                    parent = parent.Parent
-                end
-
-                if string.find(blob, "coin", 1, true)
-                or string.find(blob, "bag", 1, true)
-                or string.find(blob, "inventory", 1, true) then
-                    return tonumber(current), tonumber(maximum)
+                    if (string.find(blob, "coin", 1, true) or string.find(blob, "bag", 1, true))
+                    and not string.find(blob, "inventory", 1, true) then
+                        return curNum, maxNum
+                    end
                 end
             end
         end
@@ -4021,7 +4027,7 @@ function RefreshFarmBagState()
 
     if typeof(maxCoins)
         == "number"
-    and maxCoins > 0 then
+    and maxCoins >= 10 then
         AutoFarmBagMax =
             maxCoins
 
@@ -4036,7 +4042,8 @@ end
 
 function IsFarmBagFull()
     return AutoFarmBagKnown
-        and AutoFarmBagMax > 0
+        and AutoFarmBagMax >= 10
+        and AutoFarmBagCoins > 0
         and AutoFarmBagCoins >= AutoFarmBagMax
 end
 
@@ -4632,6 +4639,8 @@ function ResetAutoFarmFullPause()
     AutoFarmPausedFull = false
     AutoFarmResetTriggered = false
     AutoFarmKillTriggered = false
+    AutoFarmBagCoins = 0
+    AutoFarmBagKnown = false
     AutoFarmPauseCharacter = nil
     AutoFarmPauseMap = nil
     AutoFarmPauseContainer = nil
@@ -4656,15 +4665,14 @@ function UpdateAutoFarmRoundLifecycle()
         end
 
         AutoFarmRoundWasActive = false
+        AutoFarmBagCoins = 0
+        AutoFarmBagKnown = false
     else
         if not AutoFarmRoundWasActive or mapChanged then
-            if AutoFarmPausedFull
-            and (AutoFarmSawRoundEnd or mapChanged) then
-                ResetAutoFarmFullPause()
-                AutoFarmBagKnown = false
-                AutoFarmBagCoins = 0
-                RefreshFarmBagState()
-            end
+            ResetAutoFarmFullPause()
+            AutoFarmBagKnown = false
+            AutoFarmBagCoins = 0
+            RefreshFarmBagState()
 
             AutoFarmSawRoundEnd = false
         end
