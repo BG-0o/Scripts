@@ -4833,9 +4833,21 @@ function ToxMM2RunKillOnFull()
                 "Bag full • Murderer Killing All",
                 Color3.fromRGB(255, 60, 60)
             )
-            pcall(function()
-                KillAll(true)
-            end)
+
+            while active() and #GetKnifeTargets() > 0 do
+                knife = FindNamedTool({"knife"}) or knife
+                if not knife then
+                    break
+                end
+
+                if not KillAllBusy then
+                    pcall(function()
+                        KillAll(true)
+                    end)
+                end
+
+                task.wait(0.25)
+            end
 
         elseif role == "Sheriff" or gun then
             if targetMode == "Murderer" or targetMode == "Both" then
@@ -4844,22 +4856,29 @@ function ToxMM2RunKillOnFull()
                     Color3.fromRGB(80, 180, 255)
                 )
 
-                if not gun then
-                    pcall(function()
-                        GrabGun(true)
-                    end)
+                while active() do
+                    local murderer = FindGuidedMurderer() or GetPlayerByRole("Murderer")
+                    if not murderer or not IsMM2PlayerAlive(murderer) then
+                        break
+                    end
 
-                    local started = os.clock()
-                    repeat
-                        task.wait(0.08)
-                        gun = FindNamedTool({"gun", "revolver"})
-                    until gun or not active() or os.clock() - started >= 2.5
-                end
+                    gun = FindNamedTool({"gun", "revolver"}) or gun
 
-                if active() then
-                    pcall(function()
-                        ShootMurderer(true)
-                    end)
+                    if not gun or not gun.Parent then
+                        pcall(function()
+                            GrabGun(true)
+                        end)
+                        task.wait(0.15)
+                        gun = GetOrEquipGuidedGun()
+                    end
+
+                    if gun and active() and not GuidedShotBusy then
+                        pcall(function()
+                            ShootMurderer(false)
+                        end)
+                    end
+
+                    task.wait(0.2)
                 end
             elseif targetMode == "Sheriff" then
                 CustomNotify(
@@ -4880,38 +4899,40 @@ function ToxMM2RunKillOnFull()
                 return
             end
 
-            local function flingTarget(targetPlayer, label)
+            local function flingUntilDead(targetPlayer, label)
                 if not targetPlayer or not IsMM2PlayerAlive(targetPlayer) then
                     return false
                 end
-
-                CustomNotify(
-                    "Bag full • Flinging " .. label,
-                    Color3.fromRGB(255, 170, 50)
-                )
 
                 local restoreAntiFling = Settings.AntiFling == true
                 if restoreAntiFling then
                     SetSharedTemporary("AntiFling", false)
                 end
 
-                local ok, res = pcall(function()
-                    return fling(targetPlayer)
-                end)
+                while active() and targetPlayer and IsMM2PlayerAlive(targetPlayer) do
+                    CustomNotify(
+                        "Bag full • Flinging " .. label,
+                        Color3.fromRGB(255, 170, 50)
+                    )
+
+                    pcall(function()
+                        fling(targetPlayer)
+                    end)
+
+                    task.wait(0.2)
+                end
 
                 if restoreAntiFling then
                     SetSharedTemporary("AntiFling", true)
                 end
 
-                return ok and res ~= false
+                return true
             end
 
-            local murderTarget = GetPlayerByRole("Murderer")
-            local sheriffTarget = GetPlayerByRole("Sheriff")
-
             if targetMode == "Murderer" then
-                if murderTarget then
-                    flingTarget(murderTarget, "Murderer")
+                local murderTarget = GetPlayerByRole("Murderer")
+                if murderTarget and IsMM2PlayerAlive(murderTarget) then
+                    flingUntilDead(murderTarget, "Murderer")
                 else
                     CustomNotify(
                         "Murderer not found to fling",
@@ -4919,8 +4940,9 @@ function ToxMM2RunKillOnFull()
                     )
                 end
             elseif targetMode == "Sheriff" then
-                if sheriffTarget then
-                    flingTarget(sheriffTarget, "Sheriff")
+                local sheriffTarget = GetPlayerByRole("Sheriff")
+                if sheriffTarget and IsMM2PlayerAlive(sheriffTarget) then
+                    flingUntilDead(sheriffTarget, "Sheriff")
                 else
                     CustomNotify(
                         "Sheriff not found to fling",
@@ -4928,14 +4950,17 @@ function ToxMM2RunKillOnFull()
                     )
                 end
             elseif targetMode == "Both" then
+                local murderTarget = GetPlayerByRole("Murderer")
                 if murderTarget and IsMM2PlayerAlive(murderTarget) then
-                    flingTarget(murderTarget, "Murderer")
-                    task.wait(0.5)
+                    flingUntilDead(murderTarget, "Murderer")
                 end
 
+                local sheriffTarget = GetPlayerByRole("Sheriff")
                 if active() and sheriffTarget and IsMM2PlayerAlive(sheriffTarget) then
-                    flingTarget(sheriffTarget, "Sheriff")
-                elseif not murderTarget and not sheriffTarget then
+                    flingUntilDead(sheriffTarget, "Sheriff")
+                end
+
+                if not murderTarget and not sheriffTarget then
                     CustomNotify(
                         "Targets not found to fling",
                         Color3.fromRGB(255, 180, 70)
