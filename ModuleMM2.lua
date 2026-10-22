@@ -1486,7 +1486,7 @@ function KillAll(force)
                         knife,
                         target,
                         0.9,
-                        true
+                        false
                     )
                 end
             end
@@ -4116,8 +4116,15 @@ function GetAutoFarmMapRoot(forceRefresh)
     AutoFarmMapRootScanTime = now
 
     local normal = workspace:FindFirstChild("Normal")
+        or workspace:FindFirstChild("Zombie")
+        or workspace:FindFirstChild("Halloween")
     local normalContainer = normal
-        and normal:FindFirstChild("CoinContainer", true)
+        and (
+            normal:FindFirstChild("CoinContainer", true)
+            or normal:FindFirstChild("CandyContainer", true)
+            or normal:FindFirstChild("Candies", true)
+            or normal:FindFirstChild("Coins", true)
+        )
         or nil
 
     local selectedRoot = nil
@@ -4135,6 +4142,9 @@ function GetAutoFarmMapRoot(forceRefresh)
             and object.Name ~= "Lobby"
             and object:IsA("Model") then
                 local container = object:FindFirstChild("CoinContainer", true)
+                    or object:FindFirstChild("CandyContainer", true)
+                    or object:FindFirstChild("Candies", true)
+                    or object:FindFirstChild("Coins", true)
 
                 if container then
                     if HasPotentialFarmCoins(container) then
@@ -4176,7 +4186,11 @@ function IsCoinTouchPart(part)
 
     return lower == "coin_server"
         or lower == "coinserver"
+        or lower == "candy_server"
+        or lower == "candyserver"
         or string.find(lower, "coin", 1, true) ~= nil
+        or string.find(lower, "cand", 1, true) ~= nil
+        or string.find(lower, "doce", 1, true) ~= nil
         or string.find(lower, "token", 1, true) ~= nil
         or string.find(lower, "credit", 1, true) ~= nil
 end
@@ -4191,6 +4205,9 @@ function IsCoinValid(coin)
     end
 
     local container = coin:FindFirstAncestor("CoinContainer")
+        or coin:FindFirstAncestor("CandyContainer")
+        or coin:FindFirstAncestor("Candies")
+        or coin:FindFirstAncestor("Coins")
 
     if not container then
         return false
@@ -4848,13 +4865,35 @@ function ToxMM2RunKillOnFull()
                     break
                 end
 
-                if not KillAllBusy then
-                    pcall(function()
-                        KillAll(true)
-                    end)
+                EquipTool(knife)
+
+                local targets = GetKnifeTargets()
+                if #targets == 0 then
+                    break
                 end
 
-                task.wait(0.25)
+                OneSlashTargets(knife, targets, true)
+                task.wait(0.04)
+
+                targets = GetKnifeTargets()
+                for _, target in ipairs(targets) do
+                    if not active() then
+                        break
+                    end
+
+                    if KnifeTargetAlive(target) then
+                        knife = FindNamedTool({"knife"}) or knife
+                        if not knife then
+                            break
+                        end
+
+                        EquipTool(knife)
+                        AttackKnifeTargetUntilDone(knife, target, 0.8, false)
+                        task.wait(0.04)
+                    end
+                end
+
+                task.wait(0.12)
             end
 
         elseif role == "Sheriff" or gun then
@@ -4896,83 +4935,189 @@ function ToxMM2RunKillOnFull()
             end
 
         else
-            local fling = getgenv().ToxFlingPlayer
+            local gun = FindNamedTool({"gun", "revolver"})
+            local gotGun = gun ~= nil
 
-            if not fling then
-                CustomNotify(
-                    "Fling system unavailable",
-                    Color3.fromRGB(255, 100, 100)
-                )
-                KillOnFullBusy = false
-                return
-            end
-
-            local function flingUntilDead(targetPlayer, label)
-                if not targetPlayer or not IsMM2PlayerAlive(targetPlayer) then
-                    return false
-                end
-
-                local restoreAntiFling = Settings.AntiFling == true
-                if restoreAntiFling then
-                    SetSharedTemporary("AntiFling", false)
-                end
-
-                while active() and targetPlayer and IsMM2PlayerAlive(targetPlayer) do
+            if not gotGun and (targetMode == "Murderer" or targetMode == "Both") then
+                local gunDrop = FindGunDrop()
+                if gunDrop then
                     CustomNotify(
-                        "Bag full • Flinging " .. label,
-                        Color3.fromRGB(255, 170, 50)
+                        "Bag full • Grabbing Dropped Gun",
+                        Color3.fromRGB(80, 220, 120)
                     )
 
-                    pcall(function()
-                        fling(targetPlayer)
-                    end)
+                    local grabStart = tick()
+                    while active() and tick() - grabStart < 1.8 do
+                        if GrabGun(true) or FindNamedTool({"gun", "revolver"}) then
+                            gotGun = true
+                            break
+                        end
+                        task.wait(0.15)
+                    end
+                end
+            end
+
+            gun = FindNamedTool({"gun", "revolver"}) or gun
+            if gun then
+                gotGun = true
+            end
+
+            if gotGun and (targetMode == "Murderer" or targetMode == "Both") then
+                CustomNotify(
+                    "Bag full • Shooting Murderer",
+                    Color3.fromRGB(80, 180, 255)
+                )
+
+                local shootStart = tick()
+                while active() and tick() - shootStart < 6 do
+                    local murderer = FindGuidedMurderer() or GetPlayerByRole("Murderer")
+                    if not murderer or not IsMM2PlayerAlive(murderer) then
+                        break
+                    end
+
+                    gun = FindNamedTool({"gun", "revolver"}) or gun
+                    if not gun or not gun.Parent then
+                        gun = GetOrEquipGuidedGun()
+                    end
+
+                    if not gun then
+                        break
+                    end
+
+                    if gun and active() and not GuidedShotBusy then
+                        pcall(function()
+                            ShootMurderer(false)
+                        end)
+                    end
 
                     task.wait(0.2)
                 end
-
-                if restoreAntiFling then
-                    SetSharedTemporary("AntiFling", true)
-                end
-
-                return true
             end
 
-            if targetMode == "Murderer" then
-                local murderTarget = GetPlayerByRole("Murderer")
-                if murderTarget and IsMM2PlayerAlive(murderTarget) then
-                    flingUntilDead(murderTarget, "Murderer")
-                else
-                    CustomNotify(
-                        "Murderer not found to fling",
-                        Color3.fromRGB(255, 180, 70)
-                    )
+            local murderStillAlive = false
+            if targetMode == "Murderer" or targetMode == "Both" then
+                local m = GetPlayerByRole("Murderer") or FindGuidedMurderer()
+                if m and IsMM2PlayerAlive(m) then
+                    murderStillAlive = true
                 end
-            elseif targetMode == "Sheriff" then
-                local sheriffTarget = GetPlayerByRole("Sheriff")
-                if sheriffTarget and IsMM2PlayerAlive(sheriffTarget) then
-                    flingUntilDead(sheriffTarget, "Sheriff")
-                else
-                    CustomNotify(
-                        "Sheriff not found to fling",
-                        Color3.fromRGB(255, 180, 70)
-                    )
+            end
+
+            local sheriffStillAlive = false
+            if targetMode == "Sheriff" or targetMode == "Both" then
+                local s = GetPlayerByRole("Sheriff")
+                if s and IsMM2PlayerAlive(s) then
+                    sheriffStillAlive = true
                 end
-            elseif targetMode == "Both" then
-                local murderTarget = GetPlayerByRole("Murderer")
-                if murderTarget and IsMM2PlayerAlive(murderTarget) then
-                    flingUntilDead(murderTarget, "Murderer")
+            end
+
+            local needFling = false
+            if targetMode == "Murderer" and murderStillAlive then
+                needFling = true
+            elseif targetMode == "Sheriff" and sheriffStillAlive then
+                needFling = true
+            elseif targetMode == "Both" and (murderStillAlive or sheriffStillAlive) then
+                needFling = true
+            end
+
+            if needFling and active() then
+                local fling = getgenv().ToxFlingPlayer
+
+                if not fling then
+                    CustomNotify(
+                        "Fling system unavailable",
+                        Color3.fromRGB(255, 100, 100)
+                    )
+                    KillOnFullBusy = false
+                    return
                 end
 
-                local sheriffTarget = GetPlayerByRole("Sheriff")
-                if active() and sheriffTarget and IsMM2PlayerAlive(sheriffTarget) then
-                    flingUntilDead(sheriffTarget, "Sheriff")
+                local function IsTargetFlying(targetPlayer)
+                    if not targetPlayer or not targetPlayer.Character then return false end
+                    local tRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart") or targetPlayer.Character:FindFirstChild("Torso")
+                    if not tRoot then return false end
+                    local vel = tRoot.AssemblyLinearVelocity or tRoot.Velocity or Vector3.zero
+                    return vel.Magnitude > 75
                 end
 
-                if not murderTarget and not sheriffTarget then
-                    CustomNotify(
-                        "Targets not found to fling",
-                        Color3.fromRGB(255, 180, 70)
-                    )
+                local function flingUntilDead(targetPlayer, label)
+                    if not targetPlayer or not IsMM2PlayerAlive(targetPlayer) then
+                        return false
+                    end
+
+                    local restoreAntiFling = Settings.AntiFling == true
+                    if restoreAntiFling then
+                        SetSharedTemporary("AntiFling", false)
+                    end
+
+                    while active() and targetPlayer and IsMM2PlayerAlive(targetPlayer) do
+                        if not IsTargetFlying(targetPlayer) then
+                            CustomNotify(
+                                "Bag full • Flinging " .. label,
+                                Color3.fromRGB(255, 170, 50)
+                            )
+
+                            pcall(function()
+                                fling(targetPlayer)
+                            end)
+                        end
+
+                        local flingWait = tick()
+                        while tick() - flingWait < 3.5 and IsMM2PlayerAlive(targetPlayer) and active() do
+                            if IsTargetFlying(targetPlayer) then
+                                task.wait(0.25)
+                            else
+                                if tick() - flingWait > 1.0 then break end
+                                task.wait(0.2)
+                            end
+                        end
+
+                        task.wait(0.2)
+                    end
+
+                    if restoreAntiFling then
+                        SetSharedTemporary("AntiFling", true)
+                    end
+
+                    return true
+                end
+
+                if targetMode == "Murderer" then
+                    local murderTarget = GetPlayerByRole("Murderer") or FindGuidedMurderer()
+                    if murderTarget and IsMM2PlayerAlive(murderTarget) then
+                        flingUntilDead(murderTarget, "Murderer")
+                    else
+                        CustomNotify(
+                            "Murderer not found to fling",
+                            Color3.fromRGB(255, 180, 70)
+                        )
+                    end
+                elseif targetMode == "Sheriff" then
+                    local sheriffTarget = GetPlayerByRole("Sheriff")
+                    if sheriffTarget and IsMM2PlayerAlive(sheriffTarget) then
+                        flingUntilDead(sheriffTarget, "Sheriff")
+                    else
+                        CustomNotify(
+                            "Sheriff not found to fling",
+                            Color3.fromRGB(255, 180, 70)
+                        )
+                    end
+                elseif targetMode == "Both" then
+                    local murderTarget = GetPlayerByRole("Murderer") or FindGuidedMurderer()
+                    if murderTarget and IsMM2PlayerAlive(murderTarget) then
+                        flingUntilDead(murderTarget, "Murderer")
+                    end
+
+                    local sheriffTarget = GetPlayerByRole("Sheriff")
+                    if active() and sheriffTarget and IsMM2PlayerAlive(sheriffTarget) then
+                        flingUntilDead(sheriffTarget, "Sheriff")
+                    end
+
+                    if not murderTarget and not sheriffTarget then
+                        CustomNotify(
+                            "Targets not found to fling",
+                            Color3.fromRGB(255, 180, 70)
+                        )
+                    end
                 end
             end
         end
