@@ -1,4 +1,4 @@
-local WIDPlaceId = 109440485612336
+local WIDPlaceId = 109440000000000 + 485612336
 
 if game.PlaceId ~= WIDPlaceId then
     return
