@@ -35,7 +35,7 @@ or not CreateButton then
     return
 end
 
-local WIDModuleVersion = "2026-10-30-wid-v1"
+local WIDModuleVersion = "2026-10-30-wid-v3"
 
 if getgenv().ToxWIDModuleLoadedJobId == game.JobId
 and getgenv().ToxWIDModuleVersion == WIDModuleVersion
@@ -60,7 +60,7 @@ Settings.WIDCollapsedSections = typeof(Settings.WIDCollapsedSections) == "table"
 
 Settings.WIDAutoWin = Settings.WIDAutoWin == true
 Settings.WIDSafePlatform = Settings.WIDSafePlatform == true
-Settings.WIDPlatformHeight = tonumber(Settings.WIDPlatformHeight) or 350
+Settings.WIDPlatformHeight = tonumber(Settings.WIDPlatformHeight) or 380
 Settings.WIDAntiVoid = Settings.WIDAntiVoid == true
 Settings.WIDNoFallDamage = Settings.WIDNoFallDamage == true
 Settings.WIDAntiFling = Settings.WIDAntiFling == true
@@ -71,6 +71,7 @@ Settings.WIDInfiniteJump = Settings.WIDInfiniteJump == true
 Settings.WIDAutoSafeSpot = Settings.WIDAutoSafeSpot == true
 Settings.WIDAnchorOnPlatform = Settings.WIDAnchorOnPlatform == true
 Settings.WIDAirWalk = Settings.WIDAirWalk == true
+Settings.WIDPreventLobbyPull = Settings.WIDPreventLobbyPull ~= false
 
 local WIDConnections = {}
 local WIDCurrentSection = nil
@@ -78,6 +79,12 @@ local WIDSections = {}
 local SafePlatformModel = nil
 local AirWalkPart = nil
 local LastAnnouncedDisaster = ""
+
+local hazardKeywords = {
+    "lava", "acid", "kill", "damage", "fire", "meteor",
+    "spike", "hazard", "tsunami", "toxic", "death", "debris",
+    "falling", "rock", "magma", "beam", "laser"
+}
 
 local function TrackConnection(connection)
     if connection then
@@ -220,118 +227,6 @@ local function TeleportTo(cframe, label)
     return true
 end
 
-local function EnsureSafePlatform()
-    if SafePlatformModel and SafePlatformModel.Parent then
-        local floor = SafePlatformModel:FindFirstChild("PlatformFloor")
-        if floor then
-            return SafePlatformModel, floor
-        end
-    end
-
-    if SafePlatformModel then
-        pcall(function() SafePlatformModel:Destroy() end)
-    end
-
-    local model = Instance.new("Model")
-    model.Name = "ToxWIDPlatform"
-    model.Parent = Workspace
-
-    local height = tonumber(Settings.WIDPlatformHeight) or 350
-    local center = Vector3.new(0, height, 0)
-
-    local character, _, root = GetCharacterState()
-    if root then
-        center = Vector3.new(root.Position.X, height, root.Position.Z)
-    end
-
-    local floor = Instance.new("Part")
-    floor.Name = "PlatformFloor"
-    floor.Size = Vector3.new(65, 4, 65)
-    floor.CFrame = CFrame.new(center)
-    floor.Anchored = true
-    floor.CanCollide = true
-    floor.Material = Enum.Material.SmoothPlastic
-    floor.Color = Color3.fromRGB(25, 28, 36)
-    floor.Parent = model
-
-    local roof = Instance.new("Part")
-    roof.Name = "PlatformRoof"
-    roof.Size = Vector3.new(65, 3, 65)
-    roof.CFrame = CFrame.new(center + Vector3.new(0, 18, 0))
-    roof.Anchored = true
-    roof.CanCollide = true
-    roof.Material = Enum.Material.ForceField
-    roof.Color = Color3.fromRGB(80, 150, 255)
-    roof.Transparency = 0.5
-    roof.Parent = model
-
-    local wallOffsets = {
-        {Vector3.new(0, 9, 32.5), Vector3.new(65, 18, 2)},
-        {Vector3.new(0, 9, -32.5), Vector3.new(65, 18, 2)},
-        {Vector3.new(32.5, 9, 0), Vector3.new(2, 18, 65)},
-        {Vector3.new(-32.5, 9, 0), Vector3.new(2, 18, 65)}
-    }
-
-    for idx, wallData in ipairs(wallOffsets) do
-        local wall = Instance.new("Part")
-        wall.Name = "Wall_" .. tostring(idx)
-        wall.Size = wallData[2]
-        wall.CFrame = CFrame.new(center + wallData[1])
-        wall.Anchored = true
-        wall.CanCollide = true
-        wall.Material = Enum.Material.ForceField
-        wall.Color = Color3.fromRGB(80, 150, 255)
-        wall.Transparency = 0.6
-        wall.Parent = model
-    end
-
-    SafePlatformModel = model
-    return model, floor
-end
-
-local function DestroySafePlatform()
-    if SafePlatformModel then
-        pcall(function()
-            SafePlatformModel:Destroy()
-        end)
-        SafePlatformModel = nil
-    end
-end
-
-local function TeleportToSafePlatform()
-    local _, floor = EnsureSafePlatform()
-    if floor then
-        TeleportTo(floor.CFrame + Vector3.new(0, 5, 0), "Safe Sky Platform")
-    end
-end
-
-local function FindMapCenterCFrame()
-    local map = Workspace:FindFirstChild("Map")
-        or Workspace:FindFirstChild("Island")
-        or Workspace:FindFirstChild("GameMap")
-        or Workspace:FindFirstChild("ActiveMap")
-
-    if map and map:IsA("Model") then
-        local cf = map:GetPivot()
-        if cf then
-            return cf + Vector3.new(0, 8, 0)
-        end
-    end
-
-    local spawns = {}
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("SpawnLocation") then
-            table.insert(spawns, obj)
-        end
-    end
-
-    if #spawns > 0 then
-        return spawns[1].CFrame + Vector3.new(0, 5, 0)
-    end
-
-    return CFrame.new(0, 50, 0)
-end
-
 local function FindLobbyCFrame()
     local lobby = Workspace:FindFirstChild("Lobby")
         or Workspace:FindFirstChild("Spawn")
@@ -348,6 +243,154 @@ local function FindLobbyCFrame()
     end
 
     return CFrame.new(0, 200, 0)
+end
+
+local function IsPlayerInLobby()
+    local _, _, root = GetCharacterState()
+    if not root then
+        return false
+    end
+
+    local lobbyCF = FindLobbyCFrame()
+    local dx = root.Position.X - lobbyCF.Position.X
+    local dz = root.Position.Z - lobbyCF.Position.Z
+    local distXZ = math.sqrt(dx * dx + dz * dz)
+
+    return distXZ < 220
+end
+
+local function FindMapCenterCFrame()
+    local map = Workspace:FindFirstChild("Map")
+        or Workspace:FindFirstChild("Island")
+        or Workspace:FindFirstChild("GameMap")
+        or Workspace:FindFirstChild("ActiveMap")
+        or Workspace:FindFirstChild("CurrentMap")
+
+    if map and map:IsA("Model") then
+        local cf = map:GetPivot()
+        if cf then
+            return cf + Vector3.new(0, 8, 0)
+        end
+    end
+
+    local spawns = {}
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("SpawnLocation") and not string.find(string.lower(obj.Name), "lobby") then
+            table.insert(spawns, obj)
+        end
+    end
+
+    if #spawns > 0 then
+        return spawns[1].CFrame + Vector3.new(0, 5, 0)
+    end
+
+    local _, _, root = GetCharacterState()
+    if root and not IsPlayerInLobby() then
+        return root.CFrame
+    end
+
+    local lobbyCF = FindLobbyCFrame()
+    return lobbyCF * CFrame.new(0, -100, 450)
+end
+
+local function GetSafePlatformPosition(forceMap)
+    local height = tonumber(Settings.WIDPlatformHeight) or 380
+    local mapCF = FindMapCenterCFrame()
+
+    if forceMap or IsPlayerInLobby() then
+        return Vector3.new(mapCF.Position.X, height, mapCF.Position.Z)
+    end
+
+    local _, _, root = GetCharacterState()
+    if root then
+        return Vector3.new(root.Position.X, height, root.Position.Z)
+    end
+
+    return Vector3.new(mapCF.Position.X, height, mapCF.Position.Z)
+end
+
+local function DestroySafePlatform()
+    if SafePlatformModel then
+        pcall(function()
+            SafePlatformModel:Destroy()
+        end)
+        SafePlatformModel = nil
+    end
+end
+
+local function EnsureSafePlatform(forceMap)
+    local center = GetSafePlatformPosition(forceMap)
+
+    if SafePlatformModel and SafePlatformModel.Parent then
+        local floor = SafePlatformModel:FindFirstChild("PlatformFloor")
+        if floor then
+            local lobbyCF = FindLobbyCFrame()
+            local dx = floor.Position.X - lobbyCF.Position.X
+            local dz = floor.Position.Z - lobbyCF.Position.Z
+            local distFromLobby = math.sqrt(dx * dx + dz * dz)
+
+            if distFromLobby >= 180 then
+                return SafePlatformModel, floor
+            end
+        end
+    end
+
+    DestroySafePlatform()
+
+    local model = Instance.new("Model")
+    model.Name = "ToxWIDPlatform"
+    model.Parent = Workspace
+
+    local floor = Instance.new("Part")
+    floor.Name = "PlatformFloor"
+    floor.Size = Vector3.new(70, 4, 70)
+    floor.CFrame = CFrame.new(center)
+    floor.Anchored = true
+    floor.CanCollide = true
+    floor.Material = Enum.Material.SmoothPlastic
+    floor.Color = Color3.fromRGB(25, 28, 36)
+    floor.Parent = model
+
+    local roof = Instance.new("Part")
+    roof.Name = "PlatformRoof"
+    roof.Size = Vector3.new(90, 4, 90)
+    roof.CFrame = CFrame.new(center + Vector3.new(0, 20, 0))
+    roof.Anchored = true
+    roof.CanCollide = true
+    roof.Material = Enum.Material.SmoothPlastic
+    roof.Color = Color3.fromRGB(30, 34, 44)
+    roof.Transparency = 0
+    roof.Parent = model
+
+    local wallOffsets = {
+        {Vector3.new(0, 10, 35), Vector3.new(70, 20, 2)},
+        {Vector3.new(0, 10, -35), Vector3.new(70, 20, 2)},
+        {Vector3.new(35, 10, 0), Vector3.new(2, 20, 70)},
+        {Vector3.new(-35, 10, 0), Vector3.new(2, 20, 70)}
+    }
+
+    for idx, wallData in ipairs(wallOffsets) do
+        local wall = Instance.new("Part")
+        wall.Name = "Wall_" .. tostring(idx)
+        wall.Size = wallData[2]
+        wall.CFrame = CFrame.new(center + wallData[1])
+        wall.Anchored = true
+        wall.CanCollide = true
+        wall.Material = Enum.Material.SmoothPlastic
+        wall.Color = Color3.fromRGB(40, 45, 58)
+        wall.Transparency = 0.3
+        wall.Parent = model
+    end
+
+    SafePlatformModel = model
+    return model, floor
+end
+
+local function TeleportToSafePlatform(forceMap)
+    local _, floor = EnsureSafePlatform(forceMap ~= false)
+    if floor then
+        TeleportTo(floor.CFrame + Vector3.new(0, 5, 0), "Safe Sky Bunker")
+    end
 end
 
 local function FindHighestMapPart()
@@ -401,25 +444,24 @@ local function FindRandomSurvivor()
     return nil
 end
 
-local function ScanAndNeutralizeHazards()
-    local hazardKeywords = {
-        "lava", "acid", "kill", "damage", "fire", "meteor",
-        "spike", "hazard", "tsunami", "toxic", "death"
-    }
+local function NeutralizeSingleHazard(obj)
+    if not obj or not obj.Parent then
+        return
+    end
 
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            local name = string.lower(obj.Name)
-            local isHazard = false
+    if obj:IsA("Explosion") then
+        pcall(function()
+            obj.BlastPressure = 0
+            obj.BlastRadius = 0
+            obj.DestroyJointRadiusPercent = 0
+        end)
+        return
+    end
 
-            for _, kw in ipairs(hazardKeywords) do
-                if string.find(name, kw) then
-                    isHazard = true
-                    break
-                end
-            end
-
-            if isHazard then
+    if obj:IsA("BasePart") then
+        local name = string.lower(obj.Name)
+        for _, kw in ipairs(hazardKeywords) do
+            if string.find(name, kw) then
                 pcall(function()
                     obj.CanTouch = false
                     for _, child in ipairs(obj:GetChildren()) do
@@ -428,10 +470,23 @@ local function ScanAndNeutralizeHazards()
                         end
                     end
                 end)
+                break
             end
         end
     end
 end
+
+local function ScanAndNeutralizeHazards()
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        NeutralizeSingleHazard(obj)
+    end
+end
+
+TrackConnection(Workspace.DescendantAdded:Connect(function(obj)
+    if Settings.WIDAntiHazards then
+        NeutralizeSingleHazard(obj)
+    end
+end))
 
 local function CheckDisasterNotice()
     local playerGui = Player:FindFirstChildOfClass("PlayerGui")
@@ -479,14 +534,21 @@ TrackConnection(RunService.Heartbeat:Connect(function()
         return
     end
 
+    pcall(function()
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, false)
+    end)
+
     if Settings.WIDAntiVoid and root.Position.Y < 15 then
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
-        local _, floor = EnsureSafePlatform()
+        local _, floor = EnsureSafePlatform(true)
         if floor then
             root.CFrame = floor.CFrame + Vector3.new(0, 5, 0)
         else
-            root.CFrame = CFrame.new(root.Position.X, tonumber(Settings.WIDPlatformHeight) or 350, root.Position.Z)
+            local mapCF = FindMapCenterCFrame()
+            root.CFrame = CFrame.new(mapCF.Position.X, tonumber(Settings.WIDPlatformHeight) or 380, mapCF.Position.Z)
         end
         CustomNotify("Void Rescue activated!", Color3.fromRGB(100, 255, 100), 2)
     end
@@ -575,14 +637,16 @@ task.spawn(function()
         if Settings.WIDAutoWin or Settings.WIDAutoSafeSpot then
             local character, humanoid, root = GetCharacterState()
             if humanoid and humanoid.Health > 0 and root then
-                local _, floor = EnsureSafePlatform()
+                local inLobby = IsPlayerInLobby()
+                local _, floor = EnsureSafePlatform(true)
+
                 if floor then
                     local dist = (root.Position - floor.Position).Magnitude
-                    if dist > 35 then
-                        TeleportTo(floor.CFrame + Vector3.new(0, 5, 0), "Safe Platform")
+                    if inLobby or dist > 45 then
+                        TeleportTo(floor.CFrame + Vector3.new(0, 5, 0), "Safe Map Bunker")
                     end
 
-                    if Settings.WIDAnchorOnPlatform then
+                    if Settings.WIDAnchorOnPlatform and not inLobby then
                         root.Anchored = true
                     end
                 end
@@ -613,8 +677,8 @@ WIDCreateToggle(
     function(v)
         Settings.WIDAutoWin = v == true
         if v then
-            EnsureSafePlatform()
-            TeleportToSafePlatform()
+            EnsureSafePlatform(true)
+            TeleportToSafePlatform(true)
             CustomNotify("Auto Win Enabled", Color3.fromRGB(100, 255, 100), 3)
         else
             local _, _, root = GetCharacterState()
@@ -634,7 +698,7 @@ WIDCreateToggle(
     function(v)
         Settings.WIDAutoSafeSpot = v == true
         if v then
-            TeleportToSafePlatform()
+            TeleportToSafePlatform(true)
         else
             local _, _, root = GetCharacterState()
             if root then
@@ -644,6 +708,20 @@ WIDCreateToggle(
         AutoSaveConfiguration()
     end,
     "WIDAutoSafeSpot"
+)
+
+WIDCreateToggle(
+    "Anti Lobby-Pull (Stay Over Map)",
+    GamePage,
+    Settings.WIDPreventLobbyPull,
+    function(v)
+        Settings.WIDPreventLobbyPull = v == true
+        if v and IsPlayerInLobby() then
+            TeleportToSafePlatform(true)
+        end
+        AutoSaveConfiguration()
+    end,
+    "WIDPreventLobbyPull"
 )
 
 WIDCreateToggle(
@@ -682,17 +760,17 @@ WIDCreateToggleWithValue(
     function(v)
         Settings.WIDSafePlatform = v == true
         if v then
-            EnsureSafePlatform()
+            EnsureSafePlatform(true)
         else
             DestroySafePlatform()
         end
         AutoSaveConfiguration()
     end,
     function(val)
-        local newHeight = math.clamp(tonumber(val) or 350, 80, 1800)
+        local newHeight = math.clamp(tonumber(val) or 380, 80, 1800)
         Settings.WIDPlatformHeight = newHeight
         if SafePlatformModel and SafePlatformModel.Parent then
-            EnsureSafePlatform()
+            EnsureSafePlatform(true)
         end
         AutoSaveConfiguration()
     end,
@@ -703,18 +781,18 @@ WIDCreateButton(
     "Teleport to Safe Sky Platform",
     GamePage,
     function()
-        TeleportToSafePlatform()
+        TeleportToSafePlatform(true)
     end
 )
 
 WIDCreateButton(
-    "Rebuild / Refresh Platform",
+    "Rebuild / Refresh Platform Over Map",
     GamePage,
     function()
         DestroySafePlatform()
-        EnsureSafePlatform()
-        TeleportToSafePlatform()
-        CustomNotify("Platform Refreshed", Color3.fromRGB(100, 255, 100), 2)
+        EnsureSafePlatform(true)
+        TeleportToSafePlatform(true)
+        CustomNotify("Platform Refreshed Over Map", Color3.fromRGB(100, 255, 100), 2)
     end
 )
 
@@ -754,7 +832,7 @@ WIDCreateToggle(
 )
 
 WIDCreateToggle(
-    "Disable Hazard Touch (Lava/Acid/Kill)",
+    "Disable Hazard Touch & Explosions",
     GamePage,
     Settings.WIDAntiHazards,
     function(v)
