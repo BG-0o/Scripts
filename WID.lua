@@ -35,7 +35,10 @@ or not CreateButton then
     return
 end
 
-local WIDModuleVersion = "2026-10-30-wid-v3"
+getgenv().ToxWIDGeneration = (tonumber(getgenv().ToxWIDGeneration) or 0) + 1
+local CurrentGeneration = getgenv().ToxWIDGeneration
+
+local WIDModuleVersion = "2026-10-30-wid-v4"
 
 if getgenv().ToxWIDModuleLoadedJobId == game.JobId
 and getgenv().ToxWIDModuleVersion == WIDModuleVersion
@@ -199,6 +202,21 @@ local function GetCharacterState()
     return character, humanoid, root
 end
 
+local function ClearAllWIDWorkspaceObjects()
+    for _, obj in ipairs(Workspace:GetChildren()) do
+        if obj.Name == "ToxWIDPlatform" or obj.Name == "ToxAirWalkPart" then
+            pcall(function() obj:Destroy() end)
+        end
+    end
+    SafePlatformModel = nil
+    if AirWalkPart then
+        pcall(function() AirWalkPart:Destroy() end)
+        AirWalkPart = nil
+    end
+end
+
+ClearAllWIDWorkspaceObjects()
+
 local function AllowToxTeleport(seconds, reason)
     if getgenv().AllowToxTeleport then
         getgenv().AllowToxTeleport(seconds or 1.5, reason or "WID")
@@ -309,15 +327,6 @@ local function GetSafePlatformPosition(forceMap)
     return Vector3.new(mapCF.Position.X, height, mapCF.Position.Z)
 end
 
-local function DestroySafePlatform()
-    if SafePlatformModel then
-        pcall(function()
-            SafePlatformModel:Destroy()
-        end)
-        SafePlatformModel = nil
-    end
-end
-
 local function EnsureSafePlatform(forceMap)
     local center = GetSafePlatformPosition(forceMap)
 
@@ -328,14 +337,15 @@ local function EnsureSafePlatform(forceMap)
             local dx = floor.Position.X - lobbyCF.Position.X
             local dz = floor.Position.Z - lobbyCF.Position.Z
             local distFromLobby = math.sqrt(dx * dx + dz * dz)
+            local distToTarget = (floor.Position - center).Magnitude
 
-            if distFromLobby >= 180 then
+            if distFromLobby >= 180 and distToTarget < 60 then
                 return SafePlatformModel, floor
             end
         end
     end
 
-    DestroySafePlatform()
+    ClearAllWIDWorkspaceObjects()
 
     local model = Instance.new("Model")
     model.Name = "ToxWIDPlatform"
@@ -630,7 +640,7 @@ end))
 task.spawn(function()
     while true do
         task.wait(1)
-        if getgenv().Destroyed then
+        if getgenv().Destroyed or CurrentGeneration ~= getgenv().ToxWIDGeneration then
             break
         end
 
@@ -685,6 +695,10 @@ WIDCreateToggle(
             if root then
                 root.Anchored = false
             end
+            if not Settings.WIDSafePlatform then
+                ClearAllWIDWorkspaceObjects()
+            end
+            CustomNotify("Auto Win Disabled", Color3.fromRGB(255, 150, 50), 2)
         end
         AutoSaveConfiguration()
     end,
@@ -762,7 +776,7 @@ WIDCreateToggleWithValue(
         if v then
             EnsureSafePlatform(true)
         else
-            DestroySafePlatform()
+            ClearAllWIDWorkspaceObjects()
         end
         AutoSaveConfiguration()
     end,
@@ -789,7 +803,7 @@ WIDCreateButton(
     "Rebuild / Refresh Platform Over Map",
     GamePage,
     function()
-        DestroySafePlatform()
+        ClearAllWIDWorkspaceObjects()
         EnsureSafePlatform(true)
         TeleportToSafePlatform(true)
         CustomNotify("Platform Refreshed Over Map", Color3.fromRGB(100, 255, 100), 2)
@@ -978,24 +992,28 @@ WIDCreateButton(
 )
 
 getgenv().ToxWIDCleanup = function()
+    getgenv().ToxWIDGeneration = (tonumber(getgenv().ToxWIDGeneration) or 0) + 1
+
     for _, conn in ipairs(WIDConnections) do
         pcall(function() conn:Disconnect() end)
     end
     table.clear(WIDConnections)
 
-    if SafePlatformModel then
-        pcall(function() SafePlatformModel:Destroy() end)
-        SafePlatformModel = nil
-    end
+    ClearAllWIDWorkspaceObjects()
 
-    if AirWalkPart then
-        pcall(function() AirWalkPart:Destroy() end)
-        AirWalkPart = nil
-    end
-
-    local _, _, root = GetCharacterState()
-    if root and root.Anchored and not Settings.WIDAnchorOnPlatform then
+    local _, humanoid, root = GetCharacterState()
+    if root then
         root.Anchored = false
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+    end
+
+    if humanoid then
+        pcall(function()
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, true)
+        end)
     end
 end
 
