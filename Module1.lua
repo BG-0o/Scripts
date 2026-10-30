@@ -3217,24 +3217,21 @@ local function UpdateAirWalk()
 
         local vertical = 0
 
-        if UserInputService:
-            IsKeyDown(
-                Enum.KeyCode.E
-            ) then
+        if UserInputService:IsKeyDown(Enum.KeyCode.E)
+        or UserInputService:IsKeyDown(Enum.KeyCode.Space) then
             vertical += 1
         end
 
-        if UserInputService:
-            IsKeyDown(
-                Enum.KeyCode.Q
-            ) then
+        if UserInputService:IsKeyDown(Enum.KeyCode.Q)
+        or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
+        or UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
             vertical -= 1
         end
 
         if vertical ~= 0 then
             LockedAirWalkY +=
                 vertical
-                * 18
+                * 28
                 * deltaTime
         end
 
@@ -3281,6 +3278,15 @@ end
 
 getgenv().UpdateAirWalk =
     UpdateAirWalk
+
+if not getgenv().__ToxModule1AirWalkHooked then
+    getgenv().__ToxModule1AirWalkHooked = true
+    RunService.Heartbeat:Connect(function()
+        if Settings.AirWalk then
+            pcall(UpdateAirWalk)
+        end
+    end)
+end
 
 local function UpdateMouseIcon()
     pcall(function()
@@ -5048,6 +5054,136 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
         else
             Input.Text = tostring(DefaultValue)
         end
+    end)
+
+    UpdateToggle()
+
+    if getgenv().RegisterToxSearchControl then
+        getgenv().RegisterToxSearchControl(Name, Page, Container)
+    end
+
+    return Container
+end
+
+getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, DefaultChoice, CallbackToggle, CallbackChoice, SyncKey)
+    local Container = Instance.new("Frame")
+    Container.Size = UDim2.new(1, -5, 0, 39)
+    Container.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    Container.BorderSizePixel = 0
+    Container.Parent = Page
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -165, 1, 0)
+    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = Name
+    Label.TextColor3 = Color3.fromRGB(240, 240, 240)
+    Label.TextSize = 13
+    Label.Font = Enum.Font.GothamMedium
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = Container
+
+    local ChoiceButton = Instance.new("TextButton")
+    ChoiceButton.Size = UDim2.new(0, 95, 0, 25)
+    ChoiceButton.Position = UDim2.new(1, -150, 0.5, -12)
+    ChoiceButton.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    ChoiceButton.BorderSizePixel = 0
+    ChoiceButton.Text = tostring(DefaultChoice)
+    ChoiceButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ChoiceButton.TextSize = 12
+    ChoiceButton.Font = Enum.Font.GothamBold
+    ChoiceButton.Parent = Container
+    local ChoiceCorner = Instance.new("UICorner") ChoiceCorner.CornerRadius = UDim.new(0, 4) ChoiceCorner.Parent = ChoiceButton
+
+    local CurrentIdx = 1
+    for i, opt in ipairs(Options) do
+        if opt == DefaultChoice then
+            CurrentIdx = i
+            break
+        end
+    end
+
+    ChoiceButton.MouseButton1Click:Connect(function()
+        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        CurrentIdx = CurrentIdx + 1
+        if CurrentIdx > #Options then CurrentIdx = 1 end
+        ChoiceButton.Text = tostring(Options[CurrentIdx])
+        if CallbackChoice then
+            CallbackChoice(Options[CurrentIdx])
+        end
+        AutoSaveConfiguration()
+    end)
+
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Size = UDim2.new(0, 38, 0, 20)
+    ToggleButton.Position = UDim2.new(1, -48, 0.5, -10)
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.Text = ""
+    ToggleButton.AutoButtonColor = false
+    ToggleButton.Parent = Container
+    local ToggleCorner = Instance.new("UICorner") ToggleCorner.CornerRadius = UDim.new(0, 4) ToggleCorner.Parent = ToggleButton
+
+    local Indicator = Instance.new("Frame")
+    Indicator.Size = UDim2.new(0, 14, 0, 14)
+    Indicator.Position = UDim2.new(0, 3, 0.5, -7)
+    Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Indicator.BorderSizePixel = 0
+    Indicator.Parent = ToggleButton
+    local IndicatorCorner = Instance.new("UICorner") IndicatorCorner.CornerRadius = UDim.new(0, 3) IndicatorCorner.Parent = Indicator
+
+    local Enabled = getgenv().ToxOptionsReady == false
+        and false
+        or (DefaultToggle == true)
+
+    local function UpdateToggle()
+        if Enabled then
+            ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 180, 70)
+            Indicator.Position = UDim2.new(1, -17, 0.5, -7)
+        else
+            ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+            Indicator.Position = UDim2.new(0, 3, 0.5, -7)
+        end
+    end
+
+    local Controller = {
+        Button = Container,
+        SetVisual = function(Value)
+            Enabled = Value == true
+            UpdateToggle()
+        end,
+        SetValue = function(Value)
+            ChoiceButton.Text = tostring(Value)
+            for i, opt in ipairs(Options) do
+                if opt == Value then
+                    CurrentIdx = i
+                    break
+                end
+            end
+        end
+    }
+
+    RegisterSharedToggle(SyncKey, Controller)
+    RegisterStartupToggleCallback(SyncKey, CallbackToggle)
+
+    ToggleButton.MouseButton1Click:Connect(function()
+        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+
+        Enabled = not Enabled
+        UpdateToggle()
+        if CallbackToggle then
+            CallbackToggle(Enabled)
+        end
+
+        if SyncKey and getgenv().SyncToggleVisuals then
+            getgenv().SyncToggleVisuals(SyncKey, Enabled)
+        end
+
+        if getgenv().ScriptLoaded then
+            CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100))
+        end
+
+        AutoSaveConfiguration()
     end)
 
     UpdateToggle()
