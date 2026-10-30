@@ -22,6 +22,7 @@ local CreateToggle = getgenv().CreateToggle
 local CreateToggleWithValue = getgenv().CreateToggleWithValue
 local CreateButton = getgenv().CreateButton
 local CreateDropdown = getgenv().CreateDropdown
+local CreateToggleWithChoice = getgenv().CreateToggleWithChoice
 local CreateInputWithButton = getgenv().CreateInputWithButton
 local CustomNotify = getgenv().CustomNotify or function() end
 local AutoSaveConfiguration = getgenv().AutoSaveConfiguration or function() end
@@ -39,7 +40,7 @@ end
 getgenv().ToxWIDGeneration = (tonumber(getgenv().ToxWIDGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxWIDGeneration
 
-local WIDModuleVersion = "2026-10-30-wid-v11"
+local WIDModuleVersion = "2026-10-30-wid-v12"
 
 if getgenv().ToxWIDModuleLoadedJobId == game.JobId
 and getgenv().ToxWIDModuleVersion == WIDModuleVersion
@@ -65,8 +66,8 @@ Settings.WIDCollapsedSections = typeof(Settings.WIDCollapsedSections) == "table"
 Settings.WIDAutoWin = Settings.WIDAutoWin == true
 Settings.WIDAutoWinMode = (Settings.WIDAutoWinMode == "Map" or Settings.WIDAutoWinMode == "Platform")
     and Settings.WIDAutoWinMode
-    or "Platform"
-Settings.WIDRelocateOnDamage = Settings.WIDRelocateOnDamage ~= false
+    or "Map"
+Settings.WIDRelocateOnDamage = Settings.WIDRelocateOnDamage == true
 Settings.WIDAntiDamage = Settings.WIDAntiDamage ~= false
 Settings.WIDSafePlatform = Settings.WIDSafePlatform == true
 Settings.WIDPlatformHeight = tonumber(Settings.WIDPlatformHeight) or 380
@@ -90,9 +91,11 @@ local AirWalkY = nil
 local LastAnnouncedDisaster = ""
 local LastRecordedHealth = 100
 local LastDamageEvacTime = 0
-local ActiveAutoWinTarget = Settings.WIDAutoWinMode or "Platform"
 local CurrentMapShelterIndex = 1
 local LastSafetyState = "UNKNOWN"
+local IsPlayerConfirmedSafe = false
+local RoundTeleportDone = false
+local LastSafeZoneNotification = 0
 
 local hazardKeywords = {
     "lava", "acid", "kill", "damage", "fire", "meteor",
@@ -193,6 +196,145 @@ local function WIDCreateDropdown(...)
         return TrackControl(CreateDropdown(...))
     end
     return nil
+end
+
+local function CreateToggleWithChoiceLocal(Name, Page, Options, DefaultToggle, DefaultChoice, CallbackToggle, CallbackChoice, SyncKey)
+    local Container = Instance.new("Frame")
+    Container.Size = UDim2.new(1, -5, 0, 39)
+    Container.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    Container.BorderSizePixel = 0
+    Container.Parent = Page
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -165, 1, 0)
+    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = Name
+    Label.TextColor3 = Color3.fromRGB(240, 240, 240)
+    Label.TextSize = 13
+    Label.Font = Enum.Font.GothamMedium
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = Container
+
+    local ChoiceButton = Instance.new("TextButton")
+    ChoiceButton.Size = UDim2.new(0, 95, 0, 25)
+    ChoiceButton.Position = UDim2.new(1, -150, 0.5, -12)
+    ChoiceButton.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    ChoiceButton.BorderSizePixel = 0
+    ChoiceButton.Text = tostring(DefaultChoice)
+    ChoiceButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ChoiceButton.TextSize = 12
+    ChoiceButton.Font = Enum.Font.GothamBold
+    ChoiceButton.Parent = Container
+    local ChoiceCorner = Instance.new("UICorner") ChoiceCorner.CornerRadius = UDim.new(0, 4) ChoiceCorner.Parent = ChoiceButton
+
+    local CurrentIdx = 1
+    for i, opt in ipairs(Options) do
+        if opt == DefaultChoice then
+            CurrentIdx = i
+            break
+        end
+    end
+
+    ChoiceButton.MouseButton1Click:Connect(function()
+        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        CurrentIdx = CurrentIdx + 1
+        if CurrentIdx > #Options then CurrentIdx = 1 end
+        ChoiceButton.Text = tostring(Options[CurrentIdx])
+        if CallbackChoice then
+            CallbackChoice(Options[CurrentIdx])
+        end
+        AutoSaveConfiguration()
+    end)
+
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Size = UDim2.new(0, 38, 0, 20)
+    ToggleButton.Position = UDim2.new(1, -48, 0.5, -10)
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.Text = ""
+    ToggleButton.AutoButtonColor = false
+    ToggleButton.Parent = Container
+    local ToggleCorner = Instance.new("UICorner") ToggleCorner.CornerRadius = UDim.new(0, 4) ToggleCorner.Parent = ToggleButton
+
+    local Indicator = Instance.new("Frame")
+    Indicator.Size = UDim2.new(0, 14, 0, 14)
+    Indicator.Position = UDim2.new(0, 3, 0.5, -7)
+    Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Indicator.BorderSizePixel = 0
+    Indicator.Parent = ToggleButton
+    local IndicatorCorner = Instance.new("UICorner") IndicatorCorner.CornerRadius = UDim.new(0, 3) IndicatorCorner.Parent = Indicator
+
+    local Enabled = getgenv().ToxOptionsReady == false
+        and false
+        or (DefaultToggle == true)
+
+    local function UpdateToggle()
+        if Enabled then
+            ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 180, 70)
+            Indicator.Position = UDim2.new(1, -17, 0.5, -7)
+        else
+            ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+            Indicator.Position = UDim2.new(0, 3, 0.5, -7)
+        end
+    end
+
+    local Controller = {
+        Button = Container,
+        SetVisual = function(Value)
+            Enabled = Value == true
+            UpdateToggle()
+        end,
+        SetValue = function(Value)
+            ChoiceButton.Text = tostring(Value)
+            for i, opt in ipairs(Options) do
+                if opt == Value then
+                    CurrentIdx = i
+                    break
+                end
+            end
+        end
+    }
+
+    if getgenv().RegisterSharedToggle then
+        getgenv().RegisterSharedToggle(SyncKey, Controller)
+    end
+    if getgenv().RegisterStartupToggleCallback then
+        getgenv().RegisterStartupToggleCallback(SyncKey, CallbackToggle)
+    end
+
+    ToggleButton.MouseButton1Click:Connect(function()
+        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+
+        Enabled = not Enabled
+        UpdateToggle()
+        if CallbackToggle then
+            CallbackToggle(Enabled)
+        end
+
+        if SyncKey and getgenv().SyncToggleVisuals then
+            getgenv().SyncToggleVisuals(SyncKey, Enabled)
+        end
+
+        if getgenv().ScriptLoaded then
+            CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100))
+        end
+
+        AutoSaveConfiguration()
+    end)
+
+    UpdateToggle()
+
+    if getgenv().RegisterToxSearchControl then
+        getgenv().RegisterToxSearchControl(Name, Page, Container)
+    end
+
+    return Container
+end
+
+local function WIDCreateToggleWithChoice(...)
+    local fn = CreateToggleWithChoice or CreateToggleWithChoiceLocal
+    return TrackControl(fn(...))
 end
 
 local function CreateWIDSection(text)
@@ -404,58 +546,82 @@ local function IsIntermission()
 end
 
 local function GetGameSafetyStatus()
-    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
-    if not playerGui then
-        return "UNKNOWN", nil
-    end
+    local containers = {}
+    local pg = Player:FindFirstChildOfClass("PlayerGui")
+    if pg then table.insert(containers, pg) end
+    if Player.Character then table.insert(containers, Player.Character) end
+    if Camera then table.insert(containers, Camera) end
 
-    local status = "UNKNOWN"
-    local foundText = nil
+    for _, container in ipairs(containers) do
+        for _, label in ipairs(container:GetDescendants()) do
+            if label:IsA("TextLabel") and label.Visible then
+                local text = label.Text
+                if typeof(text) == "string" and #text >= 3 and #text <= 75 then
+                    local low = string.lower(text)
+                    -- Check for explicit SAFE indicator
+                    if string.find(low, "against the wall")
+                    or string.find(low, "stay against")
+                    or string.find(low, "stay inside")
+                    or string.find(low, "stay near")
+                    or string.find(low, "stay safe")
+                    or string.find(low, "safe")
+                    or string.find(low, "warm")
+                    or string.find(low, "comfort")
+                    or string.find(low, "shelter") then
+                        local col = label.TextColor3
+                        -- Mint green / vibrant green check (e.g. R=110, G=240, B=165)
+                        if col.G >= 0.55 and col.G > col.R and (col.G - col.R) >= 0.12 then
+                            return "SAFE", label.Text
+                        end
+                    end
 
-    for _, label in ipairs(playerGui:GetDescendants()) do
-        if label:IsA("TextLabel") and label.Visible then
-            local t = string.lower(label.Text)
-            if string.find(t, "warm")
-            or string.find(t, "shelter")
-            or string.find(t, "find")
-            or string.find(t, "safe")
-            or string.find(t, "somewhere")
-            or string.find(t, "stay")
-            or string.find(t, "danger")
-            or string.find(t, "cold")
-            or string.find(t, "heat")
-            or string.find(t, "high")
-            or string.find(t, "hazard")
-            or string.find(t, "stage") then
-                local col = label.TextColor3
-
-                if col.G >= 0.55 and col.R <= 0.65 and (col.G - col.R) >= 0.15 then
-                    return "SAFE", label.Text
-                end
-
-                if col.R >= 0.60 and col.G <= 0.45 and (col.R - col.G) >= 0.15 then
-                    status = "DANGER"
-                    foundText = label.Text
+                    -- Check for explicit DANGER action instruction (must exclude general banners)
+                    if (string.find(low, "find shelter")
+                    or string.find(low, "seek shelter")
+                    or string.find(low, "get inside")
+                    or string.find(low, "find warmth")
+                    or string.find(low, "too cold")
+                    or string.find(low, "seek high ground")
+                    or string.find(low, "evacuate")
+                    or string.find(low, "seek cover"))
+                    and not string.find(low, "disaster:")
+                    and not string.find(low, "round:")
+                    and not string.find(low, "intermission") then
+                        local col = label.TextColor3
+                        if col.R >= 0.65 and col.G <= 0.45 and (col.R - col.G) >= 0.20 then
+                            return "DANGER", label.Text
+                        end
+                    end
                 end
             end
         end
     end
 
-    if status == "UNKNOWN" then
-        for _, label in ipairs(playerGui:GetDescendants()) do
-            if label:IsA("TextLabel") and label.Visible and #label.Text >= 4 and #label.Text <= 60 then
-                local col = label.TextColor3
-                if col.G >= 0.70 and col.R <= 0.40 then
-                    return "SAFE", label.Text
-                elseif col.R >= 0.70 and col.G <= 0.35 then
-                    status = "DANGER"
-                    foundText = label.Text
+    -- Also check BillboardGuis / SurfaceGuis anywhere in Workspace (floating hints in 3D world)
+    for _, obj in ipairs(Workspace:GetChildren()) do
+        if obj:IsA("BillboardGui") or obj:IsA("SurfaceGui") then
+            for _, label in ipairs(obj:GetDescendants()) do
+                if label:IsA("TextLabel") and label.Visible then
+                    local text = label.Text
+                    if typeof(text) == "string" and #text >= 3 and #text <= 75 then
+                        local low = string.lower(text)
+                        if string.find(low, "against the wall")
+                        or string.find(low, "stay against")
+                        or string.find(low, "stay inside")
+                        or string.find(low, "safe")
+                        or string.find(low, "warm") then
+                            local col = label.TextColor3
+                            if col.G >= 0.55 and col.G > col.R and (col.G - col.R) >= 0.12 then
+                                return "SAFE", label.Text
+                            end
+                        end
+                    end
                 end
             end
         end
     end
 
-    return status, foundText
+    return "UNKNOWN", nil
 end
 
 local function GetActiveMap()
@@ -756,6 +922,10 @@ local function GetSafePlatformPosition(forceMap)
 end
 
 local function EnsureSafePlatform(forceMap)
+    if Settings.WIDAutoWinMode ~= "Platform" and not Settings.WIDSafePlatform then
+        return nil, nil
+    end
+
     local center = GetSafePlatformPosition(forceMap)
 
     if SafePlatformModel and SafePlatformModel.Parent then
@@ -828,11 +998,15 @@ local function TeleportToSafePlatform(forceMap)
     local _, floor = EnsureSafePlatform(forceMap ~= false)
     if floor then
         TeleportTo(floor.CFrame + Vector3.new(0, 5, 0), "Sky Platform")
+    else
+        TeleportTo(FindMapCenterCFrame(), "Map Center")
     end
 end
 
 local function GetCurrentTargetCFrame()
-    if ActiveAutoWinTarget == "Platform" then
+    local mode = Settings.WIDAutoWinMode or "Map"
+
+    if mode == "Platform" then
         local _, floor = EnsureSafePlatform(true)
         if floor then
             return floor.CFrame + Vector3.new(0, 5, 0), "Sky Platform"
@@ -858,23 +1032,25 @@ local function HandleAutoWinRelocation(reason)
         return
     end
 
-    if ActiveAutoWinTarget == "Platform" then
-        ActiveAutoWinTarget = "Map"
-        CurrentMapShelterIndex = 1
-        local shelters = GetAllCandidateShelters()
-        if #shelters > 0 then
-            TeleportTo(shelters[1], "Map Shelter 1 (" .. tostring(reason or "Safe") .. ")")
-        else
-            TeleportTo(FindMapCenterCFrame(), "Map Center")
-        end
+    local mode = Settings.WIDAutoWinMode or "Map"
+
+    if mode == "Platform" then
+        TeleportToSafePlatform(true)
     else
         local shelters = GetAllCandidateShelters()
-        if CurrentMapShelterIndex < #shelters then
+        if #shelters > 1 then
             CurrentMapShelterIndex = CurrentMapShelterIndex + 1
-            TeleportTo(shelters[CurrentMapShelterIndex], "Map Shelter " .. CurrentMapShelterIndex)
+            if CurrentMapShelterIndex > #shelters then
+                CurrentMapShelterIndex = 1
+            end
+            TeleportTo(shelters[CurrentMapShelterIndex], "Map Shelter " .. CurrentMapShelterIndex .. " (" .. tostring(reason or "Safe") .. ")")
         else
-            ActiveAutoWinTarget = "Platform"
-            TeleportToSafePlatform(true)
+            local roof = FindOnTopOfHouseCFrame()
+            if roof then
+                TeleportTo(roof, "High Ground (" .. tostring(reason or "Safe") .. ")")
+            else
+                TeleportTo(FindMapCenterCFrame(), "Map Center (" .. tostring(reason or "Safe") .. ")")
+            end
         end
     end
 end
@@ -947,9 +1123,10 @@ local function BindCharacterHealth(character)
         if newHealth < LastRecordedHealth - 0.5 then
             LastRecordedHealth = newHealth
 
-            if (tick() - LastDamageEvacTime) > 0.8 then
+            if (tick() - LastDamageEvacTime) > 2 then
                 LastDamageEvacTime = tick()
-                if Settings.WIDRelocateOnDamage or Settings.WIDAutoWin then
+                if Settings.WIDRelocateOnDamage and Settings.WIDAutoWin then
+                    IsPlayerConfirmedSafe = false
                     HandleAutoWinRelocation("Damage")
                 end
             end
@@ -966,11 +1143,14 @@ end
 TrackConnection(Player.CharacterAdded:Connect(function(newChar)
     task.wait(0.5)
     BindCharacterHealth(newChar)
-    ActiveAutoWinTarget = Settings.WIDAutoWinMode or "Platform"
     CurrentMapShelterIndex = 1
     LastSafetyState = "UNKNOWN"
+    IsPlayerConfirmedSafe = false
+    RoundTeleportDone = false
 
     if Settings.WIDAutoWin and not IsIntermission() then
+        task.wait(1)
+        RoundTeleportDone = true
         local targetCF, label = GetCurrentTargetCFrame()
         if targetCF then
             TeleportTo(targetCF, label)
@@ -1136,17 +1316,20 @@ TrackConnection(RunService.Heartbeat:Connect(function(dt)
             AirWalkY = root.Position.Y - 3.2
         end
 
-        local vertSpeed = 28
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+        local vertSpeed = 30
+        local movingUp = UserInputService:IsKeyDown(Enum.KeyCode.E) or UserInputService:IsKeyDown(Enum.KeyCode.Space)
+        local movingDown = UserInputService:IsKeyDown(Enum.KeyCode.Q) or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)
+
+        if movingUp and not movingDown then
             AirWalkY = AirWalkY + (vertSpeed * dt)
-        elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        elseif movingDown and not movingUp then
             AirWalkY = AirWalkY - (vertSpeed * dt)
         end
 
         if not AirWalkPart or not AirWalkPart.Parent then
             AirWalkPart = Instance.new("Part")
             AirWalkPart.Name = "ToxAirWalkPart"
-            AirWalkPart.Size = Vector3.new(6, 1, 6)
+            AirWalkPart.Size = Vector3.new(7, 1, 7)
             AirWalkPart.Transparency = 1
             AirWalkPart.Anchored = true
             AirWalkPart.CanCollide = true
@@ -1209,26 +1392,42 @@ task.spawn(function()
 
         if humanoid and humanoid.Health > 0 and root then
             if IsIntermission() then
-                ActiveAutoWinTarget = Settings.WIDAutoWinMode or "Platform"
-                CurrentMapShelterIndex = 1
+                RoundTeleportDone = false
+                IsPlayerConfirmedSafe = false
                 LastSafetyState = "UNKNOWN"
+                CurrentMapShelterIndex = 1
             else
                 if Settings.WIDAutoWin then
                     local inLobby = IsPlayerInLobby()
                     local safetyStatus, safetyPrompt = GetGameSafetyStatus()
 
-                    if safetyStatus == "DANGER" and (tick() - LastDamageEvacTime) > 2 then
-                        LastDamageEvacTime = tick()
-                        HandleAutoWinRelocation("Danger Alert")
-                    elseif safetyStatus == "SAFE" and LastSafetyState ~= "SAFE" then
-                        CustomNotify("Safe Spot Confirmed (Prompt Green)", Color3.fromRGB(100, 255, 100), 2)
+                    if safetyStatus == "SAFE" then
+                        IsPlayerConfirmedSafe = true
+                        if LastSafetyState ~= "SAFE" and (tick() - LastSafeZoneNotification) > 5 then
+                            LastSafeZoneNotification = tick()
+                            CustomNotify("Safe Spot Confirmed: " .. tostring(safetyPrompt or "Protected"), Color3.fromRGB(100, 255, 100), 2)
+                        end
+                    elseif safetyStatus == "DANGER" then
+                        IsPlayerConfirmedSafe = false
                     end
                     LastSafetyState = safetyStatus
 
-                    local targetCF, spotLabel = GetCurrentTargetCFrame()
-                    if targetCF then
-                        local dist = (root.Position - targetCF.Position).Magnitude
-                        if inLobby or dist > 40 then
+                    local shouldTeleport = false
+                    if not RoundTeleportDone then
+                        shouldTeleport = true
+                    elseif inLobby and Settings.WIDPreventLobbyPull then
+                        shouldTeleport = true
+                    elseif Settings.WIDAutoWinMode == "Platform" and not IsPlayerConfirmedSafe then
+                        local platformHeight = tonumber(Settings.WIDPlatformHeight) or 380
+                        if root.Position.Y < (platformHeight - 25) then
+                            shouldTeleport = true
+                        end
+                    end
+
+                    if shouldTeleport then
+                        RoundTeleportDone = true
+                        local targetCF, spotLabel = GetCurrentTargetCFrame()
+                        if targetCF then
                             TeleportTo(targetCF, spotLabel)
                         end
                     end
@@ -1244,14 +1443,15 @@ end)
 
 CreateWIDSection("SURVIVAL & AUTO-FARM")
 
-WIDCreateToggle(
+WIDCreateToggleWithChoice(
     "Auto Win",
     GamePage,
+    {"Map", "Platform"},
     Settings.WIDAutoWin,
+    Settings.WIDAutoWinMode or "Map",
     function(v)
         Settings.WIDAutoWin = v == true
         if v then
-            ActiveAutoWinTarget = Settings.WIDAutoWinMode or "Platform"
             CurrentMapShelterIndex = 1
             if not IsIntermission() then
                 local targetCF, spotLabel = GetCurrentTargetCFrame()
@@ -1259,7 +1459,7 @@ WIDCreateToggle(
                     TeleportTo(targetCF, spotLabel)
                 end
             end
-            CustomNotify("Auto Win Enabled", Color3.fromRGB(100, 255, 100), 3)
+            CustomNotify("Auto Win Enabled [" .. tostring(Settings.WIDAutoWinMode or "Map") .. "]", Color3.fromRGB(100, 255, 100), 3)
         else
             if not Settings.WIDSafePlatform then
                 ClearAllWIDWorkspaceObjects()
@@ -1268,26 +1468,28 @@ WIDCreateToggle(
         end
         AutoSaveConfiguration()
     end,
-    "WIDAutoWin"
-)
-
-WIDCreateDropdown(
-    "Auto Win Target",
-    {"Platform", "Map"},
-    GamePage,
-    Settings.WIDAutoWinMode or "Platform",
     function(option)
         Settings.WIDAutoWinMode = option
-        ActiveAutoWinTarget = option
         CurrentMapShelterIndex = 1
-        if Settings.WIDAutoWin and not IsIntermission() then
-            local targetCF, spotLabel = GetCurrentTargetCFrame()
-            if targetCF then
-                TeleportTo(targetCF, spotLabel)
+        if option == "Platform" then
+            if Settings.WIDAutoWin and not IsIntermission() then
+                TeleportToSafePlatform(true)
+            end
+        else
+            if not Settings.WIDSafePlatform and SafePlatformModel then
+                ClearAllWIDWorkspaceObjects()
+            end
+            if Settings.WIDAutoWin and not IsIntermission() then
+                local targetCF, spotLabel = GetCurrentTargetCFrame()
+                if targetCF then
+                    TeleportTo(targetCF, spotLabel)
+                end
             end
         end
+        CustomNotify("Auto Win Target: " .. tostring(option), Color3.fromRGB(100, 255, 100), 2)
         AutoSaveConfiguration()
-    end
+    end,
+    "WIDAutoWin"
 )
 
 WIDCreateToggle(
@@ -1546,7 +1748,7 @@ WIDCreateToggle(
 )
 
 WIDCreateToggle(
-    "Air Walk",
+    "Air Walk (E Up / Q Down)",
     GamePage,
     Settings.WIDAirWalk,
     function(v)
