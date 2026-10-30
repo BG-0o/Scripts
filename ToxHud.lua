@@ -22,7 +22,7 @@ local function SafeLoad(url)
         return game:HttpGet(requestUrl)
     end)
 
-    if not success or not content or content:find("404") then
+    if not success or not content or content == "404: Not Found" or content:sub(1, 15):find("404") then
         warn("[ToxHud Error]: Nao foi possivel carregar " .. tostring(url))
         return false
     end
