@@ -40,7 +40,7 @@ end
 getgenv().ToxWIDGeneration = (tonumber(getgenv().ToxWIDGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxWIDGeneration
 
-local WIDModuleVersion = "2026-10-30-wid-v12"
+local WIDModuleVersion = "2026-10-30-wid-v13"
 
 if getgenv().ToxWIDModuleLoadedJobId == game.JobId
 and getgenv().ToxWIDModuleVersion == WIDModuleVersion
@@ -66,7 +66,7 @@ Settings.WIDCollapsedSections = typeof(Settings.WIDCollapsedSections) == "table"
 Settings.WIDAutoWin = Settings.WIDAutoWin == true
 Settings.WIDAutoWinMode = (Settings.WIDAutoWinMode == "Map" or Settings.WIDAutoWinMode == "Platform")
     and Settings.WIDAutoWinMode
-    or "Map"
+    or "Platform"
 Settings.WIDRelocateOnDamage = Settings.WIDRelocateOnDamage == true
 Settings.WIDAntiDamage = Settings.WIDAntiDamage ~= false
 Settings.WIDSafePlatform = Settings.WIDSafePlatform == true
@@ -94,6 +94,9 @@ local LastDamageEvacTime = 0
 local CurrentMapShelterIndex = 1
 local LastSafetyState = "UNKNOWN"
 local IsPlayerConfirmedSafe = false
+local IsEvacuatedToMap = false
+local RelocationGracePeriodUntil = 0
+local RelocationBaseHealth = 100
 local RoundTeleportDone = false
 local LastSafeZoneNotification = 0
 
@@ -994,6 +997,13 @@ local function EnsureSafePlatform(forceMap)
     return model, floor
 end
 
+local function IsPlayerOnPlatform()
+    local _, _, root = GetCharacterState()
+    if not root then return false end
+    local platformHeight = tonumber(Settings.WIDPlatformHeight) or 380
+    return root.Position.Y > (platformHeight - 35)
+end
+
 local function TeleportToSafePlatform(forceMap)
     local _, floor = EnsureSafePlatform(forceMap ~= false)
     if floor then
@@ -1003,27 +1013,109 @@ local function TeleportToSafePlatform(forceMap)
     end
 end
 
-local function GetCurrentTargetCFrame()
-    local mode = Settings.WIDAutoWinMode or "Map"
+local function FindHeatSourceCFrame()
+    local map = GetActiveMap()
+    local searchRoot = (map and map ~= Workspace) and map or Workspace
+    local lobbyCF = FindLobbyCFrame()
+    local bestSource = nil
+    local bestDist = math.huge
+    local _, _, root = GetCharacterState()
+    local playerPos = root and root.Position or lobbyCF.Position
 
-    if mode == "Platform" then
+    local heatNames = {
+        "fire", "camp", "heat", "warm", "stove", "radiator",
+        "furnace", "torch", "hearth", "bonfire", "lamp"
+    }
+
+    for _, obj in ipairs(searchRoot:GetDescendants()) do
+        if obj:IsA("BasePart") or obj:IsA("Model") then
+            local name = string.lower(obj.Name)
+            local isHeat = false
+            for _, kw in ipairs(heatNames) do
+                if string.find(name, kw) then
+                    isHeat = true
+                    break
+                end
+            end
+
+            if not isHeat and obj:IsA("BasePart") then
+                if obj:FindFirstChildOfClass("Fire")
+                or obj:FindFirstChildOfClass("PointLight")
+                or obj:FindFirstChildOfClass("SurfaceLight") then
+                    local pName = obj.Parent and string.lower(obj.Parent.Name) or ""
+                    for _, kw in ipairs(heatNames) do
+                        if string.find(pName, kw) then
+                            isHeat = true
+                            break
+                        end
+                    end
+                end
+            end
+
+            if isHeat then
+                local cf = obj:IsA("Model") and obj:GetPivot() or obj.CFrame
+                local distLobby = (cf.Position - lobbyCF.Position).Magnitude
+                if distLobby > 80 and cf.Position.Y > -25 and cf.Position.Y < 180 then
+                    local d = (cf.Position - playerPos).Magnitude
+                    if d < bestDist then
+                        bestDist = d
+                        bestSource = cf
+                    end
+                end
+            end
+        end
+    end
+
+    if bestSource then
+        return bestSource * CFrame.new(0, 3.5, 4)
+    end
+    return nil
+end
+
+local function GetBestMapSurvivalCFrame(reason)
+    local dis = string.lower(LastAnnouncedDisaster or "")
+    local reasonStr = string.lower(tostring(reason or ""))
+    local isCold = string.find(dis, "cold")
+        or string.find(dis, "blizzard")
+        or string.find(dis, "freeze")
+        or string.find(dis, "frost")
+        or string.find(dis, "ice")
+        or string.find(reasonStr, "cold")
+        or string.find(reasonStr, "warm")
+
+    if isCold then
+        local heatCF = FindHeatSourceCFrame()
+        if heatCF then
+            return heatCF, "Campfire / Heat Source"
+        end
+    end
+
+    local shelters = GetAllCandidateShelters()
+    if #shelters >= CurrentMapShelterIndex then
+        return shelters[CurrentMapShelterIndex], "Map Shelter " .. CurrentMapShelterIndex
+    elseif #shelters > 0 then
+        return shelters[1], "Map Shelter 1"
+    end
+
+    local roof = FindOnTopOfHouseCFrame()
+    if roof then
+        return roof, "High Ground"
+    end
+
+    return FindMapCenterCFrame(), "Map Center"
+end
+
+local function GetCurrentTargetCFrame()
+    local mode = Settings.WIDAutoWinMode or "Platform"
+
+    if mode == "Platform" and not IsEvacuatedToMap then
         local _, floor = EnsureSafePlatform(true)
         if floor then
             return floor.CFrame + Vector3.new(0, 5, 0), "Sky Platform"
         end
         return FindMapCenterCFrame(), "Map Center"
     else
-        local shelters = GetAllCandidateShelters()
-        if #shelters >= CurrentMapShelterIndex then
-            return shelters[CurrentMapShelterIndex], "Shelter " .. CurrentMapShelterIndex
-        elseif #shelters > 0 then
-            return shelters[1], "Shelter"
-        end
-        local roof = FindOnTopOfHouseCFrame()
-        if roof then
-            return roof, "High Ground"
-        end
-        return FindMapCenterCFrame(), "Map Center"
+        return GetBestMapSurvivalCFrame("AutoWin Target")
     end
 end
 
@@ -1032,26 +1124,20 @@ local function HandleAutoWinRelocation(reason)
         return
     end
 
-    local mode = Settings.WIDAutoWinMode or "Map"
+    if IsPlayerOnPlatform() then
+        IsEvacuatedToMap = true
+    end
 
-    if mode == "Platform" then
-        TeleportToSafePlatform(true)
-    else
+    local targetCF, spotLabel = GetBestMapSurvivalCFrame(reason)
+    if targetCF then
+        CurrentMapShelterIndex = CurrentMapShelterIndex + 1
         local shelters = GetAllCandidateShelters()
-        if #shelters > 1 then
-            CurrentMapShelterIndex = CurrentMapShelterIndex + 1
-            if CurrentMapShelterIndex > #shelters then
-                CurrentMapShelterIndex = 1
-            end
-            TeleportTo(shelters[CurrentMapShelterIndex], "Map Shelter " .. CurrentMapShelterIndex .. " (" .. tostring(reason or "Safe") .. ")")
-        else
-            local roof = FindOnTopOfHouseCFrame()
-            if roof then
-                TeleportTo(roof, "High Ground (" .. tostring(reason or "Safe") .. ")")
-            else
-                TeleportTo(FindMapCenterCFrame(), "Map Center (" .. tostring(reason or "Safe") .. ")")
-            end
+        if CurrentMapShelterIndex > math.max(#shelters, 1) then
+            CurrentMapShelterIndex = 1
         end
+        TeleportTo(targetCF, spotLabel)
+    else
+        TeleportTo(FindMapCenterCFrame(), "Map Center (" .. tostring(reason or "Safe") .. ")")
     end
 end
 
@@ -1077,6 +1163,15 @@ local function NeutralizeDamageScripts()
                         child:Destroy()
                     end)
                 end
+            end
+        end
+
+        for _, child in ipairs(char:GetDescendants()) do
+            if child:IsA("Fire") or (child:IsA("ParticleEmitter") and (string.find(string.lower(child.Name), "fire") or string.find(string.lower(child.Name), "burn"))) then
+                pcall(function()
+                    child.Enabled = false
+                    child:Destroy()
+                end)
             end
         end
 
@@ -1123,12 +1218,49 @@ local function BindCharacterHealth(character)
         if newHealth < LastRecordedHealth - 0.5 then
             LastRecordedHealth = newHealth
 
-            if (tick() - LastDamageEvacTime) > 2 then
+            if not Settings.WIDAutoWin or IsIntermission() then
+                return
+            end
+
+            -- 1. If currently on Platform: IMMEDIATELY evacuate to map shelter!
+            if IsPlayerOnPlatform() then
+                IsEvacuatedToMap = true
+                IsPlayerConfirmedSafe = false
+                RelocationGracePeriodUntil = tick() + 6.0
+                RelocationBaseHealth = newHealth
                 LastDamageEvacTime = tick()
-                if Settings.WIDRelocateOnDamage and Settings.WIDAutoWin then
-                    IsPlayerConfirmedSafe = false
-                    HandleAutoWinRelocation("Damage")
+                local targetCF, spotLabel = GetBestMapSurvivalCFrame("Platform Damage")
+                if targetCF then
+                    CustomNotify("Damage on Platform! Evacuating to " .. spotLabel, Color3.fromRGB(255, 180, 50), 3)
+                    TeleportTo(targetCF, spotLabel)
                 end
+                return
+            end
+
+            -- 2. Player is already on the map:
+            -- If safety prompt is GREEN / SAFE: DO NOT relocate on lingering ticks!
+            if IsPlayerConfirmedSafe then
+                return
+            end
+
+            -- 3. In grace period (first 6 seconds after relocating):
+            -- Allow warming up / fire extinguishing without teleporting in loop!
+            if tick() < RelocationGracePeriodUntil then
+                if (RelocationBaseHealth - newHealth) > 35 then
+                    RelocationGracePeriodUntil = tick() + 6.0
+                    RelocationBaseHealth = newHealth
+                    LastDamageEvacTime = tick()
+                    HandleAutoWinRelocation("Emergency Relocation")
+                end
+                return
+            end
+
+            -- 4. Grace period has expired and player is still losing health and not safe:
+            if Settings.WIDRelocateOnDamage and (tick() - LastDamageEvacTime) > 3.0 then
+                LastDamageEvacTime = tick()
+                RelocationGracePeriodUntil = tick() + 6.0
+                RelocationBaseHealth = newHealth
+                HandleAutoWinRelocation("Continuous Damage")
             end
         else
             LastRecordedHealth = newHealth
@@ -1146,6 +1278,9 @@ TrackConnection(Player.CharacterAdded:Connect(function(newChar)
     CurrentMapShelterIndex = 1
     LastSafetyState = "UNKNOWN"
     IsPlayerConfirmedSafe = false
+    IsEvacuatedToMap = false
+    RelocationGracePeriodUntil = 0
+    RelocationBaseHealth = 100
     RoundTeleportDone = false
 
     if Settings.WIDAutoWin and not IsIntermission() then
@@ -1394,11 +1529,14 @@ task.spawn(function()
             if IsIntermission() then
                 RoundTeleportDone = false
                 IsPlayerConfirmedSafe = false
+                IsEvacuatedToMap = false
+                RelocationGracePeriodUntil = 0
                 LastSafetyState = "UNKNOWN"
                 CurrentMapShelterIndex = 1
             else
                 if Settings.WIDAutoWin then
                     local inLobby = IsPlayerInLobby()
+                    local onPlatform = IsPlayerOnPlatform()
                     local safetyStatus, safetyPrompt = GetGameSafetyStatus()
 
                     if safetyStatus == "SAFE" then
@@ -1412,23 +1550,49 @@ task.spawn(function()
                     end
                     LastSafetyState = safetyStatus
 
-                    local shouldTeleport = false
                     if not RoundTeleportDone then
-                        shouldTeleport = true
-                    elseif inLobby and Settings.WIDPreventLobbyPull then
-                        shouldTeleport = true
-                    elseif Settings.WIDAutoWinMode == "Platform" and not IsPlayerConfirmedSafe then
-                        local platformHeight = tonumber(Settings.WIDPlatformHeight) or 380
-                        if root.Position.Y < (platformHeight - 25) then
-                            shouldTeleport = true
-                        end
-                    end
-
-                    if shouldTeleport then
                         RoundTeleportDone = true
-                        local targetCF, spotLabel = GetCurrentTargetCFrame()
-                        if targetCF then
-                            TeleportTo(targetCF, spotLabel)
+                        if Settings.WIDAutoWinMode == "Platform" and not IsEvacuatedToMap then
+                            TeleportToSafePlatform(true)
+                        else
+                            local targetCF, spotLabel = GetBestMapSurvivalCFrame("Round Start")
+                            if targetCF then
+                                TeleportTo(targetCF, spotLabel)
+                            end
+                        end
+                    elseif inLobby and Settings.WIDPreventLobbyPull then
+                        if Settings.WIDAutoWinMode == "Platform" and not IsEvacuatedToMap then
+                            TeleportToSafePlatform(true)
+                        else
+                            local targetCF, spotLabel = GetBestMapSurvivalCFrame("Anti Lobby Pull")
+                            if targetCF then
+                                TeleportTo(targetCF, spotLabel)
+                            end
+                        end
+                    elseif onPlatform and not IsEvacuatedToMap then
+                        local dis = string.lower(LastAnnouncedDisaster or "")
+                        local hostileDisaster = string.find(dis, "cold")
+                            or string.find(dis, "blizzard")
+                            or string.find(dis, "freeze")
+                            or string.find(dis, "frost")
+                            or string.find(dis, "ice")
+                            or string.find(dis, "fire")
+                            or string.find(dis, "heat")
+                            or string.find(dis, "wall")
+                            or string.find(dis, "burn")
+
+                        local dangerAlert = (safetyStatus == "DANGER")
+
+                        if hostileDisaster or dangerAlert then
+                            IsEvacuatedToMap = true
+                            IsPlayerConfirmedSafe = false
+                            RelocationGracePeriodUntil = tick() + 6.0
+                            RelocationBaseHealth = humanoid.Health
+                            local targetCF, spotLabel = GetBestMapSurvivalCFrame("Platform Evacuation (" .. (safetyPrompt or dis) .. ")")
+                            if targetCF then
+                                CustomNotify("Platform Unsafe -> Evacuating to " .. spotLabel, Color3.fromRGB(255, 180, 50), 3)
+                                TeleportTo(targetCF, spotLabel)
+                            end
                         end
                     end
                 end
@@ -1446,20 +1610,26 @@ CreateWIDSection("SURVIVAL & AUTO-FARM")
 WIDCreateToggleWithChoice(
     "Auto Win",
     GamePage,
-    {"Map", "Platform"},
+    {"Platform", "Map"},
     Settings.WIDAutoWin,
-    Settings.WIDAutoWinMode or "Map",
+    Settings.WIDAutoWinMode or "Platform",
     function(v)
         Settings.WIDAutoWin = v == true
         if v then
             CurrentMapShelterIndex = 1
+            IsPlayerConfirmedSafe = false
+            IsEvacuatedToMap = false
             if not IsIntermission() then
-                local targetCF, spotLabel = GetCurrentTargetCFrame()
-                if targetCF then
-                    TeleportTo(targetCF, spotLabel)
+                if Settings.WIDAutoWinMode == "Platform" then
+                    TeleportToSafePlatform(true)
+                else
+                    local targetCF, spotLabel = GetBestMapSurvivalCFrame("Toggle Enabled")
+                    if targetCF then
+                        TeleportTo(targetCF, spotLabel)
+                    end
                 end
             end
-            CustomNotify("Auto Win Enabled [" .. tostring(Settings.WIDAutoWinMode or "Map") .. "]", Color3.fromRGB(100, 255, 100), 3)
+            CustomNotify("Auto Win Enabled [" .. tostring(Settings.WIDAutoWinMode or "Platform") .. "]", Color3.fromRGB(100, 255, 100), 3)
         else
             if not Settings.WIDSafePlatform then
                 ClearAllWIDWorkspaceObjects()
@@ -1471,6 +1641,8 @@ WIDCreateToggleWithChoice(
     function(option)
         Settings.WIDAutoWinMode = option
         CurrentMapShelterIndex = 1
+        IsPlayerConfirmedSafe = false
+        IsEvacuatedToMap = false
         if option == "Platform" then
             if Settings.WIDAutoWin and not IsIntermission() then
                 TeleportToSafePlatform(true)
@@ -1480,7 +1652,7 @@ WIDCreateToggleWithChoice(
                 ClearAllWIDWorkspaceObjects()
             end
             if Settings.WIDAutoWin and not IsIntermission() then
-                local targetCF, spotLabel = GetCurrentTargetCFrame()
+                local targetCF, spotLabel = GetBestMapSurvivalCFrame("Mode Switch")
                 if targetCF then
                     TeleportTo(targetCF, spotLabel)
                 end
