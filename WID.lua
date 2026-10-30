@@ -38,7 +38,7 @@ end
 getgenv().ToxWIDGeneration = (tonumber(getgenv().ToxWIDGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxWIDGeneration
 
-local WIDModuleVersion = "2026-10-30-wid-v4"
+local WIDModuleVersion = "2026-10-30-wid-v6"
 
 if getgenv().ToxWIDModuleLoadedJobId == game.JobId
 and getgenv().ToxWIDModuleVersion == WIDModuleVersion
@@ -72,9 +72,12 @@ Settings.WIDNotifyDisasters = Settings.WIDNotifyDisasters == true
 Settings.WIDAntiAFK = Settings.WIDAntiAFK == true
 Settings.WIDInfiniteJump = Settings.WIDInfiniteJump == true
 Settings.WIDAutoSafeSpot = Settings.WIDAutoSafeSpot == true
-Settings.WIDAnchorOnPlatform = Settings.WIDAnchorOnPlatform == true
+Settings.WIDAnchorOnPlatform = Settings.WIDAnchorOnPlatform ~= false
 Settings.WIDAirWalk = Settings.WIDAirWalk == true
 Settings.WIDPreventLobbyPull = Settings.WIDPreventLobbyPull ~= false
+Settings.WIDSmartShelter = Settings.WIDSmartShelter ~= false
+Settings.WIDForceIndoor = Settings.WIDForceIndoor == true
+Settings.WIDEmergencyRescue = Settings.WIDEmergencyRescue ~= false
 
 local WIDConnections = {}
 local WIDCurrentSection = nil
@@ -82,11 +85,26 @@ local WIDSections = {}
 local SafePlatformModel = nil
 local AirWalkPart = nil
 local LastAnnouncedDisaster = ""
+local LastRecordedHealth = 100
+local LastRescueTime = 0
 
 local hazardKeywords = {
     "lava", "acid", "kill", "damage", "fire", "meteor",
     "spike", "hazard", "tsunami", "toxic", "death", "debris",
     "falling", "rock", "magma", "beam", "laser"
+}
+
+local enclosedDisasterKeywords = {
+    "freeze", "cold", "blizzard", "ice", "snow", "frost", "subzero", "winter", "hail", "cryo", "absolute zero",
+    "heat", "hot", "solar", "warm", "firestorm", "drought", "sun", "scorch", "burn", "wildfire", "heatwave",
+    "supernova", "temperature", "summer", "overheat", "acid", "toxic", "radiation", "fallout", "chemical",
+    "sandstorm", "dust", "ash", "meteor", "asteroid", "falling rocks", "debris", "lightning", "thunder"
+}
+
+local highAltitudeDisasterKeywords = {
+    "tsunami", "flood", "water", "rising water", "ocean", "sea", "deluge", "wave",
+    "rising lava", "lava rise", "magma", "volcano",
+    "earthquake", "sinkhole", "quake", "ground collapse"
 }
 
 local function TrackConnection(connection)
@@ -277,14 +295,53 @@ local function IsPlayerInLobby()
     return distXZ < 220
 end
 
-local function FindMapCenterCFrame()
-    local map = Workspace:FindFirstChild("Map")
-        or Workspace:FindFirstChild("Island")
-        or Workspace:FindFirstChild("GameMap")
-        or Workspace:FindFirstChild("ActiveMap")
-        or Workspace:FindFirstChild("CurrentMap")
+local function GetActiveMap()
+    local names = {
+        "Map", "Island", "GameMap", "ActiveMap", "CurrentMap",
+        "LoadedMap", "RoundMap", "Structure", "Structures"
+    }
+    for _, name in ipairs(names) do
+        local found = Workspace:FindFirstChild(name)
+        if found and found:IsA("Model") and #found:GetChildren() > 2 then
+            return found
+        end
+    end
 
-    if map and map:IsA("Model") then
+    local lobbyCF = FindLobbyCFrame()
+    local bestModel = nil
+    local maxParts = 0
+
+    for _, obj in ipairs(Workspace:GetChildren()) do
+        if obj:IsA("Model")
+        and obj.Name ~= "ToxWIDPlatform"
+        and obj.Name ~= "Lobby"
+        and obj.Name ~= "Spawn"
+        and obj.Name ~= "Hub"
+        and not Players:GetPlayerFromCharacter(obj) then
+            local partCount = 0
+            for _, child in ipairs(obj:GetChildren()) do
+                if child:IsA("BasePart") then
+                    partCount = partCount + 1
+                end
+            end
+            if partCount > maxParts then
+                local pivot = obj:GetPivot()
+                local distFromLobby = (pivot.Position - lobbyCF.Position).Magnitude
+                if distFromLobby > 150 then
+                    maxParts = partCount
+                    bestModel = obj
+                end
+            end
+        end
+    end
+
+    return bestModel or Workspace
+end
+
+local function FindMapCenterCFrame()
+    local map = GetActiveMap()
+
+    if map and map:IsA("Model") and map ~= Workspace then
         local cf = map:GetPivot()
         if cf then
             return cf + Vector3.new(0, 8, 0)
@@ -311,6 +368,192 @@ local function FindMapCenterCFrame()
     return lobbyCF * CFrame.new(0, -100, 450)
 end
 
+local function FindSubFloorBunkerCFrame()
+    local map = GetActiveMap()
+    local lobbyCF = FindLobbyCFrame()
+    local lowestFloorY = math.huge
+    local floorPart = nil
+
+    for _, part in ipairs(map:GetDescendants()) do
+        if part:IsA("BasePart")
+        and part.CanCollide
+        and part.Size.X >= 12 and part.Size.Z >= 12
+        and (not SafePlatformModel or not part:IsDescendantOf(SafePlatformModel)) then
+            local distLobby = (part.Position - lobbyCF.Position).Magnitude
+            if distLobby > 160 and part.Position.Y > -40 and part.Position.Y < lowestFloorY then
+                lowestFloorY = part.Position.Y
+                floorPart = part
+            end
+        end
+    end
+
+    if floorPart then
+        local subY = floorPart.Position.Y - (floorPart.Size.Y / 2) - 3.5
+        if subY > -80 then
+            return CFrame.new(floorPart.Position.X, subY, floorPart.Position.Z)
+        end
+    end
+
+    local mapCF = FindMapCenterCFrame()
+    return CFrame.new(mapCF.Position.X, mapCF.Position.Y - 12, mapCF.Position.Z)
+end
+
+local function FindBestIndoorShelter()
+    local map = GetActiveMap()
+    local candidatePositions = {}
+    local lobbyCF = FindLobbyCFrame()
+
+    local excludeList = {Player.Character}
+    if SafePlatformModel then
+        table.insert(excludeList, SafePlatformModel)
+    end
+
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = excludeList
+
+    for _, part in ipairs(map:GetDescendants()) do
+        if part:IsA("BasePart")
+        and part.CanCollide
+        and part.Size.X >= 3 and part.Size.Z >= 3
+        and (not SafePlatformModel or not part:IsDescendantOf(SafePlatformModel))
+        and not string.find(string.lower(part.Name), "platform") then
+            local distLobby = (part.Position - lobbyCF.Position).Magnitude
+            if distLobby > 160 and part.Position.Y < 240 and part.Position.Y > -40 then
+                local standPos = Vector3.new(part.Position.X, part.Position.Y + (part.Size.Y / 2) + 3.2, part.Position.Z)
+                local hitUp = Workspace:Raycast(standPos, Vector3.new(0, 45, 0), rayParams)
+
+                if hitUp and hitUp.Instance and hitUp.Instance:IsA("BasePart") and hitUp.Instance.CanCollide then
+                    local ceilingDist = hitUp.Position.Y - standPos.Y
+                    if ceilingDist >= 5 and ceilingDist <= 35 then
+                        local score = 50
+                        if ceilingDist >= 7 and ceilingDist <= 18 then
+                            score = score + 25
+                        end
+                        if hitUp.Instance.Material ~= Enum.Material.Glass then
+                            score = score + 20
+                        end
+                        if hitUp.Instance.Anchored then
+                            score = score + 15
+                        end
+
+                        local wallCount = 0
+                        local dirs = {
+                            Vector3.new(20, 0, 0),
+                            Vector3.new(-20, 0, 0),
+                            Vector3.new(0, 0, 20),
+                            Vector3.new(0, 0, -20)
+                        }
+                        for _, dir in ipairs(dirs) do
+                            local hitWall = Workspace:Raycast(standPos, dir, rayParams)
+                            if hitWall and hitWall.Instance then
+                                wallCount = wallCount + 1
+                            end
+                        end
+                        score = score + (wallCount * 12)
+
+                        table.insert(candidatePositions, {
+                            CFrame = CFrame.new(standPos),
+                            Score = score
+                        })
+                    end
+                end
+            end
+        end
+    end
+
+    if #candidatePositions > 0 then
+        table.sort(candidatePositions, function(a, b)
+            return a.Score > b.Score
+        end)
+        return candidatePositions[1].CFrame
+    end
+
+    for _, obj in ipairs(map:GetDescendants()) do
+        if obj:IsA("BasePart") or obj:IsA("Model") then
+            local name = string.lower(obj.Name)
+            if string.find(name, "shelter")
+            or string.find(name, "bunker")
+            or string.find(name, "house")
+            or string.find(name, "room")
+            or string.find(name, "cabin")
+            or string.find(name, "safe") then
+                local cf = obj:IsA("Model") and obj:GetPivot() or obj.CFrame
+                local distLobby = (cf.Position - lobbyCF.Position).Magnitude
+                if distLobby > 160 then
+                    return cf + Vector3.new(0, 3.5, 0)
+                end
+            end
+        end
+    end
+
+    return FindSubFloorBunkerCFrame()
+end
+
+local function IsEnclosedShelterNeeded()
+    local text = string.lower(tostring(LastAnnouncedDisaster or ""))
+
+    for _, kw in ipairs(enclosedDisasterKeywords) do
+        if string.find(text, kw) then
+            return true, kw
+        end
+    end
+
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+    if playerGui then
+        for _, label in ipairs(playerGui:GetDescendants()) do
+            if label:IsA("TextLabel") and label.Visible then
+                local t = string.lower(label.Text)
+                for _, kw in ipairs(enclosedDisasterKeywords) do
+                    if string.find(t, kw) then
+                        return true, kw
+                    end
+                end
+            end
+        end
+    end
+
+    local rsDisaster = ReplicatedStorage:FindFirstChild("Disaster")
+        or ReplicatedStorage:FindFirstChild("CurrentDisaster")
+        or ReplicatedStorage:FindFirstChild("RoundStatus")
+    if rsDisaster and rsDisaster:IsA("StringValue") then
+        local t = string.lower(rsDisaster.Value)
+        for _, kw in ipairs(enclosedDisasterKeywords) do
+            if string.find(t, kw) then
+                return true, kw
+            end
+        end
+    end
+
+    return false, nil
+end
+
+local function IsHighAltitudeNeeded()
+    local text = string.lower(tostring(LastAnnouncedDisaster or ""))
+
+    for _, kw in ipairs(highAltitudeDisasterKeywords) do
+        if string.find(text, kw) then
+            return true, kw
+        end
+    end
+
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+    if playerGui then
+        for _, label in ipairs(playerGui:GetDescendants()) do
+            if label:IsA("TextLabel") and label.Visible then
+                local t = string.lower(label.Text)
+                for _, kw in ipairs(highAltitudeDisasterKeywords) do
+                    if string.find(t, kw) then
+                        return true, kw
+                    end
+                end
+            end
+        end
+    end
+
+    return false, nil
+end
+
 local function GetSafePlatformPosition(forceMap)
     local height = tonumber(Settings.WIDPlatformHeight) or 380
     local mapCF = FindMapCenterCFrame()
@@ -325,6 +568,15 @@ local function GetSafePlatformPosition(forceMap)
     end
 
     return Vector3.new(mapCF.Position.X, height, mapCF.Position.Z)
+end
+
+local function DestroySafePlatform()
+    if SafePlatformModel then
+        pcall(function()
+            SafePlatformModel:Destroy()
+        end)
+        SafePlatformModel = nil
+    end
 end
 
 local function EnsureSafePlatform(forceMap)
@@ -347,9 +599,10 @@ local function EnsureSafePlatform(forceMap)
 
     ClearAllWIDWorkspaceObjects()
 
+    local map = GetActiveMap()
     local model = Instance.new("Model")
     model.Name = "ToxWIDPlatform"
-    model.Parent = Workspace
+    model.Parent = (map and map ~= Workspace) and map or Workspace
 
     local floor = Instance.new("Part")
     floor.Name = "PlatformFloor"
@@ -406,11 +659,12 @@ end
 local function FindHighestMapPart()
     local highestPart = nil
     local maxY = -math.huge
+    local map = GetActiveMap()
 
-    for _, part in ipairs(Workspace:GetDescendants()) do
+    for _, part in ipairs(map:GetDescendants()) do
         if part:IsA("BasePart")
         and part.CanCollide
-        and not part:IsDescendantOf(SafePlatformModel or Workspace)
+        and (not SafePlatformModel or not part:IsDescendantOf(SafePlatformModel))
         and part.Position.Y > maxY
         and part.Position.Y < 2000 then
             local isChar = false
@@ -644,27 +898,65 @@ task.spawn(function()
             break
         end
 
-        if Settings.WIDAutoWin or Settings.WIDAutoSafeSpot then
-            local character, humanoid, root = GetCharacterState()
-            if humanoid and humanoid.Health > 0 and root then
-                local inLobby = IsPlayerInLobby()
-                local _, floor = EnsureSafePlatform(true)
+        local character, humanoid, root = GetCharacterState()
 
-                if floor then
-                    local dist = (root.Position - floor.Position).Magnitude
-                    if inLobby or dist > 45 then
-                        TeleportTo(floor.CFrame + Vector3.new(0, 5, 0), "Safe Map Bunker")
-                    end
-
-                    if Settings.WIDAnchorOnPlatform and not inLobby then
-                        root.Anchored = true
+        if humanoid and humanoid.Health > 0 and root then
+            if humanoid.Health < LastRecordedHealth and (tick() - LastRescueTime) > 3 then
+                if Settings.WIDEmergencyRescue then
+                    LastRescueTime = tick()
+                    local emergencyCF = FindBestIndoorShelter()
+                    if emergencyCF then
+                        TeleportTo(emergencyCF, "Emergency Shelter (Damage Avoided)")
+                        if Settings.WIDAnchorOnPlatform then
+                            root.Anchored = true
+                        end
                     end
                 end
             end
-        else
-            local _, _, root = GetCharacterState()
-            if root and root.Anchored and not Settings.WIDAnchorOnPlatform then
-                root.Anchored = false
+            LastRecordedHealth = humanoid.Health
+
+            if Settings.WIDAutoWin or Settings.WIDAutoSafeSpot then
+                local inLobby = IsPlayerInLobby()
+                local isEnclosed, encName = IsEnclosedShelterNeeded()
+                local isAltitude = IsHighAltitudeNeeded()
+                local forceIndoor = Settings.WIDForceIndoor == true
+
+                if (forceIndoor or (Settings.WIDSmartShelter and isEnclosed and not isAltitude)) then
+                    local shelterCF = FindBestIndoorShelter()
+                    if shelterCF then
+                        local distShelter = (root.Position - shelterCF.Position).Magnitude
+                        if inLobby or distShelter > 10 then
+                            TeleportTo(shelterCF, "Indoor Shelter (" .. tostring(encName or "Cover") .. ")")
+                        end
+                        if Settings.WIDAnchorOnPlatform then
+                            root.Anchored = true
+                        end
+                    else
+                        local subCF = FindSubFloorBunkerCFrame()
+                        if subCF and (inLobby or (root.Position - subCF.Position).Magnitude > 12) then
+                            TeleportTo(subCF, "Sub-Floor Bunker")
+                        end
+                        if Settings.WIDAnchorOnPlatform then
+                            root.Anchored = true
+                        end
+                    end
+                else
+                    local _, floor = EnsureSafePlatform(true)
+                    if floor then
+                        local dist = (root.Position - floor.Position).Magnitude
+                        if inLobby or dist > 45 then
+                            TeleportTo(floor.CFrame + Vector3.new(0, 5, 0), "Safe Sky Bunker")
+                        end
+
+                        if Settings.WIDAnchorOnPlatform and not inLobby then
+                            root.Anchored = true
+                        end
+                    end
+                end
+            else
+                if root.Anchored and not Settings.WIDAnchorOnPlatform then
+                    root.Anchored = false
+                end
             end
         end
 
@@ -687,8 +979,18 @@ WIDCreateToggle(
     function(v)
         Settings.WIDAutoWin = v == true
         if v then
-            EnsureSafePlatform(true)
-            TeleportToSafePlatform(true)
+            local isEnclosed = IsEnclosedShelterNeeded()
+            if Settings.WIDForceIndoor or (Settings.WIDSmartShelter and isEnclosed) then
+                local shelter = FindBestIndoorShelter()
+                if shelter then
+                    TeleportTo(shelter, "Indoor Shelter")
+                else
+                    TeleportToSafePlatform(true)
+                end
+            else
+                EnsureSafePlatform(true)
+                TeleportToSafePlatform(true)
+            end
             CustomNotify("Auto Win Enabled", Color3.fromRGB(100, 255, 100), 3)
         else
             local _, _, root = GetCharacterState()
@@ -706,13 +1008,62 @@ WIDCreateToggle(
 )
 
 WIDCreateToggle(
+    "Smart Auto-Shelter (Adaptive Sky/Indoor)",
+    GamePage,
+    Settings.WIDSmartShelter,
+    function(v)
+        Settings.WIDSmartShelter = v == true
+        AutoSaveConfiguration()
+    end,
+    "WIDSmartShelter"
+)
+
+WIDCreateToggle(
+    "Force Indoor Shelter (Real Map Roof)",
+    GamePage,
+    Settings.WIDForceIndoor,
+    function(v)
+        Settings.WIDForceIndoor = v == true
+        if v then
+            local shelter = FindBestIndoorShelter()
+            if shelter then
+                TeleportTo(shelter, "Indoor Map Shelter")
+            end
+        end
+        AutoSaveConfiguration()
+    end,
+    "WIDForceIndoor"
+)
+
+WIDCreateToggle(
+    "Emergency Damage Rescue (Auto-Relocate)",
+    GamePage,
+    Settings.WIDEmergencyRescue,
+    function(v)
+        Settings.WIDEmergencyRescue = v == true
+        AutoSaveConfiguration()
+    end,
+    "WIDEmergencyRescue"
+)
+
+WIDCreateToggle(
     "Auto Safe Spot Lock",
     GamePage,
     Settings.WIDAutoSafeSpot,
     function(v)
         Settings.WIDAutoSafeSpot = v == true
         if v then
-            TeleportToSafePlatform(true)
+            local isEnclosed = IsEnclosedShelterNeeded()
+            if Settings.WIDForceIndoor or (Settings.WIDSmartShelter and isEnclosed) then
+                local shelter = FindBestIndoorShelter()
+                if shelter then
+                    TeleportTo(shelter, "Indoor Shelter")
+                else
+                    TeleportToSafePlatform(true)
+                end
+            else
+                TeleportToSafePlatform(true)
+            end
         else
             local _, _, root = GetCharacterState()
             if root then
@@ -762,6 +1113,51 @@ WIDCreateToggle(
         AutoSaveConfiguration()
     end,
     "WIDAntiAFK"
+)
+
+CreateWIDSection("REAL MAP SHELTERS & BUNKERS")
+
+WIDCreateButton(
+    "Teleport to Indoor Map Shelter",
+    GamePage,
+    function()
+        local cf = FindBestIndoorShelter()
+        if cf then
+            TeleportTo(cf, "Indoor Map Shelter")
+        else
+            CustomNotify("No indoor shelter detected on map", Color3.fromRGB(255, 100, 100), 2)
+        end
+    end
+)
+
+WIDCreateButton(
+    "Teleport to Sub-Floor Map Bunker",
+    GamePage,
+    function()
+        local cf = FindSubFloorBunkerCFrame()
+        if cf then
+            TeleportTo(cf, "Sub-Floor Map Bunker")
+            local _, _, root = GetCharacterState()
+            if root and Settings.WIDAnchorOnPlatform then
+                root.Anchored = true
+            end
+        else
+            CustomNotify("Sub-floor bunker unavailable", Color3.fromRGB(255, 100, 100), 2)
+        end
+    end
+)
+
+WIDCreateButton(
+    "Teleport to Highest Point on Map",
+    GamePage,
+    function()
+        local cf = FindHighestMapPart()
+        if cf then
+            TeleportTo(cf, "Highest Point")
+        else
+            CustomNotify("High ground not found", Color3.fromRGB(255, 100, 100), 2)
+        end
+    end
 )
 
 CreateWIDSection("SAFE SKY PLATFORM")
@@ -959,19 +1355,6 @@ WIDCreateButton(
     GamePage,
     function()
         TeleportTo(FindMapCenterCFrame(), "Map Center")
-    end
-)
-
-WIDCreateButton(
-    "Teleport to Highest Point on Map",
-    GamePage,
-    function()
-        local cf = FindHighestMapPart()
-        if cf then
-            TeleportTo(cf, "Highest Point")
-        else
-            CustomNotify("High ground not found", Color3.fromRGB(255, 100, 100), 2)
-        end
     end
 )
 
