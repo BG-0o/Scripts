@@ -39,7 +39,7 @@ end
 getgenv().ToxWIDGeneration = (tonumber(getgenv().ToxWIDGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxWIDGeneration
 
-local WIDModuleVersion = "2026-10-30-wid-v9"
+local WIDModuleVersion = "2026-10-30-wid-v10"
 
 if getgenv().ToxWIDModuleLoadedJobId == game.JobId
 and getgenv().ToxWIDModuleVersion == WIDModuleVersion
@@ -66,6 +66,7 @@ Settings.WIDAutoWin = Settings.WIDAutoWin == true
 Settings.WIDAutoWinMode = (Settings.WIDAutoWinMode == "Map" or Settings.WIDAutoWinMode == "Platform")
     and Settings.WIDAutoWinMode
     or "Platform"
+Settings.WIDRelocateOnDamage = Settings.WIDRelocateOnDamage ~= false
 Settings.WIDAntiDamage = Settings.WIDAntiDamage ~= false
 Settings.WIDSafePlatform = Settings.WIDSafePlatform == true
 Settings.WIDPlatformHeight = tonumber(Settings.WIDPlatformHeight) or 380
@@ -87,6 +88,9 @@ local SafePlatformModel = nil
 local AirWalkPart = nil
 local AirWalkY = nil
 local LastAnnouncedDisaster = ""
+local LastRecordedHealth = 100
+local LastDamageEvacTime = 0
+local CurrentEvacIndex = 1
 
 local hazardKeywords = {
     "lava", "acid", "kill", "damage", "fire", "meteor",
@@ -111,7 +115,9 @@ pcall(function()
                     or string.find(name, "hazard")
                     or string.find(name, "hurt")
                     or string.find(name, "takedamage")
-                    or string.find(name, "health") then
+                    or string.find(name, "dealdamage")
+                    or string.find(name, "health")
+                    or string.find(name, "hit") then
                         return nil
                     end
                 end
@@ -353,6 +359,46 @@ local function IsPlayerInLobby()
     local distXZ = math.sqrt(dx * dx + dz * dz)
 
     return distXZ < 160
+end
+
+local function IsIntermission()
+    local text = ""
+
+    local rsStatus = ReplicatedStorage:FindFirstChild("Status")
+        or ReplicatedStorage:FindFirstChild("RoundStatus")
+        or ReplicatedStorage:FindFirstChild("GameState")
+        or ReplicatedStorage:FindFirstChild("Round")
+        or ReplicatedStorage:FindFirstChild("Disaster")
+
+    if rsStatus and rsStatus:IsA("StringValue") then
+        text = text .. " " .. string.lower(rsStatus.Value)
+    end
+
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+    if playerGui then
+        for _, label in ipairs(playerGui:GetDescendants()) do
+            if label:IsA("TextLabel") and label.Visible then
+                local t = string.lower(label.Text)
+                if string.find(t, "intermission")
+                or string.find(t, "waiting")
+                or string.find(t, "next round")
+                or string.find(t, "starting in")
+                or string.find(t, "game starts")
+                or string.find(t, "round over") then
+                    return true
+                end
+            end
+        end
+    end
+
+    if string.find(text, "intermission")
+    or string.find(text, "waiting")
+    or string.find(text, "starting in")
+    or string.find(text, "round over") then
+        return true
+    end
+
+    return false
 end
 
 local function GetActiveMap()
@@ -645,10 +691,9 @@ local function EnsureSafePlatform(forceMap)
 
     ClearAllWIDWorkspaceObjects()
 
-    local map = GetActiveMap()
     local model = Instance.new("Model")
     model.Name = "ToxWIDPlatform"
-    model.Parent = (map and map ~= Workspace) and map or Workspace
+    model.Parent = Workspace
 
     local floor = Instance.new("Part")
     floor.Name = "PlatformFloor"
@@ -706,11 +751,11 @@ local function GetAutoWinCFrame()
     if Settings.WIDAutoWinMode == "Map" then
         local shelter = FindInsideHouseCFrame()
         if shelter then
-            return shelter, "Map Shelter"
+            return shelter, "Shelter"
         end
         local roof = FindOnTopOfHouseCFrame()
         if roof then
-            return roof, "Map High Ground"
+            return roof, "High Ground"
         end
         return FindMapCenterCFrame(), "Map Center"
     else
@@ -720,6 +765,34 @@ local function GetAutoWinCFrame()
         end
         return FindMapCenterCFrame(), "Map Center"
     end
+end
+
+local function GetEvacuationTarget()
+    local spots = {}
+
+    local shelterCF = FindInsideHouseCFrame()
+    if shelterCF then
+        table.insert(spots, {CF = shelterCF, Label = "Shelter"})
+    end
+
+    local roofCF = FindOnTopOfHouseCFrame()
+    if roofCF then
+        table.insert(spots, {CF = roofCF, Label = "High Ground"})
+    end
+
+    local _, floor = EnsureSafePlatform(true)
+    if floor then
+        table.insert(spots, {CF = floor.CFrame + Vector3.new(0, 5, 0), Label = "Sky Platform"})
+    end
+
+    table.insert(spots, {CF = FindMapCenterCFrame(), Label = "Map Center"})
+
+    if #spots == 0 then
+        return nil, "Target"
+    end
+
+    CurrentEvacIndex = (CurrentEvacIndex % #spots) + 1
+    return spots[CurrentEvacIndex].CF, spots[CurrentEvacIndex].Label
 end
 
 local function NeutralizeDamageScripts()
@@ -773,6 +846,50 @@ local function NeutralizeDamageScripts()
         end
     end
 end
+
+local function BindCharacterHealth(character)
+    if not character then
+        return
+    end
+
+    local humanoid = character:WaitForChild("Humanoid", 5) or character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then
+        return
+    end
+
+    LastRecordedHealth = humanoid.Health
+
+    TrackConnection(humanoid.HealthChanged:Connect(function(newHealth)
+        if newHealth < LastRecordedHealth - 0.5 then
+            LastRecordedHealth = newHealth
+
+            if Settings.WIDRelocateOnDamage and (tick() - LastDamageEvacTime) > 0.8 then
+                LastDamageEvacTime = tick()
+                local evacCF, label = GetEvacuationTarget()
+                if evacCF then
+                    TeleportTo(evacCF, "Evac: " .. label)
+                end
+            end
+        else
+            LastRecordedHealth = newHealth
+        end
+    end))
+end
+
+if Player.Character then
+    BindCharacterHealth(Player.Character)
+end
+
+TrackConnection(Player.CharacterAdded:Connect(function(newChar)
+    task.wait(0.5)
+    BindCharacterHealth(newChar)
+    if Settings.WIDAutoWin and not IsIntermission() then
+        local targetCF, label = GetAutoWinCFrame()
+        if targetCF then
+            TeleportTo(targetCF, label)
+        end
+    end
+end))
 
 local function FindRandomSurvivor()
     local candidates = {}
@@ -1004,13 +1121,13 @@ task.spawn(function()
         local character, humanoid, root = GetCharacterState()
 
         if humanoid and humanoid.Health > 0 and root then
-            if Settings.WIDAutoWin then
+            if Settings.WIDAutoWin and not IsIntermission() then
                 local inLobby = IsPlayerInLobby()
                 local targetCF, spotLabel = GetAutoWinCFrame()
 
                 if targetCF then
                     local dist = (root.Position - targetCF.Position).Magnitude
-                    if inLobby or dist > 70 then
+                    if inLobby or dist > 40 then
                         TeleportTo(targetCF, spotLabel)
                     end
                 end
@@ -1032,9 +1149,11 @@ WIDCreateToggle(
     function(v)
         Settings.WIDAutoWin = v == true
         if v then
-            local targetCF, spotLabel = GetAutoWinCFrame()
-            if targetCF then
-                TeleportTo(targetCF, spotLabel)
+            if not IsIntermission() then
+                local targetCF, spotLabel = GetAutoWinCFrame()
+                if targetCF then
+                    TeleportTo(targetCF, spotLabel)
+                end
             end
             CustomNotify("Auto Win Enabled", Color3.fromRGB(100, 255, 100), 3)
         else
@@ -1055,7 +1174,7 @@ WIDCreateDropdown(
     Settings.WIDAutoWinMode or "Platform",
     function(option)
         Settings.WIDAutoWinMode = option
-        if Settings.WIDAutoWin then
+        if Settings.WIDAutoWin and not IsIntermission() then
             local targetCF, spotLabel = GetAutoWinCFrame()
             if targetCF then
                 TeleportTo(targetCF, spotLabel)
@@ -1063,6 +1182,17 @@ WIDCreateDropdown(
         end
         AutoSaveConfiguration()
     end
+)
+
+WIDCreateToggle(
+    "Relocate on Damage",
+    GamePage,
+    Settings.WIDRelocateOnDamage,
+    function(v)
+        Settings.WIDRelocateOnDamage = v == true
+        AutoSaveConfiguration()
+    end,
+    "WIDRelocateOnDamage"
 )
 
 WIDCreateToggle(
@@ -1086,7 +1216,7 @@ WIDCreateToggle(
     Settings.WIDPreventLobbyPull,
     function(v)
         Settings.WIDPreventLobbyPull = v == true
-        if v and IsPlayerInLobby() then
+        if v and IsPlayerInLobby() and not IsIntermission() then
             local targetCF, spotLabel = GetAutoWinCFrame()
             if targetCF then
                 TeleportTo(targetCF, spotLabel)
