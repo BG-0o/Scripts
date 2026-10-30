@@ -38,7 +38,7 @@ end
 getgenv().ToxWIDGeneration = (tonumber(getgenv().ToxWIDGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxWIDGeneration
 
-local WIDModuleVersion = "2026-10-30-wid-v7"
+local WIDModuleVersion = "2026-10-30-wid-v8"
 
 if getgenv().ToxWIDModuleLoadedJobId == game.JobId
 and getgenv().ToxWIDModuleVersion == WIDModuleVersion
@@ -62,20 +62,21 @@ Settings.WIDCollapsedSections = typeof(Settings.WIDCollapsedSections) == "table"
     or {}
 
 Settings.WIDAutoWin = Settings.WIDAutoWin == true
+Settings.WIDAutoWinMode = (Settings.WIDAutoWinMode == "Map" or Settings.WIDAutoWinMode == "Platform")
+    and Settings.WIDAutoWinMode
+    or "Platform"
+Settings.WIDAntiDamage = Settings.WIDAntiDamage ~= false
 Settings.WIDSafePlatform = Settings.WIDSafePlatform == true
 Settings.WIDPlatformHeight = tonumber(Settings.WIDPlatformHeight) or 380
-Settings.WIDAntiVoid = Settings.WIDAntiVoid == true
-Settings.WIDNoFallDamage = Settings.WIDNoFallDamage == true
+Settings.WIDAntiVoid = Settings.WIDAntiVoid ~= false
+Settings.WIDNoFallDamage = Settings.WIDNoFallDamage ~= false
 Settings.WIDAntiFling = Settings.WIDAntiFling == true
-Settings.WIDAntiHazards = Settings.WIDAntiHazards == true
+Settings.WIDAntiHazards = Settings.WIDAntiHazards ~= false
 Settings.WIDNotifyDisasters = Settings.WIDNotifyDisasters == true
 Settings.WIDAntiAFK = Settings.WIDAntiAFK == true
 Settings.WIDInfiniteJump = Settings.WIDInfiniteJump == true
-Settings.WIDAutoSafeSpot = Settings.WIDAutoSafeSpot == true
-Settings.WIDAnchorOnPlatform = Settings.WIDAnchorOnPlatform ~= false
 Settings.WIDAirWalk = Settings.WIDAirWalk == true
 Settings.WIDPreventLobbyPull = Settings.WIDPreventLobbyPull ~= false
-Settings.WIDSmartShelter = Settings.WIDSmartShelter ~= false
 
 local WIDConnections = {}
 local WIDCurrentSection = nil
@@ -90,22 +91,32 @@ local hazardKeywords = {
     "falling", "rock", "magma", "beam", "laser"
 }
 
-local enclosedDisasterKeywords = {
-    "sun disappear", "sun got closer", "freeze", "cold", "blizzard", "ice",
-    "snow", "frost", "subzero", "hypothermia", "stay warm", "somewhere warm",
-    "heat", "hot", "solar", "warm", "firestorm", "drought", "burn", "scorch",
-    "wildfire", "heatwave", "heat wave", "supernova", "summer", "overheat",
-    "acid", "toxic rain", "radiation", "fallout", "chemical", "sandstorm",
-    "dust", "ash", "volcanic ash", "meteor", "moon fell", "falling rocks",
-    "debris", "lightning", "thunder", "storm"
-}
-
-local highAltitudeDisasterKeywords = {
-    "floor became lava", "floor is lava", "lava", "magma", "volcano",
-    "mega tsunami", "tsunami", "ocean roll", "flood", "water rise",
-    "rising water", "rising lava", "ocean", "deluge", "wave", "sea",
-    "zombie", "outbreak", "infected"
-}
+pcall(function()
+    if hookmetamethod and getnamecallmethod then
+        local oldNamecall
+        oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            if method == "FireServer" or method == "fireServer" then
+                if Settings.WIDAntiDamage then
+                    local name = string.lower(tostring(self.Name))
+                    if string.find(name, "damage")
+                    or string.find(name, "temp")
+                    or string.find(name, "cold")
+                    or string.find(name, "freeze")
+                    or string.find(name, "heat")
+                    or string.find(name, "burn")
+                    or string.find(name, "hazard")
+                    or string.find(name, "hurt")
+                    or string.find(name, "takedamage")
+                    or string.find(name, "health") then
+                        return nil
+                    end
+                end
+            end
+            return oldNamecall(self, ...)
+        end))
+    end
+end)
 
 local function TrackConnection(connection)
     if connection then
@@ -167,11 +178,10 @@ local function WIDCreateButton(...)
 end
 
 local function WIDCreateDropdown(...)
-    return TrackControl(CreateDropdown(...))
-end
-
-local function WIDCreateInputWithButton(...)
-    return TrackControl(CreateInputWithButton(...))
+    if CreateDropdown then
+        return TrackControl(CreateDropdown(...))
+    end
+    return nil
 end
 
 local function CreateWIDSection(text)
@@ -572,15 +582,6 @@ local function GetSafePlatformPosition(forceMap)
     return Vector3.new(mapCF.Position.X, height, mapCF.Position.Z)
 end
 
-local function DestroySafePlatform()
-    if SafePlatformModel then
-        pcall(function()
-            SafePlatformModel:Destroy()
-        end)
-        SafePlatformModel = nil
-    end
-end
-
 local function EnsureSafePlatform(forceMap)
     local center = GetSafePlatformPosition(forceMap)
 
@@ -658,76 +659,76 @@ local function TeleportToSafePlatform(forceMap)
     end
 end
 
-local function GetActiveDisasterType()
-    local text = string.lower(tostring(LastAnnouncedDisaster or ""))
+local function GetAutoWinCFrame()
+    if Settings.WIDAutoWinMode == "Map" then
+        local shelter = FindInsideHouseCFrame()
+        if shelter then
+            return shelter, "Map Shelter"
+        end
+        local roof = FindOnTopOfHouseCFrame()
+        if roof then
+            return roof, "Map High Ground"
+        end
+        return FindMapCenterCFrame(), "Map Center"
+    else
+        local _, floor = EnsureSafePlatform(true)
+        if floor then
+            return floor.CFrame + Vector3.new(0, 5, 0), "Safe Sky Platform"
+        end
+        return FindMapCenterCFrame(), "Map Center"
+    end
+end
 
-    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
-    if playerGui then
-        for _, label in ipairs(playerGui:GetDescendants()) do
-            if label:IsA("TextLabel") and label.Visible then
-                local t = string.lower(label.Text)
-                if #t >= 4 and #t <= 80 then
-                    if string.find(t, "what if")
-                    or string.find(t, "disaster")
-                    or string.find(t, "sun")
-                    or string.find(t, "lava")
-                    or string.find(t, "tsunami")
-                    or string.find(t, "freeze")
-                    or string.find(t, "cold")
-                    or string.find(t, "heat")
-                    or string.find(t, "warm")
-                    or string.find(t, "stage")
-                    or string.find(t, "warning") then
-                        text = text .. " " .. t
-                    end
+local function NeutralizeDamageScripts()
+    if not Settings.WIDAntiDamage then
+        return
+    end
+
+    local char = Player.Character
+    if char then
+        for _, child in ipairs(char:GetChildren()) do
+            if child:IsA("LocalScript") or child:IsA("Script") then
+                local name = string.lower(child.Name)
+                if string.find(name, "temp")
+                or string.find(name, "cold")
+                or string.find(name, "freeze")
+                or string.find(name, "heat")
+                or string.find(name, "burn")
+                or string.find(name, "damage")
+                or string.find(name, "ragdoll") then
+                    pcall(function()
+                        child.Disabled = true
+                        child:Destroy()
+                    end)
+                end
+            end
+        end
+
+        local ff = char:FindFirstChild("ToxDamageShield")
+        if not ff then
+            ff = Instance.new("ForceField")
+            ff.Name = "ToxDamageShield"
+            ff.Visible = false
+            ff.Parent = char
+        end
+    end
+
+    local pg = Player:FindFirstChildOfClass("PlayerGui")
+    if pg then
+        for _, desc in ipairs(pg:GetDescendants()) do
+            if desc:IsA("LocalScript") then
+                local name = string.lower(desc.Name)
+                if string.find(name, "temp")
+                or string.find(name, "cold")
+                or string.find(name, "freeze")
+                or string.find(name, "heat") then
+                    pcall(function()
+                        desc.Disabled = true
+                    end)
                 end
             end
         end
     end
-
-    local rsDisaster = ReplicatedStorage:FindFirstChild("Disaster")
-        or ReplicatedStorage:FindFirstChild("CurrentDisaster")
-        or ReplicatedStorage:FindFirstChild("RoundStatus")
-    if rsDisaster and rsDisaster:IsA("StringValue") then
-        text = text .. " " .. string.lower(rsDisaster.Value)
-    end
-
-    for _, kw in ipairs(enclosedDisasterKeywords) do
-        if string.find(text, kw) then
-            return "INDOORS", kw
-        end
-    end
-
-    for _, kw in ipairs(highAltitudeDisasterKeywords) do
-        if string.find(text, kw) then
-            return "ROOF", kw
-        end
-    end
-
-    return "AUTOFARM", "Standard"
-end
-
-local function GetOptimalSafeSpot()
-    local disasterType, disasterName = GetActiveDisasterType()
-
-    if disasterType == "INDOORS" then
-        local houseCF = FindInsideHouseCFrame()
-        if houseCF then
-            return houseCF, "Inside House (" .. tostring(disasterName) .. ")"
-        end
-    elseif disasterType == "ROOF" then
-        local roofCF = FindOnTopOfHouseCFrame()
-        if roofCF then
-            return roofCF, "Top of House (" .. tostring(disasterName) .. ")"
-        end
-    end
-
-    local _, floor = EnsureSafePlatform(true)
-    if floor then
-        return floor.CFrame + Vector3.new(0, 5, 0), "Safe Sky Platform"
-    end
-
-    return FindMapCenterCFrame(), "Map Center"
 end
 
 local function FindRandomSurvivor()
@@ -840,6 +841,7 @@ TrackConnection(RunService.Heartbeat:Connect(function()
     end
 
     pcall(function()
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
         humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
         humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
         humanoid:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, false)
@@ -848,9 +850,9 @@ TrackConnection(RunService.Heartbeat:Connect(function()
     if Settings.WIDAntiVoid and root.Position.Y < 15 then
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
-        local spotCF = GetOptimalSafeSpot()
-        if spotCF then
-            root.CFrame = spotCF
+        local targetCF, label = GetAutoWinCFrame()
+        if targetCF then
+            root.CFrame = targetCF
         else
             local mapCF = FindMapCenterCFrame()
             root.CFrame = CFrame.new(mapCF.Position.X, tonumber(Settings.WIDPlatformHeight) or 380, mapCF.Position.Z)
@@ -940,27 +942,20 @@ task.spawn(function()
         end
 
         pcall(CheckDisasterNotice)
+        pcall(NeutralizeDamageScripts)
 
         local character, humanoid, root = GetCharacterState()
 
         if humanoid and humanoid.Health > 0 and root then
-            if Settings.WIDAutoWin or Settings.WIDAutoSafeSpot then
+            if Settings.WIDAutoWin then
                 local inLobby = IsPlayerInLobby()
-                local targetCF, spotLabel = GetOptimalSafeSpot()
+                local targetCF, spotLabel = GetAutoWinCFrame()
 
                 if targetCF then
                     local dist = (root.Position - targetCF.Position).Magnitude
-                    if inLobby or dist > 15 then
+                    if inLobby or dist > 70 then
                         TeleportTo(targetCF, spotLabel)
                     end
-
-                    if Settings.WIDAnchorOnPlatform and not inLobby then
-                        root.Anchored = true
-                    end
-                end
-            else
-                if root.Anchored and not Settings.WIDAnchorOnPlatform then
-                    root.Anchored = false
                 end
             end
         end
@@ -980,16 +975,12 @@ WIDCreateToggle(
     function(v)
         Settings.WIDAutoWin = v == true
         if v then
-            local spotCF, label = GetOptimalSafeSpot()
-            if spotCF then
-                TeleportTo(spotCF, label)
+            local targetCF, spotLabel = GetAutoWinCFrame()
+            if targetCF then
+                TeleportTo(targetCF, spotLabel)
             end
             CustomNotify("Auto Win Enabled", Color3.fromRGB(100, 255, 100), 3)
         else
-            local _, _, root = GetCharacterState()
-            if root then
-                root.Anchored = false
-            end
             if not Settings.WIDSafePlatform then
                 ClearAllWIDWorkspaceObjects()
             end
@@ -1000,37 +991,36 @@ WIDCreateToggle(
     "WIDAutoWin"
 )
 
-WIDCreateToggle(
-    "Smart Safe Spot (Auto-Detect Map & Disaster)",
+WIDCreateDropdown(
+    "Auto Win Mode",
+    {"Platform", "Map"},
     GamePage,
-    Settings.WIDSmartShelter,
-    function(v)
-        Settings.WIDSmartShelter = v == true
-        AutoSaveConfiguration()
-    end,
-    "WIDSmartShelter"
-)
-
-WIDCreateToggle(
-    "Auto Safe Spot Lock",
-    GamePage,
-    Settings.WIDAutoSafeSpot,
-    function(v)
-        Settings.WIDAutoSafeSpot = v == true
-        if v then
-            local spotCF, label = GetOptimalSafeSpot()
-            if spotCF then
-                TeleportTo(spotCF, label)
-            end
-        else
-            local _, _, root = GetCharacterState()
-            if root then
-                root.Anchored = false
+    Settings.WIDAutoWinMode or "Platform",
+    function(option)
+        Settings.WIDAutoWinMode = option
+        if Settings.WIDAutoWin then
+            local targetCF, spotLabel = GetAutoWinCFrame()
+            if targetCF then
+                TeleportTo(targetCF, spotLabel)
             end
         end
         AutoSaveConfiguration()
+    end
+)
+
+WIDCreateToggle(
+    "Anti Temperature & Hazard Damage",
+    GamePage,
+    Settings.WIDAntiDamage,
+    function(v)
+        Settings.WIDAntiDamage = v == true
+        if v then
+            pcall(NeutralizeDamageScripts)
+            pcall(ScanAndNeutralizeHazards)
+        end
+        AutoSaveConfiguration()
     end,
-    "WIDAutoSafeSpot"
+    "WIDAntiDamage"
 )
 
 WIDCreateToggle(
@@ -1040,29 +1030,14 @@ WIDCreateToggle(
     function(v)
         Settings.WIDPreventLobbyPull = v == true
         if v and IsPlayerInLobby() then
-            local spotCF, label = GetOptimalSafeSpot()
-            if spotCF then
-                TeleportTo(spotCF, label)
+            local targetCF, spotLabel = GetAutoWinCFrame()
+            if targetCF then
+                TeleportTo(targetCF, spotLabel)
             end
         end
         AutoSaveConfiguration()
     end,
     "WIDPreventLobbyPull"
-)
-
-WIDCreateToggle(
-    "Anchor Root on Safe Spot",
-    GamePage,
-    Settings.WIDAnchorOnPlatform,
-    function(v)
-        Settings.WIDAnchorOnPlatform = v == true
-        local _, _, root = GetCharacterState()
-        if root and not v then
-            root.Anchored = false
-        end
-        AutoSaveConfiguration()
-    end,
-    "WIDAnchorOnPlatform"
 )
 
 WIDCreateToggle(
@@ -1079,20 +1054,7 @@ WIDCreateToggle(
 CreateWIDSection("MAP SAFE LOCATIONS")
 
 WIDCreateButton(
-    "Teleport to Best Safe Spot (Current Disaster)",
-    GamePage,
-    function()
-        local spotCF, label = GetOptimalSafeSpot()
-        if spotCF then
-            TeleportTo(spotCF, label)
-        else
-            CustomNotify("Safe spot not found", Color3.fromRGB(255, 100, 100), 2)
-        end
-    end
-)
-
-WIDCreateButton(
-    "Teleport to Inside House / Shelter",
+    "Teleport to Map Shelter / Inside House",
     GamePage,
     function()
         local cf = FindInsideHouseCFrame()
@@ -1105,7 +1067,7 @@ WIDCreateButton(
 )
 
 WIDCreateButton(
-    "Teleport to Top of House / High Ground",
+    "Teleport to Map High Ground / Roof",
     GamePage,
     function()
         local cf = FindOnTopOfHouseCFrame()
@@ -1114,6 +1076,14 @@ WIDCreateButton(
         else
             CustomNotify("High roof not found", Color3.fromRGB(255, 100, 100), 2)
         end
+    end
+)
+
+WIDCreateButton(
+    "Teleport to Map Center",
+    GamePage,
+    function()
+        TeleportTo(FindMapCenterCFrame(), "Map Center")
     end
 )
 
@@ -1297,21 +1267,13 @@ WIDCreateToggle(
     "WIDAirWalk"
 )
 
-CreateWIDSection("TELEPORTS & LOCATIONS")
+CreateWIDSection("TELEPORTS & UTILITY")
 
 WIDCreateButton(
     "Teleport to Lobby / Spawn",
     GamePage,
     function()
         TeleportTo(FindLobbyCFrame(), "Lobby")
-    end
-)
-
-WIDCreateButton(
-    "Teleport to Map Center",
-    GamePage,
-    function()
-        TeleportTo(FindMapCenterCFrame(), "Map Center")
     end
 )
 
@@ -1341,15 +1303,23 @@ getgenv().ToxWIDCleanup = function()
 
     ClearAllWIDWorkspaceObjects()
 
-    local _, humanoid, root = GetCharacterState()
+    local character, humanoid, root = GetCharacterState()
     if root then
         root.Anchored = false
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
     end
 
+    if character then
+        local ff = character:FindFirstChild("ToxDamageShield")
+        if ff then
+            pcall(function() ff:Destroy() end)
+        end
+    end
+
     if humanoid then
         pcall(function()
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, true)
             humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
             humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
             humanoid:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, true)
