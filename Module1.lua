@@ -363,7 +363,7 @@ getgenv().GameModuleRegistry = {
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BABFT.lua",
         Ready = true
     },
-    [109440485612336] = {
+    [109440000000000 + 485612336] = {
         ShortName = "WID",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/WID",
         Ready = true
