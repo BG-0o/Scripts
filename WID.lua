@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Player = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
+local Mouse = Player:GetMouse()
 
 local Settings = getgenv().Settings
 local GamePage = getgenv().GamePage
@@ -38,7 +39,7 @@ end
 getgenv().ToxWIDGeneration = (tonumber(getgenv().ToxWIDGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxWIDGeneration
 
-local WIDModuleVersion = "2026-10-30-wid-v8"
+local WIDModuleVersion = "2026-10-30-wid-v9"
 
 if getgenv().ToxWIDModuleLoadedJobId == game.JobId
 and getgenv().ToxWIDModuleVersion == WIDModuleVersion
@@ -76,6 +77,7 @@ Settings.WIDNotifyDisasters = Settings.WIDNotifyDisasters == true
 Settings.WIDAntiAFK = Settings.WIDAntiAFK == true
 Settings.WIDInfiniteJump = Settings.WIDInfiniteJump == true
 Settings.WIDAirWalk = Settings.WIDAirWalk == true
+Settings.ClickTP = Settings.ClickTP == true
 Settings.WIDPreventLobbyPull = Settings.WIDPreventLobbyPull ~= false
 
 local WIDConnections = {}
@@ -83,6 +85,7 @@ local WIDCurrentSection = nil
 local WIDSections = {}
 local SafePlatformModel = nil
 local AirWalkPart = nil
+local AirWalkY = nil
 local LastAnnouncedDisaster = ""
 
 local hazardKeywords = {
@@ -241,6 +244,7 @@ local function ClearAllWIDWorkspaceObjects()
         pcall(function() AirWalkPart:Destroy() end)
         AirWalkPart = nil
     end
+    AirWalkY = nil
 end
 
 ClearAllWIDWorkspaceObjects()
@@ -272,6 +276,45 @@ local function TeleportTo(cframe, label)
     CustomNotify("Teleported to " .. tostring(label or "Target"), Color3.fromRGB(100, 255, 100), 2)
     return true
 end
+
+local function GetClickTPCFrame()
+    local character, humanoid, root = GetCharacterState()
+    if not root then
+        return nil
+    end
+
+    local ray = Camera:ScreenPointToRay(Mouse.X, Mouse.Y)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    local exclude = {character}
+    if SafePlatformModel then table.insert(exclude, SafePlatformModel) end
+    if AirWalkPart then table.insert(exclude, AirWalkPart) end
+    params.FilterDescendantsInstances = exclude
+
+    local result = Workspace:Raycast(ray.Origin, ray.Direction * 3000, params)
+    if result and result.Position then
+        return CFrame.new(result.Position + Vector3.new(0, 3.5, 0))
+    end
+    if Mouse.Hit then
+        return Mouse.Hit + Vector3.new(0, 3.5, 0)
+    end
+    return nil
+end
+
+TrackConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then
+        return
+    end
+
+    if Settings.ClickTP and input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
+            local targetCF = GetClickTPCFrame()
+            if targetCF then
+                TeleportTo(targetCF, "Click TP")
+            end
+        end
+    end
+end))
 
 local function FindLobbyCFrame()
     local lobby = Workspace:FindFirstChild("Lobby")
@@ -655,7 +698,7 @@ end
 local function TeleportToSafePlatform(forceMap)
     local _, floor = EnsureSafePlatform(forceMap ~= false)
     if floor then
-        TeleportTo(floor.CFrame + Vector3.new(0, 5, 0), "Safe Sky Platform")
+        TeleportTo(floor.CFrame + Vector3.new(0, 5, 0), "Sky Platform")
     end
 end
 
@@ -673,7 +716,7 @@ local function GetAutoWinCFrame()
     else
         local _, floor = EnsureSafePlatform(true)
         if floor then
-            return floor.CFrame + Vector3.new(0, 5, 0), "Safe Sky Platform"
+            return floor.CFrame + Vector3.new(0, 5, 0), "Sky Platform"
         end
         return FindMapCenterCFrame(), "Map Center"
     end
@@ -834,7 +877,7 @@ local function CheckDisasterNotice()
     end
 end
 
-TrackConnection(RunService.Heartbeat:Connect(function()
+TrackConnection(RunService.Heartbeat:Connect(function(dt)
     local character, humanoid, root = GetCharacterState()
     if not humanoid or humanoid.Health <= 0 or not root then
         return
@@ -885,17 +928,31 @@ TrackConnection(RunService.Heartbeat:Connect(function()
     end
 
     if Settings.WIDAirWalk then
+        if not AirWalkY then
+            AirWalkY = root.Position.Y - 3.2
+        end
+
+        local vertSpeed = 28
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            AirWalkY = AirWalkY + (vertSpeed * dt)
+        elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+            AirWalkY = AirWalkY - (vertSpeed * dt)
+        end
+
         if not AirWalkPart or not AirWalkPart.Parent then
             AirWalkPart = Instance.new("Part")
             AirWalkPart.Name = "ToxAirWalkPart"
-            AirWalkPart.Size = Vector3.new(4, 1, 4)
+            AirWalkPart.Size = Vector3.new(6, 1, 6)
             AirWalkPart.Transparency = 1
             AirWalkPart.Anchored = true
             AirWalkPart.CanCollide = true
+            AirWalkPart.Material = Enum.Material.SmoothPlastic
             AirWalkPart.Parent = Workspace
         end
-        AirWalkPart.CFrame = CFrame.new(root.Position.X, root.Position.Y - 3.2, root.Position.Z)
+
+        AirWalkPart.CFrame = CFrame.new(root.Position.X, AirWalkY, root.Position.Z)
     else
+        AirWalkY = nil
         if AirWalkPart then
             pcall(function() AirWalkPart:Destroy() end)
             AirWalkPart = nil
@@ -969,7 +1026,7 @@ end)
 CreateWIDSection("SURVIVAL & AUTO-FARM")
 
 WIDCreateToggle(
-    "Auto Win (Safe AFK Farm)",
+    "Auto Win",
     GamePage,
     Settings.WIDAutoWin,
     function(v)
@@ -992,7 +1049,7 @@ WIDCreateToggle(
 )
 
 WIDCreateDropdown(
-    "Auto Win Mode",
+    "Auto Win Target",
     {"Platform", "Map"},
     GamePage,
     Settings.WIDAutoWinMode or "Platform",
@@ -1009,7 +1066,7 @@ WIDCreateDropdown(
 )
 
 WIDCreateToggle(
-    "Anti Temperature & Hazard Damage",
+    "Anti Hazard Damage",
     GamePage,
     Settings.WIDAntiDamage,
     function(v)
@@ -1024,7 +1081,7 @@ WIDCreateToggle(
 )
 
 WIDCreateToggle(
-    "Anti Lobby-Pull (Stay Over Map)",
+    "Anti Lobby Pull",
     GamePage,
     Settings.WIDPreventLobbyPull,
     function(v)
@@ -1041,7 +1098,7 @@ WIDCreateToggle(
 )
 
 WIDCreateToggle(
-    "Anti-AFK (20m Disconnect Saver)",
+    "Anti AFK",
     GamePage,
     Settings.WIDAntiAFK,
     function(v)
@@ -1054,25 +1111,25 @@ WIDCreateToggle(
 CreateWIDSection("MAP SAFE LOCATIONS")
 
 WIDCreateButton(
-    "Teleport to Map Shelter / Inside House",
+    "Teleport to Shelter",
     GamePage,
     function()
         local cf = FindInsideHouseCFrame()
         if cf then
-            TeleportTo(cf, "Inside House / Shelter")
+            TeleportTo(cf, "Shelter")
         else
-            CustomNotify("No enclosed house found on map", Color3.fromRGB(255, 100, 100), 2)
+            CustomNotify("No shelter found on map", Color3.fromRGB(255, 100, 100), 2)
         end
     end
 )
 
 WIDCreateButton(
-    "Teleport to Map High Ground / Roof",
+    "Teleport to High Ground",
     GamePage,
     function()
         local cf = FindOnTopOfHouseCFrame()
         if cf then
-            TeleportTo(cf, "Top of House / High Ground")
+            TeleportTo(cf, "High Ground")
         else
             CustomNotify("High roof not found", Color3.fromRGB(255, 100, 100), 2)
         end
@@ -1090,7 +1147,7 @@ WIDCreateButton(
 CreateWIDSection("SAFE SKY PLATFORM")
 
 WIDCreateToggleWithValue(
-    "Spawn Safe Sky Platform",
+    "Safe Sky Platform",
     GamePage,
     Settings.WIDSafePlatform,
     Settings.WIDPlatformHeight,
@@ -1115,7 +1172,7 @@ WIDCreateToggleWithValue(
 )
 
 WIDCreateButton(
-    "Teleport to Safe Sky Platform",
+    "Teleport to Sky Platform",
     GamePage,
     function()
         TeleportToSafePlatform(true)
@@ -1123,20 +1180,20 @@ WIDCreateButton(
 )
 
 WIDCreateButton(
-    "Rebuild / Refresh Platform Over Map",
+    "Refresh Platform",
     GamePage,
     function()
         ClearAllWIDWorkspaceObjects()
         EnsureSafePlatform(true)
         TeleportToSafePlatform(true)
-        CustomNotify("Platform Refreshed Over Map", Color3.fromRGB(100, 255, 100), 2)
+        CustomNotify("Platform Refreshed", Color3.fromRGB(100, 255, 100), 2)
     end
 )
 
 CreateWIDSection("PROTECTION & GODMODE")
 
 WIDCreateToggle(
-    "Anti Void (Bottom Fall Saver)",
+    "Anti Void",
     GamePage,
     Settings.WIDAntiVoid,
     function(v)
@@ -1158,7 +1215,7 @@ WIDCreateToggle(
 )
 
 WIDCreateToggle(
-    "Anti-Fling & Body Stabilizer",
+    "Anti Fling",
     GamePage,
     Settings.WIDAntiFling,
     function(v)
@@ -1169,7 +1226,7 @@ WIDCreateToggle(
 )
 
 WIDCreateToggle(
-    "Disable Hazard Touch & Explosions",
+    "Anti Hazards",
     GamePage,
     Settings.WIDAntiHazards,
     function(v)
@@ -1183,7 +1240,7 @@ WIDCreateToggle(
 )
 
 WIDCreateToggle(
-    "Notify Disasters & Warnings",
+    "Notify Disasters",
     GamePage,
     Settings.WIDNotifyDisasters,
     function(v)
@@ -1253,24 +1310,40 @@ WIDCreateToggle(
 )
 
 WIDCreateToggle(
-    "Air Walk (Float on Air)",
+    "Air Walk",
     GamePage,
     Settings.WIDAirWalk,
     function(v)
         Settings.WIDAirWalk = v == true
-        if not v and AirWalkPart then
-            pcall(function() AirWalkPart:Destroy() end)
-            AirWalkPart = nil
+        if not v then
+            AirWalkY = nil
+            if AirWalkPart then
+                pcall(function() AirWalkPart:Destroy() end)
+                AirWalkPart = nil
+            end
         end
         AutoSaveConfiguration()
     end,
     "WIDAirWalk"
 )
 
+WIDCreateToggle(
+    "Click TP",
+    GamePage,
+    Settings.ClickTP == true,
+    function(v)
+        SetShared("ClickTP", v == true)
+        if v then
+            CustomNotify("Hold Ctrl and Left Click to teleport", Color3.fromRGB(100, 255, 100), 3)
+        end
+    end,
+    "ClickTP"
+)
+
 CreateWIDSection("TELEPORTS & UTILITY")
 
 WIDCreateButton(
-    "Teleport to Lobby / Spawn",
+    "Teleport to Lobby",
     GamePage,
     function()
         TeleportTo(FindLobbyCFrame(), "Lobby")
@@ -1278,7 +1351,7 @@ WIDCreateButton(
 )
 
 WIDCreateButton(
-    "Teleport to Random Survivor",
+    "Teleport to Survivor",
     GamePage,
     function()
         local survivor = FindRandomSurvivor()
