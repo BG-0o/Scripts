@@ -39,7 +39,7 @@ end
 getgenv().ToxWIDGeneration = (tonumber(getgenv().ToxWIDGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxWIDGeneration
 
-local WIDModuleVersion = "2026-10-30-wid-v10"
+local WIDModuleVersion = "2026-10-30-wid-v11"
 
 if getgenv().ToxWIDModuleLoadedJobId == game.JobId
 and getgenv().ToxWIDModuleVersion == WIDModuleVersion
@@ -90,7 +90,9 @@ local AirWalkY = nil
 local LastAnnouncedDisaster = ""
 local LastRecordedHealth = 100
 local LastDamageEvacTime = 0
-local CurrentEvacIndex = 1
+local ActiveAutoWinTarget = Settings.WIDAutoWinMode or "Platform"
+local CurrentMapShelterIndex = 1
+local LastSafetyState = "UNKNOWN"
 
 local hazardKeywords = {
     "lava", "acid", "kill", "damage", "fire", "meteor",
@@ -401,6 +403,61 @@ local function IsIntermission()
     return false
 end
 
+local function GetGameSafetyStatus()
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+    if not playerGui then
+        return "UNKNOWN", nil
+    end
+
+    local status = "UNKNOWN"
+    local foundText = nil
+
+    for _, label in ipairs(playerGui:GetDescendants()) do
+        if label:IsA("TextLabel") and label.Visible then
+            local t = string.lower(label.Text)
+            if string.find(t, "warm")
+            or string.find(t, "shelter")
+            or string.find(t, "find")
+            or string.find(t, "safe")
+            or string.find(t, "somewhere")
+            or string.find(t, "stay")
+            or string.find(t, "danger")
+            or string.find(t, "cold")
+            or string.find(t, "heat")
+            or string.find(t, "high")
+            or string.find(t, "hazard")
+            or string.find(t, "stage") then
+                local col = label.TextColor3
+
+                if col.G >= 0.55 and col.R <= 0.65 and (col.G - col.R) >= 0.15 then
+                    return "SAFE", label.Text
+                end
+
+                if col.R >= 0.60 and col.G <= 0.45 and (col.R - col.G) >= 0.15 then
+                    status = "DANGER"
+                    foundText = label.Text
+                end
+            end
+        end
+    end
+
+    if status == "UNKNOWN" then
+        for _, label in ipairs(playerGui:GetDescendants()) do
+            if label:IsA("TextLabel") and label.Visible and #label.Text >= 4 and #label.Text <= 60 then
+                local col = label.TextColor3
+                if col.G >= 0.70 and col.R <= 0.40 then
+                    return "SAFE", label.Text
+                elseif col.R >= 0.70 and col.G <= 0.35 then
+                    status = "DANGER"
+                    foundText = label.Text
+                end
+            end
+        end
+    end
+
+    return status, foundText
+end
+
 local function GetActiveMap()
     local names = {
         "Map", "Island", "GameMap", "ActiveMap", "CurrentMap",
@@ -473,7 +530,7 @@ local function FindMapCenterCFrame()
     return lobbyCF * CFrame.new(0, -100, 450)
 end
 
-local function FindInsideHouseCFrame()
+local function GetAllCandidateShelters()
     local map = GetActiveMap()
     local searchRoot = (map and map ~= Workspace) and map or Workspace
     local candidateRooms = {}
@@ -491,18 +548,18 @@ local function FindInsideHouseCFrame()
     for _, part in ipairs(searchRoot:GetDescendants()) do
         if part:IsA("BasePart")
         and part.CanCollide
-        and part.Size.X >= 4 and part.Size.Z >= 4
+        and part.Size.X >= 3 and part.Size.Z >= 3
         and (not SafePlatformModel or not part:IsDescendantOf(SafePlatformModel))
         and not string.find(string.lower(part.Name), "platform") then
             local distLobby = (part.Position - lobbyCF.Position).Magnitude
-            if distLobby > 110 and part.Position.Y > -30 and part.Position.Y < 180 then
+            if distLobby > 100 and part.Position.Y > -30 and part.Position.Y < 180 then
                 local standPos = Vector3.new(part.Position.X, part.Position.Y + (part.Size.Y / 2) + 3.2, part.Position.Z)
                 local hitCeiling = Workspace:Raycast(standPos, Vector3.new(0, 35, 0), rayParams)
 
                 if hitCeiling and hitCeiling.Instance and hitCeiling.Instance:IsA("BasePart") and hitCeiling.Instance.CanCollide then
                     local ceilingHeight = hitCeiling.Position.Y - standPos.Y
-                    if ceilingHeight >= 5 and ceilingHeight <= 28 then
-                        local score = 60
+                    if ceilingHeight >= 5 and ceilingHeight <= 30 then
+                        local score = 50
                         if ceilingHeight >= 7 and ceilingHeight <= 16 then
                             score = score + 30
                         end
@@ -540,30 +597,57 @@ local function FindInsideHouseCFrame()
         end
     end
 
-    if #candidateRooms > 0 then
-        table.sort(candidateRooms, function(a, b)
-            return a.Score > b.Score
-        end)
-        return candidateRooms[1].CFrame
+    table.sort(candidateRooms, function(a, b)
+        return a.Score > b.Score
+    end)
+
+    local list = {}
+    for _, item in ipairs(candidateRooms) do
+        local tooClose = false
+        for _, existing in ipairs(list) do
+            if (item.CFrame.Position - existing.Position).Magnitude < 15 then
+                tooClose = true
+                break
+            end
+        end
+        if not tooClose then
+            table.insert(list, item.CFrame)
+            if #list >= 6 then
+                break
+            end
+        end
     end
 
-    for _, obj in ipairs(searchRoot:GetDescendants()) do
-        if obj:IsA("Model") or obj:IsA("BasePart") then
-            local name = string.lower(obj.Name)
-            if string.find(name, "house")
-            or string.find(name, "shelter")
-            or string.find(name, "room")
-            or string.find(name, "cabin")
-            or string.find(name, "building") then
-                local cf = obj:IsA("Model") and obj:GetPivot() or obj.CFrame
-                local distLobby = (cf.Position - lobbyCF.Position).Magnitude
-                if distLobby > 110 and cf.Position.Y > -20 and cf.Position.Y < 150 then
-                    return cf + Vector3.new(0, 3.5, 0)
+    if #list == 0 then
+        for _, obj in ipairs(searchRoot:GetDescendants()) do
+            if obj:IsA("Model") or obj:IsA("BasePart") then
+                local name = string.lower(obj.Name)
+                if string.find(name, "house")
+                or string.find(name, "shelter")
+                or string.find(name, "room")
+                or string.find(name, "cabin")
+                or string.find(name, "building") then
+                    local cf = obj:IsA("Model") and obj:GetPivot() or obj.CFrame
+                    local distLobby = (cf.Position - lobbyCF.Position).Magnitude
+                    if distLobby > 100 and cf.Position.Y > -20 and cf.Position.Y < 150 then
+                        table.insert(list, cf + Vector3.new(0, 3.5, 0))
+                        if #list >= 4 then
+                            break
+                        end
+                    end
                 end
             end
         end
     end
 
+    return list
+end
+
+local function FindInsideHouseCFrame()
+    local shelters = GetAllCandidateShelters()
+    if #shelters > 0 then
+        return shelters[1]
+    end
     return nil
 end
 
@@ -747,52 +831,52 @@ local function TeleportToSafePlatform(forceMap)
     end
 end
 
-local function GetAutoWinCFrame()
-    if Settings.WIDAutoWinMode == "Map" then
-        local shelter = FindInsideHouseCFrame()
-        if shelter then
-            return shelter, "Shelter"
+local function GetCurrentTargetCFrame()
+    if ActiveAutoWinTarget == "Platform" then
+        local _, floor = EnsureSafePlatform(true)
+        if floor then
+            return floor.CFrame + Vector3.new(0, 5, 0), "Sky Platform"
+        end
+        return FindMapCenterCFrame(), "Map Center"
+    else
+        local shelters = GetAllCandidateShelters()
+        if #shelters >= CurrentMapShelterIndex then
+            return shelters[CurrentMapShelterIndex], "Shelter " .. CurrentMapShelterIndex
+        elseif #shelters > 0 then
+            return shelters[1], "Shelter"
         end
         local roof = FindOnTopOfHouseCFrame()
         if roof then
             return roof, "High Ground"
         end
         return FindMapCenterCFrame(), "Map Center"
-    else
-        local _, floor = EnsureSafePlatform(true)
-        if floor then
-            return floor.CFrame + Vector3.new(0, 5, 0), "Sky Platform"
-        end
-        return FindMapCenterCFrame(), "Map Center"
     end
 end
 
-local function GetEvacuationTarget()
-    local spots = {}
-
-    local shelterCF = FindInsideHouseCFrame()
-    if shelterCF then
-        table.insert(spots, {CF = shelterCF, Label = "Shelter"})
+local function HandleAutoWinRelocation(reason)
+    if not Settings.WIDAutoWin or IsIntermission() then
+        return
     end
 
-    local roofCF = FindOnTopOfHouseCFrame()
-    if roofCF then
-        table.insert(spots, {CF = roofCF, Label = "High Ground"})
+    if ActiveAutoWinTarget == "Platform" then
+        ActiveAutoWinTarget = "Map"
+        CurrentMapShelterIndex = 1
+        local shelters = GetAllCandidateShelters()
+        if #shelters > 0 then
+            TeleportTo(shelters[1], "Map Shelter 1 (" .. tostring(reason or "Safe") .. ")")
+        else
+            TeleportTo(FindMapCenterCFrame(), "Map Center")
+        end
+    else
+        local shelters = GetAllCandidateShelters()
+        if CurrentMapShelterIndex < #shelters then
+            CurrentMapShelterIndex = CurrentMapShelterIndex + 1
+            TeleportTo(shelters[CurrentMapShelterIndex], "Map Shelter " .. CurrentMapShelterIndex)
+        else
+            ActiveAutoWinTarget = "Platform"
+            TeleportToSafePlatform(true)
+        end
     end
-
-    local _, floor = EnsureSafePlatform(true)
-    if floor then
-        table.insert(spots, {CF = floor.CFrame + Vector3.new(0, 5, 0), Label = "Sky Platform"})
-    end
-
-    table.insert(spots, {CF = FindMapCenterCFrame(), Label = "Map Center"})
-
-    if #spots == 0 then
-        return nil, "Target"
-    end
-
-    CurrentEvacIndex = (CurrentEvacIndex % #spots) + 1
-    return spots[CurrentEvacIndex].CF, spots[CurrentEvacIndex].Label
 end
 
 local function NeutralizeDamageScripts()
@@ -863,11 +947,10 @@ local function BindCharacterHealth(character)
         if newHealth < LastRecordedHealth - 0.5 then
             LastRecordedHealth = newHealth
 
-            if Settings.WIDRelocateOnDamage and (tick() - LastDamageEvacTime) > 0.8 then
+            if (tick() - LastDamageEvacTime) > 0.8 then
                 LastDamageEvacTime = tick()
-                local evacCF, label = GetEvacuationTarget()
-                if evacCF then
-                    TeleportTo(evacCF, "Evac: " .. label)
+                if Settings.WIDRelocateOnDamage or Settings.WIDAutoWin then
+                    HandleAutoWinRelocation("Damage")
                 end
             end
         else
@@ -883,8 +966,12 @@ end
 TrackConnection(Player.CharacterAdded:Connect(function(newChar)
     task.wait(0.5)
     BindCharacterHealth(newChar)
+    ActiveAutoWinTarget = Settings.WIDAutoWinMode or "Platform"
+    CurrentMapShelterIndex = 1
+    LastSafetyState = "UNKNOWN"
+
     if Settings.WIDAutoWin and not IsIntermission() then
-        local targetCF, label = GetAutoWinCFrame()
+        local targetCF, label = GetCurrentTargetCFrame()
         if targetCF then
             TeleportTo(targetCF, label)
         end
@@ -1010,7 +1097,7 @@ TrackConnection(RunService.Heartbeat:Connect(function(dt)
     if Settings.WIDAntiVoid and root.Position.Y < 15 then
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
-        local targetCF, label = GetAutoWinCFrame()
+        local targetCF, label = GetCurrentTargetCFrame()
         if targetCF then
             root.CFrame = targetCF
         else
@@ -1121,14 +1208,29 @@ task.spawn(function()
         local character, humanoid, root = GetCharacterState()
 
         if humanoid and humanoid.Health > 0 and root then
-            if Settings.WIDAutoWin and not IsIntermission() then
-                local inLobby = IsPlayerInLobby()
-                local targetCF, spotLabel = GetAutoWinCFrame()
+            if IsIntermission() then
+                ActiveAutoWinTarget = Settings.WIDAutoWinMode or "Platform"
+                CurrentMapShelterIndex = 1
+                LastSafetyState = "UNKNOWN"
+            else
+                if Settings.WIDAutoWin then
+                    local inLobby = IsPlayerInLobby()
+                    local safetyStatus, safetyPrompt = GetGameSafetyStatus()
 
-                if targetCF then
-                    local dist = (root.Position - targetCF.Position).Magnitude
-                    if inLobby or dist > 40 then
-                        TeleportTo(targetCF, spotLabel)
+                    if safetyStatus == "DANGER" and (tick() - LastDamageEvacTime) > 2 then
+                        LastDamageEvacTime = tick()
+                        HandleAutoWinRelocation("Danger Alert")
+                    elseif safetyStatus == "SAFE" and LastSafetyState ~= "SAFE" then
+                        CustomNotify("Safe Spot Confirmed (Prompt Green)", Color3.fromRGB(100, 255, 100), 2)
+                    end
+                    LastSafetyState = safetyStatus
+
+                    local targetCF, spotLabel = GetCurrentTargetCFrame()
+                    if targetCF then
+                        local dist = (root.Position - targetCF.Position).Magnitude
+                        if inLobby or dist > 40 then
+                            TeleportTo(targetCF, spotLabel)
+                        end
                     end
                 end
             end
@@ -1149,8 +1251,10 @@ WIDCreateToggle(
     function(v)
         Settings.WIDAutoWin = v == true
         if v then
+            ActiveAutoWinTarget = Settings.WIDAutoWinMode or "Platform"
+            CurrentMapShelterIndex = 1
             if not IsIntermission() then
-                local targetCF, spotLabel = GetAutoWinCFrame()
+                local targetCF, spotLabel = GetCurrentTargetCFrame()
                 if targetCF then
                     TeleportTo(targetCF, spotLabel)
                 end
@@ -1174,8 +1278,10 @@ WIDCreateDropdown(
     Settings.WIDAutoWinMode or "Platform",
     function(option)
         Settings.WIDAutoWinMode = option
+        ActiveAutoWinTarget = option
+        CurrentMapShelterIndex = 1
         if Settings.WIDAutoWin and not IsIntermission() then
-            local targetCF, spotLabel = GetAutoWinCFrame()
+            local targetCF, spotLabel = GetCurrentTargetCFrame()
             if targetCF then
                 TeleportTo(targetCF, spotLabel)
             end
@@ -1217,7 +1323,7 @@ WIDCreateToggle(
     function(v)
         Settings.WIDPreventLobbyPull = v == true
         if v and IsPlayerInLobby() and not IsIntermission() then
-            local targetCF, spotLabel = GetAutoWinCFrame()
+            local targetCF, spotLabel = GetCurrentTargetCFrame()
             if targetCF then
                 TeleportTo(targetCF, spotLabel)
             end
