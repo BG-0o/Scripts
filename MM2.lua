@@ -65,6 +65,10 @@ end
 local function CreateMM2Section(
     text
 )
+    if getgenv().CreateSection and GamePage then
+        return getgenv().CreateSection(GamePage, text, "🔪")
+    end
+
     local label =
         Instance.new(
             "TextLabel"
