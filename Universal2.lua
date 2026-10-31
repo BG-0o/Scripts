@@ -410,7 +410,7 @@ local function CreateToggleCycleControl(name, options, page, defaultToggle, defa
             end
         end
 
-        index += 1
+        index = index + (1)
         if index > #options then
             index = 1
         end
@@ -780,24 +780,24 @@ local function UpdateFreecam(delta)
 
     if UserInputService:GetFocusedTextBox() == nil then
         if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-            move += orientation.LookVector
+            move = move + (orientation.LookVector)
         end
         if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-            move -= orientation.LookVector
+            move = move - (orientation.LookVector)
         end
         if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-            move -= orientation.RightVector
+            move = move - (orientation.RightVector)
         end
         if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-            move += orientation.RightVector
+            move = move + (orientation.RightVector)
         end
         if UserInputService:IsKeyDown(Enum.KeyCode.E)
         or UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            move += Vector3.yAxis
+            move = move + (Vector3.yAxis)
         end
         if UserInputService:IsKeyDown(Enum.KeyCode.Q)
         or UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-            move -= Vector3.yAxis
+            move = move - (Vector3.yAxis)
         end
     end
 
@@ -809,12 +809,12 @@ local function UpdateFreecam(delta)
 
     if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
     or UserInputService:IsKeyDown(Enum.KeyCode.RightShift) then
-        speed *= 3
+        speed = speed * (3)
     end
 
     if move.Magnitude > 0 then
         move = move.Unit
-        freecamPosition += move * speed * math.max(tonumber(delta) or 0, 0)
+        freecamPosition = freecamPosition + (move * speed * math.max(tonumber(delta) or 0, 0))
     end
 
     local frame = CFrame.new(freecamPosition) * orientation
@@ -1409,7 +1409,7 @@ RunService:BindToRenderStep(
         ApplyOutlineSettings()
         UpdateHealthESP()
 
-        fakeLagClock += math.max(tonumber(delta) or 0, 0)
+        fakeLagClock = fakeLagClock + (math.max(tonumber(delta) or 0, 0))
         if Settings.FakeLag and fakeLagClock >= 0.14 then
             fakeLagClock = 0
             local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
@@ -1655,7 +1655,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
     
                     if part then
                         npcCache[#npcCache + 1] = model
-                        count += 1
+                        count = count + (1)
     
                         if count >= 200 then
                             break
@@ -1866,8 +1866,8 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
                 maxStep
                 / movementMagnitude
 
-            dx *= scale
-            dy *= scale
+            dx = dx * (scale)
+            dy = dy * (scale)
         end
 
         dx = RoundAimMouseDelta(dx)
@@ -3037,7 +3037,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         local control = table.remove(section.Controls, controlIndex)
 
         if controlIndex < anchorIndex then
-            anchorIndex -= 1
+            anchorIndex = anchorIndex - (1)
         end
 
         table.insert(section.Controls, math.max(1, anchorIndex), control)
@@ -3068,7 +3068,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         local control = table.remove(section.Controls, controlIndex)
 
         if controlIndex < anchorIndex then
-            anchorIndex -= 1
+            anchorIndex = anchorIndex - (1)
         end
 
         table.insert(section.Controls, anchorIndex + 1, control)
@@ -3133,7 +3133,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
 
             if section.Header and section.Header.Parent then
                 section.Header.LayoutOrder = layoutOrder
-                layoutOrder += 1
+                layoutOrder = layoutOrder + (1)
             end
 
             local validControls = {}
@@ -3146,7 +3146,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
 
                     validControls[#validControls + 1] = control
                     control.LayoutOrder = layoutOrder
-                    layoutOrder += 1
+                    layoutOrder = layoutOrder + (1)
                 end
             end
 
@@ -3445,7 +3445,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
                 end)
             end
     
-            fixClock += math.max(tonumber(delta) or 0, 0)
+            fixClock = fixClock + (math.max(tonumber(delta) or 0, 0))
             if Settings.FixUnanchoredParts and fixClock >= 0.18 then
                 fixClock = 0
                 FixDangerousUnanchoredParts()
@@ -3460,7 +3460,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end
     
             if Settings.NormalizeAnimations then
-                normalizeClock += math.max(tonumber(delta) or 0, 0)
+                normalizeClock = normalizeClock + (math.max(tonumber(delta) or 0, 0))
     
                 if normalizeClock >= 0.25 then
                     normalizeClock = 0
