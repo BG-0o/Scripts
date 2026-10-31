@@ -26,6 +26,13 @@ local PlayToxSound = env.PlayToxSound or function() end
 local AutoSaveConfiguration = env.AutoSaveConfiguration or function() end
 local GUIColorMap = env.GUIColorMap or {}
 
+-- Shared UI references
+local WatermarkFrame = nil
+local WatermarkLabel = nil
+local SetWeatherType = nil
+local OpenColorPicker = nil
+
+
 -- ==============================================================================
 -- TOXHUB REVOLUTION UI ENGINE (BigFroot / Wasor Classic Inspired)
 -- ==============================================================================
@@ -1373,7 +1380,7 @@ end)
 -- WATERMARK HUD
 -- ==============================================================================
 
-local WatermarkFrame = Instance.new("Frame")
+WatermarkFrame = Instance.new("Frame")
 WatermarkFrame.Name = "ToxWatermark"
 WatermarkFrame.Size = UDim2.new(0, 240, 0, 26)
 WatermarkFrame.Position = UDim2.new(0, 20, 0, 16)
@@ -1388,7 +1395,7 @@ local WStroke = Instance.new("UIStroke") WStroke.Color = Theme.Outline WStroke.T
 RegisterThemedObject(WatermarkFrame, "BackgroundColor3", "Panel")
 RegisterThemedObject(WStroke, "Color", "Outline")
 
-local WatermarkLabel = Instance.new("TextLabel")
+WatermarkLabel = Instance.new("TextLabel")
 WatermarkLabel.Size = UDim2.new(1, -12, 1, 0)
 WatermarkLabel.Position = UDim2.new(0, 8, 0, 0)
 WatermarkLabel.BackgroundTransparency = 1
@@ -1703,7 +1710,7 @@ RegisterThemedObject(CPApplyBtn, "BackgroundColor3", "Accent")
 local ActiveEditingColorKey = nil
 local ActiveSwatchFrame = nil
 
-local function OpenColorPicker(colorKey, swatchFrame)
+OpenColorPicker = function(colorKey, swatchFrame)
     ActiveEditingColorKey = colorKey
     ActiveSwatchFrame = swatchFrame
     CPTitle.Text = "Color: " .. tostring(colorKey)
@@ -1783,10 +1790,12 @@ for _, pCol in ipairs(Presets) do
     end)
 end
 
-end -- COLOR PICKER MODAL
+end
 
 
-do -- HOME PAGE SETUP
+
+do -- HOME DASHBOARD, SETTINGS & TELEMETRY
+-- ==============================================================================
 -- HOME PAGE SETUP (BigFroot Style Dashboard)
 -- ==============================================================================
 
@@ -2154,10 +2163,6 @@ ReplaceKeyBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==============================================================================
-
-end -- HOME PAGE SETUP
-
-do -- SETTINGS PAGE SETUP
 -- SETTINGS PAGE SETUP (Screenshot 2 Match)
 -- ==============================================================================
 
@@ -2697,7 +2702,7 @@ task.spawn(function()
     end)
 
     while not getgenv().Destroyed do
-        local elapsed = os.clock() - StartSessionTime
+        local elapsed = os.clock() - (StartSessionTime or os.clock())
         local mins = math.floor(elapsed / 60)
         local secs = math.floor(elapsed % 60)
         local timeStr = tostring(mins) .. "m " .. tostring(secs) .. "s"
@@ -2730,7 +2735,7 @@ task.spawn(function()
         UpdatePlayersPill(tostring(pCount) .. " / " .. tostring(maxP))
 
         -- Watermark Update
-        if WatermarkFrame.Visible then
+        if WatermarkFrame and WatermarkFrame.Visible and WatermarkLabel then
             WatermarkLabel.Text = "<b>ToxHub</b> v2.0  |  FPS: " .. tostring(currentFps) .. "  |  Ping: " .. tostring(pingVal) .. "ms"
         end
 
@@ -2772,7 +2777,8 @@ end)
 -- Default open Home Page
 ToxOpenPage(HomePage)
 
-end -- SETTINGS PAGE SETUP
+end -- HOME DASHBOARD, SETTINGS & TELEMETRY
+
 
 
 do -- EMBEDDED WIDGETS
@@ -3005,7 +3011,7 @@ TrackGuiPosition("Main", Main)
 
 -- ==============================================================================
 
-end -- EMBEDDED WIDGETS
+end
 
 -- SHARED CONTROLS & CONTROL FACTORIES (CreateToggle, CreateButton, etc.)
 -- ==============================================================================
@@ -3956,6 +3962,7 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
 
     return Box
 end
+
 
 
 local function ApplyStagedOptionsAfterLoadScreen()
