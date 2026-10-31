@@ -288,76 +288,92 @@ local function SaveUniversal2Settings()
 end
 
 local function CreateToggleCycleControl(name, options, page, defaultToggle, defaultMode, toggleCallback, modeCallback, syncKey)
-    if not page then
-        return nil
+    if not page then return nil end
+
+    if getgenv().CreateToggleWithChoice then
+        local ctrl = getgenv().CreateToggleWithChoice(name, page, options, defaultToggle == true, defaultMode or options[1], toggleCallback, modeCallback, syncKey)
+        local btn = (type(ctrl) == "table" and rawget(ctrl, "Button")) or ctrl
+        TrackUniversalControl(btn, page)
+        return btn, (type(ctrl) == "table" and rawget(ctrl, "SetVisual")) or function() end
     end
 
+    local th = getgenv().Theme or {}
+    local accent = th.Accent or Color3.fromRGB(30, 95, 255)
+    local panel = th.Panel or Color3.fromRGB(16, 16, 26)
+    local element = th.Element or Color3.fromRGB(22, 22, 34)
+    local outline = th.Outline or Color3.fromRGB(36, 36, 56)
+
     local box = Instance.new("Frame")
-    box.Size = UDim2.new(1, -5, 0, 39)
-    box.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    box.Size = UDim2.new(1, -4, 0, 36)
+    box.BackgroundColor3 = element
     box.BorderSizePixel = 0
     box.Parent = page
+    local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 6) bCorner.Parent = box
+    local bStroke = Instance.new("UIStroke")
+    bStroke.Color = outline
+    bStroke.Thickness = 1
+    bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    bStroke.Parent = box
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -158, 1, 0)
+    label.Size = UDim2.new(1, -170, 1, 0)
     label.Position = UDim2.new(0, 12, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = name
-    label.TextColor3 = Color3.fromRGB(240, 240, 240)
-    label.TextSize = 13
+    label.TextColor3 = th.Text or Color3.fromRGB(255, 255, 255)
+    label.TextSize = 12
     label.Font = Enum.Font.GothamMedium
     label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextTruncate = Enum.TextTruncate.AtEnd
     label.Parent = box
 
     local modeButton = Instance.new("TextButton")
-    modeButton.Size = UDim2.new(0, 84, 0, 25)
-    modeButton.Position = UDim2.new(1, -138, 0.5, -12)
-    modeButton.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    modeButton.Size = UDim2.new(0, 84, 0, 22)
+    modeButton.Position = UDim2.new(1, -140, 0.5, -11)
+    modeButton.BackgroundColor3 = panel
     modeButton.BorderSizePixel = 0
     modeButton.Text = tostring(defaultMode or options[1])
-    modeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    modeButton.TextSize = 10
+    modeButton.TextColor3 = accent
+    modeButton.TextSize = 11
     modeButton.Font = Enum.Font.GothamBold
     modeButton.Parent = box
-
-    local modeCorner = Instance.new("UICorner")
-    modeCorner.CornerRadius = UDim.new(0, 4)
-    modeCorner.Parent = modeButton
+    local mCorner = Instance.new("UICorner") mCorner.CornerRadius = UDim.new(0, 4) mCorner.Parent = modeButton
+    local mStroke = Instance.new("UIStroke")
+    mStroke.Color = outline
+    mStroke.Thickness = 1
+    mStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    mStroke.Parent = modeButton
 
     local toggleButton = Instance.new("TextButton")
     toggleButton.Size = UDim2.new(0, 38, 0, 20)
     toggleButton.Position = UDim2.new(1, -48, 0.5, -10)
-    toggleButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    toggleButton.BackgroundColor3 = defaultToggle and accent or panel
     toggleButton.BorderSizePixel = 0
     toggleButton.Text = ""
     toggleButton.AutoButtonColor = false
     toggleButton.Parent = box
-
-    local toggleCorner = Instance.new("UICorner")
-    toggleCorner.CornerRadius = UDim.new(0, 4)
-    toggleCorner.Parent = toggleButton
+    local tCorner = Instance.new("UICorner") tCorner.CornerRadius = UDim.new(1, 0) tCorner.Parent = toggleButton
+    local tStroke = Instance.new("UIStroke")
+    tStroke.Color = outline
+    tStroke.Thickness = 1
+    tStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    tStroke.Parent = toggleButton
 
     local indicator = Instance.new("Frame")
     indicator.Size = UDim2.new(0, 14, 0, 14)
-    indicator.Position = UDim2.new(0, 3, 0.5, -7)
+    indicator.Position = defaultToggle and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
     indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     indicator.BorderSizePixel = 0
     indicator.Parent = toggleButton
+    local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = indicator
 
-    local indicatorCorner = Instance.new("UICorner")
-    indicatorCorner.CornerRadius = UDim.new(0, 3)
-    indicatorCorner.Parent = indicator
-
-    local state = env.ToxOptionsReady == false and false or defaultToggle == true
+    local state = defaultToggle == true
 
     local function updateToggle()
-        if state then
-            toggleButton.BackgroundColor3 = Color3.fromRGB(50, 180, 70)
-            indicator.Position = UDim2.new(1, -17, 0.5, -7)
-        else
-            toggleButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-            indicator.Position = UDim2.new(0, 3, 0.5, -7)
-        end
+        local curAccent = (getgenv().Theme and getgenv().Theme.Accent) or accent
+        local curPanel = (getgenv().Theme and getgenv().Theme.Panel) or panel
+        toggleButton.BackgroundColor3 = state and curAccent or curPanel
+        indicator.Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
     end
 
     local function setVisual(value)
@@ -366,67 +382,34 @@ local function CreateToggleCycleControl(name, options, page, defaultToggle, defa
     end
 
     if syncKey and type(env.RegisterSharedToggle) == "function" then
-        pcall(env.RegisterSharedToggle, syncKey, {
-            Button = box,
-            SetVisual = setVisual
-        })
-    elseif syncKey and type(RegisterSharedToggle) == "function" then
-        pcall(RegisterSharedToggle, syncKey, {
-            Button = box,
-            SetVisual = setVisual
-        })
-    end
-
-    if syncKey and type(env.RegisterStartupToggleCallback) == "function" then
-        pcall(env.RegisterStartupToggleCallback, syncKey, toggleCallback)
+        pcall(env.RegisterSharedToggle, syncKey, { Button = box, SetVisual = setVisual })
     end
 
     toggleButton.MouseButton1Click:Connect(function()
-        if env.Destroyed or env.ToxOptionsReady == false then
-            return
-        end
-
+        if env.Destroyed then return end
         state = not state
         updateToggle()
-        toggleCallback(state)
-
+        if toggleCallback then toggleCallback(state) end
         if syncKey and type(env.SyncToggleVisuals) == "function" then
             pcall(env.SyncToggleVisuals, syncKey, state)
         end
-
         SaveUniversal2Settings()
     end)
 
     modeButton.MouseButton1Click:Connect(function()
-        if env.Destroyed or env.ToxOptionsReady == false then
-            return
-        end
-
+        if env.Destroyed then return end
         local index = 1
         for i, option in ipairs(options) do
-            if tostring(option) == tostring(modeButton.Text) then
-                index = i
-                break
-            end
+            if tostring(option) == tostring(modeButton.Text) then index = i break end
         end
-
-        index = index + (1)
-        if index > #options then
-            index = 1
-        end
-
+        index = index + 1
+        if index > #options then index = 1 end
         modeButton.Text = tostring(options[index])
-        modeCallback(options[index])
+        if modeCallback then modeCallback(options[index]) end
         SaveUniversal2Settings()
     end)
 
-    updateToggle()
     TrackUniversalControl(box, page)
-
-    if type(env.RegisterToxSearchControl) == "function" then
-        env.RegisterToxSearchControl(name, page, box, options)
-    end
-
     return box, setVisual
 end
 
