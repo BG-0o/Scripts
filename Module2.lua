@@ -19,11 +19,14 @@ local Player = Players.LocalPlayer
 local Mouse = Player:GetMouse()
 
 local Settings = env.Settings or {}
-local MakeDraggable = env.MakeDraggable or function() end
-local CustomNotify = env.CustomNotify or function() end
-local Notify = env.Notify or function() end
-local PlayToxSound = env.PlayToxSound or function() end
-local AutoSaveConfiguration = env.AutoSaveConfiguration or function() end
+local function MakeDraggable(...) if env.MakeDraggable then return env.MakeDraggable(...) end end
+local function CustomNotify(...) if env.CustomNotify then return env.CustomNotify(...) end end
+local function Notify(...) if env.Notify then return env.Notify(...) end end
+local function PlayToxSound(...) if env.PlayToxSound then return env.PlayToxSound(...) end end
+local function AutoSaveConfiguration(...) if env.AutoSaveConfiguration then return env.AutoSaveConfiguration(...) end end
+local function ApplySavedGuiPosition(...) if env.ApplySavedGuiPosition then return env.ApplySavedGuiPosition(...) end end
+local function TrackGuiPosition(...) if env.TrackGuiPosition then return env.TrackGuiPosition(...) end end
+local function MakeResizable(...) if env.MakeResizable then return env.MakeResizable(...) end end
 local GUIColorMap = env.GUIColorMap or {}
 
 -- Shared UI references
@@ -635,7 +638,7 @@ local function GetCardOrder(cardKey, defaultOrder)
     return defaultOrder
 end
 
-getgenv().CreateCard = function(Page, Title, Icon, DefaultOrder, CardKey)
+local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     CardKey = CardKey or (tostring(Page.Name or "P") .. "_" .. tostring(Title):gsub("%s+", ""))
     DefaultOrder = DefaultOrder or (#Page:GetChildren() + 1)
     local currentOrder = GetCardOrder(CardKey, DefaultOrder)
@@ -886,22 +889,29 @@ getgenv().CreateCard = function(Page, Title, Icon, DefaultOrder, CardKey)
     table.insert(CardRegistry, Card)
     return Card
 end
+getgenv().CreateCard = CreateCard
 
-getgenv().CreateSection = function(Page, Title, Icon)
-    local card = getgenv().CreateCard(Page, Title, Icon)
-    Page.__ActiveCard = card
+local ActivePageCards = {}
+
+local function CreateSection(Page, Title, Icon)
+    local card = CreateCard(Page, Title, Icon)
+    if Page then
+        ActivePageCards[Page] = card
+    end
     return card
 end
+getgenv().CreateSection = CreateSection
 
-getgenv().ResolveElementParent = function(Page)
-    if Page and (Page:IsA("ScrollingFrame") or Page:IsA("Frame")) then
-        local activeCard = Page.__ActiveCard
+local function ResolveElementParent(Page)
+    if Page then
+        local activeCard = ActivePageCards[Page]
         if activeCard and activeCard:FindFirstChild("Content") then
             return activeCard.Content
         end
     end
     return Page
 end
+getgenv().ResolveElementParent = ResolveElementParent
 
 -- ==============================================================================
 -- PAGES ENGINE
@@ -910,7 +920,7 @@ end
 local Pages = {}
 getgenv().Pages = Pages
 
-getgenv().CreatePage = function(Name, RawPage)
+local function CreatePage(Name, RawPage)
     local Page = Instance.new("ScrollingFrame")
     Page.Name = Name
     Page.Size = UDim2.new(1, -20, 1, -12)
@@ -948,6 +958,7 @@ getgenv().CreatePage = function(Name, RawPage)
     Pages[Name] = Page
     return Page, Layout
 end
+getgenv().CreatePage = CreatePage
 
 -- Initialize Standard Pages
 local HomePage = CreatePage("HOME")
@@ -1154,7 +1165,7 @@ if GamePage and DetectedGameModule then
 end
 
 -- ToxOpenPage implementation
-getgenv().ToxOpenPage = function(targetPage)
+local function ToxOpenPage(targetPage)
     if not targetPage then return end
 
     for _, p in pairs(Pages) do
@@ -1180,6 +1191,7 @@ getgenv().ToxOpenPage = function(targetPage)
         getgenv().ToxControlGui.Visible = (targetPage == ControlPage)
     end
 end
+getgenv().ToxOpenPage = ToxOpenPage
 
 
 getgenv().ToxPageButtonsByPage = getgenv().ToxPageButtonsByPage or {}
@@ -3772,7 +3784,13 @@ getgenv().CreateKeybindButton = function(Name, Page, DefaultKey, Callback)
     Button.Position = UDim2.new(1, -95, 0.5, -12)
     Button.BackgroundColor3 = Theme.Panel
     Button.BorderSizePixel = 0
-    Button.Text = DefaultKey and DefaultKey.Name or "NONE"
+    local defaultKeyText = "NONE"
+    if typeof(DefaultKey) == "EnumItem" or (type(DefaultKey) == "table" and DefaultKey.Name) then
+        defaultKeyText = tostring(DefaultKey.Name)
+    elseif type(DefaultKey) == "string" and DefaultKey ~= "" then
+        defaultKeyText = DefaultKey
+    end
+    Button.Text = defaultKeyText
     Button.TextColor3 = Theme.Accent
     Button.TextSize = 11
     Button.Font = Enum.Font.GothamBold
@@ -3854,7 +3872,13 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     KeyButton.Position = UDim2.new(1, -118, 0.5, -11)
     KeyButton.BackgroundColor3 = Theme.Panel
     KeyButton.BorderSizePixel = 0
-    KeyButton.Text = DefaultKey and DefaultKey.Name or "NONE"
+    local defaultKeyText = "NONE"
+    if typeof(DefaultKey) == "EnumItem" or (type(DefaultKey) == "table" and DefaultKey.Name) then
+        defaultKeyText = tostring(DefaultKey.Name)
+    elseif type(DefaultKey) == "string" and DefaultKey ~= "" then
+        defaultKeyText = DefaultKey
+    end
+    KeyButton.Text = defaultKeyText
     KeyButton.TextColor3 = Theme.DimText
     KeyButton.TextSize = 10
     KeyButton.Font = Enum.Font.GothamBold
