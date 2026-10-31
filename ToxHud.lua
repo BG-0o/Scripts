@@ -44,8 +44,15 @@ local function SafeLoad(url)
     return true
 end
 
+-- 1. Core Systems & Configuration Backend
 if not SafeLoad("https://raw.githubusercontent.com/BG-0o/Scripts/main/Module1.lua") then
     return
 end
 
-SafeLoad("https://raw.githubusercontent.com/BG-0o/Scripts/main/Module2.lua")
+-- 2. Revolution UI Engine (BigFroot / Wasor Style)
+if not SafeLoad("https://raw.githubusercontent.com/BG-0o/Scripts/main/Module2.lua") then
+    return
+end
+
+-- 3. Sub-Windows & Game Loaders
+SafeLoad("https://raw.githubusercontent.com/BG-0o/Scripts/main/Module3.lua")
