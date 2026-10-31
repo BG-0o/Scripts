@@ -4746,6 +4746,9 @@ CreateToggle("Charms", VisualsPage, Settings.Chams, function(v)
 end, "Chams")
 
 function CreateToggleCycleOption(name, page, enabled, options, currentValue, toggleCallback, cycleCallback, syncKey)
+    if getgenv().CreateToggleWithChoice then
+        return getgenv().CreateToggleWithChoice(name, page, options, enabled, currentValue or options[1], toggleCallback, cycleCallback, syncKey)
+    end
     local box = Instance.new("Frame")
     box.Size = UDim2.new(1, -5, 0, 39)
     box.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
@@ -4974,14 +4977,14 @@ local MM2PlayerDataRemote = nil
 local MM2HasAuthoritativeData = false
 getgenv().ToxMM2StableRoleCache = getgenv().ToxMM2StableRoleCache or {}
 
-local RoleColors = {
+RoleColors = {
     Murderer = Color3.fromRGB(255, 50, 50),
     Sheriff = Color3.fromRGB(50, 150, 255),
     Innocent = Color3.fromRGB(50, 255, 50),
     Hero = Color3.fromRGB(50, 255, 255)
 }
 
-local MM2UnknownColor = Color3.fromRGB(235, 235, 235)
+MM2UnknownColor = Color3.fromRGB(235, 235, 235)
 
 local function NormalizeRoleName(value)
     if typeof(value) ~= "string" or value == "" then
@@ -5620,8 +5623,8 @@ CreateToggleCycleOption(
     end
 )
 
-local LoopFlingInput = nil
-local LoopFlingGeneration = 0
+LoopFlingInput = nil
+LoopFlingGeneration = 0
 
 local function ToggleLoopFling(
     text
@@ -6834,6 +6837,9 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
         isGuiKey = (input.KeyCode.Name == Settings.GUIKeybind)
     end
     if isGuiKey then
+        if getgenv().ToggleToxGui then
+            return
+        end
         if Main.Visible then
             SubGuisPreKeyHiddenState.ChatLog = ChatLogGui.Visible
             SubGuisPreKeyHiddenState.Music = MusicGui.Visible
@@ -6999,8 +7005,8 @@ AddConnection(RunService.Stepped:Connect(function()
     if Settings.Fullbright then UpdateFullbright() end
 end))
 
-local FlyBV = nil
-local FlyBG = nil
+FlyBV = nil
+FlyBG = nil
 
 function DisableNormalFlyPhysics()
     local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
@@ -7761,7 +7767,7 @@ function RestoreSubGuiAfterMain(key, gui)
     end
 end
 
-if Minimize then
+if Minimize and not getgenv().SetToxMinimized then
     Minimize.MouseButton1Click:Connect(function()
         Minimized = not Minimized
 
@@ -7890,3 +7896,169 @@ task.spawn(function()
 end)
 
 getgenv().ToxUniversalLoaded = true
+
+
+-- ==============================================================================
+-- WASOR PORTED FEATURES (Save Game, No 3D Render, AirWalk Platform, Return By Death)
+-- ==============================================================================
+
+task.spawn(function()
+    -- Save Game (Standard & Decompile)
+    if getgenv().ScriptsPage then
+        local function RunSaveGame(decompile)
+            local modeText = decompile and " (Decompiled Scripts)" or " (Standard)"
+            CustomNotify("Starting Save Game" .. modeText .. "...", Color3.fromRGB(218, 170, 42))
+            task.spawn(function()
+                local ok, err = pcall(function()
+                    local SaveInstance = saveinstance or (getgenv and getgenv().saveinstance)
+                    if not SaveInstance then
+                        SaveInstance = loadstring(game:HttpGet("https://raw.githubusercontent.com/luau/UniversalSynSaveInstance/main/saveinstance.lua"))()
+                        if type(SaveInstance) == "table" and SaveInstance.Save then
+                            SaveInstance = SaveInstance.Save
+                        end
+                    end
+
+                    if type(SaveInstance) == "function" then
+                        if decompile then
+                            SaveInstance({Decompile = true, DecompileTimeout = 10})
+                        else
+                            SaveInstance()
+                        end
+                    else
+                        error("saveinstance API not supported by executor")
+                    end
+                end)
+
+                if ok then
+                    CustomNotify("Save Game completed successfully!", Color3.fromRGB(50, 220, 90))
+                else
+                    CustomNotify("Save Game failed: " .. tostring(err), Color3.fromRGB(255, 80, 80))
+                end
+            end)
+        end
+
+        CreateSection("Save Game & World (WASOR)", getgenv().ScriptsPage)
+        CreateButton("Save Place (Standard)", getgenv().ScriptsPage, function() RunSaveGame(false) end)
+        CreateButton("Save Place (Decompile Scripts)", getgenv().ScriptsPage, function() RunSaveGame(true) end)
+    end
+
+    -- No 3D Rendering (Ultra AFK FPS Boost)
+    if getgenv().VisualsPage then
+        CreateToggle("No 3D Rendering (AFK Max FPS)", getgenv().VisualsPage, Settings.No3DRender == true, function(v)
+            Settings.No3DRender = v
+            pcall(function()
+                RunService:Set3dRenderingEnabled(not v)
+            end)
+            if v then
+                CustomNotify("3D Rendering Disabled (Max FPS)", Color3.fromRGB(80, 255, 120))
+            else
+                CustomNotify("3D Rendering Restored", Color3.fromRGB(100, 200, 255))
+            end
+        end, "No3DRender")
+    end
+
+    -- Air Walk Platform (Walking platform in the air)
+    local airPlatform = nil
+    if getgenv().PlayerPage then
+        CreateToggle("Air Walk Platform", getgenv().PlayerPage, Settings.AirWalkPlatform == true, function(v)
+            Settings.AirWalkPlatform = v
+            if v then
+                task.spawn(function()
+                    while Settings.AirWalkPlatform and not getgenv().Destroyed do
+                        local char = Player.Character
+                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            if not airPlatform or not airPlatform.Parent then
+                                airPlatform = Instance.new("Part")
+                                airPlatform.Name = "ToxAirPlatform"
+                                airPlatform.Size = Vector3.new(6, 1, 6)
+                                airPlatform.Anchored = true
+                                airPlatform.Transparency = 0.8
+                                airPlatform.CanCollide = true
+                                airPlatform.Color = Theme and Theme.Accent or Color3.fromRGB(45, 95, 255)
+                                airPlatform.Parent = workspace
+                            end
+                            airPlatform.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y - 3.4, hrp.Position.Z)
+                        end
+                        task.wait(0.03)
+                    end
+                    if airPlatform then pcall(function() airPlatform:Destroy() end) airPlatform = nil end
+                end)
+            else
+                if airPlatform then pcall(function() airPlatform:Destroy() end) airPlatform = nil end
+            end
+        end, "AirWalkPlatform")
+
+        -- Return By Death
+        local lastDeathCFrame = nil
+        Player.CharacterAdded:Connect(function(char)
+            if Settings.ReturnByDeath and lastDeathCFrame then
+                task.wait(0.5)
+                local hrp = char:WaitForChild("HumanoidRootPart", 5)
+                if hrp and lastDeathCFrame then
+                    hrp.CFrame = lastDeathCFrame
+                    CustomNotify("Returned to death location!", Color3.fromRGB(80, 255, 140))
+                    lastDeathCFrame = nil
+                end
+            end
+
+            local hum = char:WaitForChild("Humanoid", 5)
+            if hum then
+                hum.Died:Connect(function()
+                    local hrp = char:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        lastDeathCFrame = hrp.CFrame
+                    end
+                end)
+            end
+        end)
+
+        CreateToggle("Return By Death", getgenv().PlayerPage, Settings.ReturnByDeath == true, function(v)
+            Settings.ReturnByDeath = v
+        end, "ReturnByDeath")
+    end
+
+    -- Instant Prompts & Tool Magnet in Extras/World
+    if getgenv().FlingPage then
+        CreateSection("World & Prompts (WASOR)", getgenv().FlingPage)
+        CreateToggle("Instant Proximity Prompts", getgenv().FlingPage, Settings.InstantPrompts == true, function(v)
+            Settings.InstantPrompts = v
+            if v then
+                for _, prompt in ipairs(workspace:GetDescendants()) do
+                    if prompt:IsA("ProximityPrompt") then
+                        prompt.HoldDuration = 0
+                    end
+                end
+            end
+        end, "InstantPrompts")
+
+        workspace.DescendantAdded:Connect(function(desc)
+            if Settings.InstantPrompts and desc:IsA("ProximityPrompt") then
+                desc.HoldDuration = 0
+            end
+        end)
+
+        CreateToggle("Tool Magnet", getgenv().FlingPage, Settings.ToolMagnet == true, function(v)
+            Settings.ToolMagnet = v
+            if v then
+                task.spawn(function()
+                    while Settings.ToolMagnet and not getgenv().Destroyed do
+                        local char = Player.Character
+                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            for _, item in ipairs(workspace:GetChildren()) do
+                                if item:IsA("BackpackItem") or item:IsA("Tool") then
+                                    local handle = item:FindFirstChild("Handle")
+                                    if handle then
+                                        handle.CFrame = hrp.CFrame
+                                    end
+                                end
+                            end
+                        end
+                        task.wait(0.5)
+                    end
+                end)
+            end
+        end, "ToolMagnet")
+    end
+end)
