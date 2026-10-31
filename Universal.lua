@@ -6827,7 +6827,13 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
         end
     end
 
-    if Settings.GUIKeybind and input.KeyCode == Settings.GUIKeybind then
+    local isGuiKey = false
+    if typeof(Settings.GUIKeybind) == "EnumItem" then
+        isGuiKey = (input.KeyCode == Settings.GUIKeybind)
+    elseif typeof(Settings.GUIKeybind) == "string" then
+        isGuiKey = (input.KeyCode.Name == Settings.GUIKeybind)
+    end
+    if isGuiKey then
         if Main.Visible then
             SubGuisPreKeyHiddenState.ChatLog = ChatLogGui.Visible
             SubGuisPreKeyHiddenState.Music = MusicGui.Visible
