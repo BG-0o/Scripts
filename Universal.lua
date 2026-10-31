@@ -4747,74 +4747,91 @@ end, "Chams")
 
 function CreateToggleCycleOption(name, page, enabled, options, currentValue, toggleCallback, cycleCallback, syncKey)
     if getgenv().CreateToggleWithChoice then
-        return getgenv().CreateToggleWithChoice(name, page, options, enabled, currentValue or options[1], toggleCallback, cycleCallback, syncKey)
+        local ctrl = getgenv().CreateToggleWithChoice(name, page, options, enabled == true, currentValue or options[1], toggleCallback, cycleCallback, syncKey)
+        local btn = (type(ctrl) == "table" and rawget(ctrl, "Button")) or ctrl
+        if TrackUniversalControl then TrackUniversalControl(btn, page) end
+        return btn
     end
+
+    local th = getgenv().Theme or {}
+    local accent = th.Accent or Color3.fromRGB(30, 95, 255)
+    local panel = th.Panel or Color3.fromRGB(16, 16, 26)
+    local element = th.Element or Color3.fromRGB(22, 22, 34)
+    local outline = th.Outline or Color3.fromRGB(36, 36, 56)
+
     local box = Instance.new("Frame")
-    box.Size = UDim2.new(1, -5, 0, 39)
-    box.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    box.Size = UDim2.new(1, -4, 0, 36)
+    box.BackgroundColor3 = element
     box.BorderSizePixel = 0
     box.Parent = page
+    local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 6) bCorner.Parent = box
+    local bStroke = Instance.new("UIStroke")
+    bStroke.Color = outline
+    bStroke.Thickness = 1
+    bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    bStroke.Parent = box
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -158, 1, 0)
+    label.Size = UDim2.new(1, -170, 1, 0)
     label.Position = UDim2.new(0, 12, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = name
-    label.TextColor3 = Color3.fromRGB(240, 240, 240)
-    label.TextSize = 13
+    label.TextColor3 = th.Text or Color3.fromRGB(255, 255, 255)
+    label.TextSize = 12
     label.Font = Enum.Font.GothamMedium
     label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextTruncate = Enum.TextTruncate.AtEnd
     label.Parent = box
 
     local modeButton = Instance.new("TextButton")
-    modeButton.Size = UDim2.new(0, 84, 0, 25)
-    modeButton.Position = UDim2.new(1, -138, 0.5, -12)
-    modeButton.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    modeButton.Size = UDim2.new(0, 84, 0, 22)
+    modeButton.Position = UDim2.new(1, -140, 0.5, -11)
+    modeButton.BackgroundColor3 = panel
     modeButton.BorderSizePixel = 0
     modeButton.Text = tostring(currentValue or options[1])
-    modeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    modeButton.TextSize = 10
+    modeButton.TextColor3 = accent
+    modeButton.TextSize = 11
     modeButton.Font = Enum.Font.GothamBold
     modeButton.Parent = box
-
-    local modeCorner = Instance.new("UICorner")
-    modeCorner.CornerRadius = UDim.new(0, 4)
-    modeCorner.Parent = modeButton
+    local mCorner = Instance.new("UICorner") mCorner.CornerRadius = UDim.new(0, 4) mCorner.Parent = modeButton
+    local mStroke = Instance.new("UIStroke")
+    mStroke.Color = outline
+    mStroke.Thickness = 1
+    mStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    mStroke.Parent = modeButton
 
     local toggleButton = Instance.new("TextButton")
     toggleButton.Size = UDim2.new(0, 38, 0, 20)
     toggleButton.Position = UDim2.new(1, -48, 0.5, -10)
-    toggleButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    toggleButton.BackgroundColor3 = enabled and accent or panel
     toggleButton.BorderSizePixel = 0
     toggleButton.Text = ""
     toggleButton.AutoButtonColor = false
     toggleButton.Parent = box
-
-    local toggleCorner = Instance.new("UICorner")
-    toggleCorner.CornerRadius = UDim.new(0, 4)
-    toggleCorner.Parent = toggleButton
+    local tCorner = Instance.new("UICorner") tCorner.CornerRadius = UDim.new(1, 0) tCorner.Parent = toggleButton
+    local tStroke = Instance.new("UIStroke")
+    tStroke.Color = outline
+    tStroke.Thickness = 1
+    tStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    tStroke.Parent = toggleButton
 
     local indicator = Instance.new("Frame")
     indicator.Size = UDim2.new(0, 14, 0, 14)
-    indicator.Position = UDim2.new(0, 3, 0.5, -7)
+    indicator.Position = enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
     indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     indicator.BorderSizePixel = 0
     indicator.Parent = toggleButton
-
     local indicatorCorner = Instance.new("UICorner")
-    indicatorCorner.CornerRadius = UDim.new(0, 3)
+    indicatorCorner.CornerRadius = UDim.new(1, 0)
     indicatorCorner.Parent = indicator
 
     local state = enabled == true
 
     local function updateToggle()
-        if state then
-            toggleButton.BackgroundColor3 = Color3.fromRGB(50, 180, 70)
-            indicator.Position = UDim2.new(1, -17, 0.5, -7)
-        else
-            toggleButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-            indicator.Position = UDim2.new(0, 3, 0.5, -7)
-        end
+        local curAccent = (getgenv().Theme and getgenv().Theme.Accent) or accent
+        local curPanel = (getgenv().Theme and getgenv().Theme.Panel) or panel
+        toggleButton.BackgroundColor3 = state and curAccent or curPanel
+        indicator.Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
     end
 
     if syncKey and RegisterSharedToggle then
@@ -4828,56 +4845,28 @@ function CreateToggleCycleOption(name, page, enabled, options, currentValue, tog
     end
 
     toggleButton.MouseButton1Click:Connect(function()
-        if Destroyed then
-            return
-        end
-
+        if getgenv().Destroyed then return end
         state = not state
         updateToggle()
-        toggleCallback(state)
-
-        if syncKey and getgenv().SyncToggleVisuals then
-            getgenv().SyncToggleVisuals(syncKey, state)
-        end
-
-        if ScriptLoaded then
-            CustomNotify(name .. (state and " Enabled" or " Disabled"), state and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100))
-        end
-
+        if toggleCallback then toggleCallback(state) end
+        if syncKey and ToxSyncToggleVisuals then ToxSyncToggleVisuals(syncKey, state) end
         AutoSaveConfiguration()
     end)
 
     modeButton.MouseButton1Click:Connect(function()
-        if Destroyed then
-            return
-        end
-
+        if getgenv().Destroyed then return end
         local index = 1
-
-        for i, value in ipairs(options) do
-            if tostring(value) == tostring(modeButton.Text) then
-                index = i
-                break
-            end
+        for i, option in ipairs(options) do
+            if tostring(option) == tostring(modeButton.Text) then index = i break end
         end
-
         index = index + 1
-
-        if index > #options then
-            index = 1
-        end
-
+        if index > #options then index = 1 end
         modeButton.Text = tostring(options[index])
-        cycleCallback(options[index])
+        if cycleCallback then cycleCallback(options[index]) end
         AutoSaveConfiguration()
     end)
 
     updateToggle()
-
-    if getgenv().RegisterToxSearchControl then
-        getgenv().RegisterToxSearchControl(name, page, box, options)
-    end
-
     return TrackUniversalControl(box, page)
 end
 
@@ -5819,6 +5808,8 @@ CreateToggle("Chat Logs", ConfigPage, Settings.ChatLogs, function(v)
     ChatLogGui.Visible = v == true
 end, "ChatLogs")
 
+if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Security & Automation", "🛡️") end
+
 CreateToggle(
     "Kick Bypass",
     ConfigPage,
@@ -6202,6 +6193,7 @@ function CreateServerInfoFrame()
     local stroke = Instance.new("UIStroke")
     stroke.Color = MAIN_COLOR
     stroke.Thickness = 1
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     stroke.Transparency = 0.2
     stroke.Parent = ServerInfoFrame
 
@@ -6363,6 +6355,8 @@ CreateToggle("Server Info", ConfigPage, Settings.ToxServerInfoVisible, function(
 end, "ToxServerInfoVisible")
 
 
+if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Rendering & Performance", "⚡") end
+
 SetRender3DEnabled(true)
 
 CreateToggle(
@@ -6396,6 +6390,8 @@ CreateDropdown(
         AutoSaveConfiguration()
     end
 )
+
+if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Interface & Keybinds", "⚙️") end
 
 CreateDropdown(
     "GUI Color",
@@ -6434,6 +6430,7 @@ CreateKeybindButton("GUI Keybind", ConfigPage, Settings.GUIKeybind, function(key
         getgenv().AutoSaveConfiguration()
     end
 end)
+if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Server Operations", "🌐") end
 CreateButton("Server Hop", ConfigPage, function(button) ShowServerHopMenu(button) end)
 CreateConfirmButton("Rejoin Server", ConfigPage, function()
 	if #Players:GetPlayers() <= 1 then TeleportService:Teleport(game.PlaceId, Player)
