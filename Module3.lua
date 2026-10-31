@@ -9,6 +9,19 @@ if env.Destroyed then
     return
 end
 
+local Settings = env.Settings or {}
+local Gui = env.Gui
+local MAIN_COLOR = env.MAIN_COLOR or Color3.fromRGB(0, 170, 255)
+local SavedWaypoints = env.SavedWaypoints or {}
+local SavedIDs = env.SavedIDs or {}
+
+local function MakeDraggable(...) if env.MakeDraggable then return env.MakeDraggable(...) end end
+local function CustomNotify(...) if env.CustomNotify then return env.CustomNotify(...) end end
+local function AutoSaveConfiguration(...) if env.AutoSaveConfiguration then return env.AutoSaveConfiguration(...) end end
+local function AddConnection(...) if env.AddConnection then return env.AddConnection(...) end end
+local function ApplySavedGuiPosition(...) if env.ApplySavedGuiPosition then return env.ApplySavedGuiPosition(...) end end
+local function TrackGuiPosition(...) if env.TrackGuiPosition then return env.TrackGuiPosition(...) end end
+
 for _, key in ipairs({"ChatLogGui", "WaypointsGui", "MusicGui"}) do
     local object = env[key]
     if typeof(object) == "Instance" and object.Parent then
