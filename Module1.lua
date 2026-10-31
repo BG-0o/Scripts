@@ -2680,7 +2680,7 @@ getgenv().MakeDraggable = function(Frame, DragHandle)
         end
     end)
     AddConnection(UserInputService.InputChanged:Connect(function(input)
-        if input == DragInput and Dragging then
+        if input == DragInput and Dragging and DragStart and StartPos then
             local Delta = input.Position - DragStart
             Frame.Position = UDim2.new(StartPos.X.Scale, StartPos.X.Offset + Delta.X, StartPos.Y.Scale, StartPos.Y.Offset + Delta.Y)
         end
@@ -2725,8 +2725,8 @@ getgenv().GetSavedGuiSize =
 
             if width
             and height
-            and width >= 200
-            and height >= 100 then
+            and width >= 140
+            and height >= 80 then
                 return
                     UDim2.new(
                         0,
@@ -2794,8 +2794,8 @@ getgenv().MakeResizable =
             initialHeight = 395
         end
 
-        local minWidth = 320
-        local minHeight = 200
+        local minWidth = 140
+        local minHeight = 80
         local maxWidth = 3840
         local maxHeight = 2160
 
@@ -2803,8 +2803,8 @@ getgenv().MakeResizable =
             minWidth = minRatio.X
             minHeight = minRatio.Y
         elseif typeof(minRatio) == "number" then
-            minWidth = math.max(180, math.floor(initialWidth * minRatio))
-            minHeight = math.max(140, math.floor(initialHeight * minRatio))
+            minWidth = math.max(140, math.floor(initialWidth * minRatio))
+            minHeight = math.max(80, math.floor(initialHeight * minRatio))
         end
 
         if typeof(maxRatio) == "Vector2" then
