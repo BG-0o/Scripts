@@ -432,6 +432,8 @@ getgenv().Settings = {
     GUIColorName = "Blue",
     GUIScales = {},
     GUISizes = {},
+    MobileToggle = true,
+    CollapseSidebar = false,
 
 	SpeedValue = 16,
 	JumpValue = 50,
@@ -2761,22 +2763,6 @@ getgenv().MakeResizable =
                 or "GUI"
             )
 
-        minRatio =
-            math.clamp(
-                tonumber(minRatio)
-                or 0.85,
-                0.75,
-                1
-            )
-
-        maxRatio =
-            math.clamp(
-                tonumber(maxRatio)
-                or 1.45,
-                1,
-                1.7
-            )
-
         Settings.GUISizes =
             typeof(Settings.GUISizes)
                 == "table"
@@ -2808,41 +2794,26 @@ getgenv().MakeResizable =
             initialHeight = 395
         end
 
-        local minWidth =
-            math.max(
-                260,
-                math.floor(
-                    initialWidth
-                    * minRatio
-                )
-            )
+        local minWidth = 320
+        local minHeight = 200
+        local maxWidth = 3840
+        local maxHeight = 2160
 
-        local minHeight =
-            math.max(
-                220,
-                math.floor(
-                    initialHeight
-                    * minRatio
-                )
-            )
+        if typeof(minRatio) == "Vector2" then
+            minWidth = minRatio.X
+            minHeight = minRatio.Y
+        elseif typeof(minRatio) == "number" then
+            minWidth = math.max(180, math.floor(initialWidth * minRatio))
+            minHeight = math.max(140, math.floor(initialHeight * minRatio))
+        end
 
-        local maxWidth =
-            math.max(
-                minWidth,
-                math.floor(
-                    initialWidth
-                    * maxRatio
-                )
-            )
-
-        local maxHeight =
-            math.max(
-                minHeight,
-                math.floor(
-                    initialHeight
-                    * maxRatio
-                )
-            )
+        if typeof(maxRatio) == "Vector2" then
+            maxWidth = maxRatio.X
+            maxHeight = maxRatio.Y
+        elseif typeof(maxRatio) == "number" then
+            maxWidth = math.max(minWidth, math.floor(initialWidth * maxRatio))
+            maxHeight = math.max(minHeight, math.floor(initialHeight * maxRatio))
+        end
 
         local saved =
             Settings.GUISizes[
