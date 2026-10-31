@@ -7709,7 +7709,7 @@ function ShowCenterLoadSequence()
         getgenv().ScriptLoaded = true
 
         if not Destroyed and not getgenv().Destroyed then
-            local finalPosition = (getgenv().GetSavedGuiPosition and getgenv().GetSavedGuiPosition("Main")) or UDim2.new(0.5, -165, 0.5, -197)
+            local finalPosition = (getgenv().GetSavedGuiPosition and getgenv().GetSavedGuiPosition("Main")) or UDim2.new(0.5, -360, 0.5, -240)
 
             local finalSize =
                 (
@@ -7718,17 +7718,17 @@ function ShowCenterLoadSequence()
                         "Main",
                         UDim2.new(
                             0,
-                            330,
+                            720,
                             0,
-                            395
+                            480
                         )
                     )
                 )
                 or UDim2.new(
                     0,
-                    330,
+                    720,
                     0,
-                    395
+                    480
                 )
 
             Main.Size = UDim2.new(0, 0, 0, 0)
@@ -7744,7 +7744,7 @@ function ShowCenterLoadSequence()
                 true
             )
 
-            CustomNotify("ToxHub v1 Loaded Successfully!", Color3.fromRGB(100, 255, 100))
+            CustomNotify("ToxHub Revolution Loaded Successfully!", Color3.fromRGB(100, 255, 100))
         end
     end
 
@@ -7783,17 +7783,17 @@ MainExpandedSize =
             "Main",
             UDim2.new(
                 0,
-                330,
+                720,
                 0,
-                395
+                480
             )
         )
     )
     or UDim2.new(
         0,
-        330,
+        720,
         0,
-        395
+        480
     )
 
 function CollapseSubGuiWithMain(key, gui)
