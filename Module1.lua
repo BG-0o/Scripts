@@ -3423,6 +3423,12 @@ getgenv().UpdateFullbright = UpdateFullbright
 getgenv().RestoreFullbrightDefaults = RestoreFullbrightDefaults
 
 -- ==============================================================================
+
+-- ==============================================================================
+-- TOXHUB REVOLUTION UI ENGINE (BigFroot / Wasor Classic Inspired - Scope Optimized)
+-- ==============================================================================
+
+-- ==============================================================================
 -- TOXHUB REVOLUTION UI ENGINE (BigFroot / Wasor Classic Inspired)
 -- ==============================================================================
 
@@ -3535,6 +3541,7 @@ Main.Parent = Gui
 getgenv().Main = Main
 RegisterThemedObject(Main, "BackgroundColor3", "Background")
 
+do -- Main Decorations
 local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 10)
 MainCorner.Parent = Main
@@ -3554,6 +3561,7 @@ MainGradient.Color = ColorSequence.new({
 MainGradient.Enabled = Settings.WindowGradient ~= false
 MainGradient.Parent = Main
 
+end
 -- Custom Wallpaper
 local WallpaperImage = Instance.new("ImageLabel")
 WallpaperImage.Name = "WallpaperImage"
@@ -3600,6 +3608,7 @@ Sidebar.ZIndex = 10
 Sidebar.Parent = Main
 RegisterThemedObject(Sidebar, "BackgroundColor3", "Panel")
 
+do -- Sidebar Decorations & Header
 local SidebarCorner = Instance.new("UICorner")
 SidebarCorner.CornerRadius = UDim.new(0, 10)
 SidebarCorner.Parent = Sidebar
@@ -3680,6 +3689,7 @@ CategoryLabel.Parent = Sidebar
 RegisterThemedObject(CategoryLabel, "TextColor3", "DimText")
 
 -- Nav Scroll Container
+end
 local SidebarScroll = Instance.new("ScrollingFrame")
 SidebarScroll.Name = "SidebarScroll"
 SidebarScroll.Size = UDim2.new(1, 0, 1, -135)
@@ -3692,6 +3702,7 @@ SidebarScroll.ZIndex = 11
 SidebarScroll.Parent = Sidebar
 getgenv().Tabs = SidebarScroll
 
+do -- Sidebar Scroll Layout
 local SidebarLayout = Instance.new("UIListLayout")
 SidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
 SidebarLayout.Padding = UDim.new(0, 4)
@@ -3707,6 +3718,8 @@ SidebarLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 end)
 
 -- Sidebar Footer / Profile Card
+end
+do -- Sidebar Footer
 local SidebarFooter = Instance.new("Frame")
 SidebarFooter.Name = "SidebarFooter"
 SidebarFooter.Size = UDim2.new(1, 0, 0, 52)
@@ -3786,6 +3799,7 @@ RegisterThemedObject(CollapseSidebarBtn, "BackgroundColor3", "Element")
 RegisterThemedObject(CollapseSidebarBtn, "TextColor3", "DimText")
 
 -- Content Area
+end
 local ContentArea = Instance.new("Frame")
 ContentArea.Name = "ContentArea"
 ContentArea.Size = UDim2.new(1, -(isSidebarCollapsed and sidebarCollapsedWidth or sidebarExpandedWidth), 1, 0)
@@ -3864,6 +3878,8 @@ CurrentTabTitle.Parent = TopBar
 RegisterThemedObject(CurrentTabTitle, "TextColor3", "Text")
 
 -- Search Pill on top right
+local SearchTextBox = nil
+do -- SearchPill & Window Controls
 local SearchPill = Instance.new("Frame")
 SearchPill.Name = "SearchPill"
 SearchPill.Size = UDim2.new(0, 160, 0, 28)
@@ -3889,7 +3905,7 @@ SearchIconLabel.TextSize = 11
 SearchIconLabel.ZIndex = 23
 SearchIconLabel.Parent = SearchPill
 
-local SearchTextBox = Instance.new("TextBox")
+SearchTextBox = Instance.new("TextBox")
 SearchTextBox.Name = "SearchTextBox"
 SearchTextBox.Size = UDim2.new(1, -28, 1, 0)
 SearchTextBox.Position = UDim2.new(0, 26, 0, 0)
@@ -3946,6 +3962,7 @@ CloseBtn.MouseButton1Click:Connect(function()
 end)
 
 -- Search Results Floating Dropdown
+end
 local SearchResultsScroll = Instance.new("ScrollingFrame")
 SearchResultsScroll.Name = "SearchResultsScroll"
 SearchResultsScroll.Size = UDim2.new(0, 260, 0, 200)
@@ -3960,6 +3977,7 @@ SearchResultsScroll.ClipsDescendants = true
 SearchResultsScroll.Parent = TopBar
 RegisterThemedObject(SearchResultsScroll, "BackgroundColor3", "Panel")
 
+do -- Search Results Styling
 local SearchResultsCorner = Instance.new("UICorner") SearchResultsCorner.CornerRadius = UDim.new(0, 8) SearchResultsCorner.Parent = SearchResultsScroll
 local SearchResultsStroke = Instance.new("UIStroke") SearchResultsStroke.Color = Theme.Outline SearchResultsStroke.Thickness = 1.2 SearchResultsStroke.Parent = SearchResultsScroll
 RegisterThemedObject(SearchResultsStroke, "Color", "Outline")
@@ -3980,6 +3998,7 @@ SearchResultsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(func
 end)
 
 -- Pages Container
+end
 local PagesContainer = Instance.new("Frame")
 PagesContainer.Name = "PagesContainer"
 PagesContainer.Size = UDim2.new(1, 0, 1, -46)
@@ -4007,7 +4026,6 @@ RegisterThemedObject(ResizeHandle, "TextColor3", "DimText")
 if getgenv().MakeResizable then
     getgenv().MakeResizable(Main, ResizeHandle, "Main", Vector2.new(520, 360), Vector2.new(1200, 800))
 end
-
 
 -- ==============================================================================
 -- CARD ENGINE & REORDERING SYSTEM
@@ -4498,22 +4516,22 @@ getgenv().CreateTab = function(Name, Page)
 end
 
 -- Create Standard Sidebar Items
-local HomeNav = CreateSidebarNavButton("Home", "🏠", HomePage, 1)
-local GameNav = nil
+CreateSidebarNavButton("Home", "🏠", HomePage, 1)
+nil
 if GamePage and DetectedGameModule then
     local gameLabel = DetectedGameModule.ShortName or "Game"
     GameNav = CreateSidebarNavButton(gameLabel, "🎮", GamePage, 2)
 end
-local CombatNav = CreateSidebarNavButton("Combat", "⚔️", CombatPage, 3)
-local VisualsNav = CreateSidebarNavButton("Visuals", "👁️", VisualsPage, 4)
-local PlayerNav = CreateSidebarNavButton("Player", "👤", PlayerPage, 5)
-local LightingNav = CreateSidebarNavButton("Lighting", "💡", LightingPage, 6)
-local ExtrasNav = CreateSidebarNavButton("Extras", "✨", FlingPage, 7)
-local ScriptsNav = CreateSidebarNavButton("Scripts", "📜", ScriptsPage, 8)
-local JoinNav = CreateSidebarNavButton("Join", "🌐", JoinPage, 9)
-local ChatNav = CreateSidebarNavButton("Chat", "💬", ChatPage, 10)
-local ControlNav = CreateSidebarNavButton("Control", "🛡️", ControlPage, 11)
-local SettingsNav = CreateSidebarNavButton("Settings", "⚙️", SettingsPage, 12)
+CreateSidebarNavButton("Combat", "⚔️", CombatPage, 3)
+CreateSidebarNavButton("Visuals", "👁️", VisualsPage, 4)
+CreateSidebarNavButton("Player", "👤", PlayerPage, 5)
+CreateSidebarNavButton("Lighting", "💡", LightingPage, 6)
+CreateSidebarNavButton("Extras", "✨", FlingPage, 7)
+CreateSidebarNavButton("Scripts", "📜", ScriptsPage, 8)
+CreateSidebarNavButton("Join", "🌐", JoinPage, 9)
+CreateSidebarNavButton("Chat", "💬", ChatPage, 10)
+CreateSidebarNavButton("Control", "🛡️", ControlPage, 11)
+CreateSidebarNavButton("Settings", "⚙️", SettingsPage, 12)
 
 getgenv().GameTab = GameNav
 getgenv().UniversalTab = CombatNav
@@ -4582,6 +4600,7 @@ end
 getgenv().ShowToxUpdateGui = function() end
 
 
+do -- SEARCH ENGINE
 -- ==============================================================================
 -- SEARCH ENGINE, FLOATING MOBILE BUTTON, WATERMARK, WEATHER & COLOR PICKER
 -- ==============================================================================
@@ -4739,6 +4758,9 @@ getgenv().OpenToxSearch = function()
 end
 
 -- ==============================================================================
+do -- MOBILE TOGGLE & WATERMARK
+end
+
 -- FLOATING MOBILE TOGGLE BUTTON
 -- ==============================================================================
 
@@ -4802,6 +4824,10 @@ RegisterThemedObject(WatermarkLabel, "TextColor3", "Text")
 MakeDraggable(WatermarkFrame, WatermarkFrame)
 
 -- ==============================================================================
+local SetWeatherType = nil
+do -- WEATHER PARTICLE SYSTEM
+end
+
 -- WEATHER PARTICLE SYSTEM
 -- ==============================================================================
 
@@ -4913,6 +4939,10 @@ end
 StartWeatherEngine()
 
 -- ==============================================================================
+local OpenColorPicker = nil
+do -- COLOR PICKER MODAL
+end
+
 -- INTERACTIVE COLOR PICKER MODAL
 -- ==============================================================================
 
@@ -5100,7 +5130,7 @@ RegisterThemedObject(CPApplyBtn, "BackgroundColor3", "Accent")
 local ActiveEditingColorKey = nil
 local ActiveSwatchFrame = nil
 
-local function OpenColorPicker(colorKey, swatchFrame)
+function OpenColorPicker(colorKey, swatchFrame)
     ActiveEditingColorKey = colorKey
     ActiveSwatchFrame = swatchFrame
     CPTitle.Text = "Color: " .. tostring(colorKey)
@@ -5179,8 +5209,10 @@ for _, pCol in ipairs(Presets) do
         CPPreview.BackgroundColor3 = pCol
     end)
 end
+end -- Color Picker Modal
 
 
+do -- HOME DASHBOARD
 -- ==============================================================================
 -- HOME PAGE SETUP (BigFroot Style Dashboard)
 -- ==============================================================================
@@ -5549,6 +5581,9 @@ ReplaceKeyBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==============================================================================
+do -- SETTINGS PAGE & TELEMETRY
+end
+
 -- SETTINGS PAGE SETUP (Screenshot 2 Match)
 -- ==============================================================================
 
@@ -6162,8 +6197,10 @@ end)
 
 -- Default open Home Page
 ToxOpenPage(HomePage)
+end -- Settings Page & Telemetry
 
 
+do -- EMBEDDED WIDGETS (CHAT & QUICK JOIN)
 -- ==============================================================================
 -- EMBEDDED WIDGETS (CHAT & QUICK JOIN)
 -- ==============================================================================
@@ -6393,6 +6430,8 @@ ApplySavedGuiPosition("Main", Main)
 TrackGuiPosition("Main", Main)
 
 -- ==============================================================================
+end
+
 -- SHARED CONTROLS & CONTROL FACTORIES (CreateToggle, CreateButton, etc.)
 -- ==============================================================================
 
@@ -7343,42 +7382,13 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     return Box
 end
 
-
-
-
 local function ApplyStagedOptionsAfterLoadScreen()
-    if getgenv().ToxStartupOptionsApplied
-    or getgenv().Destroyed
-    or not getgenv().ScriptLoaded then
-        return
-    end
-
     local staged = getgenv().ToxStartupBooleanState
     local callbacks = getgenv().ToxStartupToggleCallbacks
 
-    if typeof(staged) ~= "table" then
-        staged = {}
-    end
-
-    for key, value in pairs(staged) do
-        Settings[key] = value == true
-    end
-
-    getgenv().ToxStartupOptionsApplied = true
-    getgenv().ToxOptionsReady = true
-
-    if getgenv().SyncToggleVisuals then
+    if type(staged) == "table" and type(callbacks) == "table" then
         for key, value in pairs(staged) do
-            pcall(function()
-                getgenv().SyncToggleVisuals(key, value == true)
-            end)
-        end
-    end
-
-    if typeof(callbacks) == "table" then
-        for key, value in pairs(staged) do
-            if value == true
-            and type(callbacks[key]) == "function" then
+            if value == true and type(callbacks[key]) == "function" then
                 pcall(callbacks[key], true)
             end
         end
@@ -7389,8 +7399,7 @@ local function ApplyStagedOptionsAfterLoadScreen()
 end
 
 task.spawn(function()
-    while not getgenv().Destroyed
-    and not getgenv().ScriptLoaded do
+    while not getgenv().Destroyed and not getgenv().ScriptLoaded do
         task.wait(0.03)
     end
 
