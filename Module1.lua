@@ -2737,10 +2737,10 @@ getgenv().GetSavedGuiSize =
             if width
             and height
             and width >= 200
+            and height >= 100 then
                 if key == "Main" and width < 500 then
                     return UDim2.new(0, 720, 0, 480)
                 end
-            and height >= 100 then
                 return
                     UDim2.new(
                         0,
