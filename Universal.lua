@@ -3979,7 +3979,7 @@ local function ApplyWalkFlingNoclip(
 end
 
 local function StopWalkFling()
-    WalkFlingGeneration += 1
+    WalkFlingGeneration = WalkFlingGeneration + 1
 
     local wasImpulseActive =
         WalkFlingImpulseActive
@@ -4067,53 +4067,52 @@ local function StartWalkFling()
             or not root
             or not root.Parent then
                 task.wait()
-                continue
-            end
-
-            ApplyWalkFlingNoclip(
-                character
-            )
-
-            local velocity =
-                root.Velocity
-
-            WalkFlingRestoreVelocity =
-                velocity
-
-            WalkFlingImpulseActive = true
-            getgenv().ToxWalkFlingImpulseActive = true
-
-            local multiplier =
-                game.PlaceId == NDSPlaceId
-                and 18
-                or 2500
-
-            local verticalBoost =
-                game.PlaceId == NDSPlaceId
-                and 8
-                or 1500
-
-            root.Velocity =
-                velocity * multiplier
-                + Vector3.new(
-                    0,
-                    verticalBoost,
-                    0
+            else
+                ApplyWalkFlingNoclip(
+                    character
                 )
 
-            RunService.RenderStepped:Wait()
+                local velocity =
+                    root.Velocity
 
-            if character.Parent
-            and root.Parent then
+                WalkFlingRestoreVelocity =
+                    velocity
+
+                WalkFlingImpulseActive = true
+                getgenv().ToxWalkFlingImpulseActive = true
+
+                local multiplier =
+                    game.PlaceId == NDSPlaceId
+                    and 18
+                    or 2500
+
+                local verticalBoost =
+                    game.PlaceId == NDSPlaceId
+                    and 8
+                    or 1500
+
                 root.Velocity =
-                    velocity
-                root.AssemblyLinearVelocity =
-                    velocity
-            end
+                    velocity * multiplier
+                    + Vector3.new(
+                        0,
+                        verticalBoost,
+                        0
+                    )
 
-            WalkFlingImpulseActive = false
-            getgenv().ToxWalkFlingImpulseActive = false
-            WalkFlingRestoreVelocity = nil
+                RunService.RenderStepped:Wait()
+
+                if character.Parent
+                and root.Parent then
+                    root.Velocity =
+                        velocity
+                    root.AssemblyLinearVelocity =
+                        velocity
+                end
+
+                WalkFlingImpulseActive = false
+                getgenv().ToxWalkFlingImpulseActive = false
+                WalkFlingRestoreVelocity = nil
+            end
 
             if generation
                 ~= WalkFlingGeneration
@@ -4324,48 +4323,28 @@ local function GetCarFlyMoveVector()
         IsKeyDown(
             Enum.KeyCode.W
         ) then
-        vector +=
-            Vector3.new(
-                0,
-                0,
-                -1
-            )
+        vector = vector + Vector3.new(0, 0, -1)
     end
 
     if UserInputService:
         IsKeyDown(
             Enum.KeyCode.S
         ) then
-        vector +=
-            Vector3.new(
-                0,
-                0,
-                1
-            )
+        vector = vector + Vector3.new(0, 0, 1)
     end
 
     if UserInputService:
         IsKeyDown(
             Enum.KeyCode.A
         ) then
-        vector +=
-            Vector3.new(
-                -1,
-                0,
-                0
-            )
+        vector = vector + Vector3.new(-1, 0, 0)
     end
 
     if UserInputService:
         IsKeyDown(
             Enum.KeyCode.D
         ) then
-        vector +=
-            Vector3.new(
-                1,
-                0,
-                0
-            )
+        vector = vector + Vector3.new(1, 0, 0)
     end
 
     return vector
@@ -5659,7 +5638,7 @@ local function ToggleLoopFling(
 
     if cleaned == "" then
         LoopFlingInput = nil
-        LoopFlingGeneration += 1
+        LoopFlingGeneration = LoopFlingGeneration + 1
 
         CustomNotify(
             "Loop Fling Disabled",
@@ -5683,7 +5662,7 @@ local function ToggleLoopFling(
         LoopFlingInput
     ) == normalized then
         LoopFlingInput = nil
-        LoopFlingGeneration += 1
+        LoopFlingGeneration = LoopFlingGeneration + 1
 
         CustomNotify(
             "Loop Fling Disabled",
@@ -5700,7 +5679,7 @@ local function ToggleLoopFling(
     LoopFlingInput =
         cleaned
 
-    LoopFlingGeneration += 1
+    LoopFlingGeneration = LoopFlingGeneration + 1
 
     local generation =
         LoopFlingGeneration
@@ -6464,7 +6443,7 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     end
 
     LoopFlingInput = nil
-    LoopFlingGeneration += 1
+    LoopFlingGeneration = LoopFlingGeneration + 1
 
     if RenderBackdropGui
     and RenderBackdropGui.Parent then
@@ -7108,19 +7087,9 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
             local velocity =
                 Vector3.zero
 
-            velocity +=
-                Camera.CFrame.RightVector
-                * (
-                    moveVector.X
-                    * flySpeed
-                )
+            velocity = velocity + (Camera.CFrame.RightVector * (moveVector.X * flySpeed))
 
-            velocity -=
-                Camera.CFrame.LookVector
-                * (
-                    moveVector.Z
-                    * flySpeed
-                )
+            velocity = velocity - (Camera.CFrame.LookVector * (moveVector.Z * flySpeed))
 
             if UserInputService:
                 IsKeyDown(
@@ -7130,12 +7099,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 IsKeyDown(
                     Enum.KeyCode.E
                 ) then
-                velocity +=
-                    Vector3.new(
-                        0,
-                        flySpeed * 2,
-                        0
-                    )
+                velocity = velocity + Vector3.new(0, flySpeed * 2, 0)
             end
 
             if UserInputService:
@@ -7146,12 +7110,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 IsKeyDown(
                     Enum.KeyCode.Q
                 ) then
-                velocity -=
-                    Vector3.new(
-                        0,
-                        flySpeed * 2,
-                        0
-                    )
+                velocity = velocity - Vector3.new(0, flySpeed * 2, 0)
             end
 
             CarFlyVelocity.Velocity =
