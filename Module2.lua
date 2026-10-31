@@ -1,8 +1,3 @@
--- ==============================================================================
--- TOXHUB REVOLUTION UI ENGINE (Module2.lua)
--- BigFroot v1.2.0 & WASOR Classic Inspired
--- ==============================================================================
-
 local env = getgenv()
 getgenv().ToxOptionsReady = true
 getgenv().ScriptLoaded = true
@@ -100,6 +95,11 @@ getgenv().SetToxGuiColor = function(colorName)
     local selected = GUIColorMap[tostring(colorName)]
     if selected then
         Theme.Accent = selected
+        Theme.Outline = Color3.fromRGB(
+            math.clamp(math.floor(selected.R * 255 * 0.4), 22, 70),
+            math.clamp(math.floor(selected.G * 255 * 0.4), 22, 70),
+            math.clamp(math.floor(selected.B * 255 * 0.4), 28, 80)
+        )
         ApplyTheme()
         Settings.GUIColorName = tostring(colorName)
         if getgenv().AutoSaveConfiguration then
@@ -156,10 +156,10 @@ MainCorner.CornerRadius = UDim.new(0, 10)
 MainCorner.Parent = Main
 
 local MainStroke = Instance.new("UIStroke")
-MainStroke.Color = Theme.Outline
+MainStroke.Color = Theme.Accent
 MainStroke.Thickness = 1.5
 MainStroke.Parent = Main
-RegisterThemedObject(MainStroke, "Color", "Outline")
+RegisterThemedObject(MainStroke, "Color", "Accent")
 
 local MainGradient = Instance.new("UIGradient")
 MainGradient.Rotation = 90
@@ -229,6 +229,57 @@ SidebarRightBorder.BorderSizePixel = 0
 SidebarRightBorder.ZIndex = 11
 SidebarRightBorder.Parent = Sidebar
 RegisterThemedObject(SidebarRightBorder, "BackgroundColor3", "Outline")
+
+do
+local SidebarSplitter = Instance.new("TextButton")
+SidebarSplitter.Name = "SidebarSplitter"
+SidebarSplitter.Size = UDim2.new(0, 10, 1, 0)
+SidebarSplitter.Position = UDim2.new(1, -5, 0, 0)
+SidebarSplitter.BackgroundTransparency = 1
+SidebarSplitter.BorderSizePixel = 0
+SidebarSplitter.Text = ""
+SidebarSplitter.AutoButtonColor = false
+SidebarSplitter.ZIndex = 16
+SidebarSplitter.Parent = Sidebar
+
+local isDraggingSplitter = false
+local splitterStartX = 0
+local splitterStartWidth = 0
+
+SidebarSplitter.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isDraggingSplitter = true
+        splitterStartX = input.Position.X
+        splitterStartWidth = Sidebar.AbsoluteSize.X
+        SidebarRightBorder.BackgroundColor3 = Theme.Accent
+
+        local moveConn, endConn
+        moveConn = UserInputService.InputChanged:Connect(function(moveInput)
+            if moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch then
+                local delta = moveInput.Position.X - splitterStartX
+                local newW = math.clamp(splitterStartWidth + delta, 110, 360)
+                sidebarExpandedWidth = newW
+                Settings.SidebarExpandedWidth = newW
+                if not isSidebarCollapsed then
+                    Sidebar.Size = UDim2.new(0, newW, 1, 0)
+                    ContentArea.Position = UDim2.new(0, newW, 0, 0)
+                    ContentArea.Size = UDim2.new(1, -newW, 1, 0)
+                end
+            end
+        end)
+
+        endConn = UserInputService.InputEnded:Connect(function(endInput)
+            if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
+                isDraggingSplitter = false
+                SidebarRightBorder.BackgroundColor3 = Theme.Outline
+                if moveConn then moveConn:Disconnect() end
+                if endConn then endConn:Disconnect() end
+                if getgenv().AutoSaveConfiguration then getgenv().AutoSaveConfiguration() end
+            end
+        end)
+    end
+end)
+end
 
 -- Sidebar Header
 local SidebarHeader = Instance.new("Frame")
@@ -429,9 +480,21 @@ local function SetSidebarCollapsed(collapsed)
     CategoryLabel.Visible = not isSidebarCollapsed
     UserNameLabel.Visible = not isSidebarCollapsed
     UserExpiryLabel.Visible = not isSidebarCollapsed
-    CollapseSidebarBtn.Text = isSidebarCollapsed and ">" or "<"
-    CollapseSidebarBtn.Position = isSidebarCollapsed and UDim2.new(0.5, -11, 0.5, -11) or UDim2.new(1, -26, 0.5, -11)
-    UserAvatar.Position = isSidebarCollapsed and UDim2.new(0.5, -16, 0, 6) or UDim2.new(0, 10, 0.5, -16)
+    if isSidebarCollapsed then
+        SidebarFooter.Size = UDim2.new(1, 0, 0, 72)
+        SidebarScroll.Size = UDim2.new(1, 0, 1, -(48 + 72))
+        UserAvatar.Size = UDim2.new(0, 28, 0, 28)
+        UserAvatar.Position = UDim2.new(0.5, -14, 0, 8)
+        CollapseSidebarBtn.Position = UDim2.new(0.5, -11, 0, 44)
+        CollapseSidebarBtn.Text = ">"
+    else
+        SidebarFooter.Size = UDim2.new(1, 0, 0, 48)
+        SidebarScroll.Size = UDim2.new(1, 0, 1, -(48 + 48))
+        UserAvatar.Size = UDim2.new(0, 32, 0, 32)
+        UserAvatar.Position = UDim2.new(0, 10, 0.5, -16)
+        CollapseSidebarBtn.Position = UDim2.new(1, -26, 0.5, -11)
+        CollapseSidebarBtn.Text = "<"
+    end
 
     for _, btn in ipairs(SidebarScroll:GetChildren()) do
         if btn:IsA("TextButton") then
@@ -540,16 +603,62 @@ RegisterThemedObject(MinimizeBtn, "TextColor3", "Text")
 local MinCorner = Instance.new("UICorner") MinCorner.CornerRadius = UDim.new(0, 6) MinCorner.Parent = MinimizeBtn
 getgenv().Minimize = MinimizeBtn
 
+do
+local isMinimized = false
+local MainExpandedSize = Main.Size
+
+local function SetMinimized(minimized)
+    isMinimized = (minimized == true)
+    getgenv().ToxMainMinimized = isMinimized
+    getgenv().Minimized = isMinimized
+
+    local handle = Main:FindFirstChild("ToxResizeHandle") or ResizeHandle
+    if isMinimized then
+        if Main.Size.Y.Offset > 46 then
+            MainExpandedSize = Main.Size
+            getgenv().ToxMainExpandedSize = MainExpandedSize
+        end
+        if handle then
+            handle.Visible = false
+        end
+        Sidebar.Visible = false
+        PagesContainer.Visible = false
+        SearchResultsScroll.Visible = false
+        ContentArea.Position = UDim2.new(0, 0, 0, 0)
+        ContentArea.Size = UDim2.new(1, 0, 1, 0)
+        Main.ClipsDescendants = true
+        Main.Size = UDim2.new(MainExpandedSize.X.Scale, MainExpandedSize.X.Offset, 0, 46)
+        MinimizeBtn.Text = "+"
+    else
+        Main.Size = MainExpandedSize
+        Sidebar.Visible = true
+        PagesContainer.Visible = true
+        if handle then
+            handle.Visible = true
+        end
+        local targetW = isSidebarCollapsed and sidebarCollapsedWidth or sidebarExpandedWidth
+        ContentArea.Position = UDim2.new(0, targetW, 0, 0)
+        ContentArea.Size = UDim2.new(1, -targetW, 1, 0)
+        MinimizeBtn.Text = "-"
+    end
+end
+getgenv().SetToxMinimized = SetMinimized
+
+MinimizeBtn.MouseButton1Click:Connect(function()
+    SetMinimized(not isMinimized)
+end)
+end
+
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Name = "CloseBtn"
 CloseBtn.Size = UDim2.new(0, 28, 0, 28)
 CloseBtn.Position = UDim2.new(1, -34, 0.5, -14)
 CloseBtn.BackgroundColor3 = Theme.Element
 CloseBtn.BorderSizePixel = 0
-CloseBtn.Text = "✕"
+CloseBtn.Text = "X"
 CloseBtn.TextColor3 = Theme.DimText
 CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.TextSize = 12
+CloseBtn.TextSize = 13
 CloseBtn.ZIndex = 22
 CloseBtn.Parent = TopBar
 RegisterThemedObject(CloseBtn, "BackgroundColor3", "Element")
@@ -557,8 +666,12 @@ RegisterThemedObject(CloseBtn, "TextColor3", "DimText")
 local CloseCorner = Instance.new("UICorner") CloseCorner.CornerRadius = UDim.new(0, 6) CloseCorner.Parent = CloseBtn
 
 CloseBtn.MouseButton1Click:Connect(function()
-    Main.Visible = false
-    if DimmerFrame then DimmerFrame.Visible = false end
+    if getgenv().ToggleToxGui then
+        getgenv().ToggleToxGui(false)
+    else
+        Main.Visible = false
+        if DimmerFrame then DimmerFrame.Visible = false end
+    end
 end)
 
 -- Search Results Floating Dropdown
@@ -621,7 +734,7 @@ ResizeHandle.Parent = Main
 RegisterThemedObject(ResizeHandle, "TextColor3", "DimText")
 
 if getgenv().MakeResizable then
-    getgenv().MakeResizable(Main, ResizeHandle, "Main", Vector2.new(520, 360), Vector2.new(1200, 800))
+    getgenv().MakeResizable(Main, "Main", Vector2.new(380, 240), Vector2.new(3840, 2160))
 end
 
 
@@ -1203,6 +1316,10 @@ local function ToxOpenPage(targetPage)
     if getgenv().ToxControlGui and getgenv().ToxControlGui.Parent then
         getgenv().ToxControlGui.Visible = (targetPage == ControlPage)
     end
+
+    if getgenv().JoinGamesGui and getgenv().JoinGamesGui.Parent then
+        getgenv().JoinGamesGui.Visible = (targetPage == JoinPage)
+    end
 end
 getgenv().ToxOpenPage = ToxOpenPage
 
@@ -1383,7 +1500,7 @@ MobileToggleBtn.Position = UDim2.new(1, -60, 0.5, -23)
 MobileToggleBtn.BackgroundColor3 = Theme.Panel
 MobileToggleBtn.BorderSizePixel = 0
 MobileToggleBtn.Image = LOGO_ID
-MobileToggleBtn.Visible = Settings.MobileToggle == true
+MobileToggleBtn.Visible = Settings.MobileToggle ~= false
 MobileToggleBtn.ZIndex = 999999
 MobileToggleBtn.Parent = Gui
 
@@ -1395,9 +1512,13 @@ RegisterThemedObject(MobileStroke, "Color", "Accent")
 MakeDraggable(MobileToggleBtn, MobileToggleBtn)
 
 MobileToggleBtn.MouseButton1Click:Connect(function()
-    Main.Visible = not Main.Visible
-    if DimmerFrame then
-        DimmerFrame.Visible = (Settings.DimBackground == true and Main.Visible)
+    if getgenv().ToggleToxGui then
+        getgenv().ToggleToxGui()
+    else
+        Main.Visible = not Main.Visible
+        if DimmerFrame then
+            DimmerFrame.Visible = (Settings.DimBackground == true and Main.Visible)
+        end
     end
 end)
 
@@ -2788,6 +2909,61 @@ task.spawn(function()
     end
 end)
 
+do
+local SubGuisPreKeyHiddenState = getgenv().SubGuisPreKeyHiddenState or {}
+getgenv().SubGuisPreKeyHiddenState = SubGuisPreKeyHiddenState
+
+local function ToggleToxGui(forceVisible)
+    local targetVisible = forceVisible
+    if targetVisible == nil then
+        targetVisible = not Main.Visible
+    end
+
+    Main.Visible = targetVisible
+    if DimmerFrame then
+        DimmerFrame.Visible = (Settings.DimBackground == true and targetVisible)
+    end
+
+    if not targetVisible then
+        if getgenv().ChatLogGui and getgenv().ChatLogGui.Parent then
+            SubGuisPreKeyHiddenState.ChatLog = getgenv().ChatLogGui.Visible
+            getgenv().ChatLogGui.Visible = false
+        end
+        if getgenv().MusicGui and getgenv().MusicGui.Parent then
+            SubGuisPreKeyHiddenState.Music = getgenv().MusicGui.Visible
+            getgenv().MusicGui.Visible = false
+        end
+        if getgenv().WaypointsGui and getgenv().WaypointsGui.Parent then
+            SubGuisPreKeyHiddenState.Waypoints = getgenv().WaypointsGui.Visible
+            getgenv().WaypointsGui.Visible = false
+        end
+        for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
+            if gui and gui.Parent then
+                SubGuisPreKeyHiddenState["Extra_" .. tostring(key)] = gui.Visible
+                gui.Visible = false
+            end
+        end
+    else
+        if not getgenv().ToxMainMinimized then
+            if SubGuisPreKeyHiddenState.ChatLog ~= nil and getgenv().ChatLogGui and getgenv().ChatLogGui.Parent then
+                getgenv().ChatLogGui.Visible = SubGuisPreKeyHiddenState.ChatLog
+            end
+            if SubGuisPreKeyHiddenState.Music ~= nil and getgenv().MusicGui and getgenv().MusicGui.Parent then
+                getgenv().MusicGui.Visible = SubGuisPreKeyHiddenState.Music
+            end
+            if SubGuisPreKeyHiddenState.Waypoints ~= nil and getgenv().WaypointsGui and getgenv().WaypointsGui.Parent then
+                getgenv().WaypointsGui.Visible = SubGuisPreKeyHiddenState.Waypoints
+            end
+            for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
+                if gui and gui.Parent and SubGuisPreKeyHiddenState["Extra_" .. tostring(key)] ~= nil then
+                    gui.Visible = SubGuisPreKeyHiddenState["Extra_" .. tostring(key)]
+                end
+            end
+        end
+    end
+end
+getgenv().ToggleToxGui = ToggleToxGui
+
 -- Keybind toggling Main window
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
@@ -2798,12 +2974,10 @@ UserInputService.InputBegan:Connect(function(input, gp)
         matchKey = (input.KeyCode.Name == Settings.GUIKeybind)
     end
     if matchKey then
-        Main.Visible = not Main.Visible
-        if DimmerFrame then
-            DimmerFrame.Visible = (Settings.DimBackground == true and Main.Visible)
-        end
+        ToggleToxGui()
     end
 end)
+end
 
 -- Default open Home Page
 ToxOpenPage(HomePage)
