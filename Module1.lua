@@ -288,8 +288,20 @@ if HasRunningToxHub() then
     task.wait(0.25)
 end
 
-if getgenv().Gui then pcall(function() getgenv().Gui:Destroy() end) end
-if getgenv().NotifGui then pcall(function() getgenv().NotifGui:Destroy() end) end
+if getgenv().Gui then
+    pcall(function() getgenv().Gui:Destroy() end)
+    getgenv().Gui = nil
+    getgenv().Main = nil
+    getgenv().JoinGamesScroll = nil
+    getgenv().JoinGamesGui = nil
+    getgenv().JoinGameIdBox = nil
+    getgenv().JoinGameAddButton = nil
+    getgenv().ToxChatScroll = nil
+end
+if getgenv().NotifGui then
+    pcall(function() getgenv().NotifGui:Destroy() end)
+    getgenv().NotifGui = nil
+end
 
 local LOGO_ID = "rbxassetid://120675082996894"
 local MAIN_COLOR = Color3.fromRGB(9, 0, 136)
