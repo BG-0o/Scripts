@@ -606,6 +606,7 @@ getgenv().UIPositions = {}
 getgenv().GameSharedSettings = {}
 getgenv().GameSpecificSettings = {}
 getgenv().BaseSharedSettings = {}
+local Settings = getgenv().Settings
 getgenv().Destroyed = false
 getgenv().ScriptLoaded = false
 getgenv().ToxOptionsReady = nil
@@ -649,10 +650,12 @@ getgenv().OriginalLighting = {
     GlobalShadows = Lighting.GlobalShadows
 }
 
-getgenv().AddConnection = function(conn)
+local function AddConnection(conn)
+    if not conn then return end
     table.insert(getgenv().ScriptConnections, conn)
     return conn
 end
+getgenv().AddConnection = AddConnection
 
 local FolderName = "ToxHub"
 local LegacyFolderName = "ToxV1_Data"
@@ -3231,20 +3234,17 @@ local function UpdateAirWalk()
 
         if UserInputService:IsKeyDown(Enum.KeyCode.E)
         or UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            vertical += 1
+            vertical = vertical + 1
         end
 
         if UserInputService:IsKeyDown(Enum.KeyCode.Q)
         or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
         or UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-            vertical -= 1
+            vertical = vertical - 1
         end
 
         if vertical ~= 0 then
-            LockedAirWalkY +=
-                vertical
-                * 28
-                * deltaTime
+            LockedAirWalkY = LockedAirWalkY + (vertical * 28 * deltaTime)
         end
 
         if not AirWalkPart
