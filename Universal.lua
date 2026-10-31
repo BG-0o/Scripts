@@ -1642,51 +1642,26 @@ local function CreateJoinInterface()
     quickTitle.Parent =
         quickGamesCard
 
-    if JoinGameIdBox
-    and JoinGameIdBox.Parent then
-        local addArea =
-            JoinGameIdBox.Parent
+    pcall(function()
+        local box = (getgenv and getgenv().JoinGameIdBox) or JoinGameIdBox
+        if box and box.Parent then
+            local addArea = box.Parent
+            if addArea and addArea.Parent then
+                addArea.Parent = quickGamesCard
+                addArea.Size = UDim2.new(1, -16, 0, 32)
+                addArea.Position = UDim2.new(0, 8, 0, 32)
+            end
+        end
+    end)
 
-        addArea.Parent =
-            quickGamesCard
-
-        addArea.Size =
-            UDim2.new(
-                1,
-                -16,
-                0,
-                32
-            )
-
-        addArea.Position =
-            UDim2.new(
-                0,
-                8,
-                0,
-                32
-            )
-    end
-
-    if JoinGamesScroll then
-        JoinGamesScroll.Parent =
-            quickGamesCard
-
-        JoinGamesScroll.Size =
-            UDim2.new(
-                1,
-                -16,
-                1,
-                -72
-            )
-
-        JoinGamesScroll.Position =
-            UDim2.new(
-                0,
-                8,
-                0,
-                68
-            )
-    end
+    pcall(function()
+        local scroll = (getgenv and getgenv().JoinGamesScroll) or JoinGamesScroll
+        if scroll and scroll.Parent then
+            scroll.Parent = quickGamesCard
+            scroll.Size = UDim2.new(1, -16, 1, -72)
+            scroll.Position = UDim2.new(0, 8, 0, 68)
+        end
+    end)
 
     if JoinGamesGui then
         JoinGamesGui.Visible = false
@@ -1736,19 +1711,14 @@ local function ResolvePlaceName(placeId)
 end
 
 local function RefreshQuickJoinGames()
-    if not JoinGamesScroll then
+    local scroll = (getgenv and getgenv().JoinGamesScroll) or JoinGamesScroll
+    if not scroll or not pcall(function() return scroll.Parent end) or scroll.Parent == nil then
         return
     end
 
-    for _, child in ipairs(
-        JoinGamesScroll:
-            GetChildren()
-    ) do
-        if child:IsA(
-            "Frame"
-        ) then
-            child:
-                Destroy()
+    for _, child in ipairs(scroll:GetChildren()) do
+        if child:IsA("Frame") then
+            pcall(function() child:Destroy() end)
         end
     end
 
@@ -1799,8 +1769,9 @@ local function RefreshQuickJoinGames()
 
         row.BorderSizePixel = 0
         row.LayoutOrder = idx
-        row.Parent =
-            JoinGamesScroll
+        pcall(function()
+            row.Parent = scroll
+        end)
 
         local rowCorner =
             Instance.new(
