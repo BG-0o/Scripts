@@ -1,3 +1,8 @@
+-- ==============================================================================
+-- TOXHUB REVOLUTION UI ENGINE (Module2.lua)
+-- BigFroot v1.2.0 & WASOR Classic Inspired
+-- ==============================================================================
+
 local env = getgenv()
 getgenv().ToxOptionsReady = true
 getgenv().ScriptLoaded = true
@@ -462,6 +467,7 @@ ContentArea.ZIndex = 5
 ContentArea.Parent = Main
 
 local function SetSidebarCollapsed(collapsed)
+    if isMinimized or getgenv().ToxMainMinimized then return end
     isSidebarCollapsed = collapsed
     Settings.CollapseSidebar = isSidebarCollapsed
 
@@ -481,18 +487,22 @@ local function SetSidebarCollapsed(collapsed)
     UserNameLabel.Visible = not isSidebarCollapsed
     UserExpiryLabel.Visible = not isSidebarCollapsed
     if isSidebarCollapsed then
-        SidebarFooter.Size = UDim2.new(1, 0, 0, 72)
-        SidebarScroll.Size = UDim2.new(1, 0, 1, -(48 + 72))
-        UserAvatar.Size = UDim2.new(0, 28, 0, 28)
-        UserAvatar.Position = UDim2.new(0.5, -14, 0, 8)
-        CollapseSidebarBtn.Position = UDim2.new(0.5, -11, 0, 44)
+        SidebarFooter.Position = UDim2.new(0, 0, 1, -78)
+        SidebarFooter.Size = UDim2.new(1, 0, 0, 78)
+        SidebarScroll.Size = UDim2.new(1, 0, 1, -(48 + 78))
+        UserAvatar.Size = UDim2.new(0, 26, 0, 26)
+        UserAvatar.Position = UDim2.new(0.5, -13, 0, 8)
+        CollapseSidebarBtn.Size = UDim2.new(0, 24, 0, 22)
+        CollapseSidebarBtn.Position = UDim2.new(0.5, -12, 0, 46)
         CollapseSidebarBtn.Text = ">"
     else
-        SidebarFooter.Size = UDim2.new(1, 0, 0, 48)
-        SidebarScroll.Size = UDim2.new(1, 0, 1, -(48 + 48))
+        SidebarFooter.Position = UDim2.new(0, 0, 1, -52)
+        SidebarFooter.Size = UDim2.new(1, 0, 0, 52)
+        SidebarScroll.Size = UDim2.new(1, 0, 1, -(48 + 52))
         UserAvatar.Size = UDim2.new(0, 32, 0, 32)
         UserAvatar.Position = UDim2.new(0, 10, 0.5, -16)
-        CollapseSidebarBtn.Position = UDim2.new(1, -26, 0.5, -11)
+        CollapseSidebarBtn.Size = UDim2.new(0, 22, 0, 22)
+        CollapseSidebarBtn.Position = UDim2.new(1, -28, 0.5, -11)
         CollapseSidebarBtn.Text = "<"
     end
 
@@ -618,10 +628,12 @@ local function SetMinimized(minimized)
             MainExpandedSize = Main.Size
             getgenv().ToxMainExpandedSize = MainExpandedSize
         end
-        if handle then
-            handle.Visible = false
+        if handle then handle.Visible = false end
+        for _, ch in ipairs(Main:GetChildren()) do
+            if ch.Name == "ToxResizeHandle" then ch.Visible = false end
         end
         Sidebar.Visible = false
+        SidebarFooter.Visible = false
         PagesContainer.Visible = false
         SearchResultsScroll.Visible = false
         ContentArea.Position = UDim2.new(0, 0, 0, 0)
@@ -632,9 +644,11 @@ local function SetMinimized(minimized)
     else
         Main.Size = MainExpandedSize
         Sidebar.Visible = true
+        SidebarFooter.Visible = true
         PagesContainer.Visible = true
-        if handle then
-            handle.Visible = true
+        if handle then handle.Visible = true end
+        for _, ch in ipairs(Main:GetChildren()) do
+            if ch.Name == "ToxResizeHandle" then ch.Visible = true end
         end
         local targetW = isSidebarCollapsed and sidebarCollapsedWidth or sidebarExpandedWidth
         ContentArea.Position = UDim2.new(0, targetW, 0, 0)
@@ -734,7 +748,7 @@ ResizeHandle.Parent = Main
 RegisterThemedObject(ResizeHandle, "TextColor3", "DimText")
 
 if getgenv().MakeResizable then
-    getgenv().MakeResizable(Main, "Main", Vector2.new(380, 240), Vector2.new(3840, 2160))
+    getgenv().MakeResizable(Main, "Main", Vector2.new(160, 90), Vector2.new(3840, 2160))
 end
 
 
@@ -1730,6 +1744,9 @@ CPPreview.Parent = ColorPickerModal
 local CPPreviewCorner = Instance.new("UICorner") CPPreviewCorner.CornerRadius = UDim.new(0, 6) CPPreviewCorner.Parent = CPPreview
 
 local function CreateCPSlider(name, yPos, maxVal, defaultVal)
+    maxVal = tonumber(maxVal) or 255
+    defaultVal = tonumber(defaultVal) or 0
+    if maxVal <= 0 then maxVal = 255 end
     local container = Instance.new("Frame")
     container.Size = UDim2.new(1, -28, 0, 40)
     container.Position = UDim2.new(0, 14, 0, yPos)
@@ -2522,6 +2539,10 @@ AddSettingsDropdown(WeatherCard.Content, "Weather area", {"Inside UI", "Screen"}
 end)
 
 local function AddSettingsSlider(parent, name, minVal, maxVal, defaultVal, suffix, callback)
+    minVal = tonumber(minVal) or 0
+    maxVal = tonumber(maxVal) or 100
+    defaultVal = tonumber(defaultVal) or minVal
+    if maxVal <= minVal then maxVal = minVal + 1 end
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, 0, 0, 42)
     row.BackgroundColor3 = Theme.Element
@@ -3295,17 +3316,25 @@ end
 getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     local parentTarget = ResolveElementParent(Page)
 
-    local Button = Instance.new("TextButton")
-    Button.Size = UDim2.new(1, -4, 0, 36)
-    Button.BackgroundColor3 = Theme.Element
-    Button.BorderSizePixel = 0
-    Button.Text = ""
-    Button.AutoButtonColor = false
-    Button.Parent = parentTarget
-    local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 6) bCorner.Parent = Button
-    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.Parent = Button
-    RegisterThemedObject(Button, "BackgroundColor3", "Element")
-    RegisterThemedObject(bStroke, "Color", "Outline")
+    local Container = Instance.new("Frame")
+    Container.Size = UDim2.new(1, -4, 0, 36)
+    Container.BackgroundColor3 = Theme.Element
+    Container.BorderSizePixel = 0
+    Container.Parent = parentTarget
+    local cCorner = Instance.new("UICorner") cCorner.CornerRadius = UDim.new(0, 6) cCorner.Parent = Container
+    local cStroke = Instance.new("UIStroke")
+    cStroke.Color = Theme.Outline
+    cStroke.Thickness = 1
+    cStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    cStroke.Parent = Container
+    RegisterThemedObject(Container, "BackgroundColor3", "Element")
+    RegisterThemedObject(cStroke, "Color", "Outline")
+
+    local ClickBtn = Instance.new("TextButton")
+    ClickBtn.Size = UDim2.new(1, 0, 1, 0)
+    ClickBtn.BackgroundTransparency = 1
+    ClickBtn.Text = ""
+    ClickBtn.Parent = Container
 
     local risky = IsFeatureRisky(Name)
     local Label = Instance.new("TextLabel")
@@ -3317,7 +3346,8 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     Label.TextSize = 12
     Label.Font = Enum.Font.GothamMedium
     Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.Parent = Button
+    Label.TextTruncate = Enum.TextTruncate.AtEnd
+    Label.Parent = Container
     if not risky then
         RegisterThemedObject(Label, "TextColor3", "Text")
     else
@@ -3329,9 +3359,13 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     ToggleBg.Position = UDim2.new(1, -48, 0.5, -10)
     ToggleBg.BackgroundColor3 = DefaultValue and Theme.Accent or Theme.Panel
     ToggleBg.BorderSizePixel = 0
-    ToggleBg.Parent = Button
+    ToggleBg.Parent = Container
     local tgCorner = Instance.new("UICorner") tgCorner.CornerRadius = UDim.new(1, 0) tgCorner.Parent = ToggleBg
-    local tgStroke = Instance.new("UIStroke") tgStroke.Color = Theme.Outline tgStroke.Thickness = 1 tgStroke.Parent = ToggleBg
+    local tgStroke = Instance.new("UIStroke")
+    tgStroke.Color = Theme.Outline
+    tgStroke.Thickness = 1
+    tgStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    tgStroke.Parent = ToggleBg
     RegisterThemedObject(tgStroke, "Color", "Outline")
 
     local Indicator = Instance.new("Frame")
@@ -3354,7 +3388,7 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     end
 
     local Controller = {
-        Button = Button,
+        Button = Container,
         SetVisual = function(Value)
             Enabled = Value == true
             Update()
@@ -3364,8 +3398,8 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     RegisterSharedToggle(SyncKey, Controller)
     RegisterStartupToggleCallback(SyncKey, Callback)
 
-    Button.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed  then return end
+    ClickBtn.MouseButton1Click:Connect(function()
+        if getgenv().Destroyed then return end
         Enabled = not Enabled
         Update()
         Callback(Enabled)
@@ -3384,10 +3418,10 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     Update()
 
     if getgenv().RegisterToxSearchControl then
-        getgenv().RegisterToxSearchControl(Name, Page, Button)
+        getgenv().RegisterToxSearchControl(Name, Page, Container)
     end
 
-    return Button
+    return Container
 end
 
 getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultValue, CallbackToggle, CallbackValue, SyncKey)
@@ -3399,7 +3433,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     Container.BorderSizePixel = 0
     Container.Parent = parentTarget
     local cCorner = Instance.new("UICorner") cCorner.CornerRadius = UDim.new(0, 6) cCorner.Parent = Container
-    local cStroke = Instance.new("UIStroke") cStroke.Color = Theme.Outline cStroke.Thickness = 1 cStroke.Parent = Container
+    local cStroke = Instance.new("UIStroke") cStroke.Color = Theme.Outline cStroke.Thickness = 1 cStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cStroke.Parent = Container
     RegisterThemedObject(Container, "BackgroundColor3", "Element")
     RegisterThemedObject(cStroke, "Color", "Outline")
 
@@ -3413,6 +3447,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     Label.TextSize = 12
     Label.Font = Enum.Font.GothamMedium
     Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.TextTruncate = Enum.TextTruncate.AtEnd
     Label.Parent = Container
     if not risky then RegisterThemedObject(Label, "TextColor3", "Text") else RegisterThemedObject(Label, "TextColor3", "Risky") end
 
@@ -3428,7 +3463,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     Input.ClearTextOnFocus = false
     Input.Parent = Container
     local inCorner = Instance.new("UICorner") inCorner.CornerRadius = UDim.new(0, 4) inCorner.Parent = Input
-    local inStroke = Instance.new("UIStroke") inStroke.Color = Theme.Outline inStroke.Thickness = 1 inStroke.Parent = Input
+    local inStroke = Instance.new("UIStroke") inStroke.Color = Theme.Outline inStroke.Thickness = 1 inStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border inStroke.Parent = Input
     RegisterThemedObject(Input, "BackgroundColor3", "Panel")
     RegisterThemedObject(Input, "TextColor3", "Text")
     RegisterThemedObject(inStroke, "Color", "Outline")
@@ -3442,7 +3477,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     ToggleButton.AutoButtonColor = false
     ToggleButton.Parent = Container
     local tgCorner = Instance.new("UICorner") tgCorner.CornerRadius = UDim.new(1, 0) tgCorner.Parent = ToggleButton
-    local tgStroke = Instance.new("UIStroke") tgStroke.Color = Theme.Outline tgStroke.Thickness = 1 tgStroke.Parent = ToggleButton
+    local tgStroke = Instance.new("UIStroke") tgStroke.Color = Theme.Outline tgStroke.Thickness = 1 tgStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border tgStroke.Parent = ToggleButton
     RegisterThemedObject(tgStroke, "Color", "Outline")
 
     local Indicator = Instance.new("Frame")
@@ -3528,7 +3563,7 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     Container.BorderSizePixel = 0
     Container.Parent = parentTarget
     local cCorner = Instance.new("UICorner") cCorner.CornerRadius = UDim.new(0, 6) cCorner.Parent = Container
-    local cStroke = Instance.new("UIStroke") cStroke.Color = Theme.Outline cStroke.Thickness = 1 cStroke.Parent = Container
+    local cStroke = Instance.new("UIStroke") cStroke.Color = Theme.Outline cStroke.Thickness = 1 cStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cStroke.Parent = Container
     RegisterThemedObject(Container, "BackgroundColor3", "Element")
     RegisterThemedObject(cStroke, "Color", "Outline")
 
@@ -3542,6 +3577,7 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     Label.TextSize = 12
     Label.Font = Enum.Font.GothamMedium
     Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.TextTruncate = Enum.TextTruncate.AtEnd
     Label.Parent = Container
     if not risky then RegisterThemedObject(Label, "TextColor3", "Text") else RegisterThemedObject(Label, "TextColor3", "Risky") end
 
@@ -3556,7 +3592,7 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     ChoiceBtn.TextSize = 11
     ChoiceBtn.Parent = Container
     local cbCorner = Instance.new("UICorner") cbCorner.CornerRadius = UDim.new(0, 4) cbCorner.Parent = ChoiceBtn
-    local cbStroke = Instance.new("UIStroke") cbStroke.Color = Theme.Outline cbStroke.Thickness = 1 cbStroke.Parent = ChoiceBtn
+    local cbStroke = Instance.new("UIStroke") cbStroke.Color = Theme.Outline cbStroke.Thickness = 1 cbStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cbStroke.Parent = ChoiceBtn
     RegisterThemedObject(ChoiceBtn, "BackgroundColor3", "Panel")
     RegisterThemedObject(ChoiceBtn, "TextColor3", "Accent")
     RegisterThemedObject(cbStroke, "Color", "Outline")
@@ -3584,7 +3620,7 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     ToggleButton.AutoButtonColor = false
     ToggleButton.Parent = Container
     local tgCorner = Instance.new("UICorner") tgCorner.CornerRadius = UDim.new(1, 0) tgCorner.Parent = ToggleButton
-    local tgStroke = Instance.new("UIStroke") tgStroke.Color = Theme.Outline tgStroke.Thickness = 1 tgStroke.Parent = ToggleButton
+    local tgStroke = Instance.new("UIStroke") tgStroke.Color = Theme.Outline tgStroke.Thickness = 1 tgStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border tgStroke.Parent = ToggleButton
     RegisterThemedObject(tgStroke, "Color", "Outline")
 
     local Indicator = Instance.new("Frame")
@@ -3658,7 +3694,7 @@ getgenv().CreateInputWithButton = function(Name, Page, DefaultText, ButtonText, 
     Box.BorderSizePixel = 0
     Box.Parent = parentTarget
     local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 6) bCorner.Parent = Box
-    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.Parent = Box
+    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border bStroke.Parent = Box
     RegisterThemedObject(Box, "BackgroundColor3", "Element")
     RegisterThemedObject(bStroke, "Color", "Outline")
 
@@ -3688,7 +3724,7 @@ getgenv().CreateInputWithButton = function(Name, Page, DefaultText, ButtonText, 
     Input.ClearTextOnFocus = false
     Input.Parent = Box
     local inCorner = Instance.new("UICorner") inCorner.CornerRadius = UDim.new(0, 4) inCorner.Parent = Input
-    local inStroke = Instance.new("UIStroke") inStroke.Color = Theme.Outline inStroke.Thickness = 1 inStroke.Parent = Input
+    local inStroke = Instance.new("UIStroke") inStroke.Color = Theme.Outline inStroke.Thickness = 1 inStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border inStroke.Parent = Input
     RegisterThemedObject(Input, "BackgroundColor3", "Panel")
     RegisterThemedObject(Input, "TextColor3", "Text")
     RegisterThemedObject(inStroke, "Color", "Outline")
@@ -3727,7 +3763,7 @@ getgenv().CreateInputWithTwoButtons = function(Name, Page, DefaultText, Btn1Text
     Box.BorderSizePixel = 0
     Box.Parent = parentTarget
     local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 6) bCorner.Parent = Box
-    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.Parent = Box
+    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border bStroke.Parent = Box
     RegisterThemedObject(Box, "BackgroundColor3", "Element")
     RegisterThemedObject(bStroke, "Color", "Outline")
 
@@ -3756,7 +3792,7 @@ getgenv().CreateInputWithTwoButtons = function(Name, Page, DefaultText, Btn1Text
     Input.ClearTextOnFocus = false
     Input.Parent = Box
     local inCorner = Instance.new("UICorner") inCorner.CornerRadius = UDim.new(0, 4) inCorner.Parent = Input
-    local inStroke = Instance.new("UIStroke") inStroke.Color = Theme.Outline inStroke.Thickness = 1 inStroke.Parent = Input
+    local inStroke = Instance.new("UIStroke") inStroke.Color = Theme.Outline inStroke.Thickness = 1 inStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border inStroke.Parent = Input
     RegisterThemedObject(Input, "BackgroundColor3", "Panel")
     RegisterThemedObject(Input, "TextColor3", "Text")
     RegisterThemedObject(inStroke, "Color", "Outline")
@@ -3816,7 +3852,7 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback
     Box.BorderSizePixel = 0
     Box.Parent = parentTarget
     local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 6) bCorner.Parent = Box
-    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.Parent = Box
+    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border bStroke.Parent = Box
     RegisterThemedObject(Box, "BackgroundColor3", "Element")
     RegisterThemedObject(bStroke, "Color", "Outline")
 
@@ -3882,7 +3918,7 @@ getgenv().CreateButton = function(Name, Page, Callback)
     Button.Font = Enum.Font.GothamMedium
     Button.Parent = parentTarget
     local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 6) Corner.Parent = Button
-    local Stroke = Instance.new("UIStroke") Stroke.Color = Theme.Outline Stroke.Thickness = 1 Stroke.Parent = Button
+    local Stroke = Instance.new("UIStroke") Stroke.Color = Theme.Outline Stroke.Thickness = 1 Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border Stroke.Parent = Button
     RegisterThemedObject(Button, "BackgroundColor3", "Element")
     RegisterThemedObject(Button, "TextColor3", "Text")
     RegisterThemedObject(Stroke, "Color", "Outline")
@@ -3912,7 +3948,7 @@ getgenv().CreateConfirmButton = function(Name, Page, Callback)
     Button.Font = Enum.Font.GothamMedium
     Button.Parent = parentTarget
     local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 6) Corner.Parent = Button
-    local Stroke = Instance.new("UIStroke") Stroke.Color = Theme.Outline Stroke.Thickness = 1 Stroke.Parent = Button
+    local Stroke = Instance.new("UIStroke") Stroke.Color = Theme.Outline Stroke.Thickness = 1 Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border Stroke.Parent = Button
     RegisterThemedObject(Button, "BackgroundColor3", "Element")
     RegisterThemedObject(Button, "TextColor3", "Text")
     RegisterThemedObject(Stroke, "Color", "Outline")
@@ -3956,7 +3992,7 @@ getgenv().CreateKeybindButton = function(Name, Page, DefaultKey, Callback)
     Box.BorderSizePixel = 0
     Box.Parent = parentTarget
     local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 6) bCorner.Parent = Box
-    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.Parent = Box
+    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border bStroke.Parent = Box
     RegisterThemedObject(Box, "BackgroundColor3", "Element")
     RegisterThemedObject(bStroke, "Color", "Outline")
 
@@ -4043,7 +4079,7 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     Box.BorderSizePixel = 0
     Box.Parent = parentTarget
     local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 6) bCorner.Parent = Box
-    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.Parent = Box
+    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border bStroke.Parent = Box
     RegisterThemedObject(Box, "BackgroundColor3", "Element")
     RegisterThemedObject(bStroke, "Color", "Outline")
 
