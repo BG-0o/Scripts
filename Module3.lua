@@ -1,3 +1,16 @@
+local RegisterThemedObject = getgenv().RegisterThemedObject or function() end
+local Theme = getgenv().Theme or {
+    Background = Color3.fromRGB(15, 16, 24),
+    Panel = Color3.fromRGB(20, 22, 34),
+    Element = Color3.fromRGB(28, 30, 46),
+    Hover = Color3.fromRGB(36, 38, 58),
+    Outline = Color3.fromRGB(35, 38, 58),
+    Accent = Color3.fromRGB(45, 95, 255),
+    Accent2 = Color3.fromRGB(130, 60, 255),
+    Text = Color3.fromRGB(240, 240, 245),
+    DimText = Color3.fromRGB(140, 145, 165),
+    Risky = Color3.fromRGB(240, 65, 65)
+}
 getgenv().ToxModule2SplitVersion = "2026-09-16-lighting-controller-2"
 local Players = game:GetService("Players")
 local TextChatService = game:GetService("TextChatService")
@@ -43,10 +56,13 @@ getgenv().ChatLogGui = ChatLogGui
 
 local ChatLogCorner = Instance.new("UICorner") ChatLogCorner.CornerRadius = UDim.new(0, 8) ChatLogCorner.Parent = ChatLogGui
 local ChatLogStroke = Instance.new("UIStroke") ChatLogStroke.Color = MAIN_COLOR ChatLogStroke.Thickness = 2 ChatLogStroke.Parent = ChatLogGui
+RegisterThemedObject(ChatLogStroke, "Color", "Accent")
+RegisterThemedObject(ChatLogGui, "BackgroundColor3", "Panel")
 
 local ChatLogTopBar = Instance.new("Frame")
 ChatLogTopBar.Size = UDim2.new(1, 0, 0, 32)
 ChatLogTopBar.BackgroundColor3 = MAIN_COLOR
+RegisterThemedObject(ChatLogTopBar, "BackgroundColor3", "Accent")
 ChatLogTopBar.BorderSizePixel = 0
 ChatLogTopBar.Parent = ChatLogGui
 
@@ -94,6 +110,7 @@ ChatLogScroll.BackgroundTransparency = 1
 ChatLogScroll.BorderSizePixel = 0
 ChatLogScroll.ScrollBarThickness = 4
 ChatLogScroll.ScrollBarImageColor3 = MAIN_COLOR
+RegisterThemedObject(ChatLogScroll, "ScrollBarImageColor3", "Accent")
 ChatLogScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 ChatLogScroll.Parent = ChatLogGui
 
@@ -154,10 +171,13 @@ getgenv().WaypointsGui = WaypointsGui
 
 local WayCorner = Instance.new("UICorner") WayCorner.CornerRadius = UDim.new(0, 8) WayCorner.Parent = WaypointsGui
 local WayStroke = Instance.new("UIStroke") WayStroke.Color = MAIN_COLOR WayStroke.Thickness = 2 WayStroke.Parent = WaypointsGui
+RegisterThemedObject(WayStroke, "Color", "Accent")
+RegisterThemedObject(WaypointsGui, "BackgroundColor3", "Panel")
 
 local WayTopBar = Instance.new("Frame")
 WayTopBar.Size = UDim2.new(1, 0, 0, 32)
 WayTopBar.BackgroundColor3 = MAIN_COLOR
+RegisterThemedObject(WayTopBar, "BackgroundColor3", "Accent")
 WayTopBar.BorderSizePixel = 0
 WayTopBar.Parent = WaypointsGui
 
@@ -439,10 +459,13 @@ getgenv().MusicGui = MusicGui
 
 local MusicCorner = Instance.new("UICorner") MusicCorner.CornerRadius = UDim.new(0, 8) MusicCorner.Parent = MusicGui
 local MusicStroke = Instance.new("UIStroke") MusicStroke.Color = MAIN_COLOR MusicStroke.Thickness = 2 MusicStroke.Parent = MusicGui
+RegisterThemedObject(MusicStroke, "Color", "Accent")
+RegisterThemedObject(MusicGui, "BackgroundColor3", "Panel")
 
 local MusicTopBar = Instance.new("Frame")
 MusicTopBar.Size = UDim2.new(1, 0, 0, 32)
 MusicTopBar.BackgroundColor3 = MAIN_COLOR
+RegisterThemedObject(MusicTopBar, "BackgroundColor3", "Accent")
 MusicTopBar.BorderSizePixel = 0
 MusicTopBar.Parent = MusicGui
 
