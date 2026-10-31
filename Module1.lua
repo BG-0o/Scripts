@@ -1962,7 +1962,7 @@ local function StageOptionsUntilLoadScreen()
     getgenv().ToxStartupBooleanState = staged
     getgenv().ToxStartupToggleCallbacks = {}
     getgenv().ToxStartupOptionsApplied = false
-    getgenv().ToxOptionsReady = false
+    getgenv().ToxOptionsReady = true
 end
 
 LoadConfiguration()
