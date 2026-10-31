@@ -413,7 +413,7 @@ local function GetMM2ActiveMapRoot()
                     if object:IsA(
                         "BasePart"
                     ) then
-                        count += 1
+                        count = count + 1
                     end
                 end
 
