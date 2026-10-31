@@ -4,6 +4,8 @@
 -- ==============================================================================
 
 local env = getgenv()
+getgenv().ToxOptionsReady = true
+getgenv().ScriptLoaded = true
 if env.Destroyed then
     return
 end
@@ -647,7 +649,7 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     Card.Name = "Card_" .. tostring(Title):gsub("%s+", "")
     Card:SetAttribute("CardKey", CardKey)
     Card:SetAttribute("DefaultOrder", DefaultOrder)
-    Card.Size = UDim2.new(1, -6, 0, 0)
+    Card.Size = UDim2.new(1, -6, 0, 36)
     Card.AutomaticSize = Enum.AutomaticSize.Y
     Card.BackgroundColor3 = Theme.Panel
     Card.BorderSizePixel = 0
@@ -667,9 +669,15 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     CardStroke.Parent = Card
     RegisterThemedObject(CardStroke, "Color", "Outline")
 
+    local CardLayout = Instance.new("UIListLayout")
+    CardLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    CardLayout.Padding = UDim.new(0, 0)
+    CardLayout.Parent = Card
+
     -- Header (36px)
     local Header = Instance.new("Frame")
     Header.Name = "Header"
+    Header.LayoutOrder = 1
     Header.Size = UDim2.new(1, 0, 0, 36)
     Header.BackgroundTransparency = 1
     Header.ZIndex = 8
@@ -779,8 +787,8 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     -- Content container inside Card
     local Content = Instance.new("Frame")
     Content.Name = "Content"
-    Content.Size = UDim2.new(1, -16, 0, 0)
-    Content.Position = UDim2.new(0, 8, 0, 36)
+    Content.LayoutOrder = 2
+    Content.Size = UDim2.new(1, 0, 0, 0)
     Content.AutomaticSize = Enum.AutomaticSize.Y
     Content.BackgroundTransparency = 1
     Content.ZIndex = 8
@@ -792,7 +800,9 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     ContentLayout.Parent = Content
 
     local ContentPadding = Instance.new("UIPadding")
-    ContentPadding.PaddingBottom = UDim.new(0, 8)
+    ContentPadding.PaddingLeft = UDim.new(0, 8)
+    ContentPadding.PaddingRight = UDim.new(0, 8)
+    ContentPadding.PaddingBottom = UDim.new(0, 10)
     ContentPadding.Parent = Content
 
     -- Collapse Handler
@@ -930,6 +940,7 @@ local function CreatePage(Name, RawPage)
     Page.ScrollBarThickness = RawPage and 0 or 3
     Page.ScrollBarImageColor3 = Theme.Accent
     Page.CanvasSize = UDim2.new(0, 0, 0, 0)
+    pcall(function() Page.AutomaticCanvasSize = RawPage and Enum.AutomaticSize.None or Enum.AutomaticSize.Y end)
     Page.ScrollingEnabled = not RawPage
     Page.Visible = false
     Page.ClipsDescendants = true
@@ -979,8 +990,10 @@ local ScriptsPage = CreatePage("SCRIPTS")
 local JoinPage = CreatePage("JOIN")
 local ChatPage = CreatePage("CHAT", true)
 local ControlPage = CreatePage("CONTROL", true)
-local ConfigPage = CreatePage("CONFIG")
 local SettingsPage = CreatePage("SETTINGS")
+local ConfigPage = SettingsPage
+getgenv().ConfigPage = SettingsPage
+getgenv().SettingsPage = SettingsPage
 
 getgenv().HomePage = HomePage
 getgenv().GamePage = GamePage
@@ -2207,7 +2220,7 @@ KeybindButton.Size = UDim2.new(0, 75, 0, 24)
 KeybindButton.Position = UDim2.new(1, -85, 0.5, -12)
 KeybindButton.BackgroundColor3 = Theme.Panel
 KeybindButton.BorderSizePixel = 0
-KeybindButton.Text = Settings.GUIKeybind and Settings.GUIKeybind.Name or "LeftAlt"
+KeybindButton.Text = (typeof(Settings.GUIKeybind) == "EnumItem" and Settings.GUIKeybind.Name) or tostring(Settings.GUIKeybind or "LeftAlt")
 KeybindButton.TextColor3 = Theme.Accent
 KeybindButton.Font = Enum.Font.GothamBold
 KeybindButton.TextSize = 11
@@ -2233,7 +2246,7 @@ KeybindButton.MouseButton1Click:Connect(function()
             else
                 Settings.GUIKeybind = input.KeyCode
             end
-            KeybindButton.Text = Settings.GUIKeybind.Name
+            KeybindButton.Text = (typeof(Settings.GUIKeybind) == 'EnumItem' and Settings.GUIKeybind.Name) or tostring(Settings.GUIKeybind or 'LeftAlt')
             if getgenv().AutoSaveConfiguration then getgenv().AutoSaveConfiguration() end
         end
     end)
@@ -2778,7 +2791,13 @@ end)
 -- Keybind toggling Main window
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
-    if Settings.GUIKeybind and input.KeyCode == Settings.GUIKeybind then
+    local matchKey = false
+    if typeof(Settings.GUIKeybind) == "EnumItem" then
+        matchKey = (input.KeyCode == Settings.GUIKeybind)
+    elseif typeof(Settings.GUIKeybind) == "string" then
+        matchKey = (input.KeyCode.Name == Settings.GUIKeybind)
+    end
+    if matchKey then
         Main.Visible = not Main.Visible
         if DimmerFrame then
             DimmerFrame.Visible = (Settings.DimBackground == true and Main.Visible)
@@ -3149,7 +3168,7 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     Indicator.Parent = ToggleBg
     local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
 
-    local Enabled = getgenv().ToxOptionsReady == false and false or (DefaultValue == true)
+    local Enabled = (DefaultValue == true)
 
     local function Update()
         TweenService:Create(ToggleBg, TweenInfo.new(0.2), {
@@ -3172,7 +3191,7 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     RegisterStartupToggleCallback(SyncKey, Callback)
 
     Button.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed  then return end
         Enabled = not Enabled
         Update()
         Callback(Enabled)
@@ -3260,7 +3279,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     Indicator.Parent = ToggleButton
     local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
 
-    local Enabled = getgenv().ToxOptionsReady == false and false or (DefaultToggle == true)
+    local Enabled = (DefaultToggle == true)
 
     local function UpdateToggle()
         TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
@@ -3287,7 +3306,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     RegisterStartupToggleCallback(SyncKey, CallbackToggle)
 
     ToggleButton.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed  then return end
         Enabled = not Enabled
         UpdateToggle()
         CallbackToggle(Enabled)
@@ -3304,7 +3323,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     end)
 
     Input.FocusLost:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed  then return end
         local num = tonumber(Input.Text)
         if num then
             CallbackValue(num)
@@ -3374,7 +3393,7 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     end
 
     ChoiceBtn.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed  then return end
         CurrentIdx = CurrentIdx + 1
         if CurrentIdx > #Options then CurrentIdx = 1 end
         ChoiceBtn.Text = tostring(Options[CurrentIdx])
@@ -3402,7 +3421,7 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     Indicator.Parent = ToggleButton
     local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
 
-    local Enabled = getgenv().ToxOptionsReady == false and false or (DefaultToggle == true)
+    local Enabled = (DefaultToggle == true)
 
     local function UpdateToggle()
         TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
@@ -3431,7 +3450,7 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     RegisterStartupToggleCallback(SyncKey, CallbackToggle)
 
     ToggleButton.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed  then return end
         Enabled = not Enabled
         UpdateToggle()
         if CallbackToggle then CallbackToggle(Enabled) end
@@ -3514,7 +3533,7 @@ getgenv().CreateInputWithButton = function(Name, Page, DefaultText, ButtonText, 
     RegisterThemedObject(Button, "BackgroundColor3", "Accent")
 
     Button.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed  then return end
         Callback(Input.Text)
     end)
 
@@ -3598,12 +3617,12 @@ getgenv().CreateInputWithTwoButtons = function(Name, Page, DefaultText, Btn1Text
     RegisterThemedObject(b2Stroke, "Color", "Outline")
 
     Button1.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed  then return end
         Callback(Input.Text, "TP")
     end)
 
     Button2.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed  then return end
         Callback(Input.Text, "LOOP")
     end)
 
@@ -3661,7 +3680,7 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback
     end
 
     Button.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed  then return end
         CurrentIdx = CurrentIdx + 1
         if CurrentIdx > #Options then CurrentIdx = 1 end
         Button.Text = tostring(Options[CurrentIdx]) .. "  ▼"
@@ -3695,7 +3714,7 @@ getgenv().CreateButton = function(Name, Page, Callback)
     RegisterThemedObject(Stroke, "Color", "Outline")
 
     Button.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed  then return end
         Callback(Button)
     end)
 
@@ -3727,7 +3746,7 @@ getgenv().CreateConfirmButton = function(Name, Page, Callback)
     local Confirming = false
 
     Button.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed  then return end
         if not Confirming then
             Confirming = true
             Button.Text = "CONFIRM " .. string.upper(Name) .. "? (Click Again)"
@@ -3911,7 +3930,7 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
 
     local Binding = false
     local CurrentKey = DefaultKey
-    local Enabled = getgenv().ToxOptionsReady == false and false or (DefaultToggle == true)
+    local Enabled = (DefaultToggle == true)
 
     local function UpdateToggle()
         TweenService:Create(Toggle, TweenInfo.new(0.2), {
@@ -3934,7 +3953,7 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     RegisterStartupToggleCallback(SyncKey, ToggleCallback)
 
     KeyButton.MouseButton1Click:Connect(function()
-        if Destroyed or getgenv().ToxOptionsReady == false or Binding then return end
+        if Destroyed  or Binding then return end
         Binding = true
         KeyButton.Text = "..."
         local conn
@@ -3963,7 +3982,7 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     end)
 
     Toggle.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
+        if getgenv().Destroyed  then return end
         Enabled = not Enabled
         UpdateToggle()
         ToggleCallback(Enabled)
