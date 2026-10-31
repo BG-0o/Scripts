@@ -2759,12 +2759,8 @@ function UpdateTargetMotion(
         return
     end
 
-    local deltaTime =
-        now
-        - (
-            state.Time
-            or now
-        )
+    local stateTime = (state and type(state.Time) == "number") and state.Time or now
+    local deltaTime = math.max(0.001, now - stateTime)
 
     if deltaTime < 0.012
     or deltaTime > 0.35 then
@@ -2782,10 +2778,11 @@ function UpdateTargetMotion(
         return
     end
 
+    local statePos = (state and typeof(state.Position) == "Vector3") and state.Position or position
     local measuredVelocity =
         (
             position
-            - state.Position
+            - statePos
         )
         / deltaTime
 
@@ -2796,7 +2793,7 @@ function UpdateTargetMotion(
         )
 
     local previousVelocity =
-        state.Velocity
+        (state and typeof(state.Velocity) == "Vector3") and state.Velocity
         or measuredVelocity
 
     local smoothedVelocity =
@@ -3142,7 +3139,8 @@ function BuildGuidedTargetSamples(
         if math.abs(
             velocity.Y
         ) > 2 then
-            predicted +=
+            predicted =
+                predicted +
                 Vector3.new(
                     0,
                     -0.5
@@ -5049,10 +5047,14 @@ function ToxMM2RunKillOnFull()
                         SetSharedTemporary("AntiFling", false)
                     end
 
-                    while active() and targetPlayer and IsMM2PlayerAlive(targetPlayer) do
+                    local flingAttempts = 0
+                    local flingStartTime = tick()
+
+                    while active() and targetPlayer and IsMM2PlayerAlive(targetPlayer) and flingAttempts < 3 and (tick() - flingStartTime) < 8 do
+                        flingAttempts = flingAttempts + 1
                         if not IsTargetFlying(targetPlayer) then
                             CustomNotify(
-                                "Bag full • Flinging " .. label,
+                                "Bag full • Flinging " .. label .. " (" .. tostring(flingAttempts) .. "/3)",
                                 Color3.fromRGB(255, 170, 50)
                             )
 
@@ -5062,12 +5064,12 @@ function ToxMM2RunKillOnFull()
                         end
 
                         local flingWait = tick()
-                        while tick() - flingWait < 3.5 and IsMM2PlayerAlive(targetPlayer) and active() do
+                        while tick() - flingWait < 2.5 and IsMM2PlayerAlive(targetPlayer) and active() do
                             if IsTargetFlying(targetPlayer) then
-                                task.wait(0.25)
-                            else
-                                if tick() - flingWait > 1.0 then break end
                                 task.wait(0.2)
+                            else
+                                if tick() - flingWait > 0.8 then break end
+                                task.wait(0.15)
                             end
                         end
 
@@ -5270,7 +5272,7 @@ function PrepareAutoFarm()
 end
 
 AutoFarmPickupOffsetY = 0
-AutoFarmCoinHoldTime = 0.18
+AutoFarmCoinHoldTime = 0.04
 AutoFarmMinTweenSpeed = 6
 TouchCoin = nil
 
@@ -5624,8 +5626,7 @@ task.spawn(function()
             end
 
             task.wait(0.1)
-            continue
-        end
+        else
 
         if Settings.MM2AutoFarmV2 then
             RefreshFarmBagState()
@@ -5730,6 +5731,7 @@ task.spawn(function()
             end
 
             task.wait(0.1)
+        end
         end
     end
 end)
