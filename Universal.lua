@@ -600,7 +600,7 @@ local ToxPages = getgenv().Pages
 
 if typeof(ToxPages) == "table" then
     for _, page in pairs(ToxPages) do
-        if page and page.GetChildren then
+        if page and page.GetChildren and page.Name ~= "HOME" and (not getgenv().GamePage or page ~= getgenv().GamePage) then
             for _, child in ipairs(page:GetChildren()) do
                 if child:IsA("Frame") or child:IsA("TextButton") then
                     child:Destroy()
@@ -1710,6 +1710,16 @@ local function ResolvePlaceName(placeId)
     return "Place " .. tostring(placeId)
 end
 
+local SupportedToxGames = {
+    { Name = "Murder Mystery 2", PlaceId = 142823291, Code = "MM2", Status = "online" },
+    { Name = "Natural Disaster Survival", PlaceId = 189707, Code = "NDS", Status = "online" },
+    { Name = "Kohls Admin House", PlaceId = 4522347649, Code = "ADMIN", Status = "online" },
+    { Name = "Build A Boat For Treasure", PlaceId = 537413528, Code = "BABFT", Status = "online" },
+    { Name = "Lucky Block Battleground", PlaceId = 662417684, Code = "LBB", Status = "online" },
+    { Name = "Flee the Facility", PlaceId = 893973440, Code = "FTF", Status = "updating" },
+    { Name = "Prison Life", PlaceId = 155615604, Code = "PL", Status = "online" }
+}
+
 local function RefreshQuickJoinGames()
     local scroll = (getgenv and getgenv().JoinGamesScroll) or JoinGamesScroll
     if not scroll or not pcall(function() return scroll.Parent end) or scroll.Parent == nil then
@@ -1722,6 +1732,109 @@ local function RefreshQuickJoinGames()
         end
     end
 
+    local displayOrder = 1
+
+    -- Render Official Supported Games with Status Dots
+    for _, gInfo in ipairs(SupportedToxGames) do
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, -4, 0, 50)
+        row.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+        row.BorderSizePixel = 0
+        row.LayoutOrder = displayOrder
+        displayOrder = displayOrder + 1
+        pcall(function() row.Parent = scroll end)
+
+        local rowCorner = Instance.new("UICorner")
+        rowCorner.CornerRadius = UDim.new(0, 6)
+        rowCorner.Parent = row
+
+        local rowStroke = Instance.new("UIStroke")
+        rowStroke.Color = Color3.fromRGB(36, 36, 56)
+        rowStroke.Thickness = 1
+        rowStroke.Parent = row
+
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(1, -95, 0, 20)
+        nameLabel.Position = UDim2.new(0, 10, 0, 6)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = gInfo.Name
+        nameLabel.TextColor3 = Color3.fromRGB(250, 250, 250)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 12
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        nameLabel.Parent = row
+
+        local idLabel = Instance.new("TextLabel")
+        idLabel.Size = UDim2.new(1, -95, 0, 16)
+        idLabel.Position = UDim2.new(0, 10, 0, 26)
+        idLabel.BackgroundTransparency = 1
+        idLabel.Text = "ID: " .. tostring(gInfo.PlaceId) .. "  •  Módulo: " .. tostring(gInfo.Code)
+        idLabel.TextColor3 = Color3.fromRGB(150, 150, 175)
+        idLabel.Font = Enum.Font.Gotham
+        idLabel.TextSize = 10
+        idLabel.TextXAlignment = Enum.TextXAlignment.Left
+        idLabel.Parent = row
+
+        -- Status Indicator Dot (Green = Online, Yellow = Updating, Red = Offline)
+        local statusColor = Color3.fromRGB(50, 230, 100)
+        local statusText = "ONLINE"
+        if gInfo.Status == "updating" then
+            statusColor = Color3.fromRGB(255, 205, 50)
+            statusText = "UPDATING"
+        elseif gInfo.Status == "offline" then
+            statusColor = Color3.fromRGB(255, 60, 70)
+            statusText = "OFFLINE"
+        end
+
+        local statusDot = Instance.new("Frame")
+        statusDot.Size = UDim2.new(0, 7, 0, 7)
+        statusDot.Position = UDim2.new(1, -78, 0, 10)
+        statusDot.BackgroundColor3 = statusColor
+        statusDot.BorderSizePixel = 0
+        statusDot.Parent = row
+        local dotCorner = Instance.new("UICorner")
+        dotCorner.CornerRadius = UDim.new(1, 0)
+        dotCorner.Parent = statusDot
+
+        local statusLbl = Instance.new("TextLabel")
+        statusLbl.Size = UDim2.new(0, 65, 0, 14)
+        statusLbl.Position = UDim2.new(1, -68, 0, 7)
+        statusLbl.BackgroundTransparency = 1
+        statusLbl.Text = statusText
+        statusLbl.TextColor3 = statusColor
+        statusLbl.Font = Enum.Font.GothamBold
+        statusLbl.TextSize = 9
+        statusLbl.TextXAlignment = Enum.TextXAlignment.Left
+        statusLbl.Parent = row
+
+        -- Join Button
+        local joinBtn = Instance.new("TextButton")
+        joinBtn.Size = UDim2.new(0, 64, 0, 22)
+        joinBtn.Position = UDim2.new(1, -74, 1, -26)
+        joinBtn.BackgroundColor3 = Color3.fromRGB(30, 95, 255)
+        joinBtn.BorderSizePixel = 0
+        joinBtn.Text = "Entrar ▶"
+        joinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        joinBtn.Font = Enum.Font.GothamBold
+        joinBtn.TextSize = 10
+        joinBtn.Parent = row
+        local jbCorner = Instance.new("UICorner")
+        jbCorner.CornerRadius = UDim.new(0, 4)
+        jbCorner.Parent = joinBtn
+
+        local targetPlaceId = gInfo.PlaceId
+        joinBtn.MouseButton1Click:Connect(function()
+            task.spawn(function()
+                if getgenv().AllowToxTeleport then
+                    getgenv().AllowToxTeleport(15, "Quick Join")
+                end
+                JoinPublicGame(targetPlaceId)
+            end)
+        end)
+    end
+
+    -- Render Custom Saved Games
     for idx, info in ipairs(
         SavedJoinGames
     ) do
