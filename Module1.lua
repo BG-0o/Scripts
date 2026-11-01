@@ -1440,8 +1440,25 @@ end
 local function BuildCurrentGameSettingsSnapshot()
     local snapshot = {}
 
+    local gamePrefix = ""
+    local curMod = getgenv().CurrentGameModule
+    if curMod and curMod.ShortName then
+        gamePrefix = tostring(curMod.ShortName)
+    end
+
+    local function isGameKey(k)
+        if typeof(k) ~= "string" then return false end
+        if IsCurrentGameSetting(k) then return true end
+        if gamePrefix ~= "" and string.sub(k, 1, #gamePrefix) == gamePrefix then return true end
+        if string.find(k, "AutoFarm") or string.find(k, "SafeLobby") or string.find(k, "KillOnFull")
+        or string.find(k, "SilentAim") or string.find(k, "TrapESP") or string.find(k, "GunESP") then
+            return true
+        end
+        return false
+    end
+
     for key in pairs(PersistedSettingKeys) do
-        if IsCurrentGameSetting(key) then
+        if isGameKey(key) then
             snapshot[key] = SerializeConfigValue(
                 Settings[key]
             )
@@ -1449,7 +1466,7 @@ local function BuildCurrentGameSettingsSnapshot()
     end
 
     for key in pairs(Settings) do
-        if IsCurrentGameSetting(key) then
+        if isGameKey(key) then
             snapshot[key] = SerializeConfigValue(
                 Settings[key]
             )
@@ -1625,7 +1642,6 @@ getgenv().AutoSaveConfiguration = function()
     if not getgenv().CurrentGameModule then
         SaveSharedMusicIDs()
         SaveSharedJoinGames()
-        return false
     end
 
     EnsureFolder()
@@ -1820,22 +1836,20 @@ local function LoadConfiguration()
 
             if typeof(decodedState) == "table" then
                 for key, savedValue in pairs(decodedState) do
-                    if IsCurrentGameSetting(key) then
-                        if typeof(savedValue) == "EnumItem"
-                        or typeof(savedValue) == "Color3"
-                        or typeof(savedValue) == "CFrame"
-                        or typeof(savedValue) == "Vector2"
-                        or typeof(savedValue) == "Vector3"
-                        or typeof(savedValue) == "UDim"
-                        or typeof(savedValue) == "UDim2" then
-                            Settings[key] = savedValue
-                            PersistedSettingKeys[key] = true
-                        else
-                            ApplyLoadedSetting(
-                                key,
-                                savedValue
-                            )
-                        end
+                    if typeof(savedValue) == "EnumItem"
+                    or typeof(savedValue) == "Color3"
+                    or typeof(savedValue) == "CFrame"
+                    or typeof(savedValue) == "Vector2"
+                    or typeof(savedValue) == "Vector3"
+                    or typeof(savedValue) == "UDim"
+                    or typeof(savedValue) == "UDim2" then
+                        Settings[key] = savedValue
+                        PersistedSettingKeys[key] = true
+                    else
+                        ApplyLoadedSetting(
+                            key,
+                            savedValue
+                        )
                     end
                 end
             end
