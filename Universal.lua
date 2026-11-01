@@ -2257,6 +2257,8 @@ local function SkidFling(TargetPlayer)
         pcall(function()
             Character:SetPrimaryPartCFrame(CFrame.new(BasePart.Position) * Pos * Ang)
         end)
+        RootPart.AssemblyLinearVelocity = Vector3.new(200000, 200000, 200000)
+        RootPart.AssemblyAngularVelocity = Vector3.new(999999, 999999, 999999)
         RootPart.Velocity = Vector3.new(9e7, 9e8, 9e7)
         RootPart.RotVelocity = Vector3.new(9e8, 9e8, 9e8)
     end
@@ -2325,6 +2327,13 @@ local function SkidFling(TargetPlayer)
     BV.Velocity = Vector3.new(9e8, 9e8, 9e8)
     BV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
 
+    local BAV = Instance.new("BodyAngularVelocity")
+    BAV.Name = "ToxFlingSpin"
+    BAV.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    BAV.AngularVelocity = Vector3.new(0, 999999, 0)
+    BAV.P = 1e9
+    BAV.Parent = RootPart
+
     Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
 
     if TRootPart and THead then
@@ -2341,6 +2350,7 @@ local function SkidFling(TargetPlayer)
         SFBasePart(Handle)
     end
 
+    if BAV and BAV.Parent then pcall(function() BAV:Destroy() end) end
     BV:Destroy()
     Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
     Camera.CameraSubject = Humanoid
