@@ -70,6 +70,8 @@ MAIN_COLOR = Theme.Accent
 getgenv().MAIN_COLOR = MAIN_COLOR
 
 local ThemedObjects = {}
+local RegisteredToggles = {}
+
 local function RegisterThemedObject(instance, prop, colorKey)
     if not instance then return end
     table.insert(ThemedObjects, {Instance = instance, Prop = prop, Key = colorKey})
@@ -77,6 +79,9 @@ local function RegisterThemedObject(instance, prop, colorKey)
         instance[prop] = Theme[colorKey]
     end)
 end
+getgenv().RegisterThemedObject = RegisterThemedObject
+getgenv().ThemedObjects = ThemedObjects
+getgenv().RegisteredToggles = RegisteredToggles
 
 local function ApplyTheme()
     MAIN_COLOR = Theme.Accent
@@ -91,6 +96,15 @@ local function ApplyTheme()
             end)
         else
             table.remove(ThemedObjects, i)
+        end
+    end
+
+    for i = #RegisteredToggles, 1, -1 do
+        local toggleEntry = RegisteredToggles[i]
+        if toggleEntry and toggleEntry.UpdateColor then
+            pcall(toggleEntry.UpdateColor)
+        else
+            table.remove(RegisteredToggles, i)
         end
     end
 end
@@ -239,13 +253,13 @@ RegisterThemedObject(SidebarRightBorder, "BackgroundColor3", "Outline")
 do
 local SidebarSplitter = Instance.new("TextButton")
 SidebarSplitter.Name = "SidebarSplitter"
-SidebarSplitter.Size = UDim2.new(0, 10, 1, 0)
-SidebarSplitter.Position = UDim2.new(1, -5, 0, 0)
+SidebarSplitter.Size = UDim2.new(0, 14, 1, 0)
+SidebarSplitter.Position = UDim2.new(1, -7, 0, 0)
 SidebarSplitter.BackgroundTransparency = 1
 SidebarSplitter.BorderSizePixel = 0
 SidebarSplitter.Text = ""
 SidebarSplitter.AutoButtonColor = false
-SidebarSplitter.ZIndex = 16
+SidebarSplitter.ZIndex = 30
 SidebarSplitter.Parent = Sidebar
 
 local isDraggingSplitter = false
@@ -255,10 +269,12 @@ local splitterStartWidth = 0
 SidebarSplitter.Active = true
 SidebarSplitter.MouseEnter:Connect(function()
     SidebarRightBorder.BackgroundColor3 = Theme.Accent
+    SidebarRightBorder.Size = UDim2.new(0, 2, 1, 0)
 end)
 SidebarSplitter.MouseLeave:Connect(function()
     if not isDraggingSplitter then
         SidebarRightBorder.BackgroundColor3 = Theme.Outline
+        SidebarRightBorder.Size = UDim2.new(0, 1, 1, 0)
     end
 end)
 
@@ -318,7 +334,7 @@ local LogoCorner = Instance.new("UICorner") LogoCorner.CornerRadius = UDim.new(0
 
 local HubTitle = Instance.new("TextLabel")
 HubTitle.Name = "HubTitle"
-HubTitle.Size = UDim2.new(1, -60, 0, 20)
+HubTitle.Size = UDim2.new(1, -95, 0, 20)
 HubTitle.Position = UDim2.new(0, 54, 0, 10)
 HubTitle.BackgroundTransparency = 1
 HubTitle.Text = "ToxHub"
@@ -333,7 +349,7 @@ RegisterThemedObject(HubTitle, "TextColor3", "Text")
 
 local HubVersion = Instance.new("TextLabel")
 HubVersion.Name = "HubVersion"
-HubVersion.Size = UDim2.new(1, -60, 0, 16)
+HubVersion.Size = UDim2.new(1, -95, 0, 16)
 HubVersion.Position = UDim2.new(0, 54, 0, 30)
 HubVersion.BackgroundTransparency = 1
 HubVersion.Text = "v2.0 Revolution"
@@ -345,6 +361,22 @@ HubVersion.Visible = not isSidebarCollapsed
 HubVersion.ZIndex = 12
 HubVersion.Parent = SidebarHeader
 RegisterThemedObject(HubVersion, "TextColor3", "DimText")
+
+local CollapseSidebarBtn = Instance.new("TextButton")
+CollapseSidebarBtn.Name = "CollapseBtn"
+CollapseSidebarBtn.Size = UDim2.new(0, 22, 0, 22)
+CollapseSidebarBtn.Position = isSidebarCollapsed and UDim2.new(0.5, -11, 0, 60) or UDim2.new(1, -28, 0.5, -11)
+CollapseSidebarBtn.BackgroundColor3 = Theme.Element
+CollapseSidebarBtn.BorderSizePixel = 0
+CollapseSidebarBtn.Text = isSidebarCollapsed and ">" or "<"
+CollapseSidebarBtn.TextColor3 = Theme.DimText
+CollapseSidebarBtn.Font = Enum.Font.GothamBold
+CollapseSidebarBtn.TextSize = 11
+CollapseSidebarBtn.ZIndex = 14
+CollapseSidebarBtn.Parent = SidebarHeader
+local CollapseBtnCorner = Instance.new("UICorner") CollapseBtnCorner.CornerRadius = UDim.new(0, 5) CollapseBtnCorner.Parent = CollapseSidebarBtn
+RegisterThemedObject(CollapseSidebarBtn, "BackgroundColor3", "Element")
+RegisterThemedObject(CollapseSidebarBtn, "TextColor3", "DimText")
 
 -- Category Label "Main"
 local CategoryLabel = Instance.new("TextLabel")
@@ -423,7 +455,7 @@ local AvatarCorner = Instance.new("UICorner") AvatarCorner.CornerRadius = UDim.n
 
 local UserNameLabel = Instance.new("TextLabel")
 UserNameLabel.Name = "UserName"
-UserNameLabel.Size = UDim2.new(1, -78, 0, 16)
+UserNameLabel.Size = UDim2.new(1, -54, 0, 16)
 UserNameLabel.Position = UDim2.new(0, 48, 0, 9)
 UserNameLabel.BackgroundTransparency = 1
 UserNameLabel.Text = Player.DisplayName or Player.Name
@@ -439,7 +471,7 @@ RegisterThemedObject(UserNameLabel, "TextColor3", "Text")
 
 local UserExpiryLabel = Instance.new("TextLabel")
 UserExpiryLabel.Name = "UserExpiry"
-UserExpiryLabel.Size = UDim2.new(1, -78, 0, 14)
+UserExpiryLabel.Size = UDim2.new(1, -54, 0, 14)
 UserExpiryLabel.Position = UDim2.new(0, 48, 0, 27)
 UserExpiryLabel.BackgroundTransparency = 1
 UserExpiryLabel.RichText = true
@@ -452,21 +484,7 @@ UserExpiryLabel.Visible = not isSidebarCollapsed
 UserExpiryLabel.ZIndex = 13
 UserExpiryLabel.Parent = SidebarFooter
 
-local CollapseSidebarBtn = Instance.new("TextButton")
-CollapseSidebarBtn.Name = "CollapseBtn"
-CollapseSidebarBtn.Size = UDim2.new(0, 22, 0, 22)
-CollapseSidebarBtn.Position = UDim2.new(1, -26, 0.5, -11)
-CollapseSidebarBtn.BackgroundColor3 = Theme.Element
-CollapseSidebarBtn.BorderSizePixel = 0
-CollapseSidebarBtn.Text = isSidebarCollapsed and ">" or "<"
-CollapseSidebarBtn.TextColor3 = Theme.DimText
-CollapseSidebarBtn.Font = Enum.Font.GothamBold
-CollapseSidebarBtn.TextSize = 11
-CollapseSidebarBtn.ZIndex = 14
-CollapseSidebarBtn.Parent = SidebarFooter
-local CollapseBtnCorner = Instance.new("UICorner") CollapseBtnCorner.CornerRadius = UDim.new(0, 5) CollapseBtnCorner.Parent = CollapseSidebarBtn
-RegisterThemedObject(CollapseSidebarBtn, "BackgroundColor3", "Element")
-RegisterThemedObject(CollapseSidebarBtn, "TextColor3", "DimText")
+-- Collapse button moved to SidebarHeader for clean footer layout
 
 -- Content Area
 local ContentArea = Instance.new("Frame")
@@ -498,18 +516,18 @@ local function SetSidebarCollapsed(collapsed)
     UserNameLabel.Visible = not isSidebarCollapsed
     UserExpiryLabel.Visible = not isSidebarCollapsed
     if isSidebarCollapsed then
-        SidebarFooter.Position = UDim2.new(0, 0, 1, -78)
-        SidebarFooter.Size = UDim2.new(1, 0, 0, 78)
-        SidebarScroll.Size = UDim2.new(1, 0, 1, -(48 + 78))
-        UserAvatar.Size = UDim2.new(0, 26, 0, 26)
-        UserAvatar.Position = UDim2.new(0.5, -13, 0, 8)
-        CollapseSidebarBtn.Size = UDim2.new(0, 24, 0, 22)
-        CollapseSidebarBtn.Position = UDim2.new(0.5, -12, 0, 46)
+        SidebarFooter.Position = UDim2.new(0, 0, 1, -52)
+        SidebarFooter.Size = UDim2.new(1, 0, 0, 52)
+        SidebarScroll.Size = UDim2.new(1, 0, 1, -(56 + 52 + 28))
+        UserAvatar.Size = UDim2.new(0, 30, 0, 30)
+        UserAvatar.Position = UDim2.new(0.5, -15, 0.5, -15)
+        CollapseSidebarBtn.Size = UDim2.new(0, 22, 0, 22)
+        CollapseSidebarBtn.Position = UDim2.new(0.5, -11, 0, 58)
         CollapseSidebarBtn.Text = ">"
     else
         SidebarFooter.Position = UDim2.new(0, 0, 1, -52)
         SidebarFooter.Size = UDim2.new(1, 0, 0, 52)
-        SidebarScroll.Size = UDim2.new(1, 0, 1, -(48 + 52))
+        SidebarScroll.Size = UDim2.new(1, 0, 1, -(56 + 52 + 10))
         UserAvatar.Size = UDim2.new(0, 32, 0, 32)
         UserAvatar.Position = UDim2.new(0, 10, 0.5, -16)
         CollapseSidebarBtn.Size = UDim2.new(0, 22, 0, 22)
@@ -564,7 +582,7 @@ CurrentTabTitle.Parent = TopBar
 RegisterThemedObject(CurrentTabTitle, "TextColor3", "Text")
 
 -- Search Pill on top right
-local SearchPill = Instance.new("Frame")
+SearchPill = Instance.new("Frame")
 SearchPill.Name = "SearchPill"
 SearchPill.Size = UDim2.new(0, 160, 0, 28)
 SearchPill.Position = UDim2.new(1, -236, 0.5, -14)
@@ -624,31 +642,40 @@ RegisterThemedObject(MinimizeBtn, "TextColor3", "Text")
 local MinCorner = Instance.new("UICorner") MinCorner.CornerRadius = UDim.new(0, 6) MinCorner.Parent = MinimizeBtn
 getgenv().Minimize = MinimizeBtn
 
+local PagesContainer = nil
+local ResizeHandle = nil
+local SearchPill = nil
+
 do
 local isMinimized = false
 local MainExpandedSize = Main.Size
+local savedPageTitle = "Home"
 
 local function SetMinimized(minimized)
     isMinimized = (minimized == true)
     getgenv().ToxMainMinimized = isMinimized
     getgenv().Minimized = isMinimized
 
-    local handle = Main:FindFirstChild("ToxResizeHandle") or ResizeHandle
     if isMinimized then
         if Main.Size.Y.Offset > 46 then
             MainExpandedSize = Main.Size
             getgenv().ToxMainExpandedSize = MainExpandedSize
         end
-        if handle then handle.Visible = false end
         for _, ch in ipairs(Main:GetChildren()) do
-            if ch.Name == "ToxResizeHandle" then ch.Visible = false end
+            if ch.Name == "ToxResizeHandle" or ch.Name == "ResizeHandle" then
+                ch.Visible = false
+            end
         end
         Sidebar.Visible = false
         SidebarFooter.Visible = false
-        PagesContainer.Visible = false
+        UserAvatar.Visible = false
+        if SearchPill then SearchPill.Visible = false end
+        if PagesContainer then PagesContainer.Visible = false end
         SearchResultsScroll.Visible = false
         ContentArea.Position = UDim2.new(0, 0, 0, 0)
         ContentArea.Size = UDim2.new(1, 0, 1, 0)
+        savedPageTitle = CurrentTabTitle.Text
+        CurrentTabTitle.Text = "ToxHub"
         Main.ClipsDescendants = true
         Main.Size = UDim2.new(MainExpandedSize.X.Scale, MainExpandedSize.X.Offset, 0, 46)
         MinimizeBtn.Text = "+"
@@ -656,14 +683,18 @@ local function SetMinimized(minimized)
         Main.Size = MainExpandedSize
         Sidebar.Visible = true
         SidebarFooter.Visible = true
-        PagesContainer.Visible = true
-        if handle then handle.Visible = true end
+        UserAvatar.Visible = true
+        if SearchPill then SearchPill.Visible = true end
+        if PagesContainer then PagesContainer.Visible = true end
         for _, ch in ipairs(Main:GetChildren()) do
-            if ch.Name == "ToxResizeHandle" then ch.Visible = true end
+            if ch.Name == "ToxResizeHandle" or ch.Name == "ResizeHandle" then
+                ch.Visible = true
+            end
         end
         local targetW = isSidebarCollapsed and sidebarCollapsedWidth or sidebarExpandedWidth
         ContentArea.Position = UDim2.new(0, targetW, 0, 0)
         ContentArea.Size = UDim2.new(1, -targetW, 1, 0)
+        CurrentTabTitle.Text = savedPageTitle or "Home"
         MinimizeBtn.Text = "-"
     end
 end
@@ -734,7 +765,7 @@ SearchResultsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(func
 end)
 
 -- Pages Container
-local PagesContainer = Instance.new("Frame")
+PagesContainer = Instance.new("Frame")
 PagesContainer.Name = "PagesContainer"
 PagesContainer.Size = UDim2.new(1, 0, 1, -46)
 PagesContainer.Position = UDim2.new(0, 0, 0, 46)
@@ -743,20 +774,7 @@ PagesContainer.ClipsDescendants = true
 PagesContainer.ZIndex = 6
 PagesContainer.Parent = ContentArea
 
--- Resize Handle
-local ResizeHandle = Instance.new("TextButton")
-ResizeHandle.Name = "ResizeHandle"
-ResizeHandle.Size = UDim2.new(0, 20, 0, 20)
-ResizeHandle.Position = UDim2.new(1, -20, 1, -20)
-ResizeHandle.BackgroundTransparency = 1
-ResizeHandle.BorderSizePixel = 0
-ResizeHandle.Text = "◢"
-ResizeHandle.TextColor3 = Theme.DimText
-ResizeHandle.TextSize = 14
-ResizeHandle.Font = Enum.Font.GothamBold
-ResizeHandle.ZIndex = 100
-ResizeHandle.Parent = Main
-RegisterThemedObject(ResizeHandle, "TextColor3", "DimText")
+-- Resize Handle managed by MakeResizable
 
 if getgenv().MakeResizable then
     getgenv().MakeResizable(Main, "Main", Vector2.new(160, 90), Vector2.new(3840, 2160))
@@ -3387,7 +3405,11 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     Indicator.Parent = ToggleBg
     local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
 
-    local Enabled = (DefaultValue == true)
+    local initialValue = DefaultValue
+    if SyncKey and Settings[SyncKey] ~= nil then
+        initialValue = Settings[SyncKey]
+    end
+    local Enabled = (initialValue == true)
 
     local function Update()
         TweenService:Create(ToggleBg, TweenInfo.new(0.2), {
@@ -3397,6 +3419,14 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
             Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
         }):Play()
     end
+
+    table.insert(RegisteredToggles, {
+        UpdateColor = function()
+            ToggleBg.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
+            tgStroke.Color = Theme.Outline
+            cStroke.Color = Theme.Outline
+        end
+    })
 
     local Controller = {
         Button = Container,
@@ -3427,6 +3457,11 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     end)
 
     Update()
+    if Enabled and Callback then
+        task.defer(function()
+            pcall(Callback, true)
+        end)
+    end
 
     if getgenv().RegisterToxSearchControl then
         getgenv().RegisterToxSearchControl(Name, Page, Container)
@@ -3499,7 +3534,11 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     Indicator.Parent = ToggleButton
     local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
 
-    local Enabled = (DefaultToggle == true)
+    local initialToggle = DefaultToggle
+    if SyncKey and Settings[SyncKey] ~= nil then
+        initialToggle = Settings[SyncKey]
+    end
+    local Enabled = (initialToggle == true)
 
     local function UpdateToggle()
         TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
@@ -3509,6 +3548,25 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
             Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
         }):Play()
     end
+
+    table.insert(RegisteredToggles, {
+        UpdateColor = function()
+            ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
+            tgStroke.Color = Theme.Outline
+            cStroke.Color = Theme.Outline
+            cbStroke.Color = Theme.Outline
+            ChoiceBtn.TextColor3 = Theme.Accent
+        end
+    })
+
+    table.insert(RegisteredToggles, {
+        UpdateColor = function()
+            ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
+            tgStroke.Color = Theme.Outline
+            cStroke.Color = Theme.Outline
+            inStroke.Color = Theme.Outline
+        end
+    })
 
     local Controller = {
         Button = Container,
@@ -3557,6 +3615,11 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     end)
 
     UpdateToggle()
+    if Enabled and CallbackToggle then
+        task.defer(function()
+            pcall(CallbackToggle, true)
+        end)
+    end
 
     if getgenv().RegisterToxSearchControl then
         getgenv().RegisterToxSearchControl(Name, Page, Container)
@@ -3642,7 +3705,11 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     Indicator.Parent = ToggleButton
     local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
 
-    local Enabled = (DefaultToggle == true)
+    local initialToggle = DefaultToggle
+    if SyncKey and Settings[SyncKey] ~= nil then
+        initialToggle = Settings[SyncKey]
+    end
+    local Enabled = (initialToggle == true)
 
     local function UpdateToggle()
         TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
@@ -3694,6 +3761,63 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     end
 
     return Container
+end
+
+getgenv().CreateTextBox = function(Name, Page, DefaultText, Callback, Placeholder)
+    local parentTarget = ResolveElementParent(Page)
+
+    local Box = Instance.new("Frame")
+    Box.Size = UDim2.new(1, -4, 0, 36)
+    Box.BackgroundColor3 = Theme.Element
+    Box.BorderSizePixel = 0
+    Box.Parent = parentTarget
+    local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 6) bCorner.Parent = Box
+    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border bStroke.Parent = Box
+    RegisterThemedObject(Box, "BackgroundColor3", "Element")
+    RegisterThemedObject(bStroke, "Color", "Outline")
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -140, 1, 0)
+    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = Name
+    Label.TextColor3 = Theme.Text
+    Label.TextSize = 12
+    Label.Font = Enum.Font.GothamMedium
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = Box
+    RegisterThemedObject(Label, "TextColor3", "Text")
+
+    local Input = Instance.new("TextBox")
+    Input.Size = UDim2.new(0, 120, 0, 24)
+    Input.Position = UDim2.new(1, -130, 0.5, -12)
+    Input.BackgroundColor3 = Theme.Panel
+    Input.BorderSizePixel = 0
+    Input.Text = tostring(DefaultText or "")
+    Input.PlaceholderText = Placeholder or "Type..."
+    Input.TextColor3 = Theme.Text
+    Input.PlaceholderColor3 = Theme.DimText
+    Input.TextSize = 11
+    Input.Font = Enum.Font.Gotham
+    Input.ClearTextOnFocus = false
+    Input.Parent = Box
+    local inCorner = Instance.new("UICorner") inCorner.CornerRadius = UDim.new(0, 4) inCorner.Parent = Input
+    local inStroke = Instance.new("UIStroke") inStroke.Color = Theme.Outline inStroke.Thickness = 1 inStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border inStroke.Parent = Input
+    RegisterThemedObject(Input, "BackgroundColor3", "Panel")
+    RegisterThemedObject(Input, "TextColor3", "Text")
+    RegisterThemedObject(inStroke, "Color", "Outline")
+
+    Input.FocusLost:Connect(function()
+        if Callback then
+            Callback(Input.Text)
+        end
+    end)
+
+    if getgenv().RegisterToxSearchControl then
+        getgenv().RegisterToxSearchControl(Name, Page, Box)
+    end
+
+    return Box
 end
 
 getgenv().CreateInputWithButton = function(Name, Page, DefaultText, ButtonText, Callback)
