@@ -587,6 +587,11 @@ getgenv().Settings = {
     MM2SafeLobby = false,
     MM2AutoFarmMode = "Tween",
     MM2AutoFarmTeleportDelay = 1.2,
+    MM2AutoVote = false,
+    MM2VoteMap = "Priority (Best Coins)",
+    MM2VoteInfinite = true,
+    ToxUITheme = "Dark Neon",
+    ToxUITransparency = 0,
 
     ADMINPrefix = ".",
     ADMINKillTarget = "",
@@ -1457,7 +1462,8 @@ local function BuildCurrentGameSettingsSnapshot()
         if IsCurrentGameSetting(k) then return true end
         if gamePrefix ~= "" and string.sub(k, 1, #gamePrefix) == gamePrefix then return true end
         if string.find(k, "AutoFarm") or string.find(k, "SafeLobby") or string.find(k, "KillOnFull")
-        or string.find(k, "SilentAim") or string.find(k, "TrapESP") or string.find(k, "GunESP") then
+        or string.find(k, "SilentAim") or string.find(k, "TrapESP") or string.find(k, "GunESP")
+        or string.find(k, "Vote") then
             return true
         end
         return false
