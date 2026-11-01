@@ -1,54 +1,51 @@
-if getgenv().ToxUniversalLoaded then
+if game.PlaceId ~= 142823291 then
     return
 end
 
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local TeleportService = game:GetService("TeleportService")
-local VirtualUser = game:GetService("VirtualUser")
-local SoundService = game:GetService("SoundService")
-local TextChatService = game:GetService("TextChatService")
-local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
-local Lighting = game:GetService("Lighting")
-local MarketplaceService = game:GetService("MarketplaceService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local GuiService = game:GetService("GuiService")
-local CoreGui = game:GetService("CoreGui")
-local StatsService = game:GetService("Stats")
+MM2ModuleVersion =
+    "2026-10-19-mm2-autofarm-alive-round-2"
 
-local Player = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
+Players = game:GetService("Players")
+UserInputService = game:GetService("UserInputService")
+RunService = game:GetService("RunService")
+ReplicatedStorage = game:GetService("ReplicatedStorage")
+TweenService = game:GetService("TweenService")
+VirtualInputManager = game:GetService("VirtualInputManager")
+GuiService = game:GetService("GuiService")
+Player = Players.LocalPlayer
+Camera = workspace.CurrentCamera
 
-getgenv().Settings = getgenv().Settings or {}
 Settings = getgenv().Settings
+GamePage = getgenv().GamePage
+CreateToggle = getgenv().CreateToggle
+CreateToggleWithValue = getgenv().CreateToggleWithValue
+CreateButton = getgenv().CreateButton
+CreateDropdown = getgenv().CreateDropdown
+CreateKeybindButton = getgenv().CreateKeybindButton
+CreateKeybindToggle = getgenv().CreateKeybindToggle
+AddConnection = getgenv().AddConnection or function(conn) return conn end
+CustomNotify = getgenv().CustomNotify or function() end
+AutoSaveConfiguration = getgenv().AutoSaveConfiguration or function() end
+SyncToggleVisuals = getgenv().SyncToggleVisuals
+SyncValueVisuals = getgenv().SyncValueVisuals
+MAIN_COLOR = getgenv().MAIN_COLOR or Color3.fromRGB(9, 0, 136)
+MakeDraggable = getgenv().MakeDraggable
 
-local NDSPlaceId = 189707
-local MM2PlaceId = 142823291
-
-if game.PlaceId ~= NDSPlaceId then
-    local env = getgenv()
-
-    if env.SetNDSNoTP then
-        pcall(function()
-            env.SetNDSNoTP(false, true)
-        end)
-    end
-
-    if env.Settings then
-        env.Settings.NDSNoTP = false
-    end
+function ToxScriptReady()
+    return getgenv().ScriptLoaded == true
+    or ScriptLoaded == true
 end
 
-Settings.WalkFling = Settings.WalkFling == true
-Settings.EspMaxDistanceByPlace =
-    typeof(Settings.EspMaxDistanceByPlace) == "table"
-    and Settings.EspMaxDistanceByPlace
-    or {}
-
-ToxUpdateVersion = "2026-10-19-kick-autoreexec-persist-v10"
-
+if not Settings
+or not GamePage
+or not CreateToggle
+or not CreateToggleWithValue
+or not CreateButton
+or not CreateDropdown
+or not CreateKeybindButton
+or not CreateKeybindToggle then
+    return
+end
 
 function ClearToxTable(target)
     if typeof(target) ~= "table" then
@@ -60,3945 +57,2899 @@ function ClearToxTable(target)
     end
 end
 
-Settings.ToxServerInfoVisible = Settings.ToxServerInfoVisible == true
-Settings.ToxServerInfoMode = Settings.ToxServerInfoMode or "FPS/Ping/Players"
-
-function GetCurrentPlaceKey()
-    return tostring(game.PlaceId)
+if getgenv().ToxMM2ModuleLoadedJobId
+    == game.JobId
+and getgenv().ToxMM2ModuleVersion
+    == MM2ModuleVersion
+and getgenv().ToxMM2ModulePage
+    == GamePage
+and not getgenv().Destroyed then
+    return
 end
 
-function GetCurrentESPMAX()
-    local placeKey = GetCurrentPlaceKey()
-    local saved = tonumber(
-        Settings.EspMaxDistanceByPlace[placeKey]
+if getgenv().ToxMM2Cleanup then
+    pcall(
+        getgenv().ToxMM2Cleanup
     )
+end
 
-    if saved then
-        return saved
+for _, child in ipairs(
+    GamePage:
+        GetChildren()
+) do
+    if child:IsA(
+        "GuiObject"
+    ) then
+        child:
+            Destroy()
+    end
+end
+
+Settings.MM2CollapsedSections =
+    typeof(Settings.MM2CollapsedSections) == "table"
+    and Settings.MM2CollapsedSections
+    or {}
+
+Settings.MM2SilentAimKey = Settings.MM2SilentAimKey or Enum.KeyCode.E
+Settings.MM2SilentAimAutoV2 = Settings.MM2SilentAimAutoV2 == true or Settings.MM2SilentAimAuto == true
+Settings.MM2SilentAimAuto = false
+Settings.MM2KillAllKey = Settings.MM2KillAllKey or Enum.KeyCode.K
+Settings.MM2KillAllAutoV2 = Settings.MM2KillAllAutoV2 == true or Settings.MM2KillAllAuto == true
+Settings.MM2KillAllAuto = false
+Settings.MM2ShootMurderKey = Settings.MM2ShootMurderKey or Enum.KeyCode.C
+Settings.MM2ShootMurderAutoV2 = Settings.MM2ShootMurderAutoV2 == true or Settings.MM2ShootMurderAuto == true
+Settings.MM2ShootMurderAuto = false
+Settings.MM2GrabGunKey = Settings.MM2GrabGunKey or Enum.KeyCode.G
+Settings.MM2GrabGunAutoV2 = Settings.MM2GrabGunAutoV2 == true or Settings.MM2GrabGunAuto == true
+Settings.MM2GrabGunAuto = false
+Settings.MM2GunESP = Settings.MM2GunESP == true
+Settings.MM2FlingTarget = Settings.MM2FlingTarget or "Murderer"
+
+ResumeAutoFarmAfterAntiKick =
+    getgenv().__ToxAntiKickResume
+    == true
+    and getgenv().__ToxAntiKickResumeFarm
+        == true
+
+getgenv().__ToxAntiKickResume = nil
+getgenv().__ToxAntiKickResumeFarm = nil
+
+Settings.MM2AutoFarmV2 =
+    Settings.MM2AutoFarmV2 == true
+    or ResumeAutoFarmAfterAntiKick
+
+Settings.MM2AutoFarmResetOnFull =
+    Settings.MM2AutoFarmResetOnFull == true
+
+Settings.MM2KillOnFull =
+    Settings.MM2KillOnFull == true
+
+Settings.MM2KillOnFullTarget =
+    tostring(Settings.MM2KillOnFullTarget or "Both")
+if Settings.MM2KillOnFullTarget ~= "Murderer"
+and Settings.MM2KillOnFullTarget ~= "Sheriff"
+and Settings.MM2KillOnFullTarget ~= "Both" then
+    Settings.MM2KillOnFullTarget = "Both"
+end
+
+Settings.MM2AutoWin =
+    Settings.MM2AutoWin == true
+
+Settings.MM2SafeLobby = Settings.MM2SafeLobby == true
+Settings.MM2AutoFarmMode = tostring(Settings.MM2AutoFarmMode or "Tween")
+if Settings.MM2AutoFarmMode ~= "Tween" and Settings.MM2AutoFarmMode ~= "Teleport" then
+    Settings.MM2AutoFarmMode = "Tween"
+end
+Settings.MM2AutoFarmTeleportDelay = tonumber(Settings.MM2AutoFarmTeleportDelay) or 1.2
+if Settings.MM2AutoFarmTeleportDelay < 0.2 then
+    Settings.MM2AutoFarmTeleportDelay = 0.2
+end
+
+configuredAutoFarmSpeed = tonumber(Settings.MM2AutoFarmSpeed)
+
+if not configuredAutoFarmSpeed or configuredAutoFarmSpeed == 50 then
+    configuredAutoFarmSpeed = 5
+end
+
+Settings.MM2AutoFarmSpeed = math.clamp(
+    configuredAutoFarmSpeed,
+    1,
+    250
+)
+Settings.MM2Whitelist = typeof(Settings.MM2Whitelist) == "table" and Settings.MM2Whitelist or {}
+Settings.MM2TargetHistory = typeof(Settings.MM2TargetHistory) == "table" and Settings.MM2TargetHistory or {}
+Settings.MM2TargetLock = false
+Settings.MM2AutoClearTarget = true
+Settings.MM2RoundTimer = false
+
+task.defer(function()
+    local gui = getgenv().Gui
+
+    if gui then
+        local oldTimer = gui:FindFirstChild("ToxMM2RoundTimerFrame")
+
+        if oldTimer then
+            oldTimer:Destroy()
+        end
+    end
+end)
+Settings.MM2RoundTimer = false
+
+ActionBusy = false
+KillAllBusy = false
+GrabGunBusy = false
+MM2AutoRuntime = nil
+
+if ResumeAutoFarmAfterAntiKick then
+    task.delay(
+        2,
+        function()
+            if not getgenv().Destroyed then
+                CustomNotify(
+                    "Anti Kick • Auto Farm resumed",
+                    Color3.fromRGB(
+                        100,
+                        255,
+                        130
+                    ),
+                    5
+                )
+            end
+        end
+    )
+end
+
+function IsInsideToxGui(obj)
+    local toxGui = getgenv().Gui
+
+    if toxGui and obj then
+        return obj == toxGui or obj:IsDescendantOf(toxGui)
     end
 
-    return tonumber(Settings.EspMaxDistance) or 1000
+    return false
 end
 
-function SetCurrentESPMAX(value)
-    local number = math.clamp(
-        math.floor((tonumber(value) or 1000) + 0.5),
-        0,
-        100000
-    )
-
-    Settings.EspMaxDistance = number
-    Settings.EspMaxDistanceByPlace[GetCurrentPlaceKey()] = number
-
-    if getgenv().AutoSaveConfiguration then
-        getgenv().AutoSaveConfiguration()
+function IsGuiVisible(obj)
+    if not obj or not obj:IsA("GuiObject") then
+        return false
     end
 
-    return number
-end
+    local current = obj
 
-Settings.EspMaxDistance = GetCurrentESPMAX()
-
-local HumanoidDefaults = setmetatable({}, {__mode = "k"})
-local NoclipDefaults = setmetatable({}, {__mode = "k"})
-local AntiFlingDefaults = setmetatable({}, {__mode = "k"})
-local HitboxDefaults = setmetatable({}, {__mode = "k"})
-
-local FOVDefault = Camera.FieldOfView
-local FOVCaptured = false
-local ShiftLockDefaults = nil
-local isShiftLockActive = false
-
-local ToxChatGui = getgenv().ToxChatGui
-local JoinGamesGui = getgenv().JoinGamesGui
-local JoinGamesScroll = getgenv().JoinGamesScroll
-local JoinGameIdBox = getgenv().JoinGameIdBox
-local JoinGameAddButton = getgenv().JoinGameAddButton
-local SavedJoinGames = getgenv().SavedJoinGames or {}
-local CheckMusicIDsBtn = getgenv().CheckMusicIDsBtn
-local SetMusicIDStatus = getgenv().SetMusicIDStatus
-
-getgenv().MusicIDStatus = {}
-local MusicIDStatus = getgenv().MusicIDStatus
-local MusicCheckRunning = false
-local MusicCheckGeneration = 0
-local MusicInitialNoticeShown = false
-
-local function GetSavedMusicIDs()
-    local ids = {}
-    local seen = {}
-
-    for _, item in ipairs(SavedIDs or {}) do
-        local id = nil
-
-        if typeof(item) == "table" then
-            id = tonumber(item.id)
-        else
-            id = tonumber(item)
+    while current do
+        if current:IsA("GuiObject") and not current.Visible then
+            return false
         end
 
-        if id and not seen[id] then
-            seen[id] = true
-            table.insert(ids, id)
+        if current:IsA("ScreenGui") and not current.Enabled then
+            return false
         end
-    end
 
-    return ids
-end
-
-local function IsMusicIDActive(id)
-    local success, info = pcall(function()
-        return MarketplaceService:GetProductInfo(id, Enum.InfoType.Asset)
-    end)
-
-    if not success or typeof(info) ~= "table" then
-        return false
-    end
-
-    if tonumber(info.AssetTypeId) ~= 3 then
-        return false
-    end
-
-    local name = string.lower(tostring(info.Name or ""))
-
-    if name == ""
-    or string.find(name, "content deleted", 1, true)
-    or string.find(name, "[deleted]", 1, true)
-    or string.find(name, "[ content deleted ]", 1, true)
-    or string.find(name, "deleted", 1, true) == 1 then
-        return false
+        current = current.Parent
     end
 
     return true
 end
 
-local function ApplyMusicStatus(id, status)
-    MusicIDStatus[tostring(id)] = status
+function GuiBlob(obj)
+    local parts = {tostring(obj.Name or "")}
 
-    if SetMusicIDStatus then
-        SetMusicIDStatus(id, status)
+    if obj:IsA("TextButton") or obj:IsA("TextLabel") or obj:IsA("TextBox") then
+        table.insert(parts, tostring(obj.Text or ""))
     end
+
+    if obj:IsA("TextBox") then
+        table.insert(parts, tostring(obj.PlaceholderText or ""))
+    end
+
+    return string.lower(table.concat(parts, " "))
 end
 
-local function CheckSavedMusicIDs(force)
-    if MusicCheckRunning and not force then
-        return
+function ClickGuiButton(button)
+    if not button or not button.Parent then
+        return false
     end
 
-    local ids = GetSavedMusicIDs()
-
-    if #ids == 0 then
-        if CheckMusicIDsBtn then
-            CheckMusicIDsBtn.Text = "Check IDs"
-        end
-        return
-    end
-
-    MusicCheckGeneration = MusicCheckGeneration + 1
-    local generation = MusicCheckGeneration
-    MusicCheckRunning = true
-
-    if CheckMusicIDsBtn then
-        CheckMusicIDsBtn.Text = "Checking..."
-        CheckMusicIDsBtn.TextColor3 = Color3.fromRGB(255, 215, 70)
-        CheckMusicIDsBtn.Active = false
-    end
-
-    for _, id in ipairs(ids) do
-        if force or MusicIDStatus[tostring(id)] == nil then
-            ApplyMusicStatus(id, "checking")
-        else
-            ApplyMusicStatus(id, MusicIDStatus[tostring(id)])
-        end
-    end
-
-    task.spawn(function()
-        local activeCount = 0
-        local unavailableCount = 0
-
-        for _, id in ipairs(ids) do
-            if generation ~= MusicCheckGeneration then
-                return
-            end
-
-            local key = tostring(id)
-            local status = MusicIDStatus[key]
-
-            if force or status == nil or status == "checking" then
-                status = IsMusicIDActive(id)
-                ApplyMusicStatus(id, status)
-                task.wait(0.12)
-            end
-
-            if status == true then
-                activeCount = activeCount + 1
-            elseif status == false then
-                unavailableCount = unavailableCount + 1
-            end
-        end
-
-        if generation ~= MusicCheckGeneration then
-            return
-        end
-
-        MusicCheckRunning = false
-
-        if CheckMusicIDsBtn and CheckMusicIDsBtn.Parent then
-            CheckMusicIDsBtn.Text = "Check IDs"
-            CheckMusicIDsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            CheckMusicIDsBtn.Active = true
-        end
-
-        if not MusicInitialNoticeShown then
-            MusicInitialNoticeShown = true
-            CustomNotify(
-                "Music IDs: "
-                    .. tostring(activeCount)
-                    .. " active | "
-                    .. tostring(unavailableCount)
-                    .. " unavailable",
-                unavailableCount > 0
-                    and Color3.fromRGB(255, 180, 70)
-                    or Color3.fromRGB(100, 255, 100)
-            )
-        end
-    end)
-end
-
-if CheckMusicIDsBtn then
-    CheckMusicIDsBtn.MouseButton1Click:Connect(function()
-        CheckSavedMusicIDs(true)
-    end)
-end
-
-if MusicGui then
-    AddConnection(MusicGui:GetPropertyChangedSignal("Visible"):Connect(function()
-        if MusicGui.Visible then
-            task.defer(function()
-                CheckSavedMusicIDs(false)
-            end)
-        end
-    end))
-end
-
-task.delay(1, function()
-    CheckSavedMusicIDs(true)
-end)
-
-local RequestFunction = nil
-
-pcall(function()
-    local env = getgenv()
-
-    if syn and syn.request then
-        RequestFunction = syn.request
-    elseif http and http.request then
-        RequestFunction = http.request
-    elseif fluxus and fluxus.request then
-        RequestFunction = fluxus.request
-    elseif krnl and krnl.request then
-        RequestFunction = krnl.request
-    elseif env and env.request then
-        RequestFunction = env.request
-    elseif env and env.http_request then
-        RequestFunction = env.http_request
-    elseif http_request then
-        RequestFunction = http_request
-    elseif request then
-        RequestFunction = request
-    end
-end)
-
-getgenv().ToxRequestFunction = RequestFunction
-
-
-local function GetHumanoidDefaults(hum)
-    if not hum then return nil end
-
-    if not HumanoidDefaults[hum] then
-        HumanoidDefaults[hum] = {
-            WalkSpeed = hum.WalkSpeed,
-            UseJumpPower = hum.UseJumpPower,
-            JumpPower = hum.JumpPower,
-            JumpHeight = hum.JumpHeight
-        }
-    end
-
-    return HumanoidDefaults[hum]
-end
-
-local function RestoreSpeed()
-    local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-    local defaults = hum and HumanoidDefaults[hum]
-
-    if hum and defaults then
-        hum.WalkSpeed = defaults.WalkSpeed
-    end
-end
-
-local function RestoreJump()
-    local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-    local defaults = hum and HumanoidDefaults[hum]
-
-    if hum and defaults then
-        hum.UseJumpPower = defaults.UseJumpPower
-        hum.JumpPower = defaults.JumpPower
-        hum.JumpHeight = defaults.JumpHeight
-    end
-end
-
-local function CaptureNoclipDefaults()
-    if not Player.Character then return end
-
-    for _, part in ipairs(Player.Character:GetDescendants()) do
-        if part:IsA("BasePart") and NoclipDefaults[part] == nil then
-            NoclipDefaults[part] = part.CanCollide
-        end
-    end
-end
-
-local function RestoreNoclipDefaults()
-    for part, canCollide in pairs(NoclipDefaults) do
-        if part and part.Parent then
-            part.CanCollide = canCollide
-        end
-        NoclipDefaults[part] = nil
-    end
-end
-
-local function RestoreAntiFlingDefaults()
-    for part, canCollide in pairs(AntiFlingDefaults) do
-        if part and part.Parent then
-            part.CanCollide = canCollide
-        end
-        AntiFlingDefaults[part] = nil
-    end
-end
-
-local function RestoreHitboxDefaults()
-    for hrp, data in pairs(HitboxDefaults) do
-        if hrp and hrp.Parent then
-            hrp.Size = data.Size
-            hrp.Transparency = data.Transparency
-            hrp.CanCollide = data.CanCollide
-        end
-        HitboxDefaults[hrp] = nil
-    end
-end
-
-local function CaptureFOVDefault()
-    if not FOVCaptured then
-        FOVDefault = Camera.FieldOfView
-        FOVCaptured = true
-    end
-end
-
-local function RestoreFOVDefault()
-    if FOVCaptured then
-        Camera.FieldOfView = FOVDefault
-        FOVCaptured = false
-    end
-end
-
-local function CaptureShiftLockDefaults()
-    if not ShiftLockDefaults then
-        ShiftLockDefaults = {
-            DevEnableMouseLock = Player.DevEnableMouseLock,
-            MouseBehavior = UserInputService.MouseBehavior
-        }
-    end
-end
-
-local function RestoreShiftLockDefaults()
-    if ShiftLockDefaults then
-        pcall(function()
-            Player.DevEnableMouseLock = ShiftLockDefaults.DevEnableMouseLock
+    if firesignal then
+        local ok = pcall(function()
+            firesignal(button.MouseButton1Click)
         end)
 
-        pcall(function()
-            UserInputService.MouseBehavior = ShiftLockDefaults.MouseBehavior
-        end)
-
-        ShiftLockDefaults = nil
-    end
-
-    isShiftLockActive = false
-end
-
-local SubGuiControls = {}
-
-local function FindSubGuiTopBar(gui)
-    if not gui then return nil end
-
-    for _, child in ipairs(gui:GetChildren()) do
-        if child:IsA("Frame") and child.Size.Y.Offset == 32 and child.Position.Y.Offset == 0 then
-            return child
+        if ok then
+            return true
         end
     end
 
-    return nil
-end
+    return pcall(function()
+        local center = button.AbsolutePosition + button.AbsoluteSize / 2
 
-local function SetSubGuiContentVisible(data, visible)
-    local gui = data.Gui
-    local topBar = data.TopBar
-
-    if visible then
-        for child, wasVisible in pairs(data.ChildVisibility) do
-            if child and child.Parent == gui and child:IsA("GuiObject") then
-                child.Visible = wasVisible
-            end
-        end
-
-        data.ChildVisibility = {}
-    else
-        data.ChildVisibility = {}
-
-        for _, child in ipairs(gui:GetChildren()) do
-            if child:IsA("GuiObject") and child ~= topBar then
-                data.ChildVisibility[child] = child.Visible
-                child.Visible = false
-            end
-        end
-    end
-end
-
-local function SetSubGuiMinimized(data, minimized)
-    if not data or not data.Gui then
-        return
-    end
-
-    local gui = data.Gui
-
-    if minimized then
-        if not data.Minimized and (gui.Size.Y.Offset > 32 or gui.Size.Y.Scale ~= 0) then
-            data.ExpandedSize = gui.Size
-        end
-
-        gui.ClipsDescendants = true
-        SetSubGuiContentVisible(data, false)
-        gui.Size = UDim2.new(data.ExpandedSize.X.Scale, data.ExpandedSize.X.Offset, 0, 32)
-        data.Button.Text = "+"
-        data.Minimized = true
-    else
-        gui.Size = data.ExpandedSize
-        SetSubGuiContentVisible(data, true)
-        data.Button.Text = "-"
-        data.Minimized = false
-    end
-end
-
-local function RegisterSubGuiMinimize(gui, buttonOffset)
-    if not gui then return nil end
-
-    local topBar = FindSubGuiTopBar(gui)
-    if not topBar then return nil end
-
-    for _, child in ipairs(topBar:GetChildren()) do
-        if child:IsA("TextButton") and (child.Text == "-" or child.Text == "+") then
-            child:Destroy()
-        end
-    end
-
-    for _, child in ipairs(topBar:GetChildren()) do
-        if child:IsA("TextLabel") then
-            child.Size = UDim2.new(1, math.min(child.Size.X.Offset, -70), child.Size.Y.Scale, child.Size.Y.Offset)
-            break
-        end
-    end
-
-    local button = Instance.new("TextButton")
-    button.Name = "ToxSubGuiMinimize"
-    button.Size = UDim2.new(0, 24, 0, 22)
-    button.Position = UDim2.new(1, buttonOffset, 0.5, -11)
-    button.BackgroundColor3 = Color3.fromRGB(22, 22, 35)
-    button.BorderSizePixel = 0
-    button.Text = "-"
-    button.TextColor3 = Color3.fromRGB(255, 255, 255)
-    button.Font = Enum.Font.GothamBold
-    button.TextSize = 14
-    button.AutoButtonColor = false
-    button.Parent = topBar
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 4)
-    corner.Parent = button
-
-    local data = {
-        Gui = gui,
-        TopBar = topBar,
-        ExpandedSize = gui.Size,
-        Button = button,
-        Minimized = false,
-        ChildVisibility = {}
-    }
-
-    SubGuiControls[gui] = data
-
-    button.MouseButton1Click:Connect(function()
-        SetSubGuiMinimized(data, not data.Minimized)
-    end)
-
-    return data
-end
-
-RegisterSubGuiMinimize(ChatLogGui, -88)
-RegisterSubGuiMinimize(MusicGui, -52)
-RegisterSubGuiMinimize(WaypointsGui, -52)
-
-if JoinGamesGui then
-    JoinGamesGui.Visible = false
-end
-
-if getgenv().MakeResizable then
-    getgenv().MakeResizable(Main, "Main", 0.88, 1.50)
-    getgenv().MakeResizable(ChatLogGui, "ChatLogs", 0.85, 1.50)
-    getgenv().MakeResizable(MusicGui, "Music", 0.85, 1.50)
-    getgenv().MakeResizable(WaypointsGui, "Waypoints", 0.85, 1.50)
-end
-
-getgenv().ToxLinkedSubGuis = getgenv().ToxLinkedSubGuis or {}
-
-getgenv().RegisterToxSubGuiMinimize = function(gui, buttonOffset)
-    if not gui then
-        return nil
-    end
-
-    local existing = SubGuiControls[gui]
-
-    if existing then
-        return existing
-    end
-
-    return RegisterSubGuiMinimize(gui, buttonOffset or -52)
-end
-
-getgenv().RegisterToxLinkedSubGui = function(key, gui)
-    if not key or not gui then
-        return
-    end
-
-    local normalizedKey =
-        tostring(key)
-
-    getgenv().ToxLinkedSubGuis[
-        normalizedKey
-    ] = gui
-
-    if getgenv().MakeResizable then
-        getgenv().MakeResizable(
-            gui,
-            "Linked_"
-            .. normalizedKey,
-            0.90,
-            1.45
+        VirtualInputManager:SendMouseButtonEvent(
+            center.X,
+            center.Y,
+            0,
+            true,
+            game,
+            0
         )
-    end
+
+        task.wait(0.02)
+
+        VirtualInputManager:SendMouseButtonEvent(
+            center.X,
+            center.Y,
+            0,
+            false,
+            game,
+            0
+        )
+    end)
 end
 
-local ToxPages = getgenv().Pages
+function FindMM2RadioTool()
+    local character = Player.Character
+    local backpack = Player:FindFirstChildOfClass("Backpack")
 
-if typeof(ToxPages) == "table" then
-    for _, page in pairs(ToxPages) do
-        if page and page.GetChildren then
-            for _, child in ipairs(page:GetChildren()) do
-                if child:IsA("Frame") or child:IsA("TextButton") then
-                    child:Destroy()
+    for _, container in ipairs({character, backpack}) do
+        if container then
+            for _, child in ipairs(container:GetChildren()) do
+                if child:IsA("Tool") then
+                    local lower = string.lower(child.Name)
+
+                    if string.find(lower, "radio", 1, true)
+                    or string.find(lower, "boombox", 1, true)
+                    or string.find(lower, "boom box", 1, true) then
+                        return child
+                    end
                 end
             end
         end
     end
-end
-
-local JoinTargetCache = nil
-local JoinLookupGeneration = 0
-
-local JoinTargetBox = nil
-local JoinPlayingLabel = nil
-local JoinPlayerButton = nil
-local JoinGamesButton = nil
-
-local function CleanJoinTarget(text)
-    text = tostring(text or "")
-    text = text:gsub("^%s+", ""):gsub("%s+$", "")
-    text = text:gsub("^@", "")
-    return text
-end
-
-local function ResolveJoinUserId(text)
-    local cleaned = CleanJoinTarget(text)
-
-    if cleaned == "" then
-        return nil, "Enter nick or ID"
-    end
-
-    local numeric = tonumber(cleaned)
-
-    if numeric and numeric > 0 then
-        return math.floor(numeric)
-    end
-
-    local ok, userId = pcall(function()
-        return Players:GetUserIdFromNameAsync(cleaned)
-    end)
-
-    if ok and tonumber(userId) then
-        return tonumber(userId)
-    end
-
-    return nil, "User not found"
-end
-
-local ToxRelayHost =
-    "https://tox-control-relay.1kobg-0o.workers.dev"
-
-local function PresenceRelayRequestOnce(
-    userId
-)
-    local url =
-        ToxRelayHost
-        .. "/roblox/presence?userId="
-        .. tostring(userId)
-        .. "&_="
-        .. tostring(
-            math.floor(
-                os.clock() * 1000
-            )
-        )
-
-    local body = nil
-
-    if RequestFunction then
-        local ok, response =
-            pcall(function()
-                return RequestFunction({
-                    Url = url,
-                    Method = "GET",
-                    Headers = {
-                        ["Accept"] =
-                            "application/json",
-                        ["Cache-Control"] =
-                            "no-cache"
-                    }
-                })
-            end)
-
-        if ok
-        and typeof(response)
-            == "table" then
-            local status =
-                tonumber(
-                    response.StatusCode
-                    or response.Status
-                    or 0
-                ) or 0
-
-            local success =
-                response.Success
-
-            if success == nil then
-                success =
-                    response.success
-            end
-
-            if (
-                status >= 200
-                and status < 300
-            )
-            or success == true then
-                body =
-                    response.Body
-                    or response.body
-            end
-        end
-    end
-
-    if typeof(body)
-        ~= "string"
-    or body == "" then
-        local ok, response =
-            pcall(function()
-                return game:HttpGet(
-                    url,
-                    true
-                )
-            end)
-
-        if not ok then
-            ok, response =
-                pcall(function()
-                    return game:HttpGet(
-                        url
-                    )
-                end)
-        end
-
-        if ok
-        and typeof(response)
-            == "string" then
-            body = response
-        end
-    end
-
-    if typeof(body)
-        ~= "string"
-    or body == "" then
-        return nil
-    end
-
-    local ok, decoded =
-        pcall(function()
-            return HttpService:
-                JSONDecode(body)
-        end)
-
-    if ok
-    and typeof(decoded)
-        == "table"
-    and decoded.ok == true
-    and typeof(decoded.presence)
-        == "table" then
-        return decoded.presence
-    end
 
     return nil
 end
 
-local function PresenceRequestOnce(userId)
-    local relayPresence =
-        PresenceRelayRequestOnce(
-            userId
-        )
+function FindRadioOpenButton()
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
 
-    if relayPresence then
-        return relayPresence
-    end
-
-    local requestData = {
-        Url = "https://presence.roblox.com/v1/presence/users",
-        Method = "POST",
-        Headers = {
-            ["Content-Type"] = "application/json"
-        },
-        Body = HttpService:JSONEncode({userIds = {userId}})
-    }
-
-    local ok = false
-    local response = nil
-
-    if RequestFunction then
-        ok, response = pcall(function()
-            return RequestFunction(requestData)
-        end)
-
-        if not ok or typeof(response) ~= "table" then
-            requestData.URL = requestData.Url
-            requestData.Url = nil
-
-            ok, response = pcall(function()
-                return RequestFunction(requestData)
-            end)
-        end
-    end
-
-    local body = nil
-
-    if ok and typeof(response) == "table" then
-        body = response.Body or response.body
-    end
-
-    if typeof(body) ~= "string" or body == "" then
-        local postOk, postBody = pcall(function()
-            return HttpService:PostAsync(
-                "https://presence.roblox.com/v1/presence/users",
-                HttpService:JSONEncode({userIds = {userId}}),
-                Enum.HttpContentType.ApplicationJson
-            )
-        end)
-
-        if postOk and typeof(postBody) == "string" then
-            body = postBody
-        end
-    end
-
-    if typeof(body) ~= "string" or body == "" then
+    if not playerGui then
         return nil
     end
 
-    local decodedOk, decoded = pcall(function()
-        return HttpService:JSONDecode(body)
-    end)
-
-    if not decodedOk or typeof(decoded) ~= "table" then
-        return nil
-    end
-
-    local presence = decoded.userPresences and decoded.userPresences[1]
-
-    if typeof(presence) ~= "table" then
-        return nil
-    end
-
-    return presence
-end
-
-local function PresenceRequest(userId)
-    local bestPresence = nil
+    local best = nil
     local bestScore = -1
 
-    for attempt = 1, 4 do
-        local presence = PresenceRequestOnce(userId)
+    for _, obj in ipairs(playerGui:GetDescendants()) do
+        if (obj:IsA("TextButton") or obj:IsA("ImageButton"))
+        and IsGuiVisible(obj)
+        and not IsInsideToxGui(obj) then
+            local blob = GuiBlob(obj)
+            local score = 0
 
-        if presence then
-            local presenceType = tonumber(presence.userPresenceType) or 0
-            local placeId = tonumber(presence.placeId)
-                or tonumber(presence.rootPlaceId)
-            local gameId = presence.gameId and tostring(presence.gameId) or nil
-
-            local score = presenceType
-
-            if presenceType == 2 then
-                score = score + 10
-            end
-
-            if placeId then
+            if blob == "radio" then
                 score = score + 20
             end
 
-            if gameId and gameId ~= "" then
-                score = score + 40
+            if string.find(blob, "radio", 1, true) then
+                score = score + 10
+            end
+
+            if string.find(string.lower(obj.Name), "radio", 1, true) then
+                score = score + 8
             end
 
             if score > bestScore then
+                best = obj
                 bestScore = score
-                bestPresence = presence
-            end
-
-            if presenceType == 2
-            and placeId
-            and gameId
-            and gameId ~= "" then
-                break
             end
         end
-
-        if attempt < 4 then
-            task.wait(0.3)
-        end
     end
 
-    if not bestPresence then
-        return nil, "Presence unavailable"
-    end
-
-    return bestPresence
-end
-
-local function UpdateJoinStatus(text, notifyFailure)
-    JoinLookupGeneration = JoinLookupGeneration + 1
-    local generation = JoinLookupGeneration
-
-    if JoinPlayingLabel then
-        JoinPlayingLabel.Text = "Checking..."
-        JoinPlayingLabel.TextColor3 = Color3.fromRGB(255, 215, 70)
-    end
-
-    local userId, resolveError = ResolveJoinUserId(text)
-
-    if not userId then
-        JoinTargetCache = nil
-
-        if JoinPlayingLabel then
-            JoinPlayingLabel.Text = resolveError or "User not found"
-            JoinPlayingLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-        end
-
-        if notifyFailure then
-            CustomNotify(resolveError or "User not found", Color3.fromRGB(255, 100, 100))
-        end
-
-        return nil
-    end
-
-    local sameServerPlayer = Players:GetPlayerByUserId(userId)
-
-    if sameServerPlayer then
-        JoinTargetCache = {
-            UserId = userId,
-            SameServer = true,
-            PlaceId = game.PlaceId,
-            GameId = game.JobId,
-            LastLocation = "This server"
-        }
-
-        if generation == JoinLookupGeneration and JoinPlayingLabel then
-            JoinPlayingLabel.Text = "Playing: this server"
-            JoinPlayingLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-        end
-
-        return JoinTargetCache
-    end
-
-    local presence, presenceError = PresenceRequest(userId)
-
-    if generation ~= JoinLookupGeneration then
-        return nil
-    end
-
-    if not presence then
-        JoinTargetCache = nil
-
-        if JoinPlayingLabel then
-            JoinPlayingLabel.Text = presenceError or "Presence unavailable"
-            JoinPlayingLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-        end
-
-        if notifyFailure then
-            CustomNotify(presenceError or "Presence unavailable", Color3.fromRGB(255, 100, 100))
-        end
-
-        return nil
-    end
-
-    local presenceType = tonumber(presence.userPresenceType) or 0
-    local lastLocation = tostring(presence.lastLocation or "")
-    local placeId = tonumber(presence.placeId)
-        or tonumber(presence.rootPlaceId)
-    local gameId = presence.gameId and tostring(presence.gameId) or nil
-
-    JoinTargetCache = {
-        UserId = userId,
-        PresenceType = presenceType,
-        PlaceId = placeId,
-        GameId = gameId,
-        LastLocation = lastLocation
-    }
-
-    if JoinPlayingLabel then
-        if presenceType == 2 then
-            JoinPlayingLabel.Text = "Playing: " .. (lastLocation ~= "" and lastLocation or "Roblox")
-            JoinPlayingLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-        elseif presenceType == 0 then
-            JoinPlayingLabel.Text = "Offline"
-            JoinPlayingLabel.TextColor3 = Color3.fromRGB(170, 170, 185)
-        else
-            JoinPlayingLabel.Text = "Online, not in game"
-            JoinPlayingLabel.TextColor3 = Color3.fromRGB(255, 215, 70)
-        end
-    end
-
-    return JoinTargetCache
-end
-
-local function RequestJson(url)
-    local body = nil
-
-    if RequestFunction then
-        local ok, response = pcall(function()
-            return RequestFunction({
-                Url = url,
-                Method = "GET"
-            })
-        end)
-
-        if ok and typeof(response) == "table" then
-            body = response.Body or response.body
-        end
-    end
-
-    if typeof(body) ~= "string" or body == "" then
-        local ok, result = pcall(function()
-            return game:HttpGet(url)
-        end)
-
-        if ok and typeof(result) == "string" then
-            body = result
-        end
-    end
-
-    if typeof(body) ~= "string" or body == "" then
-        return nil
-    end
-
-    local ok, decoded = pcall(function()
-        return HttpService:JSONDecode(body)
-    end)
-
-    if ok and typeof(decoded) == "table" then
-        return decoded
+    if bestScore > 0 then
+        return best
     end
 
     return nil
 end
 
-local function GetPopulatedPublicServer(placeId)
-    local cursor = nil
-    local bestServer = nil
-    local bestPlaying = -1
+function FindMySongsButton()
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
 
-    for _ = 1, 3 do
-        local url = "https://games.roblox.com/v1/games/"
-            .. tostring(placeId)
-            .. "/servers/Public?sortOrder=Desc&excludeFullGames=true&limit=100"
+    if not playerGui then
+        return nil
+    end
 
-        if cursor and cursor ~= "" then
-            url = url .. "&cursor=" .. HttpService:UrlEncode(cursor)
-        end
+    for _, obj in ipairs(playerGui:GetDescendants()) do
+        if (obj:IsA("TextButton") or obj:IsA("ImageButton"))
+        and IsGuiVisible(obj)
+        and not IsInsideToxGui(obj) then
+            local blob = GuiBlob(obj)
 
-        local decoded = RequestJson(url)
-
-        if not decoded or typeof(decoded.data) ~= "table" then
-            break
-        end
-
-        for _, server in ipairs(decoded.data) do
-            local serverId = tostring(server.id or "")
-            local playing = tonumber(server.playing) or 0
-            local maxPlayers = tonumber(server.maxPlayers) or 0
-
-            if serverId ~= ""
-            and serverId ~= game.JobId
-            and playing > 0
-            and (maxPlayers <= 0 or playing < maxPlayers)
-            and playing > bestPlaying then
-                bestPlaying = playing
-                bestServer = server
+            if string.find(blob, "my songs", 1, true)
+            or string.find(blob, "mysongs", 1, true) then
+                return obj
             end
         end
+    end
 
-        cursor = decoded.nextPageCursor
+    return nil
+end
 
-        if not cursor or cursor == "" then
-            break
+function FindRadioTextBox()
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+
+    if not playerGui then
+        return nil
+    end
+
+    local best = nil
+    local bestScore = -1
+
+    for _, obj in ipairs(playerGui:GetDescendants()) do
+        if obj:IsA("TextBox")
+        and IsGuiVisible(obj)
+        and not IsInsideToxGui(obj) then
+            local blob = GuiBlob(obj)
+            local score = 0
+
+            if string.find(blob, "enter sound id", 1, true) then
+                score = score + 50
+            end
+
+            if string.find(blob, "sound id", 1, true) then
+                score = score + 30
+            end
+
+            if string.find(blob, "song id", 1, true) then
+                score = score + 30
+            end
+
+            if string.find(blob, "audio id", 1, true) then
+                score = score + 25
+            end
+
+            if string.find(blob, "radio", 1, true) then
+                score = score + 15
+            end
+
+            if string.find(blob, "song", 1, true)
+            or string.find(blob, "sound", 1, true)
+            or string.find(blob, "music", 1, true) then
+                score = score + 8
+            end
+
+            if string.find(string.lower(obj.Name), "id", 1, true) then
+                score = score + 4
+            end
+
+            if score > bestScore then
+                best = obj
+                bestScore = score
+            end
         end
     end
 
-    return bestServer
+    if bestScore > 0 then
+        return best
+    end
+
+    return nil
 end
 
-local ReturnButtonCleanupPayload = [[
-local CoreGui = game:GetService("CoreGui")
-local StatsService = game:GetService("Stats")
-
-local function hideReturnObject(obj)
-    if not obj then
-        return
+function FindButtonNearTextBox(textBox, words)
+    if not textBox then
+        return nil
     end
 
-    local text = nil
-
-    if obj:IsA("TextLabel")
-    or obj:IsA("TextButton") then
-        text = tostring(obj.Text or "")
-    end
-
-    if not text or text == "" then
-        return
-    end
-
-    local lower = string.lower(text)
-
-    if not string.find(lower, "return to", 1, true)
-    and not string.find(lower, "voltar para", 1, true) then
-        return
-    end
-
-    local current = obj
+    local current = textBox.Parent
 
     for _ = 1, 6 do
         if not current then
             break
         end
 
-        if current:IsA("GuiObject") then
-            pcall(function()
-                current.Visible = false
-            end)
-        end
+        for _, obj in ipairs(current:GetDescendants()) do
+            if (obj:IsA("TextButton") or obj:IsA("ImageButton"))
+            and IsGuiVisible(obj)
+            and not IsInsideToxGui(obj) then
+                local blob = GuiBlob(obj)
 
-        if current:IsA("TextButton")
-        or current:IsA("ImageButton") then
-            break
+                for _, word in ipairs(words) do
+                    if blob == word or string.find(blob, word, 1, true) then
+                        return obj
+                    end
+                end
+            end
         end
 
         current = current.Parent
-    end
-end
-
-local function scan()
-    for _, obj in ipairs(CoreGui:GetDescendants()) do
-        hideReturnObject(obj)
-    end
-end
-
-task.spawn(function()
-    task.wait(1)
-    scan()
-
-    CoreGui.DescendantAdded:Connect(function(obj)
-        task.defer(function()
-            hideReturnObject(obj)
-
-            if obj:IsA("TextLabel")
-            or obj:IsA("TextButton") then
-                pcall(function()
-                    obj:GetPropertyChangedSignal("Text"):Connect(function()
-                        hideReturnObject(obj)
-                    end)
-                end)
-            end
-        end)
-    end)
-
-    for _ = 1, 30 do
-        task.wait(1)
-        scan()
-    end
-end)
-]]
-
-local function QueueReturnButtonCleanup()
-    local queueFunction = nil
-    local env = getgenv()
-
-    if env and type(env.queue_on_teleport) == "function" then
-        queueFunction = env.queue_on_teleport
-    elseif type(queue_on_teleport) == "function" then
-        queueFunction = queue_on_teleport
-    elseif syn and type(syn.queue_on_teleport) == "function" then
-        queueFunction = syn.queue_on_teleport
-    elseif fluxus and type(fluxus.queue_on_teleport) == "function" then
-        queueFunction = fluxus.queue_on_teleport
-    end
-
-    if not queueFunction then
-        return false
-    end
-
-    return pcall(function()
-        queueFunction(ReturnButtonCleanupPayload)
-    end)
-end
-
-local function JoinPublicGame(placeId)
-    placeId = tonumber(placeId)
-
-    if getgenv().AutoSaveConfiguration then
-        pcall(getgenv().AutoSaveConfiguration)
-    end
-
-    if Settings.AutoExecute and getgenv().QueueToxAutoExecute then
-        pcall(getgenv().QueueToxAutoExecute)
-    end
-
-    QueueReturnButtonCleanup()
-    task.wait(0.12)
-
-    if not placeId or placeId <= 0 then
-        CustomNotify("Invalid Place ID", Color3.fromRGB(255, 100, 100))
-        return false
-    end
-
-    local server = GetPopulatedPublicServer(placeId)
-
-    if server and server.id then
-        CustomNotify(
-            "Joining public server • "
-                .. tostring(server.playing or 0)
-                .. "/"
-                .. tostring(server.maxPlayers or "?"),
-            Color3.fromRGB(100, 255, 100)
-        )
-
-        local ok = pcall(function()
-            TeleportService:TeleportToPlaceInstance(
-                placeId,
-                tostring(server.id),
-                Player
-            )
-        end)
-
-        return ok
-    end
-
-    CustomNotify(
-        "No populated server found, using normal matchmaking",
-        Color3.fromRGB(255, 215, 70)
-    )
-
-    return pcall(function()
-        TeleportService:Teleport(placeId, Player)
-    end)
-end
-
-local function JoinTargetPlayer()
-    if not JoinTargetBox then
-        return
-    end
-
-    if getgenv().AutoSaveConfiguration then
-        pcall(getgenv().AutoSaveConfiguration)
-    end
-
-    if Settings.AutoExecute and getgenv().QueueToxAutoExecute then
-        pcall(getgenv().QueueToxAutoExecute)
-    end
-
-    QueueReturnButtonCleanup()
-    task.wait(0.12)
-
-    local target = UpdateJoinStatus(JoinTargetBox.Text, true)
-
-    if not target then
-        return
-    end
-
-    if target.SameServer then
-        CustomNotify("Player is already in this server", Color3.fromRGB(255, 215, 70))
-        return
-    end
-
-    if target.PresenceType ~= 2 then
-        CustomNotify("Player is not in a game", Color3.fromRGB(255, 180, 70))
-        return
-    end
-
-    if target.PlaceId and target.GameId and target.GameId ~= "" then
-        local fallbackConnection = nil
-        local fallbackUsed = false
-
-        fallbackConnection = TeleportService.TeleportInitFailed:Connect(function(player)
-            if player ~= Player or fallbackUsed then
-                return
-            end
-
-            fallbackUsed = true
-
-            if fallbackConnection then
-                fallbackConnection:Disconnect()
-            end
-
-            CustomNotify(
-                "Exact server blocked; joining a public server in the same game",
-                Color3.fromRGB(255, 180, 70)
-            )
-
-            task.spawn(function()
-                JoinPublicGame(target.PlaceId)
-            end)
-        end)
-
-        task.delay(8, function()
-            if fallbackConnection then
-                fallbackConnection:Disconnect()
-            end
-        end)
-
-        local ok = pcall(function()
-            TeleportService:TeleportToPlaceInstance(
-                target.PlaceId,
-                target.GameId,
-                Player
-            )
-        end)
-
-        if not ok then
-            if fallbackConnection then
-                fallbackConnection:Disconnect()
-            end
-
-            JoinPublicGame(target.PlaceId)
-        end
-
-        return
-    end
-
-    if target.PlaceId then
-        CustomNotify(
-            "Roblox hides the exact server; joining the same game instead",
-            Color3.fromRGB(255, 180, 70)
-        )
-
-        JoinPublicGame(target.PlaceId)
-        return
-    end
-
-    CustomNotify(
-        "Roblox did not expose this player's PlaceId/JobId",
-        Color3.fromRGB(255, 100, 100)
-    )
-end
-
-local function CreateJoinInterface()
-    if not JoinPage then
-        return
-    end
-
-    local card =
-        Instance.new(
-            "Frame"
-        )
-
-    card.Size =
-        UDim2.new(
-            1,
-            -5,
-            0,
-            78
-        )
-
-    card.BackgroundColor3 =
-        Color3.fromRGB(
-            18,
-            18,
-            26
-        )
-
-    card.BorderSizePixel = 0
-    card.LayoutOrder = 1
-    card.Parent = JoinPage
-
-    local cardCorner =
-        Instance.new(
-            "UICorner"
-        )
-
-    cardCorner.CornerRadius =
-        UDim.new(
-            0,
-            4
-        )
-
-    cardCorner.Parent = card
-
-    JoinTargetBox =
-        Instance.new(
-            "TextBox"
-        )
-
-    JoinTargetBox.Size =
-        UDim2.new(
-            0.52,
-            -8,
-            0,
-            30
-        )
-
-    JoinTargetBox.Position =
-        UDim2.new(
-            0,
-            8,
-            0,
-            8
-        )
-
-    JoinTargetBox.BackgroundColor3 =
-        Color3.fromRGB(
-            27,
-            27,
-            39
-        )
-
-    JoinTargetBox.BorderSizePixel = 0
-    JoinTargetBox.PlaceholderText =
-        "Nick / ID"
-
-    JoinTargetBox.Text = ""
-
-    JoinTargetBox.TextColor3 =
-        Color3.fromRGB(
-            245,
-            245,
-            245
-        )
-
-    JoinTargetBox.PlaceholderColor3 =
-        Color3.fromRGB(
-            130,
-            130,
-            150
-        )
-
-    JoinTargetBox.Font =
-        Enum.Font.Gotham
-
-    JoinTargetBox.TextSize = 12
-    JoinTargetBox.ClearTextOnFocus = false
-    JoinTargetBox.Parent = card
-
-    local inputCorner =
-        Instance.new(
-            "UICorner"
-        )
-
-    inputCorner.CornerRadius =
-        UDim.new(
-            0,
-            4
-        )
-
-    inputCorner.Parent =
-        JoinTargetBox
-
-    JoinPlayingLabel =
-        Instance.new(
-            "TextLabel"
-        )
-
-    JoinPlayingLabel.Size =
-        UDim2.new(
-            0.48,
-            -12,
-            0,
-            30
-        )
-
-    JoinPlayingLabel.Position =
-        UDim2.new(
-            0.52,
-            4,
-            0,
-            8
-        )
-
-    JoinPlayingLabel.BackgroundColor3 =
-        Color3.fromRGB(
-            22,
-            22,
-            32
-        )
-
-    JoinPlayingLabel.BorderSizePixel = 0
-    JoinPlayingLabel.Text =
-        "Playing: --"
-
-    JoinPlayingLabel.TextColor3 =
-        Color3.fromRGB(
-            170,
-            170,
-            185
-        )
-
-    JoinPlayingLabel.Font =
-        Enum.Font.Gotham
-
-    JoinPlayingLabel.TextSize = 10
-    JoinPlayingLabel.TextXAlignment =
-        Enum.TextXAlignment.Center
-
-    JoinPlayingLabel.TextTruncate =
-        Enum.TextTruncate.AtEnd
-
-    JoinPlayingLabel.Parent = card
-
-    local playingCorner =
-        Instance.new(
-            "UICorner"
-        )
-
-    playingCorner.CornerRadius =
-        UDim.new(
-            0,
-            4
-        )
-
-    playingCorner.Parent =
-        JoinPlayingLabel
-
-    JoinPlayerButton =
-        Instance.new(
-            "TextButton"
-        )
-
-    JoinPlayerButton.Size =
-        UDim2.new(
-            1,
-            -16,
-            0,
-            28
-        )
-
-    JoinPlayerButton.Position =
-        UDim2.new(
-            0,
-            8,
-            0,
-            44
-        )
-
-    JoinPlayerButton.BackgroundColor3 =
-        MAIN_COLOR
-
-    JoinPlayerButton.BorderSizePixel = 0
-    JoinPlayerButton.Text = "JOIN"
-
-    JoinPlayerButton.TextColor3 =
-        Color3.fromRGB(
-            255,
-            255,
-            255
-        )
-
-    JoinPlayerButton.Font =
-        Enum.Font.GothamBold
-
-    JoinPlayerButton.TextSize = 12
-    JoinPlayerButton.Parent = card
-
-    local joinCorner =
-        Instance.new(
-            "UICorner"
-        )
-
-    joinCorner.CornerRadius =
-        UDim.new(
-            0,
-            4
-        )
-
-    joinCorner.Parent =
-        JoinPlayerButton
-
-    local quickGamesCard =
-        Instance.new(
-            "Frame"
-        )
-
-    quickGamesCard.Name =
-        "InlineQuickGames"
-
-    quickGamesCard.Size =
-        UDim2.new(
-            1,
-            -5,
-            0,
-            326
-        )
-
-    quickGamesCard.BackgroundColor3 =
-        Color3.fromRGB(
-            18,
-            18,
-            26
-        )
-
-    quickGamesCard.BorderSizePixel = 0
-    quickGamesCard.LayoutOrder = 2
-    quickGamesCard.ClipsDescendants = true
-    quickGamesCard.Parent = JoinPage
-
-    local quickCorner =
-        Instance.new(
-            "UICorner"
-        )
-
-    quickCorner.CornerRadius =
-        UDim.new(
-            0,
-            4
-        )
-
-    quickCorner.Parent =
-        quickGamesCard
-
-    local quickTitle =
-        Instance.new(
-            "TextLabel"
-        )
-
-    quickTitle.Size =
-        UDim2.new(
-            1,
-            -16,
-            0,
-            24
-        )
-
-    quickTitle.Position =
-        UDim2.new(
-            0,
-            8,
-            0,
-            5
-        )
-
-    quickTitle.BackgroundTransparency = 1
-    quickTitle.Text = "Quick Games"
-
-    quickTitle.TextColor3 =
-        Color3.fromRGB(
-            245,
-            245,
-            245
-        )
-
-    quickTitle.Font =
-        Enum.Font.GothamBold
-
-    quickTitle.TextSize = 11
-    quickTitle.TextXAlignment =
-        Enum.TextXAlignment.Left
-
-    quickTitle.Parent =
-        quickGamesCard
-
-    pcall(function()
-        local box = (getgenv and getgenv().JoinGameIdBox) or JoinGameIdBox
-        if box and box.Parent then
-            local addArea = box.Parent
-            if addArea and addArea.Parent then
-                addArea.Parent = quickGamesCard
-                addArea.Size = UDim2.new(1, -16, 0, 32)
-                addArea.Position = UDim2.new(0, 8, 0, 32)
-            end
-        end
-    end)
-
-    pcall(function()
-        local scroll = (getgenv and getgenv().JoinGamesScroll) or JoinGamesScroll
-        if scroll and scroll.Parent then
-            scroll.Parent = quickGamesCard
-            scroll.Size = UDim2.new(1, -16, 1, -72)
-            scroll.Position = UDim2.new(0, 8, 0, 68)
-        end
-    end)
-
-    if JoinGamesGui then
-        JoinGamesGui.Visible = false
-    end
-
-    JoinGamesButton = nil
-
-    JoinTargetBox.FocusLost:
-        Connect(function()
-            if CleanJoinTarget(
-                JoinTargetBox.Text
-            ) ~= "" then
-                task.spawn(function()
-                    UpdateJoinStatus(
-                        JoinTargetBox.Text,
-                        false
-                    )
-                end)
-            end
-        end)
-
-    JoinPlayerButton.MouseButton1Click:
-        Connect(function()
-            task.spawn(
-                JoinTargetPlayer
-            )
-        end)
-end
-
-local function ResolvePlaceName(placeId)
-    local ok, info = pcall(function()
-        return MarketplaceService:GetProductInfo(
-            placeId,
-            Enum.InfoType.Asset
-        )
-    end)
-
-    if ok and typeof(info) == "table" then
-        local name = tostring(info.Name or "")
-
-        if name ~= "" then
-            return name
-        end
-    end
-
-    return "Place " .. tostring(placeId)
-end
-
-local function RefreshQuickJoinGames()
-    local scroll = (getgenv and getgenv().JoinGamesScroll) or JoinGamesScroll
-    if not scroll or not pcall(function() return scroll.Parent end) or scroll.Parent == nil then
-        return
-    end
-
-    for _, child in ipairs(scroll:GetChildren()) do
-        if child:IsA("Frame") then
-            pcall(function() child:Destroy() end)
-        end
-    end
-
-    for idx, info in ipairs(
-        SavedJoinGames
-    ) do
-        local placeId =
-            tonumber(
-                info.id
-                or info.PlaceId
-            )
-
-        local gameName =
-            tostring(
-                info.name
-                or info.Name
-                or (
-                    "Place "
-                    .. tostring(
-                        placeId
-                        or "?"
-                    )
-                )
-            )
-
-        local favorite =
-            info.favorite == true
-
-        local row =
-            Instance.new(
-                "Frame"
-            )
-
-        row.Size =
-            UDim2.new(
-                1,
-                -4,
-                0,
-                74
-            )
-
-        row.BackgroundColor3 =
-            Color3.fromRGB(
-                18,
-                18,
-                28
-            )
-
-        row.BorderSizePixel = 0
-        row.LayoutOrder = idx
-        pcall(function()
-            row.Parent = scroll
-        end)
-
-        local rowCorner =
-            Instance.new(
-                "UICorner"
-            )
-
-        rowCorner.CornerRadius =
-            UDim.new(
-                0,
-                4
-            )
-
-        rowCorner.Parent = row
-
-        local nameLabel =
-            Instance.new(
-                "TextLabel"
-            )
-
-        nameLabel.Size =
-            UDim2.new(
-                1,
-                -16,
-                0,
-                22
-            )
-
-        nameLabel.Position =
-            UDim2.new(
-                0,
-                8,
-                0,
-                3
-            )
-
-        nameLabel.BackgroundTransparency = 1
-
-        nameLabel.Text =
-            (
-                favorite
-                and "★ "
-                or ""
-            )
-            .. gameName
-
-        nameLabel.TextColor3 =
-            favorite
-            and Color3.fromRGB(
-                255,
-                215,
-                70
-            )
-            or Color3.fromRGB(
-                245,
-                245,
-                245
-            )
-
-        nameLabel.Font =
-            Enum.Font.GothamBold
-
-        nameLabel.TextSize = 11
-        nameLabel.TextXAlignment =
-            Enum.TextXAlignment.Left
-
-        nameLabel.TextTruncate =
-            Enum.TextTruncate.AtEnd
-
-        nameLabel.Parent = row
-
-        local idLabel =
-            Instance.new(
-                "TextLabel"
-            )
-
-        idLabel.Size =
-            UDim2.new(
-                1,
-                -16,
-                0,
-                15
-            )
-
-        idLabel.Position =
-            UDim2.new(
-                0,
-                8,
-                0,
-                24
-            )
-
-        idLabel.BackgroundTransparency = 1
-        idLabel.Text =
-            "ID: "
-            .. tostring(
-                placeId
-                or "?"
-            )
-
-        idLabel.TextColor3 =
-            Color3.fromRGB(
-                145,
-                145,
-                165
-            )
-
-        idLabel.Font =
-            Enum.Font.Gotham
-
-        idLabel.TextSize = 9
-        idLabel.TextXAlignment =
-            Enum.TextXAlignment.Left
-
-        idLabel.Parent = row
-
-        local function makeButton(
-            text,
-            xScale,
-            widthScale
-        )
-            local button =
-                Instance.new(
-                    "TextButton"
-                )
-
-            button.Size =
-                UDim2.new(
-                    widthScale,
-                    -3,
-                    0,
-                    24
-                )
-
-            button.Position =
-                UDim2.new(
-                    xScale,
-                    2,
-                    0,
-                    44
-                )
-
-            button.BackgroundColor3 =
-                Color3.fromRGB(
-                    25,
-                    25,
-                    38
-                )
-
-            button.BorderSizePixel = 0
-            button.Text = text
-
-            button.TextColor3 =
-                Color3.fromRGB(
-                    240,
-                    240,
-                    240
-                )
-
-            button.Font =
-                Enum.Font.GothamBold
-
-            button.TextSize = 9
-            button.Parent = row
-
-            local corner =
-                Instance.new(
-                    "UICorner"
-                )
-
-            corner.CornerRadius =
-                UDim.new(
-                    0,
-                    4
-                )
-
-            corner.Parent =
-                button
-
-            return button
-        end
-
-        local joinButton =
-            makeButton(
-                "Join",
-                0,
-                0.20
-            )
-
-        local upButton =
-            makeButton(
-                "Up",
-                0.20,
-                0.14
-            )
-
-        local downButton =
-            makeButton(
-                "Down",
-                0.34,
-                0.18
-            )
-
-        local favoriteButton =
-            makeButton(
-                "Fav",
-                0.52,
-                0.17
-            )
-
-        local removeButton =
-            makeButton(
-                "Remove",
-                0.69,
-                0.31
-            )
-
-        favoriteButton.TextColor3 =
-            favorite
-            and Color3.fromRGB(
-                255,
-                215,
-                70
-            )
-            or Color3.fromRGB(
-                210,
-                210,
-                220
-            )
-
-        joinButton.MouseButton1Click:
-            Connect(function()
-                if placeId then
-                    task.spawn(function()
-                        JoinPublicGame(
-                            placeId
-                        )
-                    end)
-                end
-            end)
-
-        upButton.MouseButton1Click:
-            Connect(function()
-                if idx > 1 then
-                    SavedJoinGames[
-                        idx
-                    ],
-                    SavedJoinGames[
-                        idx - 1
-                    ] =
-                        SavedJoinGames[
-                            idx - 1
-                        ],
-                        SavedJoinGames[
-                            idx
-                        ]
-
-                    AutoSaveConfiguration()
-                    RefreshQuickJoinGames()
-                end
-            end)
-
-        downButton.MouseButton1Click:
-            Connect(function()
-                if idx
-                    < #SavedJoinGames then
-                    SavedJoinGames[
-                        idx
-                    ],
-                    SavedJoinGames[
-                        idx + 1
-                    ] =
-                        SavedJoinGames[
-                            idx + 1
-                        ],
-                        SavedJoinGames[
-                            idx
-                        ]
-
-                    AutoSaveConfiguration()
-                    RefreshQuickJoinGames()
-                end
-            end)
-
-        favoriteButton.MouseButton1Click:
-            Connect(function()
-                SavedJoinGames[
-                    idx
-                ].favorite =
-                    not favorite
-
-                AutoSaveConfiguration()
-                RefreshQuickJoinGames()
-            end)
-
-        removeButton.MouseButton1Click:
-            Connect(function()
-                table.remove(
-                    SavedJoinGames,
-                    idx
-                )
-
-                AutoSaveConfiguration()
-                RefreshQuickJoinGames()
-            end)
-    end
-end
-
-getgenv().RefreshQuickJoinGames = RefreshQuickJoinGames
-
-local function AddQuickJoinGame()
-    if not JoinGameIdBox then
-        return
-    end
-
-    local cleaned = tostring(JoinGameIdBox.Text or ""):match("%d+")
-    local placeId = tonumber(cleaned)
-
-    if not placeId or placeId <= 0 then
-        CustomNotify("Invalid Place ID", Color3.fromRGB(255, 100, 100))
-        return
-    end
-
-    for _, info in ipairs(SavedJoinGames) do
-        if tonumber(info.id or info.PlaceId) == placeId then
-            CustomNotify("Game already saved", Color3.fromRGB(255, 215, 70))
-            return
-        end
-    end
-
-    JoinGameAddButton.Text = "Adding..."
-
-    task.spawn(function()
-        local name = ResolvePlaceName(placeId)
-
-        table.insert(SavedJoinGames, {
-            id = placeId,
-            name = name,
-            favorite = false
-        })
-
-        AutoSaveConfiguration()
-        RefreshQuickJoinGames()
-
-        JoinGameIdBox.Text = ""
-        JoinGameAddButton.Text = "Add Game"
-
-        CustomNotify(
-            "Saved: " .. name,
-            Color3.fromRGB(100, 255, 100)
-        )
-    end)
-end
-
-if JoinGameAddButton then
-    JoinGameAddButton.MouseButton1Click:Connect(AddQuickJoinGame)
-end
-
-if JoinGameIdBox then
-    JoinGameIdBox.FocusLost:Connect(function(enterPressed)
-        if enterPressed then
-            AddQuickJoinGame()
-        end
-    end)
-end
-
-CreateJoinInterface()
-RefreshQuickJoinGames()
-
-local ToxActiveFlingTargets = getgenv().ToxActiveFlingTargets
-
-if typeof(ToxActiveFlingTargets) ~= "table" then
-    ToxActiveFlingTargets = setmetatable({}, {__mode = "k"})
-    getgenv().ToxActiveFlingTargets = ToxActiveFlingTargets
-end
-
-local function GetToxFlingBlockReason(targetPlayer)
-    if not targetPlayer
-    or not targetPlayer.Parent
-    or not targetPlayer.Character then
-        return "unavailable"
-    end
-
-    local character = targetPlayer.Character
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    local root = character:FindFirstChild("HumanoidRootPart")
-        or humanoid and humanoid.RootPart
-
-    if not humanoid
-    or humanoid.Health <= 0
-    or not root then
-        return "dead"
-    end
-
-    local activeUntil = ToxActiveFlingTargets[targetPlayer]
-
-    if typeof(activeUntil) == "number"
-    and activeUntil > tick() then
-        return "busy"
-    end
-
-    local velocity = root.AssemblyLinearVelocity.Magnitude
-    local angular = root.AssemblyAngularVelocity.Magnitude
-    local state = humanoid:GetState()
-
-    if humanoid.Sit
-    or humanoid.PlatformStand
-    or state == Enum.HumanoidStateType.Ragdoll
-    or state == Enum.HumanoidStateType.FallingDown
-    or state == Enum.HumanoidStateType.Physics
-    or state == Enum.HumanoidStateType.Seated then
-        return "unstable"
-    end
-
-    if velocity > 95
-    or angular > 85 then
-        return "moving"
     end
 
     return nil
 end
 
-local function CanStartToxFlingTarget(targetPlayer)
-    local reason = GetToxFlingBlockReason(targetPlayer)
-    return reason == nil, reason
+function OpenMM2RadioInterface()
+    local textBox = FindRadioTextBox()
+
+    if textBox then
+        return textBox
+    end
+
+    local radioButton = FindRadioOpenButton()
+
+    if radioButton then
+        ClickGuiButton(radioButton)
+        task.wait(0.15)
+    else
+        local tool = FindMM2RadioTool()
+
+        if tool then
+            local character = Player.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+            if humanoid and tool.Parent ~= character then
+                pcall(function()
+                    humanoid:EquipTool(tool)
+                end)
+
+                task.wait(0.08)
+            end
+
+            pcall(function()
+                tool:Activate()
+            end)
+
+            task.wait(0.15)
+        end
+    end
+
+    textBox = FindRadioTextBox()
+
+    if textBox then
+        return textBox
+    end
+
+    local mySongs = FindMySongsButton()
+
+    if mySongs then
+        ClickGuiButton(mySongs)
+        task.wait(0.12)
+        textBox = FindRadioTextBox()
+    end
+
+    return textBox
 end
 
-getgenv().ToxCanFlingTarget = CanStartToxFlingTarget
+getgenv().ToxPlayMM2Radio = function(id)
+    local cleanID = tostring(id or ""):match("%d+")
 
-local function SkidFling(TargetPlayer)
-    local canFling, blockReason = CanStartToxFlingTarget(TargetPlayer)
-
-    if not canFling then
-        return false, blockReason
+    if not cleanID then
+        CustomNotify("Invalid Radio ID", Color3.fromRGB(255, 100, 100))
+        return
     end
 
-    if not TargetPlayer or not TargetPlayer.Character then return false end
+    task.spawn(function()
+        local textBox = OpenMM2RadioInterface()
 
-    local Character = Player.Character
-    local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-    local RootPart = Humanoid and Humanoid.RootPart
-    local TCharacter = TargetPlayer.Character
-    local THumanoid = TCharacter and TCharacter:FindFirstChildOfClass("Humanoid")
-    local TRootPart = THumanoid and THumanoid.RootPart
-    local THead = TCharacter and TCharacter:FindFirstChild("Head")
-    local Accessory = TCharacter and TCharacter:FindFirstChildOfClass("Accessory")
-    local Handle = Accessory and Accessory:FindFirstChild("Handle")
-
-    if not (Character and Humanoid and RootPart and TCharacter) then return false end
-
-    getgenv().OldPos = RootPart.CFrame
-    if THumanoid and THumanoid.Sit then return false end
-
-    local oldCameraSubject = Camera.CameraSubject
-    if THead then
-        Camera.CameraSubject = THead
-    elseif Handle then
-        Camera.CameraSubject = Handle
-    elseif THumanoid then
-        Camera.CameraSubject = THumanoid
-    end
-
-    local targetBasePart = TRootPart or THead or Handle
-    if not targetBasePart then
-        Camera.CameraSubject = oldCameraSubject
-        return false
-    end
-
-    ToxActiveFlingTargets[TargetPlayer] = tick() + 4
-
-    getgenv().FPDH = workspace.FallenPartsDestroyHeight
-
-    getgenv().ToxFlingBypassUntil =
-        math.max(
-            tonumber(
-                getgenv().ToxFlingBypassUntil
-            ) or 0,
-            tick() + 4
-        )
-
-    local FPos = function(BasePart, Pos, Ang)
-        if not RootPart or not BasePart or not BasePart.Parent then return end
-        RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
-        pcall(function()
-            Character:SetPrimaryPartCFrame(CFrame.new(BasePart.Position) * Pos * Ang)
-        end)
-        RootPart.AssemblyLinearVelocity = Vector3.new(200000, 200000, 200000)
-        RootPart.AssemblyAngularVelocity = Vector3.new(999999, 999999, 999999)
-        RootPart.Velocity = Vector3.new(9e7, 9e8, 9e7)
-        RootPart.RotVelocity = Vector3.new(9e8, 9e8, 9e8)
-    end
-
-    local SFBasePart = function(BasePart)
-        local TimeToWait = 2
-        local Time = tick()
-        local Angle = 0
-
-        repeat
-            if not RootPart or not THumanoid or Humanoid.Health <= 0 then break end
-
-            if BasePart.Velocity.Magnitude < 50 then
-                Angle = Angle + 100
-
-                FPos(BasePart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
-                task.wait()
-                FPos(BasePart, CFrame.new(0, -1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
-                task.wait()
-                FPos(BasePart, CFrame.new(2.25, 1.5, -2.25) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
-                task.wait()
-                FPos(BasePart, CFrame.new(-2.25, -1.5, 2.25) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
-                task.wait()
-                FPos(BasePart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection, CFrame.Angles(math.rad(Angle), 0, 0))
-                task.wait()
-                FPos(BasePart, CFrame.new(0, -1.5, 0) + THumanoid.MoveDirection, CFrame.Angles(math.rad(Angle), 0, 0))
-                task.wait()
-            else
-                FPos(BasePart, CFrame.new(0, 1.5, THumanoid.WalkSpeed), CFrame.Angles(math.rad(90), 0, 0))
-                task.wait()
-                FPos(BasePart, CFrame.new(0, -1.5, -THumanoid.WalkSpeed), CFrame.Angles(0, 0, 0))
-                task.wait()
-                FPos(BasePart, CFrame.new(0, 1.5, THumanoid.WalkSpeed), CFrame.Angles(math.rad(90), 0, 0))
-                task.wait()
-                local targetVelocity = TRootPart and TRootPart.Velocity.Magnitude / 1.25 or 0
-                FPos(BasePart, CFrame.new(0, 1.5, targetVelocity), CFrame.Angles(math.rad(90), 0, 0))
-                task.wait()
-                FPos(BasePart, CFrame.new(0, -1.5, -targetVelocity), CFrame.Angles(0, 0, 0))
-                task.wait()
-                FPos(BasePart, CFrame.new(0, 1.5, targetVelocity), CFrame.Angles(math.rad(90), 0, 0))
-                task.wait()
-                FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(math.rad(90), 0, 0))
-                task.wait()
-                FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(0, 0, 0))
-                task.wait()
-                FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(math.rad(-90), 0, 0))
-                task.wait()
-                FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(0, 0, 0))
-                task.wait()
-            end
-        until BasePart.Velocity.Magnitude > 500
-            or BasePart.Parent ~= TargetPlayer.Character
-            or TargetPlayer.Parent ~= Players
-            or THumanoid.Sit
-            or Humanoid.Health <= 0
-            or tick() > Time + TimeToWait
-    end
-
-    pcall(function()
-        workspace.FallenPartsDestroyHeight = 0/0
-    end)
-
-    local BV = Instance.new("BodyVelocity")
-    BV.Name = "EpixVel"
-    BV.Parent = RootPart
-    BV.Velocity = Vector3.new(9e8, 9e8, 9e8)
-    BV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-
-    local BAV = Instance.new("BodyAngularVelocity")
-    BAV.Name = "ToxFlingSpin"
-    BAV.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-    BAV.AngularVelocity = Vector3.new(0, 999999, 0)
-    BAV.P = 1e9
-    BAV.Parent = RootPart
-
-    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
-
-    if TRootPart and THead then
-        if (TRootPart.Position - THead.Position).Magnitude > 5 then
-            SFBasePart(THead)
-        else
-            SFBasePart(TRootPart)
-        end
-    elseif TRootPart then
-        SFBasePart(TRootPart)
-    elseif THead then
-        SFBasePart(THead)
-    elseif Handle then
-        SFBasePart(Handle)
-    end
-
-    if BAV and BAV.Parent then pcall(function() BAV:Destroy() end) end
-    BV:Destroy()
-    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
-    Camera.CameraSubject = Humanoid
-
-    local OldPos = getgenv().OldPos or RootPart.CFrame
-    repeat
-        RootPart.CFrame = OldPos * CFrame.new(0, 0.5, 0)
-        pcall(function()
-            Character:SetPrimaryPartCFrame(OldPos * CFrame.new(0, 0.5, 0))
-        end)
-        Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-
-        for _, x in ipairs(Character:GetChildren()) do
-            if x:IsA("BasePart") then
-                x.Velocity = Vector3.zero
-                x.RotVelocity = Vector3.zero
-            end
+        if not textBox then
+            CustomNotify("MM2 Radio ID box not found", Color3.fromRGB(255, 180, 70))
+            return
         end
 
-        task.wait()
-    until (RootPart.Position - OldPos.Position).Magnitude < 25
+        textBox.Text = cleanID
 
-    pcall(function()
-        workspace.FallenPartsDestroyHeight = getgenv().FPDH
-    end)
-
-    getgenv().ToxFlingBypassUntil =
-        math.max(
-            tonumber(
-                getgenv().ToxFlingBypassUntil
-            ) or 0,
-            tick() + 0.25
-        )
-
-    if getgenv().SetNDSNoTPAnchor then
         pcall(function()
-            getgenv().SetNDSNoTPAnchor(
-                OldPos,
-                true
-            )
+            textBox:CaptureFocus()
         end)
+
+        task.wait(0.03)
+
+        pcall(function()
+            textBox:ReleaseFocus(true)
+        end)
+
+        task.wait(0.05)
+
+        local playButton = FindButtonNearTextBox(textBox, {"play"})
+        local addButton = FindButtonNearTextBox(textBox, {"add", "save"})
+
+        if playButton and ClickGuiButton(playButton) then
+            CustomNotify("MM2 Radio: " .. cleanID, Color3.fromRGB(100, 255, 100))
+            return
+        end
+
+        if addButton and ClickGuiButton(addButton) then
+            task.wait(0.15)
+
+            textBox = FindRadioTextBox() or textBox
+            playButton = FindButtonNearTextBox(textBox, {"play"})
+
+            if playButton then
+                ClickGuiButton(playButton)
+            end
+
+            CustomNotify("MM2 Radio ID added: " .. cleanID, Color3.fromRGB(100, 255, 100))
+            return
+        end
+
+        CustomNotify("MM2 Radio Play button not found", Color3.fromRGB(255, 180, 70))
+    end)
+end
+
+function SetShared(Key, Value)
+    if getgenv().ToxSetSharedOption then
+        getgenv().ToxSetSharedOption(Key, Value)
+    else
+        Settings[Key] = Value == true
+
+        if SyncToggleVisuals then
+            SyncToggleVisuals(Key, Value == true)
+        end
+    end
+end
+
+function SetSharedTemporary(Key, Value)
+    local oldApplying = getgenv().ToxApplyingGameState
+    getgenv().ToxApplyingGameState = true
+    SetShared(Key, Value)
+    getgenv().ToxApplyingGameState = oldApplying
+end
+
+function GetCharacterState()
+    local character = Player.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    return character, humanoid, root
+end
+
+function FindNamedTool(names)
+    local character = Player.Character
+    local backpack = Player:FindFirstChildOfClass("Backpack")
+
+    for _, container in ipairs({character, backpack}) do
+        if container then
+            for _, child in ipairs(container:GetChildren()) do
+                if child:IsA("Tool") then
+                    local lowerName = string.lower(child.Name)
+
+                    for _, wanted in ipairs(names) do
+                        if lowerName == wanted
+                        or string.find(lowerName, wanted, 1, true) then
+                            return child
+                        end
+                    end
+                end
+            end
+        end
     end
 
-    ToxActiveFlingTargets[TargetPlayer] = nil
-    return true
+    return nil
 end
 
-getgenv().ToxFlingBypassUntil =
-    tonumber(
-        getgenv().ToxFlingBypassUntil
-    ) or 0
+MM2RoleDataCache = nil
+MM2RoleDataCacheTime = 0
 
-getgenv().ToxFlingPlayer = SkidFling
+function GetMM2RoleData(force)
+    local now = os.clock()
 
-local LastTeleportReturnCFrame =
-    typeof(getgenv().ToxLastTeleportReturnCFrame) == "CFrame"
-    and getgenv().ToxLastTeleportReturnCFrame
-    or nil
+    if not force
+    and MM2RoleDataCache
+    and now - MM2RoleDataCacheTime < 0.45 then
+        return MM2RoleDataCache
+    end
 
-local function GetLocalRoot()
-    return Player.Character
-        and Player.Character:FindFirstChild("HumanoidRootPart")
+    local getPlayerData = ReplicatedStorage:FindFirstChild("GetPlayerData", true)
+
+    if getPlayerData
+    and getPlayerData:IsA("RemoteFunction") then
+        local ok, data = pcall(function()
+            return getPlayerData:InvokeServer()
+        end)
+
+        if ok
+        and typeof(data) == "table" then
+            MM2RoleDataCache = data
+            MM2RoleDataCacheTime = now
+            return data
+        end
+    end
+
+    return MM2RoleDataCache
 end
 
-local function RecordTeleportReturn()
-    local root = GetLocalRoot()
+function NormalizeMM2Role(role)
+    role = tostring(role or "")
 
-    if root then
-        LastTeleportReturnCFrame = root.CFrame
-        getgenv().ToxLastTeleportReturnCFrame = root.CFrame
-        return true
+    if role == "Murderer" then
+        return "Murderer"
+    end
+
+    if role == "Sheriff"
+    or role == "Hero" then
+        return "Sheriff"
+    end
+
+    if role == "Innocent" then
+        return "Innocent"
+    end
+
+    return nil
+end
+
+function GetRole(target)
+    if getgenv().ToxGetMM2Role then
+        local role = NormalizeMM2Role(getgenv().ToxGetMM2Role(target))
+
+        if role then
+            return role
+        end
+    end
+
+    local backpack = target and target:FindFirstChildOfClass("Backpack")
+    local character = target and target.Character
+
+    for _, container in ipairs({character, backpack}) do
+        if container then
+            if container:FindFirstChild("Knife") then
+                return "Murderer"
+            end
+
+            if container:FindFirstChild("Gun")
+            or container:FindFirstChild("Revolver") then
+                return "Sheriff"
+            end
+        end
+    end
+
+    local data = GetMM2RoleData(false)
+
+    if typeof(data) == "table"
+    and target then
+        local info = data[target.Name]
+            or data[tostring(target.UserId)]
+            or data[target]
+
+        if typeof(info) == "table" then
+            local role = NormalizeMM2Role(info.Role or info.role)
+
+            if role then
+                return role
+            end
+        end
+    end
+
+    if target == Player then
+        return "Innocent"
+    end
+
+    return nil
+end
+
+function GetPlayerByRole(role)
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= Player and GetRole(target) == role then
+            local humanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
+
+            if humanoid and humanoid.Health > 0 then
+                return target
+            end
+        end
+    end
+
+    return nil
+end
+
+function IsSheriffAlive()
+    for _, target in ipairs(Players:GetPlayers()) do
+        if GetRole(target) == "Sheriff" then
+            local humanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
+
+            if humanoid and humanoid.Health > 0 then
+                return true
+            end
+        end
     end
 
     return false
 end
 
-getgenv().RecordToxTeleportReturn = RecordTeleportReturn
+function IsTargetAlive(target)
+    local humanoid = target
+        and target.Character
+        and target.Character:FindFirstChildOfClass("Humanoid")
 
-local function ResolveSafeGroundCFrame(cframe)
-    if typeof(cframe) ~= "CFrame" then
+    return humanoid and humanoid.Health > 0
+end
+
+function GetTargetStatusText(target)
+    if not target
+    or not target.Parent then
+        return "Left"
+    end
+
+    if IsTargetAlive(target) then
+        return "Alive"
+    end
+
+    return "Dead"
+end
+
+function EquipTool(tool)
+    if not tool then
+        return false
+    end
+
+    local character, humanoid = GetCharacterState()
+
+    if not character or not humanoid or humanoid.Health <= 0 then
+        return false
+    end
+
+    if tool.Parent ~= character then
+        pcall(function()
+            humanoid:EquipTool(tool)
+        end)
+        task.wait()
+    end
+
+    return tool.Parent == character
+end
+
+KnifeTargetIds = {}
+PlayerSelectorFrame = nil
+PlayerSelectorScroll = nil
+PlayerSelectorTitle = nil
+PlayerSelectorInput = nil
+PlayerSelectorAction = nil
+PlayerSelectorMode = "targets"
+
+function IsWhitelisted(target)
+    if not target then
+        return false
+    end
+
+    for _, userId in ipairs(Settings.MM2Whitelist) do
+        if tonumber(userId) == target.UserId then
+            return true
+        end
+    end
+
+    return false
+end
+
+function SetWhitelisted(target, enabled)
+    if not target or target == Player then
+        return
+    end
+
+    local foundIndex = nil
+
+    for index, userId in ipairs(Settings.MM2Whitelist) do
+        if tonumber(userId) == target.UserId then
+            foundIndex = index
+            break
+        end
+    end
+
+    if enabled and not foundIndex then
+        table.insert(Settings.MM2Whitelist, target.UserId)
+    elseif not enabled and foundIndex then
+        table.remove(Settings.MM2Whitelist, foundIndex)
+    end
+
+    if enabled then
+        KnifeTargetIds[target.UserId] = nil
+    end
+
+    AutoSaveConfiguration()
+end
+
+function FindCurrentPlayer(text)
+    local clean = string.lower(
+        tostring(text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    )
+
+    if clean == "" then
         return nil
     end
 
-    local origin =
-        cframe.Position
-        + Vector3.new(0, 95, 0)
+    local numericId = tonumber(clean)
 
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= Player then
+            if numericId and target.UserId == numericId then
+                return target
+            end
 
-    local excluded = {}
-
-    if Player.Character then
-        table.insert(excluded, Player.Character)
+            if string.lower(target.Name) == clean
+            or string.lower(target.DisplayName) == clean then
+                return target
+            end
+        end
     end
 
-    if getgenv().Gui then
-        table.insert(excluded, getgenv().Gui)
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= Player then
+            local name = string.lower(target.Name)
+            local displayName = string.lower(target.DisplayName)
+
+            if name:sub(1, #clean) == clean
+            or displayName:sub(1, #clean) == clean then
+                return target
+            end
+        end
     end
 
-    params.FilterDescendantsInstances = excluded
-
-    local result = workspace:Raycast(
-        origin,
-        Vector3.new(0, -220, 0),
-        params
-    )
-
-    if result
-    and result.Instance
-    and result.Instance.CanCollide then
-        local _, y, _ = cframe:ToOrientation()
-        return CFrame.new(
-            result.Position + Vector3.new(0, 4, 0)
-        ) * CFrame.Angles(0, y, 0)
-    end
-
-    return cframe
+    return nil
 end
 
-getgenv().ToxSafeTeleportToCFrame = function(cframe, useGround, reason)
-    local root = GetLocalRoot()
-    local humanoid = Player.Character
-        and Player.Character:FindFirstChildOfClass("Humanoid")
+function FindTargetByUserId(userId)
+    userId = tonumber(userId)
 
-    if typeof(cframe) ~= "CFrame"
-    or not root
+    if not userId then
+        return nil
+    end
+
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target.UserId == userId then
+            return target
+        end
+    end
+
+    return nil
+end
+
+function CleanKnifeTargets()
+    Settings.MM2AutoClearTarget = true
+    Settings.MM2TargetLock = false
+
+    for userId in pairs(KnifeTargetIds) do
+        local target = FindTargetByUserId(userId)
+
+        if not target
+        or not IsTargetAlive(target) then
+            KnifeTargetIds[userId] = nil
+        end
+    end
+end
+
+function AddTargetToHistory(target)
+    if not target
+    or target == Player then
+        return
+    end
+
+    Settings.MM2TargetHistory = typeof(Settings.MM2TargetHistory) == "table" and Settings.MM2TargetHistory or {}
+
+    for index = #Settings.MM2TargetHistory, 1, -1 do
+        local item = Settings.MM2TargetHistory[index]
+
+        if typeof(item) == "table"
+        and tonumber(item.UserId) == target.UserId then
+            table.remove(Settings.MM2TargetHistory, index)
+        end
+    end
+
+    table.insert(
+        Settings.MM2TargetHistory,
+        1,
+        {
+            UserId = target.UserId,
+            Name = target.Name,
+            DisplayName = target.DisplayName,
+            Time = os.time()
+        }
+    )
+
+    while #Settings.MM2TargetHistory > 10 do
+        table.remove(Settings.MM2TargetHistory)
+    end
+
+    AutoSaveConfiguration()
+end
+
+function CleanTargetHistory()
+    Settings.MM2TargetHistory = typeof(Settings.MM2TargetHistory) == "table" and Settings.MM2TargetHistory or {}
+
+    for index = #Settings.MM2TargetHistory, 1, -1 do
+        local item = Settings.MM2TargetHistory[index]
+
+        if typeof(item) ~= "table"
+        or not tonumber(item.UserId) then
+            table.remove(Settings.MM2TargetHistory, index)
+        end
+    end
+
+    while #Settings.MM2TargetHistory > 10 do
+        table.remove(Settings.MM2TargetHistory)
+    end
+end
+
+function GetSelectedKnifeTargets()
+    CleanKnifeTargets()
+
+    local targets = {}
+
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= Player
+        and KnifeTargetIds[target.UserId]
+        and not IsWhitelisted(target) then
+            local humanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
+
+            if humanoid and humanoid.Health > 0 then
+                table.insert(targets, target)
+            end
+        end
+    end
+
+    return targets
+end
+
+function GetKnifeTargetRoot(target)
+    local character = target and target.Character
+
+    if not character then
+        return nil
+    end
+
+    return character:FindFirstChild("HumanoidRootPart")
+        or character:FindFirstChild("UpperTorso")
+        or character:FindFirstChild("Torso")
+        or character:FindFirstChild("Head")
+end
+
+KnifeTargetAlive = function(target)
+    local humanoid =
+        target
+        and target.Character
+        and target.Character:FindFirstChildOfClass("Humanoid")
+
+    return humanoid
+        and humanoid.Health > 0
+        and GetKnifeTargetRoot(target) ~= nil
+end
+
+function GetKnifeTargets(allTargets)
+    local targets = {}
+
+    if typeof(allTargets) == "table" then
+        for _, target in ipairs(allTargets) do
+            if target
+            and target ~= Player
+            and target.Parent == Players
+            and not IsWhitelisted(target)
+            and KnifeTargetAlive(target) then
+                table.insert(targets, target)
+            end
+        end
+
+        return targets
+    end
+
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= Player
+        and not IsWhitelisted(target)
+        and KnifeTargetAlive(target) then
+            table.insert(targets, target)
+        end
+    end
+
+    return targets
+end
+
+function TouchKnifeTarget(
+    knife,
+    target,
+    activateKnife,
+    stationary
+)
+    if not knife
+    or not target
+    or target == Player
+    or not target.Character then
+        return false
+    end
+
+    local targetCharacter = target.Character
+    local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+    local targetRoot = GetKnifeTargetRoot(target)
+    local handle = knife:FindFirstChild("Handle") or knife:FindFirstChildWhichIsA("BasePart", true)
+
+    if not targetHumanoid
+    or targetHumanoid.Health <= 0
+    or not targetRoot
+    or not handle then
+        return false
+    end
+
+    local character, humanoid, root = GetCharacterState()
+
+    if not character
     or not humanoid
-    or humanoid.Health <= 0 then
+    or humanoid.Health <= 0
+    or not root then
         return false
     end
 
-    RecordTeleportReturn()
-
-    if getgenv().AllowToxTeleport then
-        getgenv().AllowToxTeleport(1.5, reason or "ToxHub")
-    end
-
-    local targetCFrame = useGround and ResolveSafeGroundCFrame(cframe) or cframe
-
-    root.AssemblyLinearVelocity = Vector3.zero
-    root.AssemblyAngularVelocity = Vector3.zero
-
-    if Player.Character then
-        Player.Character:PivotTo(targetCFrame)
-    else
-        root.CFrame = targetCFrame
-    end
-
-    if getgenv().SetNDSNoTPAnchor then
-        pcall(function()
-            getgenv().SetNDSNoTPAnchor(root.CFrame, true)
-        end)
-    end
-
-    return true
-end
-
-getgenv().ToxReturnToLastTeleport = nil
-
-local function ExecuteFling(TargetInput)
-    if not TargetInput or TargetInput == "" then
-        return CustomNotify("Enter username or 'all'", Color3.fromRGB(255, 100, 100))
-    end
-
-    if game.PlaceId == 189707
-    and Settings.NDSNoTP
-    and getgenv().SetNDSNoTP then
-        pcall(function()
-            getgenv().SetNDSNoTP(
-                false,
-                true
-            )
-        end)
-
-        if getgenv().AutoSaveConfiguration then
-            pcall(
-                getgenv().AutoSaveConfiguration
-            )
-        end
-    end
-
-    local LowerInput = string.lower(TargetInput)
-
-    if LowerInput == "all" or LowerInput == "others" then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= Player then
-                local canFling = CanStartToxFlingTarget(p)
-
-                if canFling then
-                    task.spawn(function()
-                        SkidFling(p)
-                    end)
-                end
-            end
-        end
-        return
-    end
-
-    local target = nil
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= Player and (string.find(string.lower(p.Name), LowerInput, 1, true) or string.find(string.lower(p.DisplayName), LowerInput, 1, true)) then
-            target = p
-            break
-        end
-    end
-
-    if target then
-        local canFling, blockReason = CanStartToxFlingTarget(target)
-
-        if canFling then
-            task.spawn(function()
-                SkidFling(target)
-            end)
-        else
-            CustomNotify(
-                "Fling skipped • " .. tostring(blockReason or "busy"),
-                Color3.fromRGB(255, 180, 70)
-            )
-        end
-    else
-        CustomNotify("Player not found!", Color3.fromRGB(255, 100, 100))
-    end
-end
-
-getgenv().ToxExecuteFling = ExecuteFling
-
-local function ExecuteTeleport(TargetInput, mode)
-    if not TargetInput or TargetInput == "" then 
-        if mode == "LOOP" then Settings.LoopTPTarget = nil CustomNotify("Loop TP Disabled", Color3.fromRGB(255, 100, 100)) end
-        return CustomNotify("Enter username", Color3.fromRGB(255, 100, 100)) 
-    end
-    local LowerInput = string.lower(TargetInput)
-    local targetObj = nil
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= Player and (string.find(string.lower(p.Name), LowerInput) or string.find(string.lower(p.DisplayName), LowerInput)) then
-            targetObj = p break
-        end
-    end
-
-    if targetObj and targetObj.Character and targetObj.Character:FindFirstChild("HumanoidRootPart") then
-        local tHrp = targetObj.Character.HumanoidRootPart
-        local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-        if mode == "TP" then
-            if Root then
-                if getgenv().ToxSafeTeleportToCFrame then
-                    getgenv().ToxSafeTeleportToCFrame(
-                        tHrp.CFrame * CFrame.new(0, 0, -3),
-                        false,
-                        "Player TP"
-                    )
-                else
-                    if getgenv().RecordToxTeleportReturn then
-                        getgenv().RecordToxTeleportReturn()
-                    end
-
-                    if getgenv().AllowToxTeleport then
-                        getgenv().AllowToxTeleport(1.25, "Player TP")
-                    end
-
-                    Root.CFrame = tHrp.CFrame * CFrame.new(0, 0, -3)
-                end
-            end
-            CustomNotify("Teleported to " .. targetObj.DisplayName, Color3.fromRGB(100, 255, 100))
-        elseif mode == "LOOP" then
-            if Settings.LoopTPTarget == targetObj then
-                Settings.LoopTPTarget = nil
-                CustomNotify("Loop TP Disabled", Color3.fromRGB(255, 100, 100))
-            else
-                Settings.LoopTPTarget = targetObj
-                CustomNotify("Loop TP Enabled on " .. targetObj.DisplayName, Color3.fromRGB(100, 255, 100))
-            end
-        end
-    else
-        CustomNotify("Player not found!", Color3.fromRGB(255, 100, 100))
-    end
-end
-
-local Render3DColorMap = {
-    WHITE =
-        Color3.fromRGB(
-            190,
-            190,
-            200
-        ),
-    BLACK =
-        Color3.fromRGB(
-            5,
-            5,
-            8
-        ),
-    RED =
-        Color3.fromRGB(
-            95,
-            8,
-            12
-        ),
-    BLUE =
-        Color3.fromRGB(
-            9,
-            0,
-            110
-        )
-}
-
-Settings.Render3DColor =
-    string.upper(
-        tostring(
-            Settings.Render3DColor
-            or "BLACK"
-        )
-    )
-
-if not Render3DColorMap[
-    Settings.Render3DColor
-] then
-    Settings.Render3DColor =
-        "BLACK"
-end
-
-local oldRenderBackdrop =
-    getgenv().ToxRenderBackdropGui
-
-if oldRenderBackdrop then
-    pcall(function()
-        oldRenderBackdrop:
-            Destroy()
-    end)
-end
-
-local RenderBackdropGui =
-    Instance.new("ScreenGui")
-
-RenderBackdropGui.Name =
-    "ToxRenderBackdrop"
-
-RenderBackdropGui.IgnoreGuiInset = true
-RenderBackdropGui.ResetOnSpawn = false
-RenderBackdropGui.DisplayOrder = -100
-RenderBackdropGui.ZIndexBehavior =
-    Enum.ZIndexBehavior.Sibling
-
-RenderBackdropGui.Parent =
-    (gethui and gethui())
-    or CoreGui
-
-local RenderBackdrop =
-    Instance.new("Frame")
-
-RenderBackdrop.Size =
-    UDim2.new(
-        1,
-        0,
-        1,
-        0
-    )
-
-RenderBackdrop.Position =
-    UDim2.new(
-        0,
-        0,
-        0,
-        0
-    )
-
-RenderBackdrop.BorderSizePixel = 0
-RenderBackdrop.ZIndex = 1
-RenderBackdrop.Visible = false
-RenderBackdrop.BackgroundColor3 =
-    Render3DColorMap[Settings.Render3DColor]
-    or Render3DColorMap.BLACK
-RenderBackdrop.Parent =
-    RenderBackdropGui
-
-getgenv().ToxRenderBackdropGui =
-    RenderBackdropGui
-
-local function RefreshRenderBackdrop()
-    RenderBackdrop.BackgroundColor3 =
-        Render3DColorMap[
-            Settings.Render3DColor
-        ]
-        or Render3DColorMap.BLACK
-
-    RenderBackdrop.Visible =
-        Settings.Render3D == false
-end
-
-local function SetRender3DEnabled(
-    enabled
-)
-    Settings.Render3D =
-        enabled == true
-
-    pcall(function()
-        RunService:
-            Set3dRenderingEnabled(
-                Settings.Render3D
-            )
-    end)
-
-    RefreshRenderBackdrop()
-end
-
-local function SetRender3DColor(
-    colorName
-)
-    local normalized =
-        string.upper(
-            tostring(
-                colorName
-                or "BLACK"
-            )
-        )
-
-    if not Render3DColorMap[
-        normalized
-    ] then
-        return false
-    end
-
-    Settings.Render3DColor =
-        normalized
-
-    RefreshRenderBackdrop()
-
-    return true
-end
-
-getgenv().ToxSetRender3DEnabled = SetRender3DEnabled
-getgenv().ToxSetRender3DColor = SetRender3DColor
-
-local AntiKickRejoining = false
-
-local function ResolveAntiKickQueue()
-    local env =
-        getgenv()
-
-    if env
-    and type(
-        env.queue_on_teleport
-    ) == "function" then
-        return env.queue_on_teleport
-    end
-
-    if type(queue_on_teleport)
-        == "function" then
-        return queue_on_teleport
-    end
-
-    if syn
-    and type(
-        syn.queue_on_teleport
-    ) == "function" then
-        return syn.queue_on_teleport
-    end
-
-    if fluxus
-    and type(
-        fluxus.queue_on_teleport
-    ) == "function" then
-        return fluxus.queue_on_teleport
-    end
-
-    return nil
-end
-
-local function QueueAntiKickResume()
-    local queueFunction =
-        ResolveAntiKickQueue()
-
-    if not queueFunction then
-        return false
-    end
-
-    local resumeFarm =
-        game.PlaceId == MM2PlaceId
-        and Settings.MM2AutoFarmV2
-            == true
-
-    local payload =
-        "if not game:IsLoaded() then game.Loaded:Wait() end\n"
-        .. "local env = getgenv()\n"
-        .. "env.ToxAutoExecuteQueued = false\n"
-        .. "env.ToxAutoExecuteQueuedGame = nil\n"
-        .. "env.__ToxAntiKickResume = true\n"
-        .. "env.__ToxAntiKickResumeFarm = "
-        .. tostring(
-            resumeFarm
-        )
-        .. "\n"
-        .. "task.wait(0.6)\n"
-        .. "local guardNow = tick()\n"
-        .. "local previousGuardAt = tonumber(env.__ToxQueuedDestinationAt) or 0\n"
-        .. "if env.__ToxQueuedDestinationGame == game and guardNow - previousGuardAt < 2 then return end\n"
-        .. "env.__ToxQueuedDestinationGame = game\n"
-        .. "env.__ToxQueuedDestinationAt = guardNow\n"
-        .. "task.delay(2, function() if env.__ToxQueuedDestinationGame == game and env.__ToxQueuedDestinationAt == guardNow then env.__ToxQueuedDestinationGame = nil; env.__ToxQueuedDestinationAt = nil end end)\n"
-        .. "local ok = pcall(function() loadstring(game:HttpGet("
-        .. string.format(
-            "%q",
-            "https://raw.githubusercontent.com/BG-0o/Scripts/main/ToxHud.lua"
-        )
-        .. "))() end)\n"
-        .. "if not ok and env.__ToxQueuedDestinationAt == guardNow then env.__ToxQueuedDestinationGame = nil; env.__ToxQueuedDestinationAt = nil end"
-
-    return pcall(
-        queueFunction,
-        payload
-    )
-end
-
-local function TryAntiKickRejoin(
-    reason
-)
-    if not Settings.AntiKick
-    or AntiKickRejoining
-    or getgenv().Destroyed then
-        return
-    end
-
-    local text =
-        string.lower(
-            tostring(
-                reason
-                or ""
-            )
-        )
-
-    if text ~= ""
-    and not (
-        string.find(
-            text,
-            "kick",
-            1,
-            true
-        )
-        or string.find(
-            text,
-            "disconnect",
-            1,
-            true
-        )
-        or string.find(
-            text,
-            "connection",
-            1,
-            true
-        )
-        or string.find(
-            text,
-            "error code",
-            1,
-            true
-        )
-        or string.find(
-            text,
-            "invalid",
-            1,
-            true
-        )
-        or string.find(
-            text,
-            "position",
-            1,
-            true
-        )
-    ) then
-        return
-    end
-
-    -- Salva o estado atual antes do teleport/kick; o proximo boot restaura as opcoes ativas.
-    if getgenv().AutoSaveConfiguration then
-        pcall(getgenv().AutoSaveConfiguration)
-    end
-
-    AntiKickRejoining = true
-
-    QueueAntiKickResume()
-
-    CustomNotify(
-        "Anti Kick • Rejoining server...",
-        Color3.fromRGB(
-            100,
-            190,
-            255
-        ),
-        5
-    )
-
-    if getgenv().AllowToxTeleport then
-        getgenv().AllowToxTeleport(
-            8
-        )
-    end
-
-    task.spawn(function()
-        task.wait(0.15)
-
-        local sameServer =
+    local oldCFrame = character:GetPivot()
+    local touched = false
+    local targetParts = {}
+    local seen = {}
+
+    local function addPart(part)
+        if part
+        and part:IsA("BasePart")
+        and part.Parent
+        and not seen[part] then
+            seen[part] = true
             pcall(function()
-                if game.JobId
-                and game.JobId ~= "" then
-                    TeleportService:
-                        TeleportToPlaceInstance(
-                            game.PlaceId,
-                            game.JobId,
-                            Player
-                        )
-                else
-                    error(
-                        "no_job"
-                    )
-                end
+                part.CanTouch = true
             end)
+            table.insert(targetParts, part)
+        end
+    end
 
-        if not sameServer then
+    for _, name in ipairs({
+        "HumanoidRootPart",
+        "UpperTorso",
+        "LowerTorso",
+        "Torso",
+        "Head",
+        "LeftUpperLeg",
+        "RightUpperLeg",
+        "LeftLowerLeg",
+        "RightLowerLeg",
+        "LeftFoot",
+        "RightFoot",
+        "Left Leg",
+        "Right Leg",
+        "LeftUpperArm",
+        "RightUpperArm",
+        "LeftLowerArm",
+        "RightLowerArm",
+        "LeftHand",
+        "RightHand",
+        "Left Arm",
+        "Right Arm"
+    }) do
+        addPart(targetCharacter:FindFirstChild(name, true))
+    end
+
+    for _, object in ipairs(targetCharacter:GetDescendants()) do
+        if #targetParts >= 24 then
+            break
+        end
+
+        addPart(object)
+    end
+
+    if #targetParts == 0 then
+        return false
+    end
+
+    local function activate()
+        if activateKnife ~= false then
             pcall(function()
-                TeleportService:
-                    Teleport(
-                        game.PlaceId,
-                        Player
-                    )
+                knife:Activate()
             end)
-        else
-            task.delay(
-                2.5,
-                function()
-                    if AntiKickRejoining then
-                        pcall(function()
-                            TeleportService:
-                                Teleport(
-                                    game.PlaceId,
-                                    Player
-                                )
-                        end)
-                    end
-                end
-            )
-        end
-    end)
-end
-
-pcall(function()
-    AddConnection(
-        GuiService.
-            ErrorMessageChanged:
-            Connect(function(message)
-                TryAntiKickRejoin(
-                    message
-                )
-            end)
-    )
-end)
-
-pcall(function()
-    local promptGui =
-        CoreGui:
-            FindFirstChild(
-                "RobloxPromptGui"
-            )
-
-    local promptOverlay =
-        promptGui
-        and promptGui:
-            FindFirstChild(
-                "promptOverlay"
-            )
-
-    if promptOverlay then
-        AddConnection(
-            promptOverlay.ChildAdded:
-                Connect(function(child)
-                    task.delay(
-                        0.05,
-                        function()
-                            if not child
-                            or not child.Parent then
-                                return
-                            end
-
-                            local parts = {}
-
-                            for _, item in ipairs(
-                                child:
-                                    GetDescendants()
-                            ) do
-                                if item:IsA(
-                                    "TextLabel"
-                                )
-                                or item:IsA(
-                                    "TextButton"
-                                ) then
-                                    table.insert(
-                                        parts,
-                                        tostring(
-                                            item.Text
-                                            or ""
-                                        )
-                                    )
-                                end
-                            end
-
-                            TryAntiKickRejoin(
-                                table.concat(
-                                    parts,
-                                    " "
-                                )
-                            )
-                        end
-                    )
-                end)
-        )
-    end
-end)
-
-local ServerHopMenu = nil
-local ServerHopOverlay = nil
-
-local function CloseServerHopMenu()
-    if ServerHopMenu then
-        ServerHopMenu:Destroy()
-        ServerHopMenu = nil
-    end
-
-    if ServerHopOverlay then
-        ServerHopOverlay:Destroy()
-        ServerHopOverlay = nil
-    end
-end
-
-local function GetServerHopInfo(server, mode)
-    if typeof(server) ~= "table" then
-        return nil
-    end
-
-    local playing = tonumber(server.playing) or 0
-    local maxPlayers = tonumber(server.maxPlayers) or 0
-    local serverId = tostring(server.id or "")
-
-    if serverId == ""
-    or serverId == game.JobId
-    or maxPlayers <= 0
-    or playing <= 0
-    or playing >= maxPlayers then
-        return nil
-    end
-
-    if mode == "Low" then
-        if playing >= 1
-        and playing <= math.min(2, maxPlayers - 1) then
-            return playing, true
-        end
-
-        return nil
-    end
-
-    if mode == "High" then
-        local wanted = math.max(1, maxPlayers - 2)
-
-        if maxPlayers == 12 then
-            wanted = 10
-        end
-
-        if playing >= wanted
-        and playing <= maxPlayers - 1 then
-            return -playing, true
-        end
-
-        return nil
-    end
-
-    local target = maxPlayers * 0.5
-    local low = math.max(1, math.floor(target - 1))
-    local high = math.min(maxPlayers - 1, math.ceil(target + 1))
-
-    if playing >= low
-    and playing <= high then
-        return math.abs(playing - target), true
-    end
-
-    return nil
-end
-
-local function FetchServerHopPage(cursor, order)
-    local url =
-        "https://games.roblox.com/v1/games/"
-        .. tostring(game.PlaceId)
-        .. "/servers/Public?sortOrder="
-        .. order
-        .. "&limit=100"
-
-    if cursor and cursor ~= "" then
-        url = url .. "&cursor=" .. cursor
-    end
-
-    local ok, result = pcall(function()
-        return game:HttpGet(url)
-    end)
-
-    if not ok
-    or not result then
-        return nil
-    end
-
-    local decodeOk, data = pcall(function()
-        return HttpService:JSONDecode(result)
-    end)
-
-    if decodeOk then
-        return data
-    end
-
-    return nil
-end
-
-local function FindServerHopTarget(mode)
-    mode = tostring(mode or "Low")
-
-    if mode ~= "Low"
-    and mode ~= "Medium"
-    and mode ~= "High" then
-        mode = "Low"
-    end
-
-    local order = mode == "High" and "Desc" or "Asc"
-    local cursor = nil
-    local selected = nil
-    local selectedScore = nil
-    local maxPages = mode == "Medium" and 18 or 10
-
-    for _ = 1, maxPages do
-        local data = FetchServerHopPage(cursor, order)
-
-        if not data
-        or typeof(data.data) ~= "table" then
-            break
-        end
-
-        for _, server in ipairs(data.data) do
-            local score = GetServerHopInfo(server, mode)
-
-            if score
-            and (
-                not selectedScore
-                or score < selectedScore
-            ) then
-                selected = server
-                selectedScore = score
-            end
-        end
-
-        if selected
-        and mode == "High" then
-            break
-        end
-
-        if selected
-        and mode == "Low"
-        and selectedScore == 1 then
-            break
-        end
-
-        if selected
-        and mode == "Medium"
-        and selectedScore <= 0.5 then
-            break
-        end
-
-        cursor = data.nextPageCursor
-
-        if not cursor
-        or cursor == "" then
-            break
         end
     end
 
-    return selected
-end
-
-local function ServerHop(mode)
-    mode = tostring(mode or "Low")
-
-    CustomNotify(
-        "Searching " .. mode .. " server...",
-        Color3.fromRGB(100, 180, 255),
-        3
-    )
-
-    task.spawn(function()
-        local server = FindServerHopTarget(mode)
-
-        if server
-        and server.id then
-            CustomNotify(
-                "Teleporting to "
-                .. mode
-                .. " server • "
-                .. tostring(server.playing or "?")
-                .. "/"
-                .. tostring(server.maxPlayers or "?"),
-                Color3.fromRGB(100, 255, 100),
-                5
-            )
-
-            TeleportService:TeleportToPlaceInstance(
-                game.PlaceId,
-                tostring(server.id),
-                Player
-            )
-
+    local function touchParts()
+        if not firetouchinterest then
             return
         end
 
-        CustomNotify(
-            "No " .. mode .. " server found",
-            Color3.fromRGB(255, 100, 100),
-            5
-        )
-    end)
+        pcall(function()
+            handle.CanTouch = true
+            handle.CanCollide = false
+        end)
+
+        for _, part in ipairs(targetParts) do
+            if part and part.Parent then
+                pcall(function()
+                    firetouchinterest(handle, part, 0)
+                    firetouchinterest(part, handle, 0)
+                    firetouchinterest(handle, part, 1)
+                    firetouchinterest(part, handle, 1)
+                end)
+
+                touched = true
+            end
+        end
+    end
+
+    local allow = getgenv().AllowToxTeleport
+
+    if allow then
+        allow(0.22, "MM2 Knife Attack")
+    end
+
+    local function predictedPoint(mult)
+        targetCharacter = target.Character
+        targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
+        targetRoot = GetKnifeTargetRoot(target)
+
+        if not targetCharacter
+        or not targetHumanoid
+        or targetHumanoid.Health <= 0
+        or not targetRoot then
+            return nil
+        end
+
+        local velocity = targetRoot.AssemblyLinearVelocity or Vector3.zero
+        local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
+
+        if horizontal.Magnitude > 150 then
+            horizontal = horizontal.Unit * 150
+        end
+
+        local moveBoost = targetHumanoid.MoveDirection * math.max(targetHumanoid.WalkSpeed * 0.1, 2)
+        local vertical = math.clamp(velocity.Y, -100, 100)
+
+        return targetRoot.Position
+            + horizontal * mult
+            + moveBoost
+            + Vector3.new(0, vertical * math.clamp(mult * 0.5, 0.03, 0.12), 0)
+    end
+
+    activate()
+    touchParts()
+    return touched
 end
 
-local function AddServerHopOption(parent, text, y, mode)
-    local button = Instance.new("TextButton")
-    button.Size = UDim2.new(1, -10, 0, 28)
-    button.Position = UDim2.new(0, 5, 0, y)
-    button.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
-    button.BorderSizePixel = 0
-    button.Text = text
-    button.TextColor3 = Color3.fromRGB(240, 240, 240)
-    button.TextSize = 12
-    button.Font = Enum.Font.GothamMedium
-    button.ZIndex = 202
-    button.Parent = parent
+function TeleportToTarget(target)
+    if not target
+    or target == Player
+    or not target.Character then
+        return false
+    end
 
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 4)
-    corner.Parent = button
+    local targetRoot = GetKnifeTargetRoot(target)
+    local character, humanoid, root = GetCharacterState()
 
-    button.MouseButton1Click:Connect(function()
-        CloseServerHopMenu()
-        ServerHop(mode)
-    end)
+    if not targetRoot
+    or not character
+    or not humanoid
+    or humanoid.Health <= 0
+    or not root then
+        return false
+    end
+
+    local lookVector = targetRoot.CFrame.LookVector
+    local position = targetRoot.Position - lookVector * 3 + Vector3.new(0, 1.5, 0)
+    local cframe = CFrame.lookAt(position, targetRoot.Position)
+
+    if getgenv().ToxSafeTeleportToCFrame then
+        return getgenv().ToxSafeTeleportToCFrame(cframe, false, "MM2 Target TP")
+    end
+
+    if getgenv().AllowToxTeleport then
+        getgenv().AllowToxTeleport(0.6, "MM2 Target TP")
+    end
+
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
+    character:PivotTo(cframe)
+
+    return true
 end
 
-local function ShowServerHopMenu(button)
-    CloseServerHopMenu()
+function AttackKnifeTargetUntilDone(
+    knife,
+    target,
+    timeout,
+    stationary
+)
+    timeout = tonumber(timeout) or 2
 
-    local gui = getgenv().Gui
+    local started = os.clock()
+    local attacked = false
 
-    if not gui
-    or not button then
-        ServerHop("Low")
+    while not getgenv().Destroyed
+    and knife
+    and knife.Parent
+    and target
+    and target.Parent == Players
+    and KnifeTargetAlive(target)
+    and os.clock() - started < timeout do
+        if TouchKnifeTarget(knife, target, true, stationary) then
+            attacked = true
+        end
+
+        if KnifeTargetAlive(target) then
+            task.wait()
+        end
+    end
+
+    return attacked and not KnifeTargetAlive(target)
+end
+
+function OneSlashTargets(
+    knife,
+    targets,
+    stationary
+)
+    if not knife
+    or not knife.Parent
+    or typeof(targets) ~= "table" then
+        return false
+    end
+
+    local touchedAny = false
+    local aliveTargets = GetKnifeTargets(targets)
+
+    if #aliveTargets == 0 then
+        return false
+    end
+
+    pcall(function()
+        knife:Activate()
+    end)
+
+    for pass = 1, 3 do
+        for _, target in ipairs(aliveTargets) do
+            if target
+            and target.Parent == Players
+            and not IsWhitelisted(target)
+            and KnifeTargetAlive(target) then
+                if TouchKnifeTarget(
+                    knife,
+                    target,
+                    pass == 1,
+                    stationary
+                ) then
+                    touchedAny = true
+                end
+            end
+        end
+
+        aliveTargets = GetKnifeTargets(aliveTargets)
+
+        if #aliveTargets == 0 then
+            break
+        end
+
+        RunService.Heartbeat:Wait()
+    end
+
+    return touchedAny
+end
+
+function KillSingleTarget(target)
+    if ActionBusy
+    or not target
+    or target == Player
+    or IsWhitelisted(target) then
         return
     end
 
-    ServerHopOverlay = Instance.new("TextButton")
-    ServerHopOverlay.Name = "ToxServerHopOverlay"
-    ServerHopOverlay.Size = UDim2.new(1, 0, 1, 0)
-    ServerHopOverlay.Position = UDim2.new(0, 0, 0, 0)
-    ServerHopOverlay.BackgroundTransparency = 1
-    ServerHopOverlay.Text = ""
-    ServerHopOverlay.AutoButtonColor = false
-    ServerHopOverlay.ZIndex = 198
-    ServerHopOverlay.Parent = gui
+    local knife = FindNamedTool({"knife"})
 
-    local absolute = button.AbsolutePosition
-    local size = button.AbsoluteSize
-    local viewport = Camera and Camera.ViewportSize or Vector2.new(800, 600)
-    local x = math.clamp(absolute.X, 8, math.max(8, viewport.X - 176))
-    local y = math.clamp(absolute.Y + size.Y + 4, 8, math.max(8, viewport.Y - 110))
+    if not knife then
+        CustomNotify("Kill requires the Knife", Color3.fromRGB(255, 100, 100))
+        return
+    end
 
-    ServerHopMenu = Instance.new("Frame")
-    ServerHopMenu.Name = "ToxServerHopMenu"
-    ServerHopMenu.Size = UDim2.new(0, 168, 0, 100)
-    ServerHopMenu.Position = UDim2.new(0, x, 0, y)
-    ServerHopMenu.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
-    ServerHopMenu.BorderSizePixel = 0
-    ServerHopMenu.ZIndex = 200
-    ServerHopMenu.Parent = gui
+    if not EquipTool(knife) then
+        CustomNotify("Could not equip Knife", Color3.fromRGB(255, 100, 100))
+        return
+    end
+
+    ActionBusy = true
+
+    task.spawn(function()
+        pcall(function()
+            OneSlashTargets(knife, {target})
+
+            if KnifeTargetAlive(target) then
+                AttackKnifeTargetUntilDone(knife, target, 1.4)
+            end
+        end)
+
+        ActionBusy = false
+    end)
+end
+
+function KillAll(force)
+    if KillAllBusy
+    or ActionBusy and not force then
+        return false
+    end
+
+    local knife = FindNamedTool({"knife"})
+
+    if not knife then
+        if not force then
+            CustomNotify("Kill All requires the Knife", Color3.fromRGB(255, 100, 100))
+        end
+
+        return false
+    end
+
+    if not EquipTool(knife) then
+        if not force then
+            CustomNotify("Could not equip Knife", Color3.fromRGB(255, 100, 100))
+        end
+
+        return false
+    end
+
+    local targets = GetKnifeTargets()
+
+    if #targets == 0 then
+        return false
+    end
+
+    KillAllBusy = true
+    ActionBusy = true
+
+    task.spawn(function()
+        pcall(function()
+            local started = os.clock()
+
+            while not getgenv().Destroyed
+            and os.clock() - started < 4.5 do
+                targets = GetKnifeTargets()
+
+                if #targets == 0 then
+                    break
+                end
+
+                knife = FindNamedTool({"knife"}) or knife
+
+                if not knife
+                or not knife.Parent then
+                    break
+                end
+
+                EquipTool(knife)
+                OneSlashTargets(knife, targets, true)
+
+                targets = GetKnifeTargets(targets)
+
+                if #targets == 0 then
+                    break
+                end
+
+                for _, target in ipairs(targets) do
+                    if getgenv().Destroyed then
+                        break
+                    end
+
+                    if KnifeTargetAlive(target) then
+                        TouchKnifeTarget(knife, target, true, true)
+                    end
+                end
+
+                RunService.Heartbeat:Wait()
+            end
+
+            targets = GetKnifeTargets()
+
+            for _, target in ipairs(targets) do
+                if getgenv().Destroyed then
+                    break
+                end
+
+                if KnifeTargetAlive(target) then
+                    AttackKnifeTargetUntilDone(
+                        knife,
+                        target,
+                        0.9,
+                        true
+                    )
+                end
+            end
+        end)
+
+        KillAllBusy = false
+        ActionBusy = false
+    end)
+
+    return true
+end
+
+function KillSelectedTargets()
+    if ActionBusy then
+        return
+    end
+
+    local knife = FindNamedTool({"knife"})
+
+    if not knife then
+        CustomNotify("Kill Selected requires the Knife", Color3.fromRGB(255, 100, 100))
+        return
+    end
+
+    local targets = GetSelectedKnifeTargets()
+
+    if #targets == 0 then
+        CustomNotify("No selected players available", Color3.fromRGB(255, 180, 70))
+        return
+    end
+
+    if not EquipTool(knife) then
+        CustomNotify("Could not equip Knife", Color3.fromRGB(255, 100, 100))
+        return
+    end
+
+    ActionBusy = true
+
+    task.spawn(function()
+        pcall(function()
+            OneSlashTargets(knife, targets)
+            targets = GetKnifeTargets(targets)
+
+            for _, target in ipairs(targets) do
+                if getgenv().Destroyed then
+                    break
+                end
+
+                if KnifeTargetAlive(target) then
+                    AttackKnifeTargetUntilDone(knife, target, 1.4)
+                end
+            end
+        end)
+
+        ActionBusy = false
+    end)
+end
+
+function UpdateSelectorActionText()
+    if not PlayerSelectorAction then
+        return
+    end
+
+    if PlayerSelectorMode == "targets" then
+        local count = 0
+
+        for _ in pairs(KnifeTargetIds) do
+            count = count + 1
+        end
+
+        PlayerSelectorAction.Text = "Kill Selected (" .. tostring(count) .. ")"
+    else
+        PlayerSelectorAction.Text = "Close"
+    end
+end
+
+function RefreshPlayerSelector()
+    if not PlayerSelectorScroll then
+        return
+    end
+
+    CleanKnifeTargets()
+
+    for _, child in ipairs(PlayerSelectorScroll:GetChildren()) do
+        if child:IsA("Frame")
+        or child.Name == "ToxTargetHistoryHeader" then
+            child:Destroy()
+        end
+    end
+
+    local playerList = {}
+
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= Player then
+            table.insert(playerList, target)
+        end
+    end
+
+    table.sort(playerList, function(a, b)
+        return string.lower(a.Name) < string.lower(b.Name)
+    end)
+
+    CleanTargetHistory()
+
+    local layoutOrder = 1
+
+    if #Settings.MM2TargetHistory > 0 then
+        local header = Instance.new("TextLabel")
+        header.Name = "ToxTargetHistoryHeader"
+        header.Size = UDim2.new(1, -4, 0, 22)
+        header.BackgroundTransparency = 1
+        header.Text = "Target History"
+        header.TextColor3 = Color3.fromRGB(180, 180, 205)
+        header.Font = Enum.Font.GothamBold
+        header.TextSize = 10
+        header.TextXAlignment = Enum.TextXAlignment.Left
+        header.LayoutOrder = layoutOrder
+        header.Parent = PlayerSelectorScroll
+
+        local headerPadding = Instance.new("UIPadding")
+        headerPadding.PaddingLeft = UDim.new(0, 8)
+        headerPadding.Parent = header
+
+        layoutOrder = layoutOrder + 1
+
+        for index, item in ipairs(Settings.MM2TargetHistory) do
+            if index > 4 then
+                break
+            end
+
+            local userId = tonumber(item.UserId)
+            local target = FindTargetByUserId(userId)
+            local status = target and GetTargetStatusText(target) or "Left"
+            local row = Instance.new("Frame")
+            row.Size = UDim2.new(1, -4, 0, 36)
+            row.BackgroundColor3 = Color3.fromRGB(15, 15, 24)
+            row.BorderSizePixel = 0
+            row.LayoutOrder = layoutOrder
+            row.Parent = PlayerSelectorScroll
+
+            layoutOrder = layoutOrder + 1
+
+            local rowCorner = Instance.new("UICorner")
+            rowCorner.CornerRadius = UDim.new(0, 4)
+            rowCorner.Parent = row
+
+            local label = Instance.new("TextLabel")
+            label.Size = UDim2.new(1, -184, 1, 0)
+            label.Position = UDim2.new(0, 8, 0, 0)
+            label.BackgroundTransparency = 1
+            label.Text = tostring(item.DisplayName or item.Name or userId) .. " • " .. status
+            label.TextColor3 = status == "Alive" and Color3.fromRGB(120, 230, 145) or Color3.fromRGB(230, 145, 120)
+            label.Font = Enum.Font.GothamMedium
+            label.TextSize = 10
+            label.TextXAlignment = Enum.TextXAlignment.Left
+            label.TextTruncate = Enum.TextTruncate.AtEnd
+            label.Parent = row
+
+            local selectButton = Instance.new("TextButton")
+            selectButton.Size = UDim2.new(0, 58, 0, 24)
+            selectButton.Position = UDim2.new(1, -178, 0.5, -12)
+            selectButton.BorderSizePixel = 0
+            selectButton.Text = target and "Select" or "Left"
+            selectButton.BackgroundColor3 = target and Color3.fromRGB(55, 55, 75) or Color3.fromRGB(45, 45, 55)
+            selectButton.TextColor3 = target and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(130, 130, 145)
+            selectButton.Font = Enum.Font.GothamBold
+            selectButton.TextSize = 9
+            selectButton.Parent = row
+
+            local selectCorner = Instance.new("UICorner")
+            selectCorner.CornerRadius = UDim.new(0, 4)
+            selectCorner.Parent = selectButton
+
+            local killButton = Instance.new("TextButton")
+            killButton.Size = UDim2.new(0, 48, 0, 24)
+            killButton.Position = UDim2.new(1, -52, 0.5, -12)
+            killButton.BorderSizePixel = 0
+            killButton.Text = "Kill"
+            killButton.BackgroundColor3 = target and Color3.fromRGB(155, 40, 48) or Color3.fromRGB(45, 45, 55)
+            killButton.TextColor3 = target and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(130, 130, 145)
+            killButton.Font = Enum.Font.GothamBold
+            killButton.TextSize = 9
+            killButton.Parent = row
+
+            local killCorner = Instance.new("UICorner")
+            killCorner.CornerRadius = UDim.new(0, 4)
+            killCorner.Parent = killButton
+
+            local tpButton = Instance.new("TextButton")
+            tpButton.Size = UDim2.new(0, 42, 0, 24)
+            tpButton.Position = UDim2.new(1, -100, 0.5, -12)
+            tpButton.BorderSizePixel = 0
+            tpButton.Text = "TP"
+            tpButton.BackgroundColor3 = target and Color3.fromRGB(55, 75, 105) or Color3.fromRGB(45, 45, 55)
+            tpButton.TextColor3 = target and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(130, 130, 145)
+            tpButton.Font = Enum.Font.GothamBold
+            tpButton.TextSize = 9
+            tpButton.Parent = row
+
+            local tpCorner = Instance.new("UICorner")
+            tpCorner.CornerRadius = UDim.new(0, 4)
+            tpCorner.Parent = tpButton
+
+            selectButton.MouseButton1Click:Connect(function()
+                if not target or IsWhitelisted(target) then
+                    return
+                end
+
+                KnifeTargetIds[target.UserId] = true
+                AddTargetToHistory(target)
+                RefreshPlayerSelector()
+            end)
+
+            tpButton.MouseButton1Click:Connect(function()
+                if not target then
+                    return
+                end
+
+                AddTargetToHistory(target)
+                TeleportToTarget(target)
+            end)
+
+            killButton.MouseButton1Click:Connect(function()
+                if not target or IsWhitelisted(target) then
+                    return
+                end
+
+                AddTargetToHistory(target)
+                KillSingleTarget(target)
+            end)
+        end
+    end
+
+    for index, target in ipairs(playerList) do
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, -4, 0, 42)
+        row.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+        row.BorderSizePixel = 0
+        row.LayoutOrder = layoutOrder + index
+        row.Parent = PlayerSelectorScroll
+
+        local rowCorner = Instance.new("UICorner")
+        rowCorner.CornerRadius = UDim.new(0, 4)
+        rowCorner.Parent = row
+
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(1, -224, 0, 18)
+        nameLabel.Position = UDim2.new(0, 8, 0, 4)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = target.DisplayName
+        nameLabel.TextColor3 = Color3.fromRGB(245, 245, 245)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 11
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        nameLabel.Parent = row
+
+        local role = GetRole(target) or "Unknown"
+        local status = GetTargetStatusText(target)
+
+        local userLabel = Instance.new("TextLabel")
+        userLabel.Size = UDim2.new(1, -224, 0, 15)
+        userLabel.Position = UDim2.new(0, 8, 0, 22)
+        userLabel.BackgroundTransparency = 1
+        userLabel.Text = "@" .. target.Name .. " • " .. status .. " • " .. role
+        userLabel.TextColor3 =
+            status == "Alive"
+            and Color3.fromRGB(120, 230, 145)
+            or Color3.fromRGB(230, 145, 120)
+        userLabel.Font = Enum.Font.Gotham
+        userLabel.TextSize = 9
+        userLabel.TextXAlignment = Enum.TextXAlignment.Left
+        userLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        userLabel.Parent = row
+
+        local whitelistButton = Instance.new("TextButton")
+        whitelistButton.Size = UDim2.new(0, 54, 0, 26)
+        whitelistButton.Position = UDim2.new(1, -216, 0.5, -13)
+        whitelistButton.BorderSizePixel = 0
+        whitelistButton.Font = Enum.Font.GothamBold
+        whitelistButton.TextSize = 9
+        whitelistButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        whitelistButton.Parent = row
+
+        local whitelistCorner = Instance.new("UICorner")
+        whitelistCorner.CornerRadius = UDim.new(0, 4)
+        whitelistCorner.Parent = whitelistButton
+
+        local selectButton = Instance.new("TextButton")
+        selectButton.Size = UDim2.new(0, 50, 0, 26)
+        selectButton.Position = UDim2.new(1, -158, 0.5, -13)
+        selectButton.BorderSizePixel = 0
+        selectButton.Font = Enum.Font.GothamBold
+        selectButton.TextSize = 9
+        selectButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        selectButton.Parent = row
+
+        local selectCorner = Instance.new("UICorner")
+        selectCorner.CornerRadius = UDim.new(0, 4)
+        selectCorner.Parent = selectButton
+
+        local killButton = Instance.new("TextButton")
+        killButton.Size = UDim2.new(0, 44, 0, 26)
+        killButton.Position = UDim2.new(1, -50, 0.5, -13)
+        killButton.BorderSizePixel = 0
+        killButton.Font = Enum.Font.GothamBold
+        killButton.TextSize = 9
+        killButton.Text = "Kill"
+        killButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        killButton.Parent = row
+
+        local killCorner = Instance.new("UICorner")
+        killCorner.CornerRadius = UDim.new(0, 4)
+        killCorner.Parent = killButton
+
+        local tpButton = Instance.new("TextButton")
+        tpButton.Size = UDim2.new(0, 42, 0, 26)
+        tpButton.Position = UDim2.new(1, -102, 0.5, -13)
+        tpButton.BorderSizePixel = 0
+        tpButton.Font = Enum.Font.GothamBold
+        tpButton.TextSize = 9
+        tpButton.Text = "TP"
+        tpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        tpButton.BackgroundColor3 = Color3.fromRGB(55, 75, 105)
+        tpButton.Parent = row
+
+        local tpCorner = Instance.new("UICorner")
+        tpCorner.CornerRadius = UDim.new(0, 4)
+        tpCorner.Parent = tpButton
+
+        local whitelisted = IsWhitelisted(target)
+        local selected = KnifeTargetIds[target.UserId] == true
+
+        if whitelisted then
+            whitelistButton.Text = "SAFE"
+            whitelistButton.BackgroundColor3 = MAIN_COLOR
+            selectButton.Text = "Select"
+            selectButton.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            selectButton.TextColor3 = Color3.fromRGB(130, 130, 145)
+            killButton.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            killButton.TextColor3 = Color3.fromRGB(130, 130, 145)
+        else
+            whitelistButton.Text = "Whitelist"
+            whitelistButton.BackgroundColor3 = Color3.fromRGB(55, 55, 75)
+
+            if selected then
+                selectButton.Text = "Selected"
+                selectButton.BackgroundColor3 = MAIN_COLOR
+            else
+                selectButton.Text = "Select"
+                selectButton.BackgroundColor3 = Color3.fromRGB(55, 55, 75)
+            end
+
+            killButton.BackgroundColor3 = Color3.fromRGB(155, 40, 48)
+        end
+
+        whitelistButton.MouseButton1Click:Connect(function()
+            SetWhitelisted(
+                target,
+                not IsWhitelisted(target)
+            )
+
+            RefreshPlayerSelector()
+        end)
+
+        selectButton.MouseButton1Click:Connect(function()
+            if IsWhitelisted(target) then
+                CustomNotify(
+                    target.Name .. " is whitelisted",
+                    Color3.fromRGB(255, 180, 70)
+                )
+                return
+            end
+
+            local newValue = not KnifeTargetIds[target.UserId]
+
+            KnifeTargetIds[target.UserId] =
+                newValue
+                or nil
+
+            if newValue then
+                AddTargetToHistory(target)
+            end
+
+            RefreshPlayerSelector()
+        end)
+
+        tpButton.MouseButton1Click:Connect(function()
+            AddTargetToHistory(target)
+            TeleportToTarget(target)
+        end)
+
+        killButton.MouseButton1Click:Connect(function()
+            if IsWhitelisted(target) then
+                CustomNotify(
+                    target.Name .. " is whitelisted",
+                    Color3.fromRGB(255, 180, 70)
+                )
+                return
+            end
+
+            AddTargetToHistory(target)
+            KillSingleTarget(target)
+        end)
+    end
+
+    UpdateSelectorActionText()
+end
+
+function CreatePlayerSelector()
+    if PlayerSelectorFrame and PlayerSelectorFrame.Parent then
+        return
+    end
+
+    local gui = getgenv().Gui
+
+    if not gui then
+        return
+    end
+
+    PlayerSelectorFrame = Instance.new("Frame")
+    PlayerSelectorFrame.Name = "ToxMM2PlayerSelector"
+    PlayerSelectorFrame.Size = UDim2.new(0, 350, 0, 300)
+    PlayerSelectorFrame.Position = UDim2.new(0.5, -175, 0.5, -150)
+    PlayerSelectorFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+    PlayerSelectorFrame.BorderSizePixel = 0
+    PlayerSelectorFrame.Visible = false
+    PlayerSelectorFrame.Active = true
+    PlayerSelectorFrame.ClipsDescendants = true
+    PlayerSelectorFrame.Parent = gui
+
+    if getgenv().RegisterToxLinkedSubGui then
+        getgenv().RegisterToxLinkedSubGui(
+            "MM2PlayerSelector",
+            PlayerSelectorFrame
+        )
+    end
+
+    local frameCorner = Instance.new("UICorner")
+    frameCorner.CornerRadius = UDim.new(0, 8)
+    frameCorner.Parent = PlayerSelectorFrame
+
+    local frameStroke = Instance.new("UIStroke")
+    frameStroke.Color = MAIN_COLOR
+    frameStroke.Thickness = 2
+    frameStroke.Parent = PlayerSelectorFrame
+
+    local topBar = Instance.new("Frame")
+    topBar.Size = UDim2.new(1, 0, 0, 32)
+    topBar.BackgroundColor3 = MAIN_COLOR
+    topBar.BorderSizePixel = 0
+    topBar.Parent = PlayerSelectorFrame
+
+    if getgenv().RegisterToxSubGuiMinimize then
+        getgenv().RegisterToxSubGuiMinimize(
+            PlayerSelectorFrame,
+            -52
+        )
+    end
+
+    if MakeDraggable then
+        MakeDraggable(PlayerSelectorFrame, topBar)
+    end
+
+    PlayerSelectorTitle = Instance.new("TextLabel")
+    PlayerSelectorTitle.Size = UDim2.new(1, -54, 1, 0)
+    PlayerSelectorTitle.Position = UDim2.new(0, 10, 0, 0)
+    PlayerSelectorTitle.BackgroundTransparency = 1
+    PlayerSelectorTitle.Text = "Target"
+    PlayerSelectorTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    PlayerSelectorTitle.Font = Enum.Font.GothamBold
+    PlayerSelectorTitle.TextSize = 13
+    PlayerSelectorTitle.TextXAlignment = Enum.TextXAlignment.Left
+    PlayerSelectorTitle.Parent = topBar
+
+    local closeButton = Instance.new("TextButton")
+    closeButton.Size = UDim2.new(0, 22, 0, 20)
+    closeButton.Position = UDim2.new(1, -26, 0.5, -10)
+    closeButton.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
+    closeButton.BorderSizePixel = 0
+    closeButton.Text = "X"
+    closeButton.TextColor3 = Color3.fromRGB(210, 210, 220)
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.TextSize = 11
+    closeButton.Parent = topBar
+
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 4)
+    closeCorner.Parent = closeButton
+
+    PlayerSelectorInput = Instance.new("TextBox")
+    PlayerSelectorInput.Size = UDim2.new(1, -108, 0, 30)
+    PlayerSelectorInput.Position = UDim2.new(0, 8, 0, 40)
+    PlayerSelectorInput.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+    PlayerSelectorInput.BorderSizePixel = 0
+    PlayerSelectorInput.Text = ""
+    PlayerSelectorInput.PlaceholderText = "Username / DisplayName / UserId"
+    PlayerSelectorInput.TextColor3 = Color3.fromRGB(245, 245, 245)
+    PlayerSelectorInput.PlaceholderColor3 = Color3.fromRGB(125, 125, 145)
+    PlayerSelectorInput.Font = Enum.Font.Gotham
+    PlayerSelectorInput.TextSize = 11
+    PlayerSelectorInput.ClearTextOnFocus = false
+    PlayerSelectorInput.Parent = PlayerSelectorFrame
+
+    local inputCorner = Instance.new("UICorner")
+    inputCorner.CornerRadius = UDim.new(0, 4)
+    inputCorner.Parent = PlayerSelectorInput
+
+    local addButton = Instance.new("TextButton")
+    addButton.Size = UDim2.new(0, 92, 0, 30)
+    addButton.Position = UDim2.new(1, -100, 0, 40)
+    addButton.BackgroundColor3 = MAIN_COLOR
+    addButton.BorderSizePixel = 0
+    addButton.Text = "Add"
+    addButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    addButton.Font = Enum.Font.GothamBold
+    addButton.TextSize = 11
+    addButton.Parent = PlayerSelectorFrame
+
+    local addCorner = Instance.new("UICorner")
+    addCorner.CornerRadius = UDim.new(0, 4)
+    addCorner.Parent = addButton
+
+    PlayerSelectorScroll = Instance.new("ScrollingFrame")
+    PlayerSelectorScroll.Size = UDim2.new(1, -16, 1, -116)
+    PlayerSelectorScroll.Position = UDim2.new(0, 8, 0, 78)
+    PlayerSelectorScroll.BackgroundTransparency = 1
+    PlayerSelectorScroll.BorderSizePixel = 0
+    PlayerSelectorScroll.ScrollBarThickness = 3
+    PlayerSelectorScroll.ScrollBarImageColor3 = MAIN_COLOR
+    PlayerSelectorScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    PlayerSelectorScroll.Parent = PlayerSelectorFrame
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 5)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = PlayerSelectorScroll
+
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        PlayerSelectorScroll.CanvasSize =
+            UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 8)
+    end)
+
+    PlayerSelectorAction = Instance.new("TextButton")
+    PlayerSelectorAction.Size = UDim2.new(1, -16, 0, 30)
+    PlayerSelectorAction.Position = UDim2.new(0, 8, 1, -36)
+    PlayerSelectorAction.BackgroundColor3 = MAIN_COLOR
+    PlayerSelectorAction.BorderSizePixel = 0
+    PlayerSelectorAction.Text = "Kill Selected (0)"
+    PlayerSelectorAction.TextColor3 = Color3.fromRGB(255, 255, 255)
+    PlayerSelectorAction.Font = Enum.Font.GothamBold
+    PlayerSelectorAction.TextSize = 11
+    PlayerSelectorAction.Parent = PlayerSelectorFrame
+
+    local actionCorner = Instance.new("UICorner")
+    actionCorner.CornerRadius = UDim.new(0, 4)
+    actionCorner.Parent = PlayerSelectorAction
+
+    closeButton.MouseButton1Click:Connect(function()
+        PlayerSelectorFrame.Visible = false
+    end)
+
+    local function AddFromInput()
+        local target = FindCurrentPlayer(PlayerSelectorInput.Text)
+
+        if not target then
+            CustomNotify(
+                "Player not found in server",
+                Color3.fromRGB(255, 180, 70)
+            )
+            return
+        end
+
+        if IsWhitelisted(target) then
+            CustomNotify(
+                target.Name .. " is whitelisted",
+                Color3.fromRGB(255, 180, 70)
+            )
+            return
+        end
+
+        KnifeTargetIds[target.UserId] = true
+        AddTargetToHistory(target)
+
+        PlayerSelectorInput.Text = ""
+        RefreshPlayerSelector()
+    end
+
+    addButton.MouseButton1Click:Connect(AddFromInput)
+
+    PlayerSelectorInput.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            AddFromInput()
+        end
+    end)
+
+    PlayerSelectorAction.MouseButton1Click:Connect(function()
+        KillSelectedTargets()
+    end)
+end
+
+function OpenPlayerSelector(mode)
+    CreatePlayerSelector()
+
+    if not PlayerSelectorFrame then
+        return
+    end
+
+    local requestedMode = "targets"
+
+    if PlayerSelectorFrame.Visible
+    and PlayerSelectorMode == requestedMode then
+        PlayerSelectorFrame.Visible = false
+        return
+    end
+
+    PlayerSelectorMode = requestedMode
+    PlayerSelectorTitle.Text = "Target"
+    PlayerSelectorInput.Text = ""
+    PlayerSelectorFrame.Visible = true
+    RefreshPlayerSelector()
+end
+
+AddConnection(Players.PlayerAdded:Connect(function()
+    if PlayerSelectorFrame and PlayerSelectorFrame.Visible then
+        task.defer(RefreshPlayerSelector)
+    end
+end))
+
+AddConnection(Players.PlayerRemoving:Connect(function(target)
+    KnifeTargetIds[target.UserId] = nil
+
+    if PlayerSelectorFrame and PlayerSelectorFrame.Visible then
+        task.defer(RefreshPlayerSelector)
+    end
+end))
+
+LastTargetAutoClear = 0
+
+AddConnection(RunService.Heartbeat:Connect(function()
+    if os.clock() - LastTargetAutoClear < 1 then
+        return
+    end
+
+    LastTargetAutoClear = os.clock()
+
+    local before = 0
+
+    Settings.MM2AutoClearTarget = true
+    Settings.MM2TargetLock = false
+
+    for _ in pairs(KnifeTargetIds) do
+        before = before + 1
+    end
+
+    CleanKnifeTargets()
+
+    local after = 0
+
+    for _ in pairs(KnifeTargetIds) do
+        after = after + 1
+    end
+
+    if before ~= after
+    and PlayerSelectorFrame
+    and PlayerSelectorFrame.Visible then
+        RefreshPlayerSelector()
+    end
+end))
+
+
+RoundTimerFrame = nil
+RoundTimerLabel = nil
+LastRoundTimerUpdate = 0
+
+function FormatRoundSeconds(value)
+    local number = tonumber(value)
+
+    if not number then
+        return nil
+    end
+
+    if number < 0 then
+        return nil
+    end
+
+    number = math.floor(number + 0.5)
+
+    if number > 9999 then
+        return nil
+    end
+
+    local minutes = math.floor(number / 60)
+    local seconds = number % 60
+
+    return string.format("%d:%02d", minutes, seconds)
+end
+
+function ReadTimerFromText(text, name)
+    text = tostring(text or "")
+    name = string.lower(tostring(name or ""))
+
+    local lowerText = string.lower(text)
+    local direct = string.match(text, "^%s*(%d+:%d%d)%s*$")
+    local inside = string.match(text, "(%d+:%d%d)")
+
+    if direct then
+        return direct
+    end
+
+    if inside then
+        return inside
+    end
+
+    local hasTimerName =
+        string.find(name, "timer", 1, true)
+        or string.find(name, "time", 1, true)
+        or string.find(name, "round", 1, true)
+        or string.find(name, "count", 1, true)
+        or string.find(name, "intermission", 1, true)
+
+    local hasTimerText =
+        string.find(lowerText, "time", 1, true)
+        or string.find(lowerText, "round", 1, true)
+        or string.find(lowerText, "intermission", 1, true)
+        or string.find(lowerText, "seconds", 1, true)
+        or string.find(lowerText, "starting", 1, true)
+
+    if hasTimerName or hasTimerText then
+        local number = string.match(text, "(%d+)")
+        return FormatRoundSeconds(number)
+    end
+
+    return nil
+end
+
+function ReadTimerFromObject(object)
+    if not object then
+        return nil
+    end
+
+    if object:IsA("TextLabel")
+    or object:IsA("TextButton")
+    or object:IsA("TextBox") then
+        local found = ReadTimerFromText(object.Text, object.Name)
+
+        if found then
+            return found
+        end
+
+        local contentText = nil
+
+        pcall(function()
+            contentText = object.ContentText
+        end)
+
+        if contentText then
+            found = ReadTimerFromText(contentText, object.Name)
+
+            if found then
+                return found
+            end
+        end
+    elseif object:IsA("StringValue") then
+        local found = ReadTimerFromText(object.Value, object.Name)
+
+        if found then
+            return found
+        end
+    elseif object:IsA("IntValue")
+    or object:IsA("NumberValue") then
+        local lowerName = string.lower(object.Name)
+
+        if string.find(lowerName, "timer", 1, true)
+        or string.find(lowerName, "time", 1, true)
+        or string.find(lowerName, "round", 1, true)
+        or string.find(lowerName, "count", 1, true) then
+            local found = FormatRoundSeconds(object.Value)
+
+            if found then
+                return found
+            end
+        end
+    end
+
+    local attributes = object:GetAttributes()
+
+    for attributeName, attributeValue in pairs(attributes) do
+        local lowerName = string.lower(tostring(attributeName))
+
+        if string.find(lowerName, "timer", 1, true)
+        or string.find(lowerName, "time", 1, true)
+        or string.find(lowerName, "round", 1, true)
+        or string.find(lowerName, "count", 1, true) then
+            if typeof(attributeValue) == "number" then
+                local found = FormatRoundSeconds(attributeValue)
+
+                if found then
+                    return found
+                end
+            elseif typeof(attributeValue) == "string" then
+                local found = ReadTimerFromText(attributeValue, attributeName)
+
+                if found then
+                    return found
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+function ScanRoundTimerContainer(container)
+    if not container then
+        return nil
+    end
+
+    local ownGui = getgenv().Gui
+    local direct = ReadTimerFromObject(container)
+
+    if direct
+    and (
+        not ownGui
+        or not container:IsDescendantOf(ownGui)
+    ) then
+        return direct
+    end
+
+    for _, object in ipairs(container:GetDescendants()) do
+        if not ownGui
+        or not object:IsDescendantOf(ownGui) then
+            local found = ReadTimerFromObject(object)
+
+            if found then
+                return found
+            end
+        end
+    end
+
+    return nil
+end
+
+function FindByPath(root, path)
+    local current = root
+
+    for _, name in ipairs(path) do
+        if not current then
+            return nil
+        end
+
+        current = current:FindFirstChild(name)
+    end
+
+    return current
+end
+
+function FindLikelyRoundState(mainGui, gameGui)
+    if gameGui and gameGui.Visible then
+        return "In Game"
+    end
+
+    local lobby = mainGui and mainGui:FindFirstChild("Lobby")
+
+    if lobby and lobby.Visible then
+        return "Lobby"
+    end
+
+    return "N/A"
+end
+
+function FindMM2RoundTimerText()
+    local timerPart = workspace:FindFirstChild("RoundTimerPart", true)
+
+    if timerPart then
+        local attributes = {
+            "Time",
+            "RoundTime",
+            "Timer",
+            "Value"
+        }
+
+        for _, attributeName in ipairs(attributes) do
+            local value = timerPart:GetAttribute(attributeName)
+
+            if typeof(value) == "number" then
+                local found = FormatRoundSeconds(value)
+
+                if found then
+                    return found
+                end
+            elseif typeof(value) == "string" then
+                local found = ReadTimerFromText(value, attributeName)
+
+                if found then
+                    return found
+                end
+            end
+        end
+
+        local found = ScanRoundTimerContainer(timerPart)
+
+        if found then
+            return found
+        end
+    end
+
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+    local mainGui = playerGui and playerGui:FindFirstChild("MainGUI")
+    local gameGui = mainGui and mainGui:FindFirstChild("Game")
+
+    local preferredPaths = {
+        {"MainGUI", "Game", "Timer", "Container", "Timer"},
+        {"MainGUI", "Game", "Timer", "Timer"},
+        {"MainGUI", "Game", "Timer"},
+        {"MainGUI", "Game", "RoundTimer"}
+    }
+
+    for _, path in ipairs(preferredPaths) do
+        local object = FindByPath(playerGui, path)
+        local found = ScanRoundTimerContainer(object)
+
+        if found then
+            return found
+        end
+    end
+
+    if gameGui then
+        local found = ScanRoundTimerContainer(gameGui)
+
+        if found then
+            return found
+        end
+    end
+
+    local replicatedTimer = ReplicatedStorage:FindFirstChild("RoundTimerPart", true)
+        or ReplicatedStorage:FindFirstChild("RoundTimer", true)
+
+    local replicatedFound = ScanRoundTimerContainer(replicatedTimer)
+
+    if replicatedFound then
+        return replicatedFound
+    end
+
+    return "N/A"
+end
+
+function CreateRoundTimerFrame()
+    if RoundTimerFrame and RoundTimerFrame.Parent then
+        return
+    end
+
+    local gui = getgenv().Gui
+
+    if not gui then
+        return
+    end
+
+    RoundTimerFrame = Instance.new("Frame")
+    RoundTimerFrame.Name = "ToxMM2RoundTimerFrame"
+    RoundTimerFrame.Size = UDim2.new(0, 150, 0, 38)
+    RoundTimerFrame.Position = UDim2.new(0.5, -75, 0, 84)
+    RoundTimerFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+    RoundTimerFrame.BackgroundTransparency = 0.25
+    RoundTimerFrame.BorderSizePixel = 0
+    RoundTimerFrame.Active = true
+    RoundTimerFrame.Visible = false
+    RoundTimerFrame.Parent = gui
+
+    if getgenv().RegisterToxLinkedSubGui then
+        getgenv().RegisterToxLinkedSubGui("MM2RoundTimer", RoundTimerFrame)
+    end
+
+    if getgenv().RegisterToxSubGuiMinimize then
+        getgenv().RegisterToxSubGuiMinimize(RoundTimerFrame, -52)
+    end
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 6)
-    corner.Parent = ServerHopMenu
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = RoundTimerFrame
 
     local stroke = Instance.new("UIStroke")
     stroke.Color = MAIN_COLOR
     stroke.Thickness = 1
-    stroke.Transparency = 0.15
-    stroke.Parent = ServerHopMenu
+    stroke.Transparency = 0.25
+    stroke.Parent = RoundTimerFrame
 
-    AddServerHopOption(ServerHopMenu, "Low", 6, "Low")
-    AddServerHopOption(ServerHopMenu, "Medium", 36, "Medium")
-    AddServerHopOption(ServerHopMenu, "High", 66, "High")
+    if MakeDraggable then
+        MakeDraggable(RoundTimerFrame, RoundTimerFrame)
+    end
 
-    ServerHopOverlay.MouseButton1Click:Connect(CloseServerHopMenu)
-    ServerHopOverlay.MouseButton2Click:Connect(CloseServerHopMenu)
+    RoundTimerLabel = Instance.new("TextLabel")
+    RoundTimerLabel.Size = UDim2.new(1, -12, 1, 0)
+    RoundTimerLabel.Position = UDim2.new(0, 6, 0, 0)
+    RoundTimerLabel.BackgroundTransparency = 1
+    RoundTimerLabel.Text = "Round: N/A"
+    RoundTimerLabel.TextColor3 = Color3.fromRGB(245, 245, 245)
+    RoundTimerLabel.Font = Enum.Font.GothamBold
+    RoundTimerLabel.TextSize = 12
+    RoundTimerLabel.Parent = RoundTimerFrame
 end
 
-local FPSObjectDefaults = {}
-local FPSLightingDefaults = nil
-local FPSWorkspaceConnection = nil
-local FPSLightingConnection = nil
+function SetRoundTimerVisible(enabled)
+    Settings.MM2RoundTimer = enabled == true
+    CreateRoundTimerFrame()
 
-local FPSImportantNames = {
-    GunDrop = true,
-    Gun = true,
-    Knife = true,
-    Revolver = true,
-    Handle = true,
-    HumanoidRootPart = true
-}
-
-local function IsPlayerCharacterObject(object)
-    for _, target in ipairs(Players:GetPlayers()) do
-        local character = target.Character
-
-        if character
-        and object:IsDescendantOf(character) then
-            return true
-        end
+    if RoundTimerFrame then
+        RoundTimerFrame.Visible = Settings.MM2RoundTimer
     end
-
-    return false
 end
 
-local function HasImportantFPSAncestor(object)
-    local current = object
-
-    while current do
-        if current:IsA("Tool")
-        or current:IsA("Backpack")
-        or current:IsA("Humanoid")
-        or current:IsA("Highlight")
-        or current:IsA("BillboardGui")
-        or current:IsA("ScreenGui")
-        or FPSImportantNames[current.Name] then
-            return true
-        end
-
-        local lower = string.lower(tostring(current.Name or ""))
-
-        if string.find(lower, "gundrop", 1, true)
-        or string.find(lower, "weapon", 1, true)
-        or string.find(lower, "knife", 1, true)
-        or string.find(lower, "revolver", 1, true)
-        or string.find(lower, "sheriff", 1, true)
-        or string.find(lower, "murderer", 1, true)
-        or string.find(lower, "tox", 1, true) then
-            return true
-        end
-
-        current = current.Parent
-    end
-
-    return false
-end
-
-local function ShouldIgnoreFPSObject(object)
-    if not object
-    or not object.Parent then
-        return true
-    end
-
-    if object == Camera
-    or object:IsDescendantOf(CoreGui) then
-        return true
-    end
-
-    if getgenv().Gui
-    and object:IsDescendantOf(getgenv().Gui) then
-        return true
-    end
-
-    if IsPlayerCharacterObject(object)
-    or HasImportantFPSAncestor(object) then
-        return true
-    end
-
-    return false
-end
-
-local function CaptureFPSObject(object)
-    if ShouldIgnoreFPSObject(object)
-    or FPSObjectDefaults[object] then
+AddConnection(RunService.Heartbeat:Connect(function()
+    if not ToxScriptReady()
+    or not Settings.MM2RoundTimer
+    or os.clock() - LastRoundTimerUpdate < 0.5 then
         return
     end
 
-    local data = nil
+    LastRoundTimerUpdate = os.clock()
+    CreateRoundTimerFrame()
 
-    if object:IsA("BasePart") then
-        data = {
-            Kind = "BasePart",
-            Material = object.Material,
-            MaterialVariant = object.MaterialVariant,
-            Reflectance = object.Reflectance,
-            CastShadow = object.CastShadow,
-            Color = object.Color,
-            Transparency = object.Transparency,
-            LocalTransparencyModifier = object.LocalTransparencyModifier
-        }
-    elseif object:IsA("Decal")
-    or object:IsA("Texture") then
-        data = {
-            Kind = "Texture",
-            Transparency = object.Transparency,
-            Color3 = object.Color3,
-            Texture = object.Texture
-        }
-    elseif object:IsA("ParticleEmitter") then
-        data = {
-            Kind = "ParticleEmitter",
-            Enabled = object.Enabled,
-            Rate = object.Rate
-        }
-    elseif object:IsA("Trail")
-    or object:IsA("Beam") then
-        data = {
-            Kind = "Enabled",
-            Enabled = object.Enabled
-        }
-    elseif object:IsA("Smoke")
-    or object:IsA("Fire")
-    or object:IsA("Sparkles") then
-        data = {
-            Kind = "Enabled",
-            Enabled = object.Enabled
-        }
-    elseif object:IsA("BloomEffect")
-    or object:IsA("BlurEffect")
-    or object:IsA("ColorCorrectionEffect")
-    or object:IsA("DepthOfFieldEffect")
-    or object:IsA("SunRaysEffect") then
-        data = {
-            Kind = "Enabled",
-            Enabled = object.Enabled
-        }
+    if RoundTimerLabel then
+        RoundTimerLabel.Text = "Round: " .. FindMM2RoundTimerText()
     end
+end))
 
-    if data then
-        FPSObjectDefaults[object] = data
+task.spawn(function()
+    while not getgenv().Destroyed and game.PlaceId == 142823291 do
+        if PlayerSelectorFrame and PlayerSelectorFrame.Visible then
+            RefreshPlayerSelector()
+        end
+
+        task.wait(0.75)
     end
-end
+end)
 
-local function ApplyFPSObject(object)
-    if ShouldIgnoreFPSObject(object) then
-        return
-    end
-
-    CaptureFPSObject(object)
-
-    if object:IsA("BasePart") then
-        object.Material = Enum.Material.SmoothPlastic
-        object.MaterialVariant = ""
-        object.Reflectance = 0
-        object.CastShadow = false
-    elseif object:IsA("Decal")
-    or object:IsA("Texture") then
-        object.Transparency = 1
-    elseif object:IsA("ParticleEmitter") then
-        object.Enabled = false
-        object.Rate = 0
-    elseif object:IsA("Trail")
-    or object:IsA("Beam")
-    or object:IsA("Smoke")
-    or object:IsA("Fire")
-    or object:IsA("Sparkles")
-    or object:IsA("BloomEffect")
-    or object:IsA("BlurEffect")
-    or object:IsA("ColorCorrectionEffect")
-    or object:IsA("DepthOfFieldEffect")
-    or object:IsA("SunRaysEffect") then
-        object.Enabled = false
-    end
-end
-
-local function RestoreFPSObject(object, data)
-    if not object
-    or not object.Parent
-    or typeof(data) ~= "table" then
-        return
-    end
+function NormalGunClick()
+    local viewport = Camera.ViewportSize
+    local inset = GuiService:GetGuiInset()
+    local x = viewport.X / 2
+    local y = viewport.Y / 2 + inset.Y
 
     pcall(function()
-        if data.Kind == "BasePart" then
-            object.Material = data.Material
-            object.MaterialVariant = data.MaterialVariant or ""
-            object.Reflectance = data.Reflectance
-            object.CastShadow = data.CastShadow
-            object.Color = data.Color
-            object.Transparency = data.Transparency
-            object.LocalTransparencyModifier = data.LocalTransparencyModifier or 0
-        elseif data.Kind == "Texture" then
-            object.Transparency = data.Transparency
-            object.Color3 = data.Color3
-            object.Texture = data.Texture
-        elseif data.Kind == "ParticleEmitter" then
-            object.Enabled = data.Enabled
-            object.Rate = data.Rate
-        elseif data.Kind == "Enabled" then
-            object.Enabled = data.Enabled
-        end
+        VirtualInputManager:SendMouseMoveEvent(x, y, game)
+    end)
+
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
+        task.wait(0.02)
+        VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
     end)
 end
 
-local function CaptureFPSLighting()
-    if FPSLightingDefaults then
-        return
+ShootSafetySerial = 0
+GuidedShotBusy = false
+AutoShootGeneration = 0
+
+function CancelAutoShootMurderer(syncVisual)
+    AutoShootGeneration = AutoShootGeneration + 1
+    ShootSafetySerial = ShootSafetySerial + 1
+    GuidedShotBusy = false
+
+    if MM2AutoRuntime then
+        MM2AutoRuntime.Shoot = false
     end
 
-    FPSLightingDefaults = {
-        GlobalShadows = Lighting.GlobalShadows,
-        FogEnd = Lighting.FogEnd,
-        Ambient = Lighting.Ambient,
-        OutdoorAmbient = Lighting.OutdoorAmbient,
-        Brightness = Lighting.Brightness,
-        ExposureCompensation = Lighting.ExposureCompensation,
-        EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
-        EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale
-    }
-end
+    Settings.MM2ShootMurderAuto = false
+    Settings.MM2ShootMurderAutoV2 = false
+    AutoShootLastAttempt = os.clock() + 0.05
 
-local function RestoreFPSLighting()
-    if not FPSLightingDefaults then
-        return
+    if syncVisual and SyncToggleVisuals then
+        SyncToggleVisuals("MM2ShootMurderAutoV2", false)
     end
 
-    pcall(function()
-        Lighting.GlobalShadows = FPSLightingDefaults.GlobalShadows
-        Lighting.FogEnd = FPSLightingDefaults.FogEnd
-        Lighting.Ambient = FPSLightingDefaults.Ambient
-        Lighting.OutdoorAmbient = FPSLightingDefaults.OutdoorAmbient
-        Lighting.Brightness = FPSLightingDefaults.Brightness
-        Lighting.ExposureCompensation = FPSLightingDefaults.ExposureCompensation
-        Lighting.EnvironmentDiffuseScale = FPSLightingDefaults.EnvironmentDiffuseScale
-        Lighting.EnvironmentSpecularScale = FPSLightingDefaults.EnvironmentSpecularScale
-    end)
-
-    FPSLightingDefaults = nil
-end
-
-local function SetFPSBooster(enabled, silent)
-    enabled = enabled == true
-    Settings.FPSBooster = enabled
-
-    if enabled then
-        CaptureFPSLighting()
-
-        Lighting.GlobalShadows = false
-        Lighting.FogEnd = 9e9
-
-        for _, object in ipairs(workspace:GetDescendants()) do
-            pcall(ApplyFPSObject, object)
-        end
-
-        for _, object in ipairs(Lighting:GetDescendants()) do
-            pcall(ApplyFPSObject, object)
-        end
-
-        if FPSWorkspaceConnection then
-            FPSWorkspaceConnection:Disconnect()
-        end
-
-        if FPSLightingConnection then
-            FPSLightingConnection:Disconnect()
-        end
-
-        FPSWorkspaceConnection = workspace.DescendantAdded:Connect(function(object)
-            if Settings.FPSBooster then
-                task.defer(function()
-                    pcall(ApplyFPSObject, object)
-                end)
-            end
-        end)
-
-        FPSLightingConnection = Lighting.DescendantAdded:Connect(function(object)
-            if Settings.FPSBooster then
-                task.defer(function()
-                    pcall(ApplyFPSObject, object)
-                end)
-            end
-        end)
-
-        if not silent then
-            CustomNotify(
-                "FPS Booster Enabled",
-                Color3.fromRGB(100, 255, 100)
-            )
-        end
-    else
-        if FPSWorkspaceConnection then
-            FPSWorkspaceConnection:Disconnect()
-            FPSWorkspaceConnection = nil
-        end
-
-        if FPSLightingConnection then
-            FPSLightingConnection:Disconnect()
-            FPSLightingConnection = nil
-        end
-
-        RestoreFPSLighting()
-
-        for object, data in pairs(FPSObjectDefaults) do
-            RestoreFPSObject(object, data)
-            FPSObjectDefaults[object] = nil
-        end
-
-        ClearToxTable(FPSObjectDefaults)
-
-        if not silent then
-            CustomNotify(
-                "FPS Booster Restored",
-                Color3.fromRGB(255, 180, 70)
-            )
-        end
+    if AutoSaveConfiguration then
+        AutoSaveConfiguration()
     end
-
-    return true
 end
 
-local LastSafeCFrame = nil
-local AntiVoidConnection = nil
-local AntiVoidCharacterConnection = nil
-local AntiVoidLastSave = 0
-local AntiVoidLastRescue = 0
-
-local function GetVoidThreshold()
-    local fallen =
-        tonumber(
-            workspace.FallenPartsDestroyHeight
-        ) or -500
-
-    return math.max(
-        fallen + 35,
-        -250
-    )
-end
-
-local function IsUsableSafeCFrame(cframe)
-    if typeof(cframe) ~= "CFrame" then
+function IsMM2PlayerAlive(target)
+    if not target or not target.Character then
         return false
     end
 
-    return cframe.Position.Y
-        > GetVoidThreshold() + 20
+    local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
+    local root = target.Character:FindFirstChild("HumanoidRootPart")
+
+    return humanoid
+        and humanoid.Health > 0
+        and root ~= nil
 end
 
-local function GetSpawnFallbackCFrame(root)
-    local ndsSafe =
-        getgenv().NDSSafeSpawnCFrame
+function GetOrEquipGuidedGun()
+    local character = Player.Character
 
-    if game.PlaceId == 189707
-    and IsUsableSafeCFrame(ndsSafe) then
-        return ndsSafe
+    if not character then
+        return nil
     end
 
-    local spawn =
-        workspace:
-            FindFirstChildWhichIsA(
-                "SpawnLocation",
-                true
-            )
+    local gun = character:FindFirstChild("Gun")
+        or character:FindFirstChild("Revolver")
 
-    if spawn then
-        return spawn.CFrame
-            + Vector3.new(0, 4, 0)
+    if gun and gun:IsA("Tool") then
+        return gun
     end
 
-    if root then
-        local origin =
-            Vector3.new(
-                root.Position.X,
-                math.max(
-                    root.Position.Y + 500,
-                    500
-                ),
-                root.Position.Z
-            )
+    local backpack = Player:FindFirstChildOfClass("Backpack")
 
-        local result =
-            workspace:Raycast(
-                origin,
-                Vector3.new(0, -2000, 0)
-            )
+    if not backpack then
+        return nil
+    end
 
-        if result then
-            return CFrame.new(
-                result.Position
-                + Vector3.new(0, 5, 0)
-            )
+    gun = backpack:FindFirstChild("Gun")
+        or backpack:FindFirstChild("Revolver")
+
+    if not gun or not gun:IsA("Tool") then
+        return nil
+    end
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+
+    if not humanoid or humanoid.Health <= 0 then
+        return nil
+    end
+
+    pcall(function()
+        humanoid:EquipTool(gun)
+    end)
+
+    return character:FindFirstChild("Gun")
+        or character:FindFirstChild("Revolver")
+        or gun
+end
+
+function FindGuidedMurderer()
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= Player and IsMM2PlayerAlive(target) then
+            local character = target.Character
+            local backpack = target:FindFirstChildOfClass("Backpack")
+
+            local hasKnife = character
+                and character:FindFirstChild("Knife")
+
+            if not hasKnife and backpack then
+                hasKnife = backpack:FindFirstChild("Knife")
+            end
+
+            if hasKnife then
+                return target
+            end
+        end
+    end
+
+    local roleTarget = GetPlayerByRole("Murderer")
+
+    if roleTarget and IsMM2PlayerAlive(roleTarget) then
+        return roleTarget
+    end
+
+    local getPlayerData = ReplicatedStorage:FindFirstChild(
+        "GetPlayerData",
+        true
+    )
+
+    if getPlayerData
+    and getPlayerData:IsA("RemoteFunction") then
+        local ok, data = pcall(function()
+            return getPlayerData:InvokeServer()
+        end)
+
+        if ok and typeof(data) == "table" then
+            for playerName, info in pairs(data) do
+                if typeof(info) == "table"
+                and info.Role == "Murderer"
+                and not info.Dead then
+                    local target = Players:FindFirstChild(
+                        tostring(playerName)
+                    )
+
+                    if target and IsMM2PlayerAlive(target) then
+                        return target
+                    end
+                end
+            end
         end
     end
 
     return nil
 end
 
-local function SetLastSafeCFrame(cframe)
-    if IsUsableSafeCFrame(cframe) then
-        LastSafeCFrame = cframe
-        getgenv().ToxLastSafeCFrame =
-            cframe
-    end
-end
-
-getgenv().SetToxLastSafeCFrame =
-    SetLastSafeCFrame
-
-local function RescueFromVoid(
-    character,
-    humanoid,
-    root
-)
-    if not character
-    or not character.Parent
-    or not humanoid
-    or humanoid.Health <= 0
-    or not root
-    or not root.Parent then
-        return false
-    end
-
-    if tick() - AntiVoidLastRescue < 0.8 then
-        return false
-    end
-
-    AntiVoidLastRescue = tick()
-
-    local safe =
-        IsUsableSafeCFrame(LastSafeCFrame)
-        and LastSafeCFrame
-        or GetSpawnFallbackCFrame(root)
-
-    if not safe then
-        return false
-    end
-
-    local allow =
-        getgenv().AllowToxTeleport
-
-    if allow then
-        allow(1.5, "Anti Void Restore")
-    end
-
-    if getgenv().SetNDSNoTPAnchor then
-        pcall(function()
-            getgenv().SetNDSNoTPAnchor(
-                safe,
-                true
-            )
-        end)
-    end
-
-    humanoid.Sit = false
-    humanoid.PlatformStand = false
-
-    root.AssemblyLinearVelocity =
-        Vector3.zero
-    root.AssemblyAngularVelocity =
-        Vector3.zero
-    root.CFrame = safe
-
-    pcall(function()
-        humanoid:ChangeState(
-            Enum.HumanoidStateType.GettingUp
-        )
-    end)
-
-    SetLastSafeCFrame(safe)
-    return true
-end
-
-local function StopAntiVoid()
-    if AntiVoidConnection then
-        AntiVoidConnection:Disconnect()
-        AntiVoidConnection = nil
-    end
-
-    if AntiVoidCharacterConnection then
-        AntiVoidCharacterConnection:
-            Disconnect()
-        AntiVoidCharacterConnection = nil
-    end
-end
-
-local function StartAntiVoid()
-    StopAntiVoid()
-
-    AntiVoidCharacterConnection =
-        AddConnection(
-            Player.CharacterAdded:
-                Connect(function(character)
-                    task.spawn(function()
-                        local root =
-                            character:
-                                WaitForChild(
-                                    "HumanoidRootPart",
-                                    8
-                                )
-                        local humanoid =
-                            character:
-                                FindFirstChildOfClass(
-                                    "Humanoid"
-                                )
-
-                        if not root
-                        or not humanoid then
-                            return
-                        end
-
-                        task.wait(0.45)
-
-                        if not Settings.AntiVoid
-                        or Destroyed then
-                            return
-                        end
-
-                        if root.Position.Y
-                        <= GetVoidThreshold() then
-                            RescueFromVoid(
-                                character,
-                                humanoid,
-                                root
-                            )
-                        end
-                    end)
-                end)
-        )
-
-    AntiVoidConnection =
-        AddConnection(
-            RunService.Heartbeat:
-                Connect(function()
-                    if Destroyed
-                    or not ScriptLoaded
-                    or not Settings.AntiVoid then
-                        return
-                    end
-
-                    local character =
-                        Player.Character
-                    local root =
-                        character
-                        and character:
-                            FindFirstChild(
-                                "HumanoidRootPart"
-                            )
-                    local humanoid =
-                        character
-                        and character:
-                            FindFirstChildOfClass(
-                                "Humanoid"
-                            )
-
-                    if not root
-                    or not humanoid
-                    or humanoid.Health <= 0 then
-                        return
-                    end
-
-                    local threshold =
-                        GetVoidThreshold()
-
-                    if humanoid.FloorMaterial
-                    ~= Enum.Material.Air
-                    and root.Position.Y
-                        > threshold + 20
-                    and root.AssemblyLinearVelocity.Y
-                        > -25
-                    and tick() - AntiVoidLastSave
-                        >= 0.15 then
-                        AntiVoidLastSave = tick()
-                        SetLastSafeCFrame(
-                            root.CFrame
-                        )
-                    end
-
-                    if root.Position.Y
-                    <= threshold then
-                        RescueFromVoid(
-                            character,
-                            humanoid,
-                            root
-                        )
-                    end
-                end)
-        )
-end
-
-local WalkFlingGeneration = 0
-local WalkFlingCollisionDefaults =
-    setmetatable({}, {__mode = "k"})
-local WalkFlingImpulseActive = false
-local WalkFlingRestoreVelocity = nil
-getgenv().ToxWalkFlingImpulseActive = false
-
-local function RestoreWalkFlingCollisions()
-    local character = Player.Character
-
-    for part, oldCanCollide in pairs(
-        WalkFlingCollisionDefaults
-    ) do
-        if part
-        and part.Parent
-        and character
-        and part:IsDescendantOf(character) then
-            if Settings.Noclip then
-                part.CanCollide = false
-            else
-                part.CanCollide =
-                    oldCanCollide
-            end
-        end
-    end
-
-    ClearToxTable(
-        WalkFlingCollisionDefaults
+TargetMotionHistory =
+    setmetatable(
+        {},
+        {
+            __mode = "k"
+        }
     )
-end
 
-local function ApplyWalkFlingNoclip(
-    character
+function ClampVectorMagnitude(
+    vector,
+    maximum
 )
-    for _, part in ipairs(
-        character:GetDescendants()
-    ) do
-        if part:IsA("BasePart") then
-            if WalkFlingCollisionDefaults[part]
-            == nil then
-                WalkFlingCollisionDefaults[part] =
-                    part.CanCollide
-            end
-
-            part.CanCollide = false
-        end
+    if typeof(vector)
+        ~= "Vector3" then
+        return Vector3.zero
     end
+
+    local magnitude =
+        vector.Magnitude
+
+    if magnitude <= maximum
+    or magnitude <= 0 then
+        return vector
+    end
+
+    return
+        vector.Unit
+        * maximum
 end
 
-local function StopWalkFling()
-    WalkFlingGeneration = WalkFlingGeneration + 1
+function UpdateTargetMotion(
+    target
+)
+    if not target
+    or not target.Character then
+        TargetMotionHistory[
+            target
+        ] = nil
 
-    local wasImpulseActive =
-        WalkFlingImpulseActive
+        return
+    end
 
-    WalkFlingImpulseActive = false
-    getgenv().ToxWalkFlingImpulseActive = false
+    local root =
+        target.Character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
 
+    if not root then
+        TargetMotionHistory[
+            target
+        ] = nil
+
+        return
+    end
+
+    local now =
+        os.clock()
+
+    local position =
+        root.Position
+
+    local state =
+        TargetMotionHistory[
+            target
+        ]
+
+    if not state then
+        TargetMotionHistory[
+            target
+        ] = {
+            Position = position,
+            Velocity =
+                root.AssemblyLinearVelocity,
+            Acceleration =
+                Vector3.zero,
+            Time = now
+        }
+
+        return
+    end
+
+    local stateTime = (state and type(state.Time) == "number") and state.Time or now
+    local deltaTime = math.max(0.001, now - stateTime)
+
+    if deltaTime < 0.012
+    or deltaTime > 0.35 then
+        state.Position =
+            position
+
+        state.Velocity =
+            root.AssemblyLinearVelocity
+
+        state.Acceleration =
+            Vector3.zero
+
+        state.Time = now
+
+        return
+    end
+
+    local statePos = (state and typeof(state.Position) == "Vector3") and state.Position or position
+    local measuredVelocity =
+        (
+            position
+            - statePos
+        )
+        / deltaTime
+
+    measuredVelocity =
+        ClampVectorMagnitude(
+            measuredVelocity,
+            125
+        )
+
+    local previousVelocity =
+        (state and typeof(state.Velocity) == "Vector3") and state.Velocity
+        or measuredVelocity
+
+    local smoothedVelocity =
+        previousVelocity:
+            Lerp(
+                measuredVelocity,
+                0.58
+            )
+
+    local measuredAcceleration =
+        (
+            smoothedVelocity
+            - previousVelocity
+        )
+        / deltaTime
+
+    state.Acceleration =
+        ClampVectorMagnitude(
+            (
+                state.Acceleration
+                or Vector3.zero
+            ):
+                Lerp(
+                    measuredAcceleration,
+                    0.35
+                ),
+            95
+        )
+
+    state.Velocity =
+        smoothedVelocity
+
+    state.Position =
+        position
+
+    state.Time = now
+end
+
+AddConnection(
+    RunService.Heartbeat:
+        Connect(function()
+            for _, target in ipairs(
+                Players:
+                    GetPlayers()
+            ) do
+                if target ~= Player then
+                    UpdateTargetMotion(
+                        target
+                    )
+                end
+            end
+        end)
+)
+
+function GetShotOrigin()
     local character =
         Player.Character
+
+    if not character then
+        return
+            Camera.CFrame.Position
+    end
+
+    local originPart =
+        character:
+            FindFirstChild(
+                "RightHand"
+            )
+        or character:
+            FindFirstChild(
+                "Right Arm"
+            )
+        or character:
+            FindFirstChild(
+                "UpperTorso"
+            )
+        or character:
+            FindFirstChild(
+                "Torso"
+            )
+        or character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+    return
+        originPart
+        and originPart.Position
+        or Camera.CFrame.Position
+end
+
+function GetPredictionPing()
+    local ping =
+        0.055
+
+    pcall(function()
+        local value =
+            Player:
+                GetNetworkPing()
+
+        if typeof(value)
+            == "number"
+        and value > 0 then
+            ping =
+                value
+        end
+    end)
+
+    return
+        math.clamp(
+            ping,
+            0.02,
+            0.22
+        )
+end
+
+MM2ShootOffset = 2.8
+MM2OffsetPingMultiplier = 1
+
+function GetPredictedTargetPosition(
+    target
+)
+    if not target
+    or not target.Character then
+        return nil
+    end
+
+    local character = target.Character
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local aimPart = character:FindFirstChild("UpperTorso")
+        or character:FindFirstChild("Torso")
+        or character:FindFirstChild("HumanoidRootPart")
+
+    if not humanoid
+    or humanoid.Health <= 0
+    or not aimPart then
+        return nil
+    end
+
+    local velocity = aimPart.AssemblyLinearVelocity
+    local moveDirection = humanoid.MoveDirection
+    local offset = tonumber(Settings.MM2ShootOffset) or MM2ShootOffset
+    local pingMultiplier = tonumber(Settings.MM2ShootPingMultiplier) or MM2OffsetPingMultiplier
+    local pingScale = 1
+
+    pcall(function()
+        pingScale = ((Player:GetNetworkPing() * 1000) * ((pingMultiplier - 1) * 0.01)) + 1
+    end)
+
+    local predicted = aimPart.Position
+        + ((velocity * Vector3.new(0.75, 0.5, 0.75)) * (offset / 15))
+        + (moveDirection * offset)
+
+    predicted = predicted * pingScale
+
+    return predicted
+end
+
+function GetGuidedTargetPart(
+    target
+)
+    if not target
+    or not target.Character then
+        return nil
+    end
+
+    local character =
+        target.Character
+
+    local humanoid =
+        character:
+            FindFirstChildOfClass(
+                "Humanoid"
+            )
+
+    if not humanoid
+    or humanoid.Health <= 0 then
+        return nil
+    end
+
+    return
+        character:
+            FindFirstChild(
+                "Head"
+            )
+        or character:
+            FindFirstChild(
+                "UpperTorso"
+            )
+        or character:
+            FindFirstChild(
+                "Torso"
+            )
+        or character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
+end
+
+function GetGuidedVelocity(
+    target
+)
+    local character =
+        target
+        and target.Character
+
     local root =
         character
         and character:
@@ -4006,4077 +2957,3027 @@ local function StopWalkFling()
                 "HumanoidRootPart"
             )
 
-    if wasImpulseActive
-    and root
-    and WalkFlingRestoreVelocity then
-        root.Velocity =
-            WalkFlingRestoreVelocity
-        root.AssemblyLinearVelocity =
-            WalkFlingRestoreVelocity
+    if not root then
+        return Vector3.zero
     end
 
-    WalkFlingRestoreVelocity = nil
+    local velocity =
+        root.AssemblyLinearVelocity
 
-    if root
-    and getgenv().SetNDSNoTPAnchor then
-        pcall(function()
-            getgenv().SetNDSNoTPAnchor(
-                root.CFrame,
-                true
-            )
-        end)
-    end
+    local history =
+        TargetMotionHistory[
+            target
+        ]
 
-    RestoreWalkFlingCollisions()
-end
-
-local function StartWalkFling()
-    StopWalkFling()
-
-    if not Settings.WalkFling
-    or Destroyed then
-        return
-    end
-
-    if Settings.AntiFling then
-        RestoreAntiFlingDefaults()
-    end
-
-    local generation =
-        WalkFlingGeneration
-
-    task.spawn(function()
-        local moveLift = 0.1
-
-        while Settings.WalkFling
-        and not Destroyed
-        and ScriptLoaded
-        and generation
-            == WalkFlingGeneration do
-            RunService.Heartbeat:Wait()
-
-            local character =
-                Player.Character
-            local humanoid =
-                character
-                and character:
-                    FindFirstChildOfClass(
-                        "Humanoid"
-                    )
-            local root =
-                character
-                and character:
-                    FindFirstChild(
-                        "HumanoidRootPart"
-                    )
-
-            if not character
-            or not character.Parent
-            or not humanoid
-            or humanoid.Health <= 0
-            or not root
-            or not root.Parent then
-                task.wait()
-            else
-                ApplyWalkFlingNoclip(
-                    character
+    if history
+    and typeof(
+        history.Velocity
+    ) == "Vector3" then
+        velocity =
+            velocity:
+                Lerp(
+                    history.Velocity,
+                    0.35
                 )
-
-                local velocity =
-                    root.Velocity
-
-                WalkFlingRestoreVelocity =
-                    velocity
-
-                WalkFlingImpulseActive = true
-                getgenv().ToxWalkFlingImpulseActive = true
-
-                local multiplier =
-                    game.PlaceId == NDSPlaceId
-                    and 18
-                    or 2500
-
-                local verticalBoost =
-                    game.PlaceId == NDSPlaceId
-                    and 8
-                    or 1500
-
-                root.Velocity =
-                    velocity * multiplier
-                    + Vector3.new(
-                        0,
-                        verticalBoost,
-                        0
-                    )
-
-                RunService.RenderStepped:Wait()
-
-                if character.Parent
-                and root.Parent then
-                    root.Velocity =
-                        velocity
-                    root.AssemblyLinearVelocity =
-                        velocity
-                end
-
-                WalkFlingImpulseActive = false
-                getgenv().ToxWalkFlingImpulseActive = false
-                WalkFlingRestoreVelocity = nil
-            end
-
-            if generation
-                ~= WalkFlingGeneration
-            or not Settings.WalkFling then
-                break
-            end
-
-            RunService.Stepped:Wait()
-
-            if generation
-                ~= WalkFlingGeneration
-            or not Settings.WalkFling then
-                break
-            end
-
-            if character.Parent
-            and root.Parent then
-                root.Velocity =
-                    velocity
-                    + Vector3.new(
-                        0,
-                        moveLift,
-                        0
-                    )
-
-                moveLift =
-                    moveLift * -1
-            end
-        end
-
-        WalkFlingImpulseActive = false
-        getgenv().ToxWalkFlingImpulseActive = false
-        WalkFlingRestoreVelocity = nil
-
-        if generation
-        == WalkFlingGeneration then
-            RestoreWalkFlingCollisions()
-        end
-    end)
-end
-
-getgenv().SetWalkFling = function(
-    Value,
-    Silent
-)
-    local enabled = Value == true
-    Settings.WalkFling = enabled
-
-    if enabled then
-        StartWalkFling()
-    else
-        StopWalkFling()
     end
 
-    if getgenv().SyncToggleVisuals then
-        getgenv().SyncToggleVisuals(
-            "WalkFling",
-            enabled
+    local horizontal =
+        Vector3.new(
+            velocity.X,
+            0,
+            velocity.Z
         )
-    end
 
-    if not Silent
-    and getgenv().AutoSaveConfiguration then
-        getgenv().AutoSaveConfiguration()
-    end
-end
-
-local SharedToggleSettingMap = {
-    Speed = "Speed",
-    Noclip = "Noclip",
-    NoFallDamage = "NoFallDamage",
-    AntiVoid = "AntiVoid",
-    AntiFling = "AntiFling",
-    WalkFling = "WalkFling",
-    CtrlClickTP = "CtrlClickTP",
-    CarFly = "CarFly",
-    ESPEnabled = "ESPEnabled",
-    Chams = "Chams",
-    ESPNames = "ESPNames",
-    ESPTeamColors = "ESPTeamColors",
-    SmoothFly = "SmoothFly",
-    NormalFly = "NormalFly"
-}
-
-local SharedValueSettingMap = {
-    Speed = "SpeedValue",
-    CarFly = "CarFlySpeed",
-    SmoothFly = "FlySpeed",
-    NormalFly = "FlySpeed"
-}
-
-local function GetGlobalSharedState()
-    getgenv().BaseSharedSettings =
-        getgenv().BaseSharedSettings or {}
-
-    return getgenv().BaseSharedSettings
-end
-
-local function RecordSharedToggle(Key, Value)
-    if getgenv().ToxApplyingGameState then
-        return
-    end
-
-    local settingKey = SharedToggleSettingMap[Key]
-
-    if not settingKey then
-        return
-    end
-
-    local globalState = GetGlobalSharedState()
-    globalState[settingKey] = Value == true
-    Settings[settingKey] = Value == true
-end
-
-getgenv().ToxOnSharedValueChanged = function(Key, Value)
-    if getgenv().ToxApplyingGameState then
-        return
-    end
-
-    local settingKey = SharedValueSettingMap[Key]
-    local number = tonumber(Value)
-
-    if not settingKey or not number then
-        return
-    end
-
-    local globalState = GetGlobalSharedState()
-    globalState[settingKey] = number
-    Settings[settingKey] = number
-end
-
-local CarFlyVelocity = nil
-local CarFlyGyro = nil
-local CarFlySeat = nil
-local CarFlyRoot = nil
-local CarFlyControlModule = nil
-
-local function DestroyCarFlyMovers()
-    if CarFlyVelocity then
-        pcall(function()
-            CarFlyVelocity:
-                Destroy()
-        end)
-
-        CarFlyVelocity = nil
-    end
-
-    if CarFlyGyro then
-        pcall(function()
-            CarFlyGyro:
-                Destroy()
-        end)
-
-        CarFlyGyro = nil
-    end
-
-    CarFlySeat = nil
-    CarFlyRoot = nil
-end
-
-local function GetCarFlyMoveVector()
-    if not CarFlyControlModule then
-        pcall(function()
-            local playerModule =
-                Player.PlayerScripts:
-                    WaitForChild(
-                        "PlayerModule",
-                        2
-                    )
-
-            local controlModule =
-                playerModule
-                and playerModule:
-                    WaitForChild(
-                        "ControlModule",
-                        2
-                    )
-
-            if controlModule then
-                CarFlyControlModule =
-                    require(
-                        controlModule
-                    )
-            end
-        end)
-    end
-
-    if CarFlyControlModule
-    and CarFlyControlModule.GetMoveVector then
-        local ok, vector =
-            pcall(function()
-                return
-                    CarFlyControlModule:
-                        GetMoveVector()
-            end)
-
-        if ok
-        and typeof(vector)
-            == "Vector3" then
-            return vector
-        end
-    end
-
-    local vector =
-        Vector3.zero
-
-    if UserInputService:
-        IsKeyDown(
-            Enum.KeyCode.W
-        ) then
-        vector = vector + Vector3.new(0, 0, -1)
-    end
-
-    if UserInputService:
-        IsKeyDown(
-            Enum.KeyCode.S
-        ) then
-        vector = vector + Vector3.new(0, 0, 1)
-    end
-
-    if UserInputService:
-        IsKeyDown(
-            Enum.KeyCode.A
-        ) then
-        vector = vector + Vector3.new(-1, 0, 0)
-    end
-
-    if UserInputService:
-        IsKeyDown(
-            Enum.KeyCode.D
-        ) then
-        vector = vector + Vector3.new(1, 0, 0)
-    end
-
-    return vector
-end
-
-local function EnsureCarFlyMovers(
-    root,
-    seat
-)
-    if not root
-    or not seat then
-        DestroyCarFlyMovers()
-        return false
-    end
-
-    if CarFlySeat ~= seat
-    or CarFlyRoot ~= root then
-        DestroyCarFlyMovers()
-        CarFlySeat = seat
-        CarFlyRoot = root
-    end
-
-    if not CarFlyVelocity
-    or CarFlyVelocity.Parent
-        ~= root then
-        if CarFlyVelocity then
-            CarFlyVelocity:
-                Destroy()
-        end
-
-        CarFlyVelocity =
-            Instance.new(
-                "BodyVelocity"
-            )
-
-        CarFlyVelocity.Name =
-            "ToxCarFlyVelocity"
-
-        CarFlyVelocity.MaxForce =
-            Vector3.new(
-                9e9,
-                9e9,
-                9e9
-            )
-
-        CarFlyVelocity.Velocity =
-            Vector3.zero
-
-        CarFlyVelocity.Parent =
-            root
-    end
-
-    if not CarFlyGyro
-    or CarFlyGyro.Parent
-        ~= root then
-        if CarFlyGyro then
-            CarFlyGyro:
-                Destroy()
-        end
-
-        CarFlyGyro =
-            Instance.new(
-                "BodyGyro"
-            )
-
-        CarFlyGyro.Name =
-            "ToxCarFlyGyro"
-
-        CarFlyGyro.MaxTorque =
-            Vector3.new(
-                9e9,
-                9e9,
-                9e9
-            )
-
-        CarFlyGyro.P = 9e4
-        CarFlyGyro.CFrame =
-            root.CFrame
-
-        CarFlyGyro.Parent =
-            root
-    end
-
-    return true
-end
-
-getgenv().ToxSetSharedOption = function(Key, Value)
-    local enabled = Value == true
-
-    RecordSharedToggle(Key, enabled)
-
-    if Key == "Speed" then
-        if enabled then
-            local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-            GetHumanoidDefaults(hum)
-        end
-
-        Settings.Speed = enabled
-
-        if not enabled then
-            RestoreSpeed()
-        end
-    elseif Key == "Noclip" then
-        if enabled then
-            CaptureNoclipDefaults()
-        end
-
-        Settings.Noclip = enabled
-
-        if not enabled then
-            RestoreNoclipDefaults()
-        end
-    elseif Key == "NoFallDamage" then
-        Settings.NoFallDamage = enabled
-
-        if getgenv().SetNDSNoFall then
-            getgenv().SetNDSNoFall(enabled, true)
-        end
-    elseif Key == "AntiVoid" then
-        Settings.AntiVoid = enabled
-
-        if enabled then
-            StartAntiVoid()
-        else
-            StopAntiVoid()
-        end
-    elseif Key == "AntiFling" then
-        Settings.AntiFling = enabled
-
-        if not enabled then
-            RestoreAntiFlingDefaults()
-        end
-    elseif Key == "WalkFling" then
-        getgenv().SetWalkFling(
-            enabled,
-            true
+    horizontal =
+        ClampVectorMagnitude(
+            horizontal,
+            42
         )
-    elseif Key == "CtrlClickTP" then
-        Settings.CtrlClickTP = enabled
-    elseif Key == "CarFly" then
-        Settings.CarFly = enabled
 
-        if not enabled then
-            DestroyCarFlyMovers()
-        end
-    elseif Key == "SmoothFly" then
-        Settings.SmoothFly = enabled
-
-        if enabled then
-            Settings.NormalFly = false
-
-            if getgenv().SyncToggleVisuals then
-                getgenv().SyncToggleVisuals("NormalFly", false)
-            end
-
-            if getgenv().SetNDSWaterFly then
-                getgenv().SetNDSWaterFly(false, true)
-            end
-        end
-    elseif Key == "NormalFly" then
-        Settings.NormalFly = enabled
-
-        if enabled then
-            Settings.SmoothFly = false
-
-            if getgenv().SyncToggleVisuals then
-                getgenv().SyncToggleVisuals("SmoothFly", false)
-            end
-
-            if getgenv().SetNDSWaterFly then
-                getgenv().SetNDSWaterFly(false, true)
-            end
-        end
-    else
-        Settings[Key] = enabled
-    end
-
-    if getgenv().SyncToggleVisuals then
-        getgenv().SyncToggleVisuals(Key, enabled)
-    end
+    return
+        Vector3.new(
+            horizontal.X,
+            math.clamp(
+                velocity.Y,
+                -55,
+                55
+            ),
+            horizontal.Z
+        )
 end
 
-getgenv().ApplyCurrentGameSharedSettings = function()
-    local globalState = GetGlobalSharedState()
+function GetGuidedLeadTime()
+    local ping =
+        GetPredictionPing()
 
-    getgenv().ToxApplyingGameState = true
-
-    for Key, settingKey in pairs(SharedValueSettingMap) do
-        local value = globalState[settingKey]
-
-        if value == nil then
-            value = Settings[settingKey]
-        end
-
-        if value ~= nil then
-            Settings[settingKey] = value
-            globalState[settingKey] = value
-
-            if getgenv().SyncValueVisuals then
-                getgenv().SyncValueVisuals(
-                    Key,
-                    value
-                )
-            end
-        end
-    end
-
-    for Key, settingKey in pairs(SharedToggleSettingMap) do
-        local value = globalState[settingKey]
-
-        if value == nil then
-            value = Settings[settingKey]
-        end
-
-        if value ~= nil then
-            globalState[settingKey] =
-                value == true
-
-            getgenv().ToxSetSharedOption(
-                Key,
-                value == true
-            )
-        end
-    end
-
-    getgenv().ToxApplyingGameState = false
+    return
+        math.clamp(
+            0.028
+            + ping * 0.78,
+            0.035,
+            0.125
+        )
 end
 
-local function IsPartVisible(part)
-    if not Settings.AimWallCheck then return true end
-    local origin = Camera.CFrame.Position
-    local dir = part.Position - origin
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterDescendantsInstances = {Player.Character, part.Parent}
-    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-    local result = workspace:Raycast(origin, dir, raycastParams)
-    return result == nil
-end
+function BuildGuidedTargetSamples(
+    target
+)
+    local targetPart =
+        GetGuidedTargetPart(
+            target
+        )
 
-local function GetClosestPlayerToMouse()
-    local Closest = nil
-    local ShortestDistance = Settings.FOVRadius or 120
-    local MousePos = UserInputService:GetMouseLocation()
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= Player and p.Character then
-            local targetPart = p.Character:FindFirstChild(Settings.AimPart or "Head")
-            local hum = p.Character:FindFirstChildOfClass("Humanoid")
-            if targetPart and hum and hum.Health > 0 and IsPartVisible(targetPart) then
-                local ScreenPos, OnScreen = Camera:WorldToViewportPoint(targetPart.Position)
-                if OnScreen then
-                    local Dist = (Vector2.new(ScreenPos.X, ScreenPos.Y) - MousePos).Magnitude
-                    if Dist < ShortestDistance then
-                        ShortestDistance = Dist
-                        Closest = targetPart
-                    end
-                end
-            end
-        end
-    end
-    return Closest
-end
-
-do
-    local universal2Url =
-        "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Universal2.lua"
-        .. "?toxcache="
-        .. tostring(os.time())
-        .. "_"
-        .. tostring(math.random(1000, 999999))
-
-    local source = game:HttpGet(universal2Url)
-    local chunk, compileError = loadstring(source)
-
-    if not chunk then
-        error("Universal2 compile error: " .. tostring(compileError))
+    if not targetPart
+    or not targetPart.Parent then
+        return {}
     end
 
-    local ok, runtimeError = pcall(chunk)
+    local basePosition =
+        targetPart.Position
 
-    if not ok then
-        error("Universal2 runtime error: " .. tostring(runtimeError))
-    end
-end
+    local velocity =
+        GetGuidedVelocity(
+            target
+        )
 
-BeginUniversalSection("Combat")
+    local horizontalSpeed =
+        Vector3.new(
+            velocity.X,
+            0,
+            velocity.Z
+        ).Magnitude
 
-CreateToggle("Aimbot (Right Click)", CombatPage, Settings.Aimbot, function(v) Settings.Aimbot = v end)
-CreateToggleWithValue("Aim Smoothness", CombatPage, Settings.AimbotSmoothnessEnabled, Settings.AimbotSmoothness, function(v) Settings.AimbotSmoothnessEnabled = v == true end, function(val) Settings.AimbotSmoothness = val end, "AimbotSmoothnessEnabled")
-CreateDropdown("Aim Part", {"Head", "HumanoidRootPart", "Torso"}, CombatPage, Settings.AimPart, function(v) Settings.AimPart = v end)
-CreateToggle("Aim Wall Check", CombatPage, Settings.AimWallCheck, function(v) Settings.AimWallCheck = v end)
-CreateToggleWithValue("Show FOV Circle", CombatPage, Settings.ShowFOV, Settings.FOVRadius, function(v) Settings.ShowFOV = v end, function(val) Settings.FOVRadius = val end)
-CreateToggle("Silent Aim", CombatPage, Settings.SilentAim, function(v) Settings.SilentAim = v end)
-CreateToggle("Triggerbot", CombatPage, Settings.Triggerbot, function(v) Settings.Triggerbot = v end)
-CreateToggleWithValue("Spinbot", CombatPage, Settings.Spinbot, Settings.SpinSpeed, function(v) Settings.Spinbot = v end, function(val) Settings.SpinSpeed = val end)
-CreateToggleWithValue("Hitbox Expander", CombatPage, Settings.HitboxExpander, Settings.HitboxSize, function(v) 
-    Settings.HitboxExpander = v
-    if not v then RestoreHitboxDefaults() end
-end, function(val) Settings.HitboxSize = val end)
-CreateToggleWithValue("Kill Aura", CombatPage, Settings.KillAura, Settings.KillAuraRange, function(v) Settings.KillAura = v end, function(val) Settings.KillAuraRange = val end)
-
-BeginUniversalSection("Player")
-
-CreateToggleWithValue("Speed", PlayerPage, Settings.Speed, Settings.SpeedValue, function(v)
-    if getgenv().ToxSetSharedOption then
-        getgenv().ToxSetSharedOption("Speed", v)
-    end
-end, function(val)
-    Settings.SpeedValue = val
-end, "Speed")
-
-CreateToggleWithValue("Jump", PlayerPage, Settings.Jump, Settings.JumpValue, function(v)
-    if v then
-        local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-        GetHumanoidDefaults(hum)
+    if horizontalSpeed < 1.5
+    and math.abs(
+        velocity.Y
+    ) < 2 then
+        return {
+            basePosition
+        }
     end
 
-    Settings.Jump = v
+    local lead =
+        GetGuidedLeadTime()
 
-    if not v then
-        RestoreJump()
-    end
-end, function(val) Settings.JumpValue = val end)
-
-CreateToggle("Noclip", PlayerPage, Settings.Noclip, function(v)
-    if getgenv().ToxSetSharedOption then
-        getgenv().ToxSetSharedOption("Noclip", v)
-    end
-end, "Noclip")
-
-CreateToggle("Infinite Jump", PlayerPage, Settings.InfiniteJump, function(v)
-    Settings.InfiniteJump = v
-end)
-
-CreateToggle("Air Walk (E Up / Q Down)", PlayerPage, Settings.AirWalk, function(v)
-    Settings.AirWalk = v
-    UpdateAirWalk()
-end)
-
-CreateToggleWithValue("Normal Fly", PlayerPage, Settings.NormalFly, Settings.FlySpeed, function(v)
-    if getgenv().ToxSetSharedOption then
-        getgenv().ToxSetSharedOption("NormalFly", v)
-    else
-        Settings.NormalFly = v
-        if v then Settings.SmoothFly = false end
-    end
-end, function(val) Settings.FlySpeed = val end, "NormalFly")
-
-CreateToggleWithValue("Smooth Fly", PlayerPage, Settings.SmoothFly, Settings.FlySpeed, function(v)
-    if getgenv().ToxSetSharedOption then
-        getgenv().ToxSetSharedOption("SmoothFly", v)
-    else
-        Settings.SmoothFly = v
-        if v then Settings.NormalFly = false end
-    end
-end, function(val) Settings.FlySpeed = val end, "SmoothFly")
-
-CreateToggleWithValue("Bhop (Auto Jump)", PlayerPage, Settings.Bhop, Settings.BhopInterval, function(v)
-    Settings.Bhop = v
-end, function(val)
-    Settings.BhopInterval =
+    local times = {
         math.max(
-            0.05,
-            val
+            0.02,
+            lead * 0.60
+        ),
+        lead,
+        math.min(
+            0.16,
+            lead * 1.40
         )
-end)
-
-CreateToggleWithValue("Car Speed", PlayerPage, Settings.CarSpeed, Settings.CarSpeedValue, function(v)
-    Settings.CarSpeed = v
-end, function(val)
-    Settings.CarSpeedValue = val
-end)
-
-CreateToggleWithValue("Car Fly", PlayerPage, Settings.CarFly, Settings.CarFlySpeed, function(v)
-    if getgenv().ToxSetSharedOption then
-        getgenv().ToxSetSharedOption("CarFly", v)
-    else
-        Settings.CarFly = v
-    end
-end, function(val)
-    Settings.CarFlySpeed = val
-end, "CarFly")
-
-BeginUniversalSection("ESP")
-
-CreateToggle("ESP", VisualsPage, Settings.ESPEnabled, function(v)
-    if getgenv().ToxSetSharedOption then
-        getgenv().ToxSetSharedOption("ESPEnabled", v)
-    else
-        Settings.ESPEnabled = v
-    end
-end, "ESPEnabled")
-
-CreateToggle("Charms", VisualsPage, Settings.Chams, function(v)
-    if getgenv().ToxSetSharedOption then
-        getgenv().ToxSetSharedOption("Chams", v)
-    else
-        Settings.Chams = v
-    end
-end, "Chams")
-
-function CreateToggleCycleOption(name, page, enabled, options, currentValue, toggleCallback, cycleCallback, syncKey)
-    if getgenv().CreateToggleWithChoice then
-        local ctrl = getgenv().CreateToggleWithChoice(name, page, options, enabled == true, currentValue or options[1], toggleCallback, cycleCallback, syncKey)
-        local btn = (type(ctrl) == "table" and rawget(ctrl, "Button")) or ctrl
-        if TrackUniversalControl then TrackUniversalControl(btn, page) end
-        return btn
-    end
-
-    local th = getgenv().Theme or {}
-    local accent = th.Accent or Color3.fromRGB(30, 95, 255)
-    local panel = th.Panel or Color3.fromRGB(16, 16, 26)
-    local element = th.Element or Color3.fromRGB(22, 22, 34)
-    local outline = th.Outline or Color3.fromRGB(36, 36, 56)
-
-    local box = Instance.new("Frame")
-    box.Size = UDim2.new(1, -4, 0, 36)
-    box.BackgroundColor3 = element
-    box.BorderSizePixel = 0
-    box.Parent = page
-    local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 6) bCorner.Parent = box
-    local bStroke = Instance.new("UIStroke")
-    bStroke.Color = outline
-    bStroke.Thickness = 1
-    bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    bStroke.Parent = box
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -170, 1, 0)
-    label.Position = UDim2.new(0, 12, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = name
-    label.TextColor3 = th.Text or Color3.fromRGB(255, 255, 255)
-    label.TextSize = 12
-    label.Font = Enum.Font.GothamMedium
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.TextTruncate = Enum.TextTruncate.AtEnd
-    label.Parent = box
-
-    local modeButton = Instance.new("TextButton")
-    modeButton.Size = UDim2.new(0, 84, 0, 22)
-    modeButton.Position = UDim2.new(1, -140, 0.5, -11)
-    modeButton.BackgroundColor3 = panel
-    modeButton.BorderSizePixel = 0
-    modeButton.Text = tostring(currentValue or options[1])
-    modeButton.TextColor3 = accent
-    modeButton.TextSize = 11
-    modeButton.Font = Enum.Font.GothamBold
-    modeButton.Parent = box
-    local mCorner = Instance.new("UICorner") mCorner.CornerRadius = UDim.new(0, 4) mCorner.Parent = modeButton
-    local mStroke = Instance.new("UIStroke")
-    mStroke.Color = outline
-    mStroke.Thickness = 1
-    mStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    mStroke.Parent = modeButton
-
-    local toggleButton = Instance.new("TextButton")
-    toggleButton.Size = UDim2.new(0, 38, 0, 20)
-    toggleButton.Position = UDim2.new(1, -48, 0.5, -10)
-    toggleButton.BackgroundColor3 = enabled and accent or panel
-    toggleButton.BorderSizePixel = 0
-    toggleButton.Text = ""
-    toggleButton.AutoButtonColor = false
-    toggleButton.Parent = box
-    local tCorner = Instance.new("UICorner") tCorner.CornerRadius = UDim.new(1, 0) tCorner.Parent = toggleButton
-    local tStroke = Instance.new("UIStroke")
-    tStroke.Color = outline
-    tStroke.Thickness = 1
-    tStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    tStroke.Parent = toggleButton
-
-    local indicator = Instance.new("Frame")
-    indicator.Size = UDim2.new(0, 14, 0, 14)
-    indicator.Position = enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
-    indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    indicator.BorderSizePixel = 0
-    indicator.Parent = toggleButton
-    local indicatorCorner = Instance.new("UICorner")
-    indicatorCorner.CornerRadius = UDim.new(1, 0)
-    indicatorCorner.Parent = indicator
-
-    local state = enabled == true
-
-    local function updateToggle()
-        local curAccent = (getgenv().Theme and getgenv().Theme.Accent) or accent
-        local curPanel = (getgenv().Theme and getgenv().Theme.Panel) or panel
-        toggleButton.BackgroundColor3 = state and curAccent or curPanel
-        indicator.Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
-    end
-
-    if syncKey and RegisterSharedToggle then
-        RegisterSharedToggle(syncKey, {
-            Button = box,
-            SetVisual = function(value)
-                state = value == true
-                updateToggle()
-            end
-        })
-    end
-
-    toggleButton.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed then return end
-        state = not state
-        updateToggle()
-        if toggleCallback then toggleCallback(state) end
-        if syncKey and ToxSyncToggleVisuals then ToxSyncToggleVisuals(syncKey, state) end
-        AutoSaveConfiguration()
-    end)
-
-    modeButton.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed then return end
-        local index = 1
-        for i, option in ipairs(options) do
-            if tostring(option) == tostring(modeButton.Text) then index = i break end
-        end
-        index = index + 1
-        if index > #options then index = 1 end
-        modeButton.Text = tostring(options[index])
-        if cycleCallback then cycleCallback(options[index]) end
-        AutoSaveConfiguration()
-    end)
-
-    updateToggle()
-    return TrackUniversalControl(box, page)
-end
-
-CreateToggleCycleOption("Tracers", VisualsPage, Settings.ESPTracers, {"DOWN", "UP", "MOUSE"}, Settings.TracerOrigin or "DOWN", function(v)
-    Settings.ESPTracers = v
-end, function(v)
-    Settings.TracerOrigin = v
-end)
-
-CreateToggleCycleOption("Names", VisualsPage, Settings.ESPNames, {"Name", "Display", "Name + Display"}, Settings.ESPNameMode or "Display", function(v)
-    if getgenv().ToxSetSharedOption then
-        getgenv().ToxSetSharedOption("ESPNames", v)
-    else
-        Settings.ESPNames = v
-    end
-end, function(v)
-    Settings.ESPNameMode = v
-end, "ESPNames")
-
-CreateToggle("Distance", VisualsPage, Settings.ESPDistance, function(v)
-    Settings.ESPDistance = v
-end)
-
-CreateToggle("2D Box ESP", VisualsPage, Settings.ESPBox, function(v)
-    Settings.ESPBox = v
-end)
-
-CreateToggle("Head Dot ESP", VisualsPage, Settings.ESPHeadDot, function(v)
-    Settings.ESPHeadDot = v
-end)
-
-CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
-    if getgenv().ToxSetSharedOption then
-        getgenv().ToxSetSharedOption("ESPTeamColors", v)
-    else
-        Settings.ESPTeamColors = v
-    end
-end, "ESPTeamColors")
-
-CreateToggleWithValue("Camera FOV", VisualsPage, Settings.FOVEnabled, Settings.FOVValue, function(v)
-    if v then
-        CaptureFOVDefault()
-    end
-
-    Settings.FOVEnabled = v
-
-    if not v then
-        RestoreFOVDefault()
-    end
-end, function(val) Settings.FOVValue = val end)
-
-CreateToggleWithValue("ESP Max Dist", VisualsPage, false, GetCurrentESPMAX(), function(v) end, function(val)
-    SetCurrentESPMAX(val)
-end, "EspMaxDistance")
-CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", "Magenta", "Orange", "Purple", "Lime", "Pink", "Gold"}, VisualsPage, Settings.EspColorName, function(v)
-    Settings.EspColorName = v
-    Settings.EspColor = ColorMap[v] or Color3.fromRGB(255, 255, 255)
-end)
-
-
-if getgenv().ToxESPDrawings then
-    for _, drawings in pairs(getgenv().ToxESPDrawings) do
-        for _, drawing in pairs(drawings) do
-            pcall(function() drawing:Remove() end)
-        end
-    end
-end
-
-if getgenv().ToxESPHighlights then
-    for _, highlight in pairs(getgenv().ToxESPHighlights) do
-        pcall(function() highlight:Destroy() end)
-    end
-end
-
-if getgenv().ToxESPLabels then
-    for _, label in pairs(getgenv().ToxESPLabels) do
-        pcall(function() label:Destroy() end)
-    end
-end
-
-local ESPDrawings = {}
-local Highlights = {}
-local ESPLabels = {}
-local ESPCharacterRefs = {}
-local LastESPSafetyRefresh = tick()
-
-getgenv().ToxESPDrawings = ESPDrawings
-getgenv().ToxESPHighlights = Highlights
-getgenv().ToxESPLabels = ESPLabels
-
-local MM2GameId = 66654135
-local MM2PlaceId = 142823291
-local MM2RoleCache = {}
-local MM2DeadCache = {}
-local MM2RoleCacheTime = 0
-local MM2PlayerDataRemote = nil
-local MM2HasAuthoritativeData = false
-getgenv().ToxMM2StableRoleCache = getgenv().ToxMM2StableRoleCache or {}
-
-RoleColors = {
-    Murderer = Color3.fromRGB(255, 50, 50),
-    Sheriff = Color3.fromRGB(50, 150, 255),
-    Innocent = Color3.fromRGB(50, 255, 50),
-    Hero = Color3.fromRGB(50, 255, 255)
-}
-
-MM2UnknownColor = Color3.fromRGB(235, 235, 235)
-
-local function NormalizeRoleName(value)
-    if typeof(value) ~= "string" or value == "" then
-        return nil
-    end
-
-    local role = string.lower(value)
-    role = role:gsub("[%s_%-%.]", "")
-
-    if role == "murder"
-    or role == "murderer"
-    or role == "murderers"
-    or role == "killer" then
-        return "Murderer"
-    end
-
-    if role == "sheriff"
-    or role == "detective"
-    or role == "cop"
-    or role == "police" then
-        return "Sheriff"
-    end
-
-    if role == "innocent"
-    or role == "innocents"
-    or role == "civilian"
-    or role == "survivor" then
-        return "Innocent"
-    end
-
-    if role == "hero" then
-        return "Hero"
-    end
-
-    return nil
-end
-
-local function ResolveMM2Player(nameOrId)
-    if typeof(nameOrId) == "string" then
-        local byName = Players:FindFirstChild(nameOrId)
-
-        if byName then
-            return byName
-        end
-
-        local numeric = tonumber(nameOrId)
-
-        if numeric then
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p.UserId == numeric then
-                    return p
-                end
-            end
-        end
-    elseif typeof(nameOrId) == "number" then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p.UserId == nameOrId then
-                return p
-            end
-        end
-    end
-
-    return nil
-end
-
-local function LooksLikeMM2PlayerData(data)
-    if typeof(data) ~= "table" then
-        return false
-    end
-
-    local inspected = 0
-
-    for key, info in pairs(data) do
-        if ResolveMM2Player(key) then
-            inspected = inspected + 1
-
-            if typeof(info) == "table"
-            and (
-                info.Role ~= nil
-                or info.Dead ~= nil
-                or info.Killed ~= nil
-                or info.Eliminated ~= nil
-            ) then
-                return true
-            end
-        end
-
-        if inspected >= 3 then
-            break
-        end
-    end
-
-    return false
-end
-
-local function NormalizeMM2PlayerDataContainer(data)
-    if typeof(data) ~= "table" then
-        return nil
-    end
-
-    for _, key in ipairs({"Players", "PlayerData", "Data", "Roles"}) do
-        if typeof(data[key]) == "table" and LooksLikeMM2PlayerData(data[key]) then
-            return data[key]
-        end
-    end
-
-    if LooksLikeMM2PlayerData(data) then
-        return data
-    end
-
-    return nil
-end
-
-local function ApplyMM2PlayerData(data)
-    local roleData = NormalizeMM2PlayerDataContainer(data)
-
-    if not roleData then
-        return false
-    end
-
-    local newRoles = {}
-    local newDead = {}
-    local foundCurrentPlayer = false
-
-    for playerKey, info in pairs(roleData) do
-        local target = ResolveMM2Player(playerKey)
-
-        if target then
-            foundCurrentPlayer = true
-
-            if typeof(info) == "table" then
-                local dead = info.Dead == true
-                    or info.Killed == true
-                    or info.Eliminated == true
-
-                newDead[target] = dead
-
-                if not dead then
-                    local role = NormalizeRoleName(info.Role)
-
-                    if role then
-                        newRoles[target] = role
-                    end
-                end
-            else
-                local role = NormalizeRoleName(info)
-
-                if role then
-                    newRoles[target] = role
-                    newDead[target] = false
-                end
-            end
-        end
-    end
-
-    if foundCurrentPlayer then
-        for target, role in pairs(newRoles) do
-            getgenv().ToxMM2StableRoleCache[target] = role
-        end
-
-        MM2RoleCache = newRoles
-        MM2DeadCache = newDead
-        MM2HasAuthoritativeData = true
-        MM2RoleCacheTime = tick()
-        return true
-    end
-
-    return false
-end
-
-local function ApplyMM2PlayerUpdate(playerKey, info)
-    local target = ResolveMM2Player(playerKey)
-
-    if not target or typeof(info) ~= "table" then
-        return false
-    end
-
-    MM2HasAuthoritativeData = true
-    MM2RoleCacheTime = tick()
-
-    local dead = info.Dead == true
-        or info.Killed == true
-        or info.Eliminated == true
-
-    MM2DeadCache[target] = dead
-
-    if dead then
-        MM2RoleCache[target] = nil
-    else
-        MM2RoleCache[target] = NormalizeRoleName(info.Role)
-
-        if MM2RoleCache[target] then
-            getgenv().ToxMM2StableRoleCache[target] =
-                MM2RoleCache[target]
-        end
-    end
-
-    return true
-end
-
-local function HasNamedTool(p, names)
-    if not p then
-        return false
-    end
-
-    local containers = {
-        p:FindFirstChildOfClass("Backpack"),
-        p.Character
     }
 
-    for _, container in ipairs(containers) do
-        if container then
-            for _, child in ipairs(container:GetChildren()) do
-                local childName = string.lower(child.Name)
+    local samples = {}
 
-                for _, wantedName in ipairs(names) do
-                    if childName == wantedName then
-                        return true
-                    end
-                end
-            end
+    table.insert(
+        samples,
+        basePosition
+    )
+
+    for _, timeValue in ipairs(
+        times
+    ) do
+        local predicted =
+            basePosition
+            + velocity
+                * timeValue
+
+        if math.abs(
+            velocity.Y
+        ) > 2 then
+            predicted =
+                predicted +
+                Vector3.new(
+                    0,
+                    -0.5
+                    * workspace.Gravity
+                    * timeValue
+                    * timeValue,
+                    0
+                )
         end
+
+        table.insert(
+            samples,
+            predicted
+        )
     end
 
-    return false
+    return samples
 end
 
-local function GetAttributeRole(p)
-    if not p then
-        return nil
+function FireGuidedGunShot(
+    gun,
+    target
+)
+    if not gun
+    or not gun.Parent
+    or not target
+    or not target.Parent
+    or not target.Character then
+        return false
     end
 
-    local roleKeys = {
-        "Role",
-        "RoleName"
-    }
+    local character = Player.Character
 
-    local containers = {
-        p,
-        p.Character
-    }
-
-    for _, container in ipairs(containers) do
-        if container then
-            for _, key in ipairs(roleKeys) do
-                local ok, value = pcall(function()
-                    return container:GetAttribute(key)
-                end)
-
-                if ok then
-                    local normalized = NormalizeRoleName(value)
-
-                    if normalized then
-                        return normalized
-                    end
-                end
-
-                local valueObject = container:FindFirstChild(key)
-
-                if valueObject and valueObject:IsA("StringValue") then
-                    local normalized = NormalizeRoleName(valueObject.Value)
-
-                    if normalized then
-                        return normalized
-                    end
-                end
-            end
-        end
+    if not character then
+        return false
     end
 
-    return nil
-end
+    local targetCharacter = target.Character
+    local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+    local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
+        or targetCharacter:FindFirstChild("UpperTorso")
+        or targetCharacter:FindFirstChild("Torso")
 
-local function BuildMM2FallbackRoles()
-    local newCache = {}
-    local detectedSpecialRole = false
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        local attributeRole = GetAttributeRole(p)
-
-        if attributeRole then
-            newCache[p] = attributeRole
-
-            if attributeRole == "Murderer"
-            or attributeRole == "Sheriff"
-            or attributeRole == "Hero" then
-                detectedSpecialRole = true
-            end
-        elseif HasNamedTool(p, {"knife"}) then
-            newCache[p] = "Murderer"
-            detectedSpecialRole = true
-        elseif HasNamedTool(p, {"gun", "revolver"}) then
-            newCache[p] = "Sheriff"
-            detectedSpecialRole = true
-        end
+    if not targetHumanoid
+    or targetHumanoid.Health <= 0
+    or not targetRoot then
+        return false
     end
 
-    if detectedSpecialRole then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if not newCache[p] then
-                local char = p.Character
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local shotTarget = GetPredictedTargetPosition(target) or targetRoot.Position
 
-                if hum and hum.Health > 0 then
-                    newCache[p] = "Innocent"
-                end
-            end
-        end
+    local shotOrigin = Vector3.new(
+        shotTarget.X,
+        shotTarget.Y + 1.25,
+        shotTarget.Z
+    )
 
-        for target, role in pairs(newCache) do
-            getgenv().ToxMM2StableRoleCache[target] = role
-        end
+    local shootRemote = gun:FindFirstChild("Shoot")
+        or gun:FindFirstChild("Shoot", true)
 
-        MM2RoleCache = newCache
-        MM2DeadCache = {}
-        MM2RoleCacheTime = tick()
-        return true
-    end
-
-    return false
-end
-
-local function RefreshMM2Roles(force)
-    if game.GameId ~= MM2GameId and game.PlaceId ~= MM2PlaceId then
-        return
-    end
-
-    local now = tick()
-
-    if not force and now - MM2RoleCacheTime < 0.3 then
-        return
-    end
-
-    MM2RoleCacheTime = now
-
-    if not MM2PlayerDataRemote or not MM2PlayerDataRemote.Parent then
-        MM2PlayerDataRemote = ReplicatedStorage:FindFirstChild("GetPlayerData", true)
-    end
-
-    if MM2PlayerDataRemote and MM2PlayerDataRemote:IsA("RemoteFunction") then
-        local ok, data = pcall(function()
-            return MM2PlayerDataRemote:InvokeServer()
+    if shootRemote
+    and shootRemote:IsA("RemoteEvent") then
+        local ok = pcall(function()
+            shootRemote:FireServer(
+                CFrame.new(shotOrigin),
+                CFrame.new(shotTarget)
+            )
         end)
 
         if ok then
-            local applied = ApplyMM2PlayerData(data)
-
-            if applied then
-                return
-            end
+            return true
         end
     end
 
-    BuildMM2FallbackRoles()
-end
-
-getgenv().ToxRefreshMM2Roles = RefreshMM2Roles
-
-getgenv().ToxGetMM2Role = function(p)
-    if not p then
-        return nil
-    end
-
-    if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
-        RefreshMM2Roles(false)
-
-        if MM2DeadCache[p] then
-            return nil
-        end
-
-        return MM2RoleCache[p]
-    end
-
-    return GetAttributeRole(p)
-end
-
-if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
-    local updatePlayerData = ReplicatedStorage:FindFirstChild("UpdatePlayerData", true)
-
-    if updatePlayerData and updatePlayerData:IsA("RemoteEvent") then
-        AddConnection(updatePlayerData.OnClientEvent:Connect(function(...)
-            local args = {...}
-
-            if #args >= 2 and ApplyMM2PlayerUpdate(args[1], args[2]) then
-                return
-            end
-
-            for _, value in ipairs(args) do
-                if ApplyMM2PlayerData(value) then
-                    return
-                end
-            end
-
-            task.defer(function()
-                RefreshMM2Roles(true)
-            end)
-        end))
-    end
-
-    local roleSelect = ReplicatedStorage:FindFirstChild("RoleSelect", true)
-
-    if roleSelect and roleSelect:IsA("RemoteEvent") then
-        AddConnection(roleSelect.OnClientEvent:Connect(function(...)
-            local args = {...}
-
-            for _, value in ipairs(args) do
-                local normalized = NormalizeRoleName(value)
-
-                if normalized then
-                    MM2RoleCache[Player] = normalized
-                    getgenv().ToxMM2StableRoleCache[Player] = normalized
-                    MM2DeadCache[Player] = false
-                    MM2RoleCacheTime = tick()
-                    break
-                end
-            end
-
-            task.delay(0.1, function()
-                RefreshMM2Roles(true)
-            end)
-        end))
-    end
-
-    AddConnection(Players.PlayerRemoving:Connect(function(p)
-        MM2RoleCache[p] = nil
-        MM2DeadCache[p] = nil
-        getgenv().ToxMM2StableRoleCache[p] = nil
-    end))
-
-    task.spawn(function()
-        while not getgenv().Destroyed and game.PlaceId == MM2PlaceId do
-            RefreshMM2Roles(true)
-            task.wait(0.5)
-        end
-    end)
-end
-
-local function GetESPVisualInfo(p)
-    local defaultColor = Settings.EspColor or Color3.fromRGB(255, 255, 255)
-    local mm2RoleESPActive = (game.GameId == MM2GameId or game.PlaceId == MM2PlaceId)
-        and Settings.MM2RoleESP == true
-
-    if not Settings.ESPTeamColors and not mm2RoleESPActive then
-        return defaultColor, nil
-    end
-
-    if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
-        local role = getgenv().ToxGetMM2Role
-            and getgenv().ToxGetMM2Role(p)
-            or nil
-
-        if role then
-            getgenv().ToxMM2StableRoleCache[p] = role
-        else
-            role = getgenv().ToxMM2StableRoleCache[p]
-        end
-
-        if role then
-            return RoleColors[role] or MM2UnknownColor, role
-        end
-
-        return defaultColor, nil
-    end
-
-    local attributeRole = GetAttributeRole(p)
-
-    if attributeRole then
-        return RoleColors[attributeRole] or defaultColor, attributeRole
-    end
-
-    if p and p.Team then
-        local ok, teamColor = pcall(function()
-            return p.TeamColor.Color
-        end)
-
-        if ok and typeof(teamColor) == "Color3" then
-            return teamColor, p.Team.Name
-        end
-    end
-
-    return defaultColor, nil
-end
-
-local function ClearESPForPlayer(p)
-    if ESPDrawings[p] then
-        for _, d in pairs(ESPDrawings[p]) do pcall(function() d:Remove() end) end
-        ESPDrawings[p] = nil
-    end
-
-    if Highlights[p] then
-        pcall(function() Highlights[p]:Destroy() end)
-        Highlights[p] = nil
-    end
-
-    if ESPLabels[p] then
-        pcall(function() ESPLabels[p]:Destroy() end)
-        ESPLabels[p] = nil
-    end
-
-    ESPCharacterRefs[p] = nil
-end
-
-local function ClearAllESPVisuals()
-    local targets = {}
-
-    for p in pairs(ESPDrawings) do
-        targets[p] = true
-    end
-
-    for p in pairs(Highlights) do
-        targets[p] = true
-    end
-
-    for p in pairs(ESPLabels) do
-        targets[p] = true
-    end
-
-    for p in pairs(ESPCharacterRefs) do
-        targets[p] = true
-    end
-
-    for p in pairs(targets) do
-        ClearESPForPlayer(p)
-    end
-
-    for _, targetPlayer in ipairs(Players:GetPlayers()) do
-        local character = targetPlayer.Character
-
-        if character then
-            for _, object in ipairs(character:GetDescendants()) do
-                if object.Name == "ToxChams"
-                or object.Name == "ToxESPName"
-                or object.Name == "ToxESPHealth" then
-                    pcall(function()
-                        object:Destroy()
-                    end)
-                end
-            end
-        end
-    end
-
-    for key in pairs(ESPDrawings) do
-        ESPDrawings[key] = nil
-    end
-
-    for key in pairs(Highlights) do
-        Highlights[key] = nil
-    end
-
-    for key in pairs(ESPLabels) do
-        ESPLabels[key] = nil
-    end
-
-    for key in pairs(ESPCharacterRefs) do
-        ESPCharacterRefs[key] = nil
-    end
-
-    getgenv().ToxESPDrawings = ESPDrawings
-    getgenv().ToxESPHighlights = Highlights
-    getgenv().ToxESPLabels = ESPLabels
-end
-
-getgenv().ClearAllToxESPVisuals = ClearAllESPVisuals
-
-BeginUniversalSection("Lighting")
-
-CreateToggle(
-    "Fullbright",
-    getgenv().LightingPage or FlingPage,
-    Settings.Fullbright,
-    function(v)
-        if v == true
-        and getgenv().ToxLighting
-        and type(getgenv().ToxLighting.SetAdjust) == "function" then
-            pcall(getgenv().ToxLighting.SetAdjust, false)
-            Settings.AdjustLighting = false
-
-            if getgenv().SyncToggleVisuals then
-                pcall(getgenv().SyncToggleVisuals, "AdjustLighting", false)
-            end
-        end
-
-        Settings.Fullbright = v == true
-        UpdateFullbright()
-    end,
-    "Fullbright"
-)
-
-BeginUniversalSection("Misc")
-
-CreateToggle("Ctrl Click TP", FlingPage, Settings.CtrlClickTP, function(v)
-    if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("CtrlClickTP", v) end
-end, "CtrlClickTP")
-CreateToggle("Walk Fling", FlingPage, Settings.WalkFling, function(v)
-    if getgenv().ToxSetSharedOption then
-        getgenv().ToxSetSharedOption(
-            "WalkFling",
-            v
-        )
-    end
-end, "WalkFling")
-CreateToggle("No Fall Damage", FlingPage, Settings.NoFallDamage, function(v)
-    if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("NoFallDamage", v) end
-end, "NoFallDamage")
-CreateToggle("Anti Void", FlingPage, Settings.AntiVoid, function(v)
-    if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("AntiVoid", v) end
-end, "AntiVoid")
-CreateToggle("Anti Fling", FlingPage, Settings.AntiFling, function(v)
-    if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("AntiFling", v) end
-end, "AntiFling")
-CreateToggleCycleOption(
-    "Force Shift Lock",
-    FlingPage,
-    Settings.ForceShiftLock,
-    {"Shift", "Ctrl"},
-    Settings.ShiftLockKey or "Shift",
-    function(v)
-        if v then
-            CaptureShiftLockDefaults()
-        end
-
-        Settings.ForceShiftLock = v == true
-
-        if not Settings.ForceShiftLock then
-            isShiftLockActive = false
-            RestoreShiftLockDefaults()
-        end
-    end,
-    function(v)
-        Settings.ShiftLockKey = v == "Ctrl" and "Ctrl" or "Shift"
-        isShiftLockActive = false
-
-        if Settings.ForceShiftLock then
-            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-        end
-    end
-)
-
-LoopFlingInput = nil
-LoopFlingGeneration = 0
-
-local function ToggleLoopFling(
-    text
-)
-    local cleaned =
-        tostring(
-            text
-            or ""
-        ):
-            match(
-                "^%s*(.-)%s*$"
-            )
-        or ""
-
-    if cleaned == "" then
-        LoopFlingInput = nil
-        LoopFlingGeneration = LoopFlingGeneration + 1
-
-        CustomNotify(
-            "Loop Fling Disabled",
-            Color3.fromRGB(
-                255,
-                120,
-                120
-            )
-        )
-
-        return
-    end
-
-    local normalized =
-        string.lower(
-            cleaned
-        )
-
-    if LoopFlingInput
-    and string.lower(
-        LoopFlingInput
-    ) == normalized then
-        LoopFlingInput = nil
-        LoopFlingGeneration = LoopFlingGeneration + 1
-
-        CustomNotify(
-            "Loop Fling Disabled",
-            Color3.fromRGB(
-                255,
-                120,
-                120
-            )
-        )
-
-        return
-    end
-
-    LoopFlingInput =
-        cleaned
-
-    LoopFlingGeneration = LoopFlingGeneration + 1
-
-    local generation =
-        LoopFlingGeneration
-
-    CustomNotify(
-        "Loop Fling Enabled • "
-        .. cleaned,
-        Color3.fromRGB(
-            100,
-            255,
-            130
-        )
+    local knifeLocal = gun:FindFirstChild("KnifeLocal")
+        or gun:FindFirstChild("KnifeLocal", true)
+    local createBeam = knifeLocal and (
+        knifeLocal:FindFirstChild("CreateBeam")
+        or knifeLocal:FindFirstChild("CreateBeam", true)
+    )
+    local remoteFunction = createBeam and (
+        createBeam:FindFirstChild("RemoteFunction")
+        or createBeam:FindFirstChildWhichIsA("RemoteFunction", true)
     )
 
-    task.spawn(function()
-        while LoopFlingInput
-        and generation
-            == LoopFlingGeneration
-        and not getgenv().Destroyed do
-            local activeInput =
-                LoopFlingInput
+    if remoteFunction
+    and remoteFunction:IsA("RemoteFunction") then
+        local ok = pcall(function()
+            remoteFunction:InvokeServer(1, shotTarget, "AH2")
+        end)
 
-            if not activeInput then
-                break
-            end
+        return ok
+    end
 
-            local lower =
-                string.lower(
-                    activeInput
-                )
-
-            if lower ~= "all"
-            and lower ~= "others" then
-                local found = false
-
-                for _, target in ipairs(
-                    Players:
-                        GetPlayers()
-                ) do
-                    if target ~= Player
-                    and (
-                        string.find(
-                            string.lower(
-                                target.Name
-                            ),
-                            lower,
-                            1,
-                            true
-                        )
-                        or string.find(
-                            string.lower(
-                                target.DisplayName
-                            ),
-                            lower,
-                            1,
-                            true
-                        )
-                    ) then
-                        found = true
-                        break
-                    end
-                end
-
-                if not found then
-                    LoopFlingInput = nil
-
-                    CustomNotify(
-                        "Loop Fling stopped • player left",
-                        Color3.fromRGB(
-                            255,
-                            180,
-                            70
-                        )
-                    )
-
-                    break
-                end
-            end
-
-            ExecuteFling(
-                activeInput
-            )
-
-            task.wait(1.25)
-        end
-    end)
+    return false
 end
 
-CreateInputWithTwoButtons(
-    "Fling",
-    FlingPage,
-    "",
-    "Fling",
-    "Loop",
-    function(text, mode)
-        if mode == "LOOP" then
-            ToggleLoopFling(
-                text
-            )
-        else
-            ExecuteFling(
-                text
+function ShootMurderer(showNotify)
+    if GuidedShotBusy or getgenv().Destroyed then
+        if showNotify then
+            CustomNotify(
+                "Shoot Murderer is busy",
+                Color3.fromRGB(255, 180, 70)
             )
         end
+
+        return false
     end
-)
 
-CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
-CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
-CreateButton("Tox Waypoints", FlingPage, function() WaypointsGui.Visible = not WaypointsGui.Visible end)
+    GuidedShotBusy = true
+    ShootSafetySerial = ShootSafetySerial + 1
 
-CreateButton("BigFroot", ScriptsPage, function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BigFroot.lua"))()
-end)
+    local gun = GetOrEquipGuidedGun()
 
-CreateButton("FE Emotes", ScriptsPage, function()
-    loadstring(game:HttpGet(('https://raw.githubusercontent.com/VenezzaX/Usefulthings/refs/heads/main/FeEmotes.lua'),true))()
-end)
+    if not gun then
+        GuidedShotBusy = false
 
-CreateButton("PShade", ScriptsPage, function()
-    loadstring(game:HttpGet('https://raw.githubusercontent.com/randomstring0/pshade-ultimate/refs/heads/main/src/cd.lua'))()
-end)
-
-CreateButton("Infinite Yield", ScriptsPage, function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
-end)
-
-CreateButton("Bundle Edit", ScriptsPage, function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/All/refs/heads/main/BundleEdit.lua"))()
-end)
-
-if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Security & Automation", "🛡️") end
-
-CreateToggle("Chat Logs", ConfigPage, Settings.ChatLogs, function(v)
-    Settings.ChatLogs = v
-    ChatLogGui.Visible = v == true
-end, "ChatLogs")
-
-CreateToggle(
-    "Kick Bypass",
-    ConfigPage,
-    Settings.AntiKick,
-    function(v)
-        Settings.AntiKick =
-            v == true
-
-        AutoSaveConfiguration()
-
-        if Settings.AntiKick then
+        if showNotify then
             CustomNotify(
-                "Kick Bypass Enabled • auto rejoin on disconnect",
-                Color3.fromRGB(
-                    100,
-                    255,
-                    130
-                ),
-                4
+                "You need the Gun",
+                Color3.fromRGB(255, 100, 100)
             )
         end
-    end,
-    "AntiKick"
-)
 
-CreateToggle("Anti AFK", ConfigPage, Settings.AntiAFK, function(v)
-    Settings.AntiAFK = v == true
-end, "AntiAFK")
+        return false
+    end
 
-CreateToggle("Auto Execute", ConfigPage, Settings.AutoExecute, function(v)
-    Settings.AutoExecute = v == true
+    local murderer = FindGuidedMurderer()
 
-    if Settings.AutoExecute then
-        local queueFunction = getgenv().QueueToxAutoExecute
+    if not murderer or not murderer.Character then
+        GuidedShotBusy = false
 
-        if queueFunction and queueFunction() then
+        if showNotify then
             CustomNotify(
-                "Auto Execute Enabled",
+                "Murderer not found",
+                Color3.fromRGB(255, 180, 70)
+            )
+        end
+
+        return false
+    end
+
+    local targetPart =
+        GetGuidedTargetPart(
+            murderer
+        )
+
+    if not targetPart then
+        GuidedShotBusy = false
+
+        if showNotify then
+            CustomNotify(
+                "Murderer target unavailable",
+                Color3.fromRGB(
+                    255,
+                    100,
+                    100
+                )
+            )
+        end
+
+        return false
+    end
+
+    local fired =
+        FireGuidedGunShot(
+            gun,
+            murderer
+        )
+
+    if showNotify then
+        if fired then
+            CustomNotify(
+                "Shoot Murderer: " .. murderer.DisplayName,
                 Color3.fromRGB(100, 255, 100)
             )
         else
             CustomNotify(
-                "Auto Execute is not supported by this executor",
+                "Shoot Murderer failed",
+                Color3.fromRGB(255, 100, 100)
+            )
+        end
+    end
+
+    task.delay(0.025, function()
+        GuidedShotBusy = false
+    end)
+
+    return fired
+end
+
+SilentAimBusy = false
+
+function FireNormalDirectionalShot(gun, targetPosition)
+    local character = Player.Character
+
+    if not character then
+        return false
+    end
+
+    local originPart = character:FindFirstChild("RightHand")
+        or character:FindFirstChild("Right Arm")
+        or character:FindFirstChild("UpperTorso")
+        or character:FindFirstChild("Torso")
+        or character:FindFirstChild("HumanoidRootPart")
+
+    if not originPart then
+        return false
+    end
+
+    local shootRemote = gun:FindFirstChild("Shoot")
+        or gun:FindFirstChild("Shoot", true)
+
+    if not shootRemote or not shootRemote:IsA("RemoteEvent") then
+        return false
+    end
+
+    local originPosition = originPart.Position
+    local direction = targetPosition - originPosition
+
+    if direction.Magnitude <= 0.1 then
+        return false
+    end
+
+    local originCFrame = CFrame.lookAt(
+        originPosition,
+        targetPosition
+    )
+
+    local targetCFrame = CFrame.lookAt(
+        targetPosition,
+        targetPosition + direction.Unit
+    )
+
+    local ok = pcall(function()
+        shootRemote:FireServer(
+            originCFrame,
+            targetCFrame
+        )
+    end)
+
+    return ok
+end
+
+function SilentAimShot()
+    if SilentAimBusy
+    or GuidedShotBusy
+    or getgenv().Destroyed then
+        return false
+    end
+
+    SilentAimBusy = true
+
+    local gun = GetOrEquipGuidedGun()
+
+    if not gun then
+        SilentAimBusy = false
+        return false
+    end
+
+    local murderer = FindGuidedMurderer()
+
+    if not murderer or not murderer.Character then
+        SilentAimBusy = false
+        return false
+    end
+
+    local fired =
+        FireGuidedGunShot(
+            gun,
+            murderer
+        )
+
+    task.delay(0.06, function()
+        SilentAimBusy = false
+    end)
+
+    return fired
+end
+
+function FindGunDrop()
+    local gunDrop =
+        workspace:
+            FindFirstChild(
+                "GunDrop",
+                true
+            )
+
+    if not gunDrop then
+        return nil
+    end
+
+    if gunDrop:IsA(
+        "BasePart"
+    ) then
+        return gunDrop
+    end
+
+    if gunDrop:IsA(
+        "Model"
+    ) then
+        return
+            gunDrop.PrimaryPart
+            or gunDrop:
+                FindFirstChildWhichIsA(
+                    "BasePart",
+                    true
+                )
+    end
+
+    return gunDrop:
+        FindFirstChildWhichIsA(
+            "BasePart",
+            true
+        )
+end
+
+GunESPHighlight = nil
+GunESPBillboard = nil
+GunESPAdornee = nil
+LastGunDrop = nil
+GunDropWasPresent = false
+
+function ClearGunESP()
+    if GunESPHighlight then
+        pcall(function()
+            GunESPHighlight:
+                Destroy()
+        end)
+
+        GunESPHighlight = nil
+    end
+
+    if GunESPBillboard then
+        pcall(function()
+            GunESPBillboard:
+                Destroy()
+        end)
+
+        GunESPBillboard = nil
+    end
+
+    GunESPAdornee = nil
+end
+
+function CreateGunESP(
+    gunDrop
+)
+    if not Settings.MM2GunESP
+    or not gunDrop
+    or not gunDrop.Parent then
+        ClearGunESP()
+        return
+    end
+
+    if GunESPAdornee
+        == gunDrop
+    and GunESPHighlight
+    and GunESPHighlight.Parent
+    and GunESPBillboard
+    and GunESPBillboard.Parent then
+        return
+    end
+
+    ClearGunESP()
+
+    GunESPAdornee =
+        gunDrop
+
+    GunESPHighlight =
+        Instance.new(
+            "Highlight"
+        )
+
+    GunESPHighlight.Name =
+        "ToxGunESPHighlight"
+
+    GunESPHighlight.Adornee =
+        gunDrop
+
+    GunESPHighlight.FillColor =
+        Color3.fromRGB(
+            255,
+            215,
+            60
+        )
+
+    GunESPHighlight.OutlineColor =
+        Color3.fromRGB(
+            255,
+            255,
+            255
+        )
+
+    GunESPHighlight.FillTransparency =
+        0.35
+
+    GunESPHighlight.OutlineTransparency =
+        0
+
+    GunESPHighlight.DepthMode =
+        Enum.HighlightDepthMode.AlwaysOnTop
+
+    GunESPHighlight.Parent =
+        gunDrop
+
+    GunESPBillboard =
+        Instance.new(
+            "BillboardGui"
+        )
+
+    GunESPBillboard.Name =
+        "ToxGunESPBillboard"
+
+    GunESPBillboard.Adornee =
+        gunDrop
+
+    GunESPBillboard.Size =
+        UDim2.new(
+            0,
+            110,
+            0,
+            28
+        )
+
+    GunESPBillboard.StudsOffset =
+        Vector3.new(
+            0,
+            2.1,
+            0
+        )
+
+    GunESPBillboard.AlwaysOnTop =
+        true
+
+    GunESPBillboard.MaxDistance =
+        100000
+
+    GunESPBillboard.Parent =
+        gunDrop
+
+    local label =
+        Instance.new(
+            "TextLabel"
+        )
+
+    label.Size =
+        UDim2.new(
+            1,
+            0,
+            1,
+            0
+        )
+
+    label.BackgroundTransparency =
+        1
+
+    label.Text =
+        "GUN"
+
+    label.TextColor3 =
+        Color3.fromRGB(
+            255,
+            255,
+            255
+        )
+
+    label.TextStrokeColor3 =
+        Color3.fromRGB(
+            0,
+            0,
+            0
+        )
+
+    label.TextStrokeTransparency =
+        0
+
+    label.Font =
+        Enum.Font.GothamBold
+
+    label.TextSize = 14
+    label.Parent =
+        GunESPBillboard
+end
+
+function RefreshGunDropState()
+    local gunDrop =
+        FindGunDrop()
+
+    if gunDrop
+    and gunDrop.Parent then
+        if not GunDropWasPresent
+        or LastGunDrop
+            ~= gunDrop then
+            GunDropWasPresent =
+                true
+
+            LastGunDrop =
+                gunDrop
+
+            CustomNotify(
+                "Gun Dropped!",
+                Color3.fromRGB(
+                    255,
+                    215,
+                    70
+                ),
+                5
+            )
+        end
+
+        if Settings.MM2GunESP then
+            CreateGunESP(
+                gunDrop
+            )
+        elseif GunESPHighlight
+        or GunESPBillboard then
+            ClearGunESP()
+        end
+    else
+        GunDropWasPresent =
+            false
+
+        LastGunDrop = nil
+
+        if GunESPHighlight
+        or GunESPBillboard then
+            ClearGunESP()
+        end
+    end
+end
+
+task.spawn(function()
+    while not getgenv().Destroyed
+    and game.PlaceId
+        == 142823291 do
+        pcall(
+            RefreshGunDropState
+        )
+
+        task.wait(
+            0.12
+        )
+    end
+end)
+
+function GrabGun(silent, requestedDrop)
+    if GrabGunBusy then
+        return false
+    end
+
+    local character, humanoid, root = GetCharacterState()
+
+    if not character
+    or not humanoid
+    or humanoid.Health <= 0
+    or not root then
+        return false
+    end
+
+    local localRole = GetRole(Player)
+
+    if localRole == "Murderer"
+    or localRole == "Sheriff" then
+        if not silent then
+            CustomNotify("Grab Gun is only for Innocent", Color3.fromRGB(255, 180, 70))
+        end
+
+        return false
+    end
+
+    local gunDrop = requestedDrop
+
+    if not gunDrop or not gunDrop.Parent then
+        gunDrop = FindGunDrop()
+    end
+
+    if not gunDrop then
+        if not silent then
+            CustomNotify("Dropped Gun not found", Color3.fromRGB(255, 180, 70))
+        end
+
+        return false
+    end
+
+    local function hasGun()
+        local currentCharacter = Player.Character
+        local backpack = Player:FindFirstChildOfClass("Backpack")
+
+        return currentCharacter
+            and (currentCharacter:FindFirstChild("Gun") or currentCharacter:FindFirstChild("Revolver"))
+            or backpack
+            and (backpack:FindFirstChild("Gun") or backpack:FindFirstChild("Revolver"))
+    end
+
+    local function getTouchParts(currentCharacter, currentRoot)
+        local parts = {}
+        local seen = {}
+
+        local function add(part)
+            if part
+            and part:IsA("BasePart")
+            and part.Parent
+            and not seen[part] then
+                seen[part] = true
+                part.CanTouch = true
+                table.insert(parts, part)
+            end
+        end
+
+        add(currentRoot)
+
+        for _, name in ipairs({
+            "HumanoidRootPart",
+            "UpperTorso",
+            "LowerTorso",
+            "Torso",
+            "Head",
+            "LeftFoot",
+            "RightFoot",
+            "Left Leg",
+            "Right Leg",
+            "LeftHand",
+            "RightHand",
+            "Left Arm",
+            "Right Arm"
+        }) do
+            add(currentCharacter:FindFirstChild(name, true))
+        end
+
+        return parts
+    end
+
+    GrabGunBusy = true
+    ActionBusy = true
+
+    local oldCFrame = character:GetPivot()
+    local allow = getgenv().AllowToxTeleport
+    local success = hasGun() ~= nil
+
+    pcall(function()
+        if allow then
+            allow(0.5, "MM2 Grab Gun")
+        end
+
+        for attempt = 1, 10 do
+            character, humanoid, root = GetCharacterState()
+
+            if success
+            or not gunDrop
+            or not gunDrop.Parent
+            or not character
+            or not humanoid
+            or humanoid.Health <= 0
+            or not root then
+                break
+            end
+
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+            character:PivotTo(gunDrop.CFrame * CFrame.new(0, 1.05, 0))
+
+            if firetouchinterest then
+                pcall(function()
+                    gunDrop.CanTouch = true
+                end)
+
+                for _, part in ipairs(getTouchParts(character, root)) do
+                    pcall(function()
+                        firetouchinterest(part, gunDrop, 0)
+                        firetouchinterest(gunDrop, part, 0)
+                        firetouchinterest(part, gunDrop, 1)
+                        firetouchinterest(gunDrop, part, 1)
+                    end)
+                end
+            end
+
+            if hasGun() then
+                success = true
+                break
+            end
+
+            RunService.Heartbeat:Wait()
+        end
+    end)
+
+    character, humanoid, root = GetCharacterState()
+
+    if character
+    and humanoid
+    and humanoid.Health > 0
+    and root then
+        if allow then
+            allow(0.45, "MM2 Grab Gun Return")
+        end
+
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        character:PivotTo(oldCFrame)
+    end
+
+    ActionBusy = false
+    GrabGunBusy = false
+
+    return success
+end
+
+MM2CoinCache = {}
+MM2CoinScanTime = 0
+MM2CoinBlacklist = setmetatable({}, {__mode = "k"})
+AutoFarmTween = nil
+AutoFarmRoot = nil
+AutoFarmHumanoid = nil
+AutoFarmReturnCFrame = nil
+AutoFarmRotation = nil
+AutoFarmOriginalAnchored = false
+AutoFarmOriginalAutoRotate = true
+AutoFarmOriginalPlatformStand = false
+AutoFarmOriginalSit = false
+AutoFarmOriginalRagdoll = true
+AutoFarmOriginalFallingDown = true
+AutoFarmCollisionCache = {}
+AutoFarmCanTouchCache = {}
+AutoFarmHoldPosition = nil
+AutoFarmPrepared = false
+AutoFarmBagCoins = 0
+AutoFarmBagMax = 40
+AutoFarmBagKnown = false
+AutoFarmCoinSerial = 0
+AutoFarmCompleting = false
+AutoFarmAtCoin = false
+AutoFarmGeneration = 0
+AutoFarmSessionCollected = 0
+AutoFarmPausedFull = false
+AutoFarmResetTriggered = false
+AutoFarmKillTriggered = false
+AutoFarmPauseCharacter = nil
+AutoFarmPauseMap = nil
+AutoFarmPauseContainer = nil
+AutoFarmSawRoundEnd = false
+AutoFarmRoundWasActive = false
+AutoFarmLastObservedMap = nil
+AutoFarmLastObservedContainer = nil
+AutoFarmMapRootCache = nil
+AutoFarmMapContainerCache = nil
+AutoFarmMapRootScanTime = 0
+AutoFarmLastTravelY = nil
+AutoFarmRandomNextCoin = false
+AutoFarmDeathObservedAt = nil
+AutoFarmRoleRefreshAttempt = 0
+getgenv().ToxMM2AutoWinBusy = false
+getgenv().ToxMM2AutoWinGeneration = getgenv().ToxMM2AutoWinGeneration or 0
+
+function IsAliveCharacter()
+    local character, humanoid, root = GetCharacterState()
+    return character, humanoid, root, humanoid and humanoid.Health > 0 and root ~= nil
+end
+
+function IsAutoFarmPlayerEligible()
+    local character, humanoid, root, alive = IsAliveCharacter()
+    local now = os.clock()
+
+    if not alive or not character or not humanoid or not root then
+        AutoFarmDeathObservedAt = AutoFarmDeathObservedAt or now
+        AutoFarmBagCoins = 0
+        AutoFarmBagKnown = false
+        return false
+    end
+
+    if now - (MM2RoleDataCacheTime or 0) > 0.75
+    and now - (AutoFarmRoleRefreshAttempt or 0) > 0.65 then
+        AutoFarmRoleRefreshAttempt = now
+        pcall(function()
+            GetMM2RoleData(true)
+        end)
+    end
+
+    local data = MM2RoleDataCache
+    local dataAge = now - (MM2RoleDataCacheTime or 0)
+
+    if typeof(data) ~= "table" or dataAge > 1.5 then
+        return false
+    end
+
+    local info = data[Player.Name]
+        or data[tostring(Player.UserId)]
+        or data[Player]
+
+    if typeof(info) ~= "table" then
+        return false
+    end
+
+    local role = NormalizeMM2Role(info.Role or info.role)
+
+    if not role
+    or info.Dead == true
+    or info.dead == true then
+        return false
+    end
+
+    -- After a death, wait for fresh server role data before allowing farming again.
+    if AutoFarmDeathObservedAt then
+        if (MM2RoleDataCacheTime or 0) <= AutoFarmDeathObservedAt then
+            return false
+        end
+
+        AutoFarmDeathObservedAt = nil
+    end
+
+    -- MM2's Game panel is shown during an active round and hidden in the lobby.
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+    local mainGui = playerGui and playerGui:FindFirstChild("MainGUI")
+    local gameGui = mainGui and mainGui:FindFirstChild("Game")
+    local lobbyGui = mainGui and mainGui:FindFirstChild("Lobby")
+
+    if gameGui and not gameGui.Visible then
+        return false
+    end
+
+    if lobbyGui and lobbyGui.Visible
+    and (not gameGui or not gameGui.Visible) then
+        return false
+    end
+
+    return true
+end
+
+
+function ReadCoinBagFromGui()
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+
+    if not playerGui then
+        return nil, nil
+    end
+
+    for _, obj in ipairs(playerGui:GetDescendants()) do
+        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+            local text = tostring(obj.Text or "")
+            local current, maximum = text:match("(%d+)%s*/%s*(%d+)")
+
+            if current and maximum then
+                local curNum = tonumber(current)
+                local maxNum = tonumber(maximum)
+
+                if curNum and maxNum and maxNum >= 10 then
+                    local blob = string.lower(tostring(obj.Name or ""))
+                    local parent = obj.Parent
+
+                    for _ = 1, 4 do
+                        if not parent then
+                            break
+                        end
+
+                        blob = blob .. " " .. string.lower(tostring(parent.Name or ""))
+                        parent = parent.Parent
+                    end
+
+                    if (string.find(blob, "coin", 1, true) or string.find(blob, "bag", 1, true))
+                    and not string.find(blob, "inventory", 1, true) then
+                        return curNum, maxNum
+                    end
+                end
+            end
+        end
+    end
+
+    return nil, nil
+end
+
+function RefreshFarmBagState()
+    local currentCoins,
+        maxCoins =
+        ReadCoinBagFromGui()
+
+    if typeof(currentCoins)
+        == "number" then
+        AutoFarmBagCoins =
+            currentCoins
+
+        AutoFarmBagKnown = true
+    end
+
+    if typeof(maxCoins)
+        == "number"
+    and maxCoins >= 10 then
+        AutoFarmBagMax =
+            maxCoins
+
+        AutoFarmBagKnown = true
+    end
+
+    return
+        AutoFarmBagCoins,
+        AutoFarmBagMax,
+        AutoFarmBagKnown
+end
+
+function IsFarmBagFull()
+    return AutoFarmBagKnown
+        and AutoFarmBagMax >= 10
+        and AutoFarmBagCoins > 0
+        and AutoFarmBagCoins >= AutoFarmBagMax
+end
+
+gameplayRemotes = ReplicatedStorage:FindFirstChild("Remotes")
+gameplayRemotes = gameplayRemotes and gameplayRemotes:FindFirstChild("Gameplay")
+
+coinCollectedRemote = gameplayRemotes and gameplayRemotes:FindFirstChild("CoinCollected")
+    or ReplicatedStorage:FindFirstChild("CoinCollected", true)
+
+if coinCollectedRemote and coinCollectedRemote:IsA("RemoteEvent") then
+    AddConnection(coinCollectedRemote.OnClientEvent:Connect(function(_, currentCoins, maxCoins)
+        AutoFarmCoinSerial = AutoFarmCoinSerial + 1
+
+        if typeof(currentCoins) == "number" then
+            AutoFarmBagCoins = currentCoins
+            AutoFarmBagKnown = true
+        end
+
+        if typeof(maxCoins) == "number" and maxCoins > 0 then
+            AutoFarmBagMax = maxCoins
+            AutoFarmBagKnown = true
+        end
+    end))
+end
+
+function HasPotentialFarmCoins(container)
+    if not container or not container.Parent then
+        return false
+    end
+
+    for _, object in ipairs(container:GetDescendants()) do
+        if object:IsA("BasePart")
+        and IsCoinTouchPart(object)
+        and not object:GetAttribute("Collected")
+        and not object:GetAttribute("Delete") then
+            local model = object:FindFirstAncestorOfClass("Model")
+            local hasTouch = object:FindFirstChild("TouchInterest")
+                or object:FindFirstChildWhichIsA("TouchTransmitter", true)
+
+            if not (model and model:FindFirstChildOfClass("Humanoid"))
+            and (object.Transparency < 1 or hasTouch) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+function GetAutoFarmMapRoot(forceRefresh)
+    local now = os.clock()
+    local cachedRoot = AutoFarmMapRootCache
+    local cachedContainer = AutoFarmMapContainerCache
+
+    if not forceRefresh
+    and now - (AutoFarmMapRootScanTime or 0) < 0.12 then
+        if cachedRoot
+        and cachedContainer
+        and cachedRoot.Parent
+        and cachedContainer.Parent
+        and cachedContainer:IsDescendantOf(cachedRoot) then
+            return cachedRoot, cachedContainer
+        end
+
+        if not cachedRoot and not cachedContainer then
+            return nil, nil
+        end
+    end
+
+    AutoFarmMapRootScanTime = now
+
+    local normal = workspace:FindFirstChild("Normal")
+        or workspace:FindFirstChild("Zombie")
+        or workspace:FindFirstChild("Halloween")
+
+    local function FindCoinContainer(root)
+        if not root then return nil end
+        local found = root:FindFirstChild("CoinContainer", true)
+            or root:FindFirstChild("CandyContainer", true)
+            or root:FindFirstChild("Candies", true)
+            or root:FindFirstChild("Coins", true)
+            or root:FindFirstChild("Drops", true)
+            or root:FindFirstChild("Tokens", true)
+            or root:FindFirstChild("Pumpkins", true)
+            or root:FindFirstChild("DropContainer", true)
+            or root:FindFirstChild("TokenContainer", true)
+            or root:FindFirstChild("PumpkinContainer", true)
+            or root:FindFirstChild("Candy", true)
+            or root:FindFirstChild("EventDrops", true)
+            or root:FindFirstChild("Holiday", true)
+        if found then return found end
+        for _, desc in ipairs(root:GetDescendants()) do
+            if (desc:IsA("Folder") or desc:IsA("Model")) and desc.Name ~= "Spawns" and desc.Name ~= "Lobby" then
+                for _, ch in ipairs(desc:GetChildren()) do
+                    if ch:IsA("BasePart") and IsCoinTouchPart(ch) then
+                        return desc
+                    end
+                end
+            end
+        end
+        return nil
+    end
+
+    local normalContainer = FindCoinContainer(normal)
+    local selectedRoot = nil
+    local selectedContainer = nil
+    local fallbackRoot = normalContainer and normal or nil
+    local fallbackContainer = normalContainer
+
+    if normalContainer and HasPotentialFarmCoins(normalContainer) then
+        selectedRoot = normal
+        selectedContainer = normalContainer
+    else
+        for _, object in ipairs(workspace:GetChildren()) do
+            if object ~= Player.Character
+            and object ~= normal
+            and object.Name ~= "Lobby"
+            and object:IsA("Model") then
+                local container = FindCoinContainer(object)
+                if container then
+                    if HasPotentialFarmCoins(container) then
+                        selectedRoot = object
+                        selectedContainer = container
+                        break
+                    elseif not fallbackContainer then
+                        fallbackRoot = object
+                        fallbackContainer = container
+                    end
+                end
+            end
+        end
+    end
+
+    if not selectedContainer then
+        selectedRoot = fallbackRoot
+        selectedContainer = fallbackContainer
+    end
+
+    AutoFarmMapRootCache = selectedRoot
+    AutoFarmMapContainerCache = selectedContainer
+
+    return selectedRoot, selectedContainer
+end
+
+function IsCoinTouchPart(part)
+    if not part
+    or not part:IsA("BasePart") then
+        return false
+    end
+
+    if part:FindFirstChild("TouchInterest")
+    or part:FindFirstChildWhichIsA("TouchTransmitter", true) then
+        return true
+    end
+
+    local lower = string.lower(tostring(part.Name or ""))
+
+    return lower == "coin_server"
+        or lower == "coinserver"
+        or lower == "candy_server"
+        or lower == "candyserver"
+        or string.find(lower, "coin", 1, true) ~= nil
+        or string.find(lower, "cand", 1, true) ~= nil
+        or string.find(lower, "doce", 1, true) ~= nil
+        or string.find(lower, "token", 1, true) ~= nil
+        or string.find(lower, "credit", 1, true) ~= nil
+        or string.find(lower, "pumpkin", 1, true) ~= nil
+        or string.find(lower, "gingerbread", 1, true) ~= nil
+        or string.find(lower, "drop", 1, true) ~= nil
+        or string.find(lower, "collectible", 1, true) ~= nil
+end
+
+function IsCoinValid(coin)
+    if not coin
+    or not coin.Parent
+    or not coin:IsA("BasePart")
+    or coin:GetAttribute("Collected")
+    or coin:GetAttribute("Delete") then
+        return false
+    end
+
+    local mapRoot, activeContainer = GetAutoFarmMapRoot()
+
+    if activeContainer and coin:IsDescendantOf(activeContainer) then
+        -- Within active container
+    elseif mapRoot and coin:IsDescendantOf(mapRoot) and IsCoinTouchPart(coin) then
+        -- Within active map root
+    else
+        local container = coin:FindFirstAncestor("CoinContainer")
+            or coin:FindFirstAncestor("CandyContainer")
+            or coin:FindFirstAncestor("Candies")
+            or coin:FindFirstAncestor("Coins")
+            or coin:FindFirstAncestor("Drops")
+            or coin:FindFirstAncestor("Tokens")
+            or coin:FindFirstAncestor("Pumpkins")
+            or coin:FindFirstAncestor("DropContainer")
+            or coin:FindFirstAncestor("TokenContainer")
+            or coin:FindFirstAncestor("PumpkinContainer")
+            or coin:FindFirstAncestor("Candy")
+            or coin:FindFirstAncestor("EventDrops")
+            or coin:FindFirstAncestor("Holiday")
+
+        if not container then
+            return false
+        end
+    end
+
+    local lobby = workspace:FindFirstChild("Lobby")
+
+    if lobby
+    and coin:IsDescendantOf(lobby) then
+        return false
+    end
+
+    if coin.Transparency >= 1
+    and not coin:FindFirstChildWhichIsA("TouchTransmitter", true) then
+        return false
+    end
+
+    return IsCoinTouchPart(coin)
+end
+
+function GetMM2Coins(force)
+    local now = os.clock()
+
+    if not force
+    and now - MM2CoinScanTime < 0.1 then
+        local valid = {}
+
+        for _, coin in ipairs(MM2CoinCache) do
+            if IsCoinValid(coin) then
+                table.insert(valid, coin)
+            end
+        end
+
+        MM2CoinCache = valid
+        return valid
+    end
+
+    MM2CoinScanTime = now
+
+    local coins = {}
+    local seen = {}
+    local _, container = GetAutoFarmMapRoot()
+
+    if not container then
+        MM2CoinCache = coins
+        return coins
+    end
+
+    local function addCoin(part)
+        if not part
+        or seen[part]
+        or not part:IsA("BasePart")
+        or not IsCoinTouchPart(part)
+        or not IsCoinValid(part) then
+            return
+        end
+
+        local model = part:FindFirstAncestorOfClass("Model")
+
+        if model and model:FindFirstChildOfClass("Humanoid") then
+            return
+        end
+
+        seen[part] = true
+        table.insert(coins, part)
+    end
+
+    for _, object in ipairs(container:GetDescendants()) do
+        if object:IsA("BasePart") then
+            addCoin(object)
+        end
+    end
+
+    for _, object in ipairs(container:GetChildren()) do
+        if object:IsA("BasePart") then
+            addCoin(object)
+        end
+    end
+
+    MM2CoinCache = coins
+    return coins
+end
+
+function IsAutoFarmRoundActive()
+    local _, container = GetAutoFarmMapRoot()
+
+    if not container then
+        return false
+    end
+
+    return #GetMM2Coins(true) > 0
+end
+
+function GetOtherPlayerCoinPressure(coin)
+    local bestDistance = math.huge
+    local incoming = false
+
+    for _, other in ipairs(Players:GetPlayers()) do
+        if other ~= Player and other.Character then
+            local otherHumanoid = other.Character:FindFirstChildOfClass("Humanoid")
+            local otherRoot = other.Character:FindFirstChild("HumanoidRootPart")
+
+            if otherHumanoid and otherHumanoid.Health > 0 and otherRoot then
+                local offset = coin.Position - otherRoot.Position
+                local distance = offset.Magnitude
+
+                if distance < bestDistance then
+                    bestDistance = distance
+                end
+
+                if distance > 0.1 then
+                    local horizontalVelocity = Vector3.new(
+                        otherRoot.AssemblyLinearVelocity.X,
+                        0,
+                        otherRoot.AssemblyLinearVelocity.Z
+                    )
+
+                    if horizontalVelocity.Magnitude > 7 then
+                        local direction = Vector3.new(offset.X, 0, offset.Z)
+
+                        if direction.Magnitude > 0.1
+                        and horizontalVelocity.Unit:Dot(direction.Unit) > 0.65 then
+                            incoming = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return bestDistance, incoming
+end
+
+function GetBestCoin(origin, competitionAware)
+    local coins = GetMM2Coins(false)
+    local candidates = {}
+    local bestCoin = nil
+    local bestDistance = math.huge
+    local now = os.clock()
+
+    for coin, expiry in pairs(MM2CoinBlacklist) do
+        if not coin.Parent or now >= expiry then
+            MM2CoinBlacklist[coin] = nil
+        end
+    end
+
+    for _, coin in ipairs(coins) do
+        if IsCoinValid(coin) and not MM2CoinBlacklist[coin] then
+            table.insert(candidates, coin)
+
+            local distance = 0
+
+            if typeof(origin) == "Vector3" then
+                distance = (
+                    Vector2.new(origin.X, origin.Z)
+                    - Vector2.new(coin.Position.X, coin.Position.Z)
+                ).Magnitude
+            end
+
+            if distance < bestDistance then
+                bestDistance = distance
+                bestCoin = coin
+            end
+        end
+    end
+
+    if AutoFarmRandomNextCoin and #candidates > 1 then
+        AutoFarmRandomNextCoin = false
+        return candidates[math.random(1, #candidates)]
+    end
+
+    AutoFarmRandomNextCoin = false
+    return bestCoin
+end
+function ToxMM2GetCoinTouchParts(coin)
+    local parts = {}
+
+    if coin
+    and coin.Parent then
+        if coin:IsA("BasePart") then
+            table.insert(parts, coin)
+        end
+
+        local parent = coin.Parent
+
+        if parent then
+            for _, object in ipairs(parent:GetDescendants()) do
+                if object:IsA("BasePart")
+                and object ~= coin then
+                    local lower = string.lower(tostring(object.Name or ""))
+
+                    if object:FindFirstChildWhichIsA("TouchTransmitter", true)
+                    or string.find(lower, "coin", 1, true)
+                    or string.find(lower, "touch", 1, true)
+                    or string.find(lower, "hit", 1, true) then
+                        table.insert(parts, object)
+                    end
+                end
+            end
+        end
+    end
+
+    return parts
+end
+
+function ToxMM2GetCharacterTouchParts(character, root)
+    local parts = {}
+    local seen = {}
+
+    local function add(part)
+        if part
+        and part:IsA("BasePart")
+        and not seen[part] then
+            seen[part] = true
+            table.insert(parts, part)
+        end
+    end
+
+    add(root)
+
+    if character then
+        local priority = {
+            "HumanoidRootPart",
+            "UpperTorso",
+            "LowerTorso",
+            "Torso",
+            "Head",
+            "LeftFoot",
+            "RightFoot",
+            "Left Leg",
+            "Right Leg",
+            "LeftLowerLeg",
+            "RightLowerLeg",
+            "LeftHand",
+            "RightHand",
+            "Left Arm",
+            "Right Arm"
+        }
+
+        for _, name in ipairs(priority) do
+            add(character:FindFirstChild(name, true))
+        end
+
+        for _, object in ipairs(character:GetDescendants()) do
+            add(object)
+        end
+    end
+
+    return parts
+end
+
+function SetFarmCollision(enabled)
+    local character = Player.Character
+
+    if not character then
+        return
+    end
+
+    if not enabled then
+        ClearToxTable(AutoFarmCollisionCache)
+        ClearToxTable(AutoFarmCanTouchCache)
+
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                AutoFarmCollisionCache[part] = part.CanCollide
+                AutoFarmCanTouchCache[part] = part.CanTouch
+                part.CanCollide = false
+                part.CanTouch = true
+            end
+        end
+    else
+        for part, oldValue in pairs(AutoFarmCollisionCache) do
+            if part and part.Parent then
+                part.CanCollide = oldValue
+            end
+        end
+
+        for part, oldValue in pairs(AutoFarmCanTouchCache) do
+            if part and part.Parent then
+                part.CanTouch = oldValue
+            end
+        end
+
+        ClearToxTable(AutoFarmCollisionCache)
+        ClearToxTable(AutoFarmCanTouchCache)
+    end
+end
+
+function EnableLocalControls()
+    pcall(function()
+        local playerScripts = Player:FindFirstChild("PlayerScripts")
+        local playerModule = playerScripts and playerScripts:FindFirstChild("PlayerModule")
+
+        if playerModule then
+            local module = require(playerModule)
+            local controls = module and module.GetControls and module:GetControls()
+
+            if controls and controls.Enable then
+                controls:Enable()
+            end
+        end
+    end)
+end
+
+function SetFarmPosition(position, hold)
+    if not AutoFarmRoot
+    or not AutoFarmRoot.Parent
+    or not AutoFarmHumanoid
+    or AutoFarmHumanoid.Health <= 0 then
+        return false
+    end
+
+    local allow = getgenv().AllowToxTeleport
+
+    if allow then
+        allow(0.18, "MM2 Auto Farm")
+    end
+
+    if hold then
+        AutoFarmHoldPosition = position
+    end
+
+    local character = AutoFarmRoot.Parent
+
+    AutoFarmRoot.Anchored = false
+    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+    AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+
+    if character and character:IsA("Model") then
+        character:PivotTo(CFrame.new(position))
+    else
+        AutoFarmRoot.CFrame = CFrame.new(position)
+    end
+
+    return true
+end
+
+function RestoreAutoFarmPosition()
+    if not AutoFarmReturnCFrame then
+        return
+    end
+
+    local character = Player.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+
+    if not character or not root then
+        return
+    end
+
+    local allow = getgenv().AllowToxTeleport
+
+    if allow then
+        allow(0.8, "MM2 Auto Farm Return")
+    end
+
+    root.Anchored = false
+    character:PivotTo(AutoFarmReturnCFrame)
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
+end
+
+function StopAutoFarm(restore)
+    AutoFarmGeneration = AutoFarmGeneration + 1
+    AutoFarmAtCoin = false
+    AutoFarmHoldPosition = nil
+    AutoFarmLastTravelY = nil
+
+    if AutoFarmTween then
+        pcall(function()
+            AutoFarmTween:Cancel()
+        end)
+    end
+
+    AutoFarmTween = nil
+
+    local character = Player.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+
+    if root then
+        root.Anchored = false
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+    end
+
+    if restore then
+        RestoreAutoFarmPosition()
+        RunService.Heartbeat:Wait()
+    end
+
+    SetFarmCollision(true)
+
+    character = Player.Character
+    humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    root = character and character:FindFirstChild("HumanoidRootPart")
+
+    if humanoid and humanoid.Health > 0 then
+        humanoid.PlatformStand = false
+        humanoid.Sit = false
+        humanoid.AutoRotate = true
+
+        pcall(function()
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+            humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end)
+
+        RunService.Heartbeat:Wait()
+
+        pcall(function()
+            humanoid:ChangeState(Enum.HumanoidStateType.Running)
+        end)
+    end
+
+    if root then
+        root.Anchored = false
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+    end
+
+    EnableLocalControls()
+
+    AutoFarmRoot = nil
+    AutoFarmHumanoid = nil
+    AutoFarmReturnCFrame = nil
+    AutoFarmRotation = nil
+    AutoFarmHoldPosition = nil
+    AutoFarmPrepared = false
+
+    if not AutoFarmPausedFull then
+        AutoFarmSessionCollected = 0
+    end
+end
+
+function ResetAutoFarmFullPause()
+    AutoFarmPausedFull = false
+    AutoFarmResetTriggered = false
+    AutoFarmKillTriggered = false
+    AutoFarmBagCoins = 0
+    AutoFarmBagKnown = false
+    AutoFarmPauseCharacter = nil
+    AutoFarmPauseMap = nil
+    AutoFarmPauseContainer = nil
+    AutoFarmSawRoundEnd = false
+    AutoFarmSessionCollected = 0
+end
+
+function UpdateAutoFarmRoundLifecycle()
+    local currentMap, currentContainer = GetAutoFarmMapRoot(true)
+    local roundActive = currentContainer ~= nil
+        and #GetMM2Coins(true) > 0
+
+    local mapChanged = AutoFarmLastObservedMap ~= nil
+        and (
+            currentMap ~= AutoFarmLastObservedMap
+            or currentContainer ~= AutoFarmLastObservedContainer
+        )
+
+    if not roundActive then
+        if AutoFarmRoundWasActive or mapChanged then
+            AutoFarmSawRoundEnd = true
+        end
+
+        AutoFarmRoundWasActive = false
+        AutoFarmBagCoins = 0
+        AutoFarmBagKnown = false
+    else
+        if not AutoFarmRoundWasActive or mapChanged then
+            ResetAutoFarmFullPause()
+            AutoFarmBagKnown = false
+            AutoFarmBagCoins = 0
+            RefreshFarmBagState()
+
+            AutoFarmSawRoundEnd = false
+        end
+
+        AutoFarmRoundWasActive = true
+    end
+
+    AutoFarmLastObservedMap = currentMap
+    AutoFarmLastObservedContainer = currentContainer
+
+    return roundActive, currentMap, currentContainer
+end
+
+
+function ToxMM2FlingMurdererForAutoWin()
+    local target = GetPlayerByRole("Murderer")
+
+    if not target then
+        return false
+    end
+
+    local fling = getgenv().ToxFlingPlayer
+
+    if not fling then
+        return false
+    end
+
+    task.spawn(function()
+        local restoreAntiFling = Settings.AntiFling == true
+
+        if restoreAntiFling then
+            SetSharedTemporary("AntiFling", false)
+        end
+
+        local ok, result =
+            pcall(function()
+                return fling(target)
+            end)
+
+        if ok and result == false then
+            CustomNotify(
+                "Fling skipped",
                 Color3.fromRGB(255, 180, 70)
             )
         end
-    else
-        CustomNotify(
-            "Auto Execute Disabled",
-            Color3.fromRGB(255, 180, 70)
-        )
+
+        if restoreAntiFling then
+            SetSharedTemporary("AntiFling", true)
+        end
+    end)
+
+    return true
+end
+
+function ToxMM2RunAutoWinFromFull()
+    if getgenv().ToxMM2AutoWinBusy then
+        return
     end
 
-    -- O callback tambem roda ao restaurar a configuracao no boot, sem clique manual.
-    if getgenv().AutoSaveConfiguration then
-        pcall(getgenv().AutoSaveConfiguration)
-    end
-end, "AutoExecute")
+    getgenv().ToxMM2AutoWinBusy = true
+    getgenv().ToxMM2AutoWinGeneration = (getgenv().ToxMM2AutoWinGeneration or 0) + 1
 
-CreateToggle(
-    "FPS Booster",
-    ConfigPage,
-    Settings.FPSBooster,
-    function(v)
-        SetFPSBooster(
-            v
-        )
+    local generation = getgenv().ToxMM2AutoWinGeneration
 
-        AutoSaveConfiguration()
-    end,
-    "FPSBooster"
-)
+    task.spawn(function()
+        local function active()
+            local _, humanoid, root, alive = IsAliveCharacter()
 
-
-ServerInfoFrame = nil
-ServerInfoText = nil
-ServerInfoFrameCount = 0
-ServerInfoLastClock = os.clock()
-ServerInfoFPS = 0
-ServerInfoRegionCache = nil
-ServerInfoRegionCacheTime = 0
-ServerInfoCountryCache = nil
-ServerInfoCountryChecked = false
-ServerInfoModes = {
-    "FPS",
-    "FPS/Ping",
-    "FPS/Ping/Players",
-    "Server"
-}
-
-RunService.RenderStepped:Connect(function()
-    ServerInfoFrameCount = ServerInfoFrameCount + 1
-
-    local now = os.clock()
-
-    if now - ServerInfoLastClock >= 0.5 then
-        ServerInfoFPS = math.floor((ServerInfoFrameCount / (now - ServerInfoLastClock)) + 0.5)
-        ServerInfoFrameCount = 0
-        ServerInfoLastClock = now
-    end
-end)
-
-function GetServerPingText()
-    local ok, value = pcall(function()
-        local network = StatsService and StatsService:FindFirstChild("Network")
-        local serverStats = network and network:FindFirstChild("ServerStatsItem")
-        local ping = serverStats and serverStats:FindFirstChild("Data Ping")
-
-        if ping and ping.GetValueString then
-            return ping:GetValueString()
+            return Settings.MM2AutoWin == true
+                and generation == getgenv().ToxMM2AutoWinGeneration
+                and not getgenv().Destroyed
+                and game.PlaceId == 142823291
+                and alive == true
+                and humanoid ~= nil
+                and root ~= nil
         end
 
-        return "N/A"
+        task.wait(0.2)
+
+        if not active() then
+            getgenv().ToxMM2AutoWinBusy = false
+            return
+        end
+
+        local role = GetRole(Player)
+        local knife = FindNamedTool({"knife"})
+        local gun = FindNamedTool({"gun", "revolver"})
+
+        if role == "Murderer" or knife then
+            pcall(KillAll)
+        else
+            if not gun then
+                pcall(function()
+                    GrabGun(true)
+                end)
+
+                local started = os.clock()
+
+                repeat
+                    task.wait(0.08)
+                    gun = FindNamedTool({"gun", "revolver"})
+                until gun or not active() or os.clock() - started >= 3
+            end
+
+            if active() then
+                pcall(function()
+                    ShootMurderer(false)
+                end)
+            end
+
+            local waited = os.clock()
+
+            repeat
+                task.wait(0.1)
+            until not active() or os.clock() - waited >= 3
+
+            if active() then
+                ToxMM2FlingMurdererForAutoWin()
+            end
+        end
+
+        getgenv().ToxMM2AutoWinBusy = false
     end)
-
-    if ok and value then
-        return tostring(value)
-    end
-
-    return "N/A"
 end
 
-function GetServerPingNumber()
-    local text = GetServerPingText()
-    local number = tonumber(tostring(text):match("([%d%.]+)"))
-    return number
-end
+getgenv().ToxMM2FlingMurdererForAutoWin = ToxMM2FlingMurdererForAutoWin
+getgenv().ToxMM2RunAutoWinFromFull = ToxMM2RunAutoWinFromFull
 
-function GetShortServerId(value)
-    value = tostring(value or "")
+local KillOnFullBusy = false
+local KillOnFullGeneration = 0
 
-    if value == "" then
-        return "N/A"
+function ToxMM2RunKillOnFull()
+    if KillOnFullBusy then
+        return
     end
 
-    if #value <= 18 then
-        return value
-    end
+    KillOnFullBusy = true
+    KillOnFullGeneration = KillOnFullGeneration + 1
+    local generation = KillOnFullGeneration
 
-    return string.sub(value, 1, 8) .. "..." .. string.sub(value, -6)
-end
+    task.spawn(function()
+        local function active()
+            local _, humanoid, root, alive = IsAliveCharacter()
+            return alive == true
+                and humanoid ~= nil
+                and root ~= nil
+                and not getgenv().Destroyed
+                and game.PlaceId == 142823291
+                and generation == KillOnFullGeneration
+                and IsAutoFarmRoundActive()
+                and IsAutoFarmPlayerEligible()
+        end
 
-function GetLocalCountryCode()
-    if ServerInfoCountryChecked then
-        return ServerInfoCountryCache or ""
-    end
+        task.wait(0.15)
 
-    ServerInfoCountryChecked = true
+        if not active() then
+            KillOnFullBusy = false
+            return
+        end
 
-    local ok, code = pcall(function()
-        local localization = game:GetService("LocalizationService")
-        return localization:GetCountryRegionForPlayerAsync(Player)
-    end)
+        local role = GetRole(Player)
+        local knife = FindNamedTool({"knife"})
+        local gun = FindNamedTool({"gun", "revolver"})
+        local targetMode = tostring(Settings.MM2KillOnFullTarget or "Both")
 
-    if ok and code and code ~= "" then
-        ServerInfoCountryCache = tostring(code)
-        return ServerInfoCountryCache
-    end
+        if role == "Murderer" or knife then
+            CustomNotify(
+                "Bag full • Murderer Killing All",
+                Color3.fromRGB(255, 60, 60)
+            )
 
-    ServerInfoCountryCache = ""
-    return ""
-end
+            local _, _, mRoot = IsAliveCharacter()
+            if mRoot then
+                mRoot.CFrame = mRoot.CFrame + Vector3.new(0, 40, 0)
+                mRoot.AssemblyLinearVelocity = Vector3.zero
+            end
 
-function GetServerRegionText()
-    if ServerInfoRegionCache
-    and os.clock() - ServerInfoRegionCacheTime < 8 then
-        return ServerInfoRegionCache
-    end
+            while active() and #GetKnifeTargets() > 0 do
+                knife = FindNamedTool({"knife"}) or knife
+                if not knife then
+                    break
+                end
 
-    local ok, value = pcall(function()
-        for _, object in ipairs(StatsService:GetDescendants()) do
-            local lower = string.lower(tostring(object.Name or ""))
+                EquipTool(knife)
 
-            if string.find(lower, "region", 1, true)
-            or string.find(lower, "location", 1, true)
-            or string.find(lower, "country", 1, true) then
-                if object.GetValueString then
-                    local text = object:GetValueString()
+                local targets = GetKnifeTargets()
+                if #targets == 0 then
+                    break
+                end
 
-                    if text and text ~= "" then
-                        return text
+                OneSlashTargets(knife, targets, true)
+                task.wait(0.04)
+
+                targets = GetKnifeTargets()
+                for _, target in ipairs(targets) do
+                    if not active() then
+                        break
+                    end
+
+                    if KnifeTargetAlive(target) then
+                        knife = FindNamedTool({"knife"}) or knife
+                        if not knife then
+                            break
+                        end
+
+                        EquipTool(knife)
+                        AttackKnifeTargetUntilDone(knife, target, 0.8, false)
+                        task.wait(0.04)
                     end
                 end
 
-                if object:IsA("StringValue") and object.Value ~= "" then
-                    return object.Value
+                task.wait(0.12)
+            end
+
+            KillOnFullBusy = false
+            return
+
+        elseif role == "Sheriff" or gun then
+            if targetMode == "Murderer" or targetMode == "Both" then
+                CustomNotify(
+                    "Bag full • Sheriff Shooting Murderer",
+                    Color3.fromRGB(80, 180, 255)
+                )
+
+                local murderer = FindGuidedMurderer() or GetPlayerByRole("Murderer")
+                local mChar = murderer and murderer.Character
+                local mRootPart = mChar and (mChar:FindFirstChild("HumanoidRootPart") or mChar:FindFirstChild("Torso"))
+                local _, _, sRoot = IsAliveCharacter()
+                if sRoot and mRootPart then
+                    local skyPos = Vector3.new(mRootPart.Position.X, mRootPart.Position.Y + 38, mRootPart.Position.Z)
+                    sRoot.CFrame = CFrame.lookAt(skyPos, mRootPart.Position)
+                    sRoot.AssemblyLinearVelocity = Vector3.zero
+                end
+
+                while active() do
+                    local murderer = FindGuidedMurderer() or GetPlayerByRole("Murderer")
+                    if not murderer or not IsMM2PlayerAlive(murderer) then
+                        break
+                    end
+
+                    gun = FindNamedTool({"gun", "revolver"}) or gun
+
+                    if not gun or not gun.Parent then
+                        pcall(function()
+                            GrabGun(true)
+                        end)
+                        task.wait(0.15)
+                        gun = GetOrEquipGuidedGun()
+                    end
+
+                    if gun and active() and not GuidedShotBusy then
+                        pcall(function()
+                            ShootMurderer(false)
+                        end)
+                    end
+
+                    task.wait(0.2)
+                end
+            elseif targetMode == "Sheriff" then
+                CustomNotify(
+                    "Bag full • You are Sheriff",
+                    Color3.fromRGB(255, 180, 70)
+                )
+            end
+
+        else
+            local gun = FindNamedTool({"gun", "revolver"})
+            local gotGun = gun ~= nil
+
+            if not gotGun and (targetMode == "Murderer" or targetMode == "Both") then
+                local gunDrop = FindGunDrop()
+                if gunDrop then
+                    CustomNotify(
+                        "Bag full • Grabbing Dropped Gun",
+                        Color3.fromRGB(80, 220, 120)
+                    )
+
+                    local grabStart = tick()
+                    while active() and tick() - grabStart < 1.8 do
+                        if GrabGun(true) or FindNamedTool({"gun", "revolver"}) then
+                            gotGun = true
+                            break
+                        end
+                        task.wait(0.15)
+                    end
+                end
+            end
+
+            gun = FindNamedTool({"gun", "revolver"}) or gun
+            if gun then
+                gotGun = true
+            end
+
+            if gotGun and (targetMode == "Murderer" or targetMode == "Both") then
+                CustomNotify(
+                    "Bag full • Shooting Murderer",
+                    Color3.fromRGB(80, 180, 255)
+                )
+
+                local shootStart = tick()
+                while active() and tick() - shootStart < 6 do
+                    local murderer = FindGuidedMurderer() or GetPlayerByRole("Murderer")
+                    if not murderer or not IsMM2PlayerAlive(murderer) then
+                        break
+                    end
+
+                    gun = FindNamedTool({"gun", "revolver"}) or gun
+                    if not gun or not gun.Parent then
+                        gun = GetOrEquipGuidedGun()
+                    end
+
+                    if not gun then
+                        break
+                    end
+
+                    if gun and active() and not GuidedShotBusy then
+                        pcall(function()
+                            ShootMurderer(false)
+                        end)
+                    end
+
+                    task.wait(0.2)
+                end
+            end
+
+            local murderStillAlive = false
+            if targetMode == "Murderer" or targetMode == "Both" then
+                local m = GetPlayerByRole("Murderer") or FindGuidedMurderer()
+                if m and IsMM2PlayerAlive(m) then
+                    murderStillAlive = true
+                end
+            end
+
+            local sheriffStillAlive = false
+            if targetMode == "Sheriff" or targetMode == "Both" then
+                local s = GetPlayerByRole("Sheriff")
+                if s and IsMM2PlayerAlive(s) then
+                    sheriffStillAlive = true
+                end
+            end
+
+            local needFling = false
+            if targetMode == "Murderer" and murderStillAlive then
+                needFling = true
+            elseif targetMode == "Sheriff" and sheriffStillAlive then
+                needFling = true
+            elseif targetMode == "Both" and (murderStillAlive or sheriffStillAlive) then
+                needFling = true
+            end
+
+            if needFling and active() then
+                local fling = getgenv().ToxFlingPlayer
+
+                if not fling then
+                    CustomNotify(
+                        "Fling system unavailable",
+                        Color3.fromRGB(255, 100, 100)
+                    )
+                    KillOnFullBusy = false
+                    return
+                end
+
+                local function IsTargetFlying(targetPlayer)
+                    if not targetPlayer or not targetPlayer.Character then return false end
+                    local tRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart") or targetPlayer.Character:FindFirstChild("Torso")
+                    if not tRoot then return false end
+                    local vel = tRoot.AssemblyLinearVelocity or tRoot.Velocity or Vector3.zero
+                    return vel.Magnitude > 75
+                end
+
+                local function flingUntilDead(targetPlayer, label)
+                    if not targetPlayer or not IsMM2PlayerAlive(targetPlayer) then
+                        return false
+                    end
+
+                    local restoreAntiFling = Settings.AntiFling == true
+                    if restoreAntiFling then
+                        SetSharedTemporary("AntiFling", false)
+                    end
+
+                    local flingAttempts = 0
+                    local flingStartTime = tick()
+
+                    while active() and targetPlayer and IsMM2PlayerAlive(targetPlayer) and IsAutoFarmRoundActive() and IsAutoFarmPlayerEligible() and flingAttempts < 3 and (tick() - flingStartTime) < 8 do
+                        flingAttempts = flingAttempts + 1
+                        if not IsTargetFlying(targetPlayer) then
+                            CustomNotify(
+                                "Bag full • Flinging " .. label .. " (" .. tostring(flingAttempts) .. "/3)",
+                                Color3.fromRGB(255, 170, 50)
+                            )
+
+                            pcall(function()
+                                fling(targetPlayer)
+                            end)
+                        end
+
+                        local flingWait = tick()
+                        while tick() - flingWait < 2.5 and IsMM2PlayerAlive(targetPlayer) and active() do
+                            if IsTargetFlying(targetPlayer) then
+                                task.wait(0.2)
+                            else
+                                if tick() - flingWait > 0.8 then break end
+                                task.wait(0.15)
+                            end
+                        end
+
+                        task.wait(0.2)
+                    end
+
+                    if restoreAntiFling then
+                        SetSharedTemporary("AntiFling", true)
+                    end
+
+                    return true
+                end
+
+                if targetMode == "Murderer" then
+                    local murderTarget = GetPlayerByRole("Murderer") or FindGuidedMurderer()
+                    if murderTarget and IsMM2PlayerAlive(murderTarget) then
+                        flingUntilDead(murderTarget, "Murderer")
+                    else
+                        CustomNotify(
+                            "Murderer not found to fling",
+                            Color3.fromRGB(255, 180, 70)
+                        )
+                    end
+                elseif targetMode == "Sheriff" then
+                    local sheriffTarget = GetPlayerByRole("Sheriff")
+                    if sheriffTarget and IsMM2PlayerAlive(sheriffTarget) then
+                        flingUntilDead(sheriffTarget, "Sheriff")
+                    else
+                        CustomNotify(
+                            "Sheriff not found to fling",
+                            Color3.fromRGB(255, 180, 70)
+                        )
+                    end
+                elseif targetMode == "Both" then
+                    local murderTarget = GetPlayerByRole("Murderer") or FindGuidedMurderer()
+                    if murderTarget and IsMM2PlayerAlive(murderTarget) then
+                        flingUntilDead(murderTarget, "Murderer")
+                    end
+
+                    local sheriffTarget = GetPlayerByRole("Sheriff")
+                    if active() and sheriffTarget and IsMM2PlayerAlive(sheriffTarget) then
+                        flingUntilDead(sheriffTarget, "Sheriff")
+                    end
+
+                    if not murderTarget and not sheriffTarget then
+                        CustomNotify(
+                            "Targets not found to fling",
+                            Color3.fromRGB(255, 180, 70)
+                        )
+                    end
                 end
             end
         end
 
-        return nil
+        KillOnFullBusy = false
     end)
-
-    if ok and value and tostring(value) ~= "" then
-        ServerInfoRegionCache = tostring(value)
-        ServerInfoRegionCacheTime = os.clock()
-        return ServerInfoRegionCache
-    end
-
-    local country = GetLocalCountryCode()
-    local ping = GetServerPingNumber()
-    local result = nil
-
-    if country == "BR" then
-        if ping and ping <= 95 then
-            result = "São Paulo / BR"
-        elseif ping and ping <= 180 then
-            result = "US / NA"
-        end
-    elseif country == "US" then
-        if ping and ping <= 120 then
-            result = "US"
-        end
-    elseif country ~= "" then
-        if ping and ping <= 120 then
-            result = country
-        end
-    end
-
-    ServerInfoRegionCache = result or (country ~= "" and country .. " / Unknown" or "Unknown")
-    ServerInfoRegionCacheTime = os.clock()
-    return ServerInfoRegionCache
 end
 
-function BuildServerJoinText()
-    return tostring(game.JobId ~= "" and game.JobId or "N/A")
-end
+getgenv().ToxMM2RunKillOnFull = ToxMM2RunKillOnFull
 
-function CopyServerJoinId()
-    local text = BuildServerJoinText()
-    local copied = false
-
-    if setclipboard then
-        pcall(function()
-            setclipboard(text)
-            copied = true
-        end)
-    elseif toclipboard then
-        pcall(function()
-            toclipboard(text)
-            copied = true
-        end)
-    elseif Clipboard and Clipboard.set then
-        pcall(function()
-            Clipboard.set(text)
-            copied = true
-        end)
+function CompleteAutoFarm()
+    if not IsAutoFarmPlayerEligible() then
+        return
     end
 
-    if copied then
+    RefreshFarmBagState()
+
+    if AutoFarmCompleting
+    or AutoFarmPausedFull
+    or not IsFarmBagFull() then
+        return
+    end
+
+    AutoFarmCompleting = true
+    AutoFarmPausedFull = true
+    AutoFarmPauseCharacter =
+        Player.Character
+    AutoFarmPauseMap, AutoFarmPauseContainer =
+        GetAutoFarmMapRoot(true)
+    AutoFarmSawRoundEnd = false
+
+    StopAutoFarm(true)
+
+    if Settings.MM2AutoWin
+    and getgenv().ToxMM2RunAutoWinFromFull then
         CustomNotify(
-            "JoinId copied",
-            Color3.fromRGB(100, 255, 130),
-            3
+            "Bag full • Auto Win",
+            Color3.fromRGB(
+                100,
+                255,
+                130
+            )
+        )
+
+        getgenv().ToxMM2RunAutoWinFromFull()
+    elseif Settings.MM2KillOnFull
+    and not AutoFarmKillTriggered then
+        AutoFarmKillTriggered = true
+
+        ToxMM2RunKillOnFull()
+    elseif Settings.MM2AutoFarmResetOnFull
+    and not AutoFarmResetTriggered then
+        AutoFarmResetTriggered = true
+
+        CustomNotify(
+            "Bag full • resetting",
+            Color3.fromRGB(
+                255,
+                180,
+                70
+            )
+        )
+
+        task.delay(
+            0.15,
+            function()
+                if not Settings.MM2AutoFarmV2
+                or not Settings.MM2AutoFarmResetOnFull then
+                    return
+                end
+
+                local character =
+                    Player.Character
+
+                local humanoid =
+                    character
+                    and character:
+                        FindFirstChildOfClass(
+                            "Humanoid"
+                        )
+
+                if humanoid
+                and humanoid.Health > 0 then
+                    humanoid.Health = 0
+                end
+            end
         )
     else
         CustomNotify(
-            "Clipboard not supported",
-            Color3.fromRGB(255, 180, 70),
-            3
+            "Bag full • Auto Farm paused",
+            Color3.fromRGB(
+                100,
+                255,
+                100
+            )
         )
     end
+
+    AutoFarmCompleting = false
 end
 
-function NormalizeServerInfoMode(value)
-    value = tostring(value or "")
+function PrepareAutoFarm()
+    local character, humanoid, root, alive = IsAliveCharacter()
 
-    for _, mode in ipairs(ServerInfoModes) do
-        if value == mode then
-            return mode
-        end
+    if not alive then
+        return false
     end
 
-    return "FPS/Ping/Players"
+    if AutoFarmPrepared and AutoFarmRoot == root then
+        root.Anchored = false
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        humanoid.PlatformStand = false
+        humanoid.Sit = false
+        humanoid.AutoRotate = true
+        SetFarmCollision(false)
+        return true
+    end
+
+    if AutoFarmPrepared then
+        StopAutoFarm(false)
+    end
+
+    AutoFarmGeneration = AutoFarmGeneration + 1
+    AutoFarmRoot = root
+    AutoFarmHumanoid = humanoid
+    AutoFarmReturnCFrame = character:GetPivot()
+    AutoFarmRotation = CFrame.new()
+    AutoFarmOriginalAnchored = root.Anchored
+    AutoFarmOriginalAutoRotate = humanoid.AutoRotate
+    AutoFarmOriginalPlatformStand = humanoid.PlatformStand
+    AutoFarmOriginalSit = humanoid.Sit
+    AutoFarmOriginalRagdoll = humanoid:GetStateEnabled(Enum.HumanoidStateType.Ragdoll)
+    AutoFarmOriginalFallingDown = humanoid:GetStateEnabled(Enum.HumanoidStateType.FallingDown)
+    AutoFarmPrepared = true
+    AutoFarmAtCoin = false
+    AutoFarmHoldPosition = nil
+    AutoFarmLastTravelY = nil
+    AutoFarmSessionCollected = 0
+
+    humanoid.PlatformStand = false
+    humanoid.Sit = false
+    humanoid.AutoRotate = true
+    root.Anchored = false
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
+    SetFarmCollision(false)
+
+    return true
 end
 
-function BuildServerInfoLines()
-    local mode = NormalizeServerInfoMode(Settings.ToxServerInfoMode)
-    local lines = {}
-    local fullJobId = tostring(game.JobId ~= "" and game.JobId or "N/A")
+AutoFarmPickupOffsetY = 0
+AutoFarmCoinHoldTime = 0.04
+AutoFarmMinTweenSpeed = 6
+TouchCoin = nil
 
-    if mode == "Server" then
-        table.insert(lines, "Region: " .. GetServerRegionText())
-        table.insert(lines, "Players: " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers))
-        table.insert(lines, "PlaceId: " .. tostring(game.PlaceId))
-        table.insert(lines, "JobId: " .. fullJobId)
-        table.insert(lines, "JoinId: " .. fullJobId)
-        return lines
+function GetCoinBasePosition(coin)
+    if not coin then
+        return nil
     end
 
-    table.insert(lines, "FPS: " .. tostring(ServerInfoFPS))
-
-    if mode == "FPS/Ping"
-    or mode == "FPS/Ping/Players" then
-        table.insert(lines, "Ping: " .. GetServerPingText())
+    if coin:IsA("BasePart") then
+        return coin.Position
     end
 
-    if mode == "FPS/Ping/Players" then
-        table.insert(lines, "Players: " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers))
-        table.insert(lines, "Region: " .. GetServerRegionText())
-        table.insert(lines, "PlaceId: " .. tostring(game.PlaceId))
-        table.insert(lines, "JobId: " .. fullJobId)
-        table.insert(lines, "JoinId: " .. fullJobId)
-    end
-
-    return lines
-end
-
-function RefreshServerInfoSize()
-    if not ServerInfoFrame then
-        return
-    end
-
-    local mode = NormalizeServerInfoMode(Settings.ToxServerInfoMode)
-    local lineCount = #BuildServerInfoLines()
-    local width = 250
-
-    if mode == "Server"
-    or mode == "FPS/Ping/Players" then
-        width = 430
-    end
-
-    local height = math.max(92, 40 + lineCount * 19)
-    ServerInfoFrame.Size = UDim2.new(0, width, 0, height)
-
-    if ServerInfoText then
-        ServerInfoText.Size = UDim2.new(1, -16, 1, -34)
-    end
-end
-
-function ServerInfoModeButtonText(mode)
-    if mode == "FPS" then
-        return "FPS"
-    end
-
-    if mode == "FPS/Ping" then
-        return "PING"
-    end
-
-    if mode == "Server" then
-        return "SERVER"
-    end
-
-    return "ALL"
-end
-
-function CreateServerInfoFrame()
-    if ServerInfoFrame and ServerInfoFrame.Parent then
-        return
-    end
-
-    local gui = getgenv().Gui
-
-    if not gui then
-        return
-    end
-
-    ServerInfoFrame = Instance.new("Frame")
-    ServerInfoFrame.Name = "ToxServerInfoFrame"
-    ServerInfoFrame.Size = UDim2.new(0, 430, 0, 174)
-    ServerInfoFrame.Position = UDim2.new(1, -340, 0, 110)
-    ServerInfoFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
-    ServerInfoFrame.BackgroundTransparency = 0.35
-    ServerInfoFrame.BorderSizePixel = 0
-    ServerInfoFrame.Active = true
-    ServerInfoFrame.Visible = false
-    ServerInfoFrame.Parent = gui
-
-    if getgenv().RegisterToxLinkedSubGui then
-        getgenv().RegisterToxLinkedSubGui("ServerInfo", ServerInfoFrame)
-    end
-
-    if getgenv().RegisterToxSubGuiMinimize then
-        getgenv().RegisterToxSubGuiMinimize(ServerInfoFrame, -52)
-    end
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = ServerInfoFrame
-
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = MAIN_COLOR
-    stroke.Thickness = 1
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    stroke.Transparency = 0.2
-    stroke.Parent = ServerInfoFrame
-
-    local topBar = Instance.new("Frame")
-    topBar.Size = UDim2.new(1, 0, 0, 26)
-    topBar.BackgroundColor3 = MAIN_COLOR
-    topBar.BackgroundTransparency = 0.15
-    topBar.BorderSizePixel = 0
-    topBar.Parent = ServerInfoFrame
-
-    if MakeDraggable then
-        MakeDraggable(ServerInfoFrame, topBar)
-    end
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -158, 1, 0)
-    title.Position = UDim2.new(0, 8, 0, 0)
-    title.BackgroundTransparency = 1
-    title.Text = "SERVER INFO"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 11
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = topBar
-
-    local modeButton = Instance.new("TextButton")
-    modeButton.Size = UDim2.new(0, 60, 0, 18)
-    modeButton.Position = UDim2.new(1, -148, 0.5, -9)
-    modeButton.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
-    modeButton.BorderSizePixel = 0
-    modeButton.Text = ServerInfoModeButtonText(NormalizeServerInfoMode(Settings.ToxServerInfoMode))
-    modeButton.TextColor3 = Color3.fromRGB(230, 230, 240)
-    modeButton.Font = Enum.Font.GothamBold
-    modeButton.TextSize = 10
-    modeButton.Parent = topBar
-
-    local modeCorner = Instance.new("UICorner")
-    modeCorner.CornerRadius = UDim.new(0, 4)
-    modeCorner.Parent = modeButton
-
-    local copyButton = Instance.new("TextButton")
-    copyButton.Size = UDim2.new(0, 58, 0, 18)
-    copyButton.Position = UDim2.new(1, -84, 0.5, -9)
-    copyButton.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
-    copyButton.BorderSizePixel = 0
-    copyButton.Text = "COPY"
-    copyButton.TextColor3 = Color3.fromRGB(230, 230, 240)
-    copyButton.Font = Enum.Font.GothamBold
-    copyButton.TextSize = 10
-    copyButton.Parent = topBar
-
-    local copyCorner = Instance.new("UICorner")
-    copyCorner.CornerRadius = UDim.new(0, 4)
-    copyCorner.Parent = copyButton
-
-    local closeButton = Instance.new("TextButton")
-    closeButton.Size = UDim2.new(0, 22, 0, 18)
-    closeButton.Position = UDim2.new(1, -25, 0.5, -9)
-    closeButton.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
-    closeButton.BorderSizePixel = 0
-    closeButton.Text = "X"
-    closeButton.TextColor3 = Color3.fromRGB(230, 230, 240)
-    closeButton.Font = Enum.Font.GothamBold
-    closeButton.TextSize = 10
-    closeButton.Parent = topBar
-
-    local closeCorner = Instance.new("UICorner")
-    closeCorner.CornerRadius = UDim.new(0, 4)
-    closeCorner.Parent = closeButton
-
-    ServerInfoText = Instance.new("TextLabel")
-    ServerInfoText.Size = UDim2.new(1, -16, 1, -34)
-    ServerInfoText.Position = UDim2.new(0, 8, 0, 31)
-    ServerInfoText.BackgroundTransparency = 1
-    ServerInfoText.Text = ""
-    ServerInfoText.TextColor3 = Color3.fromRGB(240, 240, 245)
-    ServerInfoText.Font = Enum.Font.GothamMedium
-    ServerInfoText.TextSize = 12
-    ServerInfoText.TextWrapped = false
-    ServerInfoText.TextTruncate = Enum.TextTruncate.None
-    ServerInfoText.TextXAlignment = Enum.TextXAlignment.Left
-    ServerInfoText.TextYAlignment = Enum.TextYAlignment.Top
-    ServerInfoText.Parent = ServerInfoFrame
-
-    copyButton.MouseButton1Click:Connect(function()
-        CopyServerJoinId()
+    local ok, pivot = pcall(function()
+        return coin:GetPivot()
     end)
 
-    closeButton.MouseButton1Click:Connect(function()
-        Settings.ToxServerInfoVisible = false
-        ServerInfoFrame.Visible = false
+    if ok and typeof(pivot) == "CFrame" then
+        return pivot.Position
+    end
 
-        if getgenv().SyncToggleVisuals then
-            getgenv().SyncToggleVisuals("ToxServerInfoVisible", false)
+    return nil
+end
+
+function GetCoinFarmPosition(coin)
+    local position = GetCoinBasePosition(coin)
+
+    if not position then
+        return nil
+    end
+
+    return Vector3.new(
+        position.X,
+        position.Y + AutoFarmPickupOffsetY,
+        position.Z
+    )
+end
+
+
+-- ==============================================================================
+-- SAFE LOBBY SYSTEM
+-- ==============================================================================
+local SafeLobbyPlatform = nil
+local SafeLobbyPosition = Vector3.new(-108, -60, -10)
+
+local function EnsureSafeLobbyPlatform()
+    if SafeLobbyPlatform and SafeLobbyPlatform.Parent then
+        return SafeLobbyPlatform
+    end
+
+    local container = workspace:FindFirstChild("ToxMM2SafeLobby")
+    if not container then
+        container = Instance.new("Folder")
+        container.Name = "ToxMM2SafeLobby"
+        container.Parent = workspace
+    end
+
+    local floor = container:FindFirstChild("Floor")
+    if not floor then
+        floor = Instance.new("Part")
+        floor.Name = "Floor"
+        floor.Size = Vector3.new(30, 2, 30)
+        floor.Position = SafeLobbyPosition
+        floor.Anchored = true
+        floor.CanCollide = true
+        floor.Material = Enum.Material.SmoothPlastic
+        floor.Color = Color3.fromRGB(15, 15, 24)
+        floor.Parent = container
+    end
+
+    local function makeWall(name, size, pos)
+        local w = container:FindFirstChild(name)
+        if not w then
+            w = Instance.new("Part")
+            w.Name = name
+            w.Size = size
+            w.Position = pos
+            w.Anchored = true
+            w.CanCollide = true
+            w.Transparency = 0.65
+            w.Material = Enum.Material.ForceField
+            w.Color = Color3.fromRGB(30, 95, 255)
+            w.Parent = container
+        end
+        return w
+    end
+
+    makeWall("WallN", Vector3.new(30, 12, 1), SafeLobbyPosition + Vector3.new(0, 6, 15))
+    makeWall("WallS", Vector3.new(30, 12, 1), SafeLobbyPosition + Vector3.new(0, 6, -15))
+    makeWall("WallE", Vector3.new(1, 12, 30), SafeLobbyPosition + Vector3.new(15, 6, 0))
+    makeWall("WallW", Vector3.new(1, 12, 30), SafeLobbyPosition + Vector3.new(-15, 6, 0))
+
+    SafeLobbyPlatform = container
+    return container
+end
+
+local function DestroySafeLobbyPlatform()
+    if SafeLobbyPlatform and SafeLobbyPlatform.Parent then
+        pcall(function() SafeLobbyPlatform:Destroy() end)
+    end
+    SafeLobbyPlatform = nil
+    local existing = workspace:FindFirstChild("ToxMM2SafeLobby")
+    if existing then
+        pcall(function() existing:Destroy() end)
+    end
+end
+
+getgenv().SetSafeLobbyEnabled = function(enabled)
+    Settings.MM2SafeLobby = (enabled == true)
+    if not Settings.MM2SafeLobby then
+        DestroySafeLobbyPlatform()
+        local character, _, root, alive = IsAliveCharacter()
+        if alive and root and root.Position.Y < 0 then
+            root.CFrame = CFrame.new(-108, 140, -10)
+        end
+    else
+        EnsureSafeLobbyPlatform()
+    end
+end
+
+task.spawn(function()
+    while not getgenv().Destroyed and game.PlaceId == 142823291 do
+        if Settings.MM2SafeLobby then
+            local mapRoot, _ = GetAutoFarmMapRoot(false)
+            local isRoundActive = IsAutoFarmRoundActive()
+            local isEligible = IsAutoFarmPlayerEligible()
+            local playerRole = GetRole(Player)
+
+            local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+            local mainGui = playerGui and playerGui:FindFirstChild("MainGUI")
+            local gameGui = mainGui and mainGui:FindFirstChild("Game")
+            local lobbyGui = mainGui and mainGui:FindFirstChild("Lobby")
+
+            local inLobby = (lobbyGui and lobbyGui.Visible == true) and (not gameGui or not gameGui.Visible) and not isRoundActive and not playerRole
+            local isMatchLive = not inLobby and (isRoundActive or isEligible or (playerRole ~= nil) or (gameGui and gameGui.Visible == true))
+
+            local character, humanoid, root, alive = IsAliveCharacter()
+
+            if alive and root and humanoid and humanoid.Health > 0 then
+                if isMatchLive then
+                    -- Match is active! Move player out of safe lobby into match area
+                    if root.Position.Y < -30 then
+                        local spawnPart = mapRoot and mapRoot:FindFirstChild("Spawns", true)
+                        local targetPos = (spawnPart and spawnPart:FindFirstChildWhichIsA("BasePart") and spawnPart:FindFirstChildWhichIsA("BasePart").Position)
+                            or (mapRoot and mapRoot:GetPivot().Position)
+                            or Vector3.new(0, 15, 0)
+
+                        root.CFrame = CFrame.new(targetPos + Vector3.new(0, 4, 0))
+                        root.AssemblyLinearVelocity = Vector3.zero
+                        root.AssemblyAngularVelocity = Vector3.zero
+                    end
+                else
+                    -- We are truly in the lobby!
+                    EnsureSafeLobbyPlatform()
+                    if root.Position.Y > 0 then
+                        root.CFrame = CFrame.new(SafeLobbyPosition + Vector3.new(0, 4, 0))
+                        root.AssemblyLinearVelocity = Vector3.zero
+                        root.AssemblyAngularVelocity = Vector3.zero
+                    end
+                end
+            end
+        end
+        task.wait(0.5)
+    end
+end)
+
+function SetAutoFarmCoinPosition(position, velocity)
+    if not AutoFarmRoot
+    or not AutoFarmRoot.Parent
+    or not AutoFarmHumanoid
+    or AutoFarmHumanoid.Health <= 0 then
+        return false
+    end
+
+    local character = Player.Character
+
+    if not character
+    or not character.Parent then
+        return false
+    end
+
+    AutoFarmHoldPosition = position
+    AutoFarmRoot.Anchored = false
+    if velocity then
+        AutoFarmRoot.AssemblyLinearVelocity = velocity
+    else
+        AutoFarmRoot.AssemblyLinearVelocity = Vector3.new(0, 0.05, 0)
+    end
+    AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+    AutoFarmRoot.CFrame = CFrame.new(position)
+    AutoFarmHumanoid.PlatformStand = false
+    AutoFarmHumanoid.Sit = false
+    AutoFarmHumanoid.AutoRotate = true
+
+    return true
+end
+
+function TweenFarmRoot(targetPosition, duration, coin)
+    if not AutoFarmRoot
+    or not AutoFarmRoot.Parent then
+        return false
+    end
+
+    local generation = AutoFarmGeneration
+    local startPosition = AutoFarmRoot.Position
+    local delta = targetPosition - startPosition
+    local distance = delta.Magnitude
+    local direction = distance > 0.01 and delta.Unit or Vector3.zero
+    local startTime = os.clock()
+
+    duration = math.max(duration, 0.05)
+    local moveSpeed = math.max(5, distance / duration)
+    local velocity = direction * math.min(moveSpeed, 45)
+
+    local serialBefore = AutoFarmCoinSerial
+    local bagBefore = AutoFarmBagCoins
+
+    if AutoFarmTween then
+        pcall(function()
+            AutoFarmTween:Cancel()
+        end)
+
+        AutoFarmTween = nil
+    end
+
+    if AutoFarmHumanoid then
+        AutoFarmHumanoid.PlatformStand = true
+    end
+
+    while Settings.MM2AutoFarmV2
+    and AutoFarmPrepared
+    and generation == AutoFarmGeneration
+    and AutoFarmRoot
+    and AutoFarmRoot.Parent
+    and AutoFarmHumanoid
+    and AutoFarmHumanoid.Health > 0
+    and IsAutoFarmPlayerEligible() do
+        if coin and not IsCoinValid(coin) then
+            return true
         end
 
-        AutoSaveConfiguration()
-    end)
+        if IsFarmBagFull() then
+            return false
+        end
 
-    modeButton.MouseButton1Click:Connect(function()
-        local mode = NormalizeServerInfoMode(Settings.ToxServerInfoMode)
-        local index = 1
+        local alpha = math.clamp(
+            (os.clock() - startTime) / duration,
+            0,
+            1
+        )
 
-        for i, item in ipairs(ServerInfoModes) do
-            if item == mode then
-                index = i
-                break
+        local position = startPosition + delta * alpha
+
+        if not SetAutoFarmCoinPosition(position, velocity) then
+            return false
+        end
+
+        if coin then
+            TouchCoin(coin)
+            if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
+                return true
             end
         end
 
-        index = index + 1
-
-        if index > #ServerInfoModes then
-            index = 1
+        if alpha >= 1 then
+            return true
         end
 
-        Settings.ToxServerInfoMode = ServerInfoModes[index]
-        modeButton.Text = ServerInfoModeButtonText(Settings.ToxServerInfoMode)
-        RefreshServerInfoSize()
-        AutoSaveConfiguration()
-    end)
+        RunService.Heartbeat:Wait()
+    end
 
-    task.spawn(function()
-        while ServerInfoFrame and ServerInfoFrame.Parent and not getgenv().Destroyed do
-            if ServerInfoFrame.Visible and ServerInfoText then
-                local lines = BuildServerInfoLines()
-                ServerInfoText.Text = table.concat(lines, "\n")
-                RefreshServerInfoSize()
+    return false
+end
+function TouchCoin(coin)
+    if not IsCoinValid(coin) then
+        return false
+    end
+
+    local character, humanoid, root, alive = IsAliveCharacter()
+
+    if not alive or not IsAutoFarmPlayerEligible() then
+        return false
+    end
+
+    local coinParts = ToxMM2GetCoinTouchParts(coin)
+    local characterParts = ToxMM2GetCharacterTouchParts(character, root)
+    local touched = false
+
+    if firetouchinterest then
+        for _, coinPart in ipairs(coinParts) do
+            if coinPart
+            and coinPart.Parent then
+                pcall(function()
+                    coinPart.CanTouch = true
+                end)
+
+                for _, bodyPart in ipairs(characterParts) do
+                    if bodyPart
+                    and bodyPart.Parent then
+                        pcall(function()
+                            bodyPart.CanTouch = true
+                            firetouchinterest(bodyPart, coinPart, 0)
+                            firetouchinterest(coinPart, bodyPart, 0)
+                            firetouchinterest(bodyPart, coinPart, 1)
+                            firetouchinterest(coinPart, bodyPart, 1)
+                        end)
+
+                        touched = true
+                    end
+                end
             end
-
-            task.wait(0.5)
         end
-    end)
-end
-
-function SetServerInfoVisible(enabled)
-    Settings.ToxServerInfoVisible = enabled == true
-    CreateServerInfoFrame()
-
-    if ServerInfoFrame then
-        ServerInfoFrame.Visible = Settings.ToxServerInfoVisible
-        RefreshServerInfoSize()
-    end
-end
-
-getgenv().OpenToxServerInfo = function()
-    SetServerInfoVisible(not Settings.ToxServerInfoVisible)
-
-    if getgenv().SyncToggleVisuals then
-        getgenv().SyncToggleVisuals("ToxServerInfoVisible", Settings.ToxServerInfoVisible)
     end
 
-    AutoSaveConfiguration()
+    return touched
 end
 
-CreateToggle("Server Info", ConfigPage, Settings.ToxServerInfoVisible, function(v)
-    SetServerInfoVisible(v)
-    AutoSaveConfiguration()
-end, "ToxServerInfoVisible")
+function RegisterFarmCoinCollected(coin, serialBefore, bagBefore)
+    RefreshFarmBagState()
 
+    if not IsCoinValid(coin)
+    or AutoFarmCoinSerial ~= serialBefore
+    or AutoFarmBagCoins > bagBefore then
+        AutoFarmAtCoin = false
+        AutoFarmHoldPosition = nil
+        AutoFarmSessionCollected = AutoFarmSessionCollected + 1
 
-if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Rendering & Performance", "⚡") end
+        if AutoFarmSessionCollected > 0
+        and AutoFarmSessionCollected % 10 == 0 then
+            AutoFarmRandomNextCoin = true
+        end
 
-SetRender3DEnabled(true)
-
-CreateToggle(
-    "3D Rendering",
-    ConfigPage,
-    Settings.Render3DDisabled == true,
-    function(v)
-        Settings.Render3DDisabled = v == true
-        SetRender3DEnabled(
-            not v
-        )
-
-        AutoSaveConfiguration()
-    end,
-    "Render3DDisabled"
-)
-
-CreateDropdown(
-    "3D Background",
-    {
-        "WHITE",
-        "BLACK",
-        "RED",
-        "BLUE"
-    },
-    ConfigPage,
-    Settings.Render3DColor,
-    function(value)
-        SetRender3DColor(
-            value
-        )
-
-        AutoSaveConfiguration()
-    end
-)
-
-if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Interface & Keybinds", "⚙️") end
-
-CreateDropdown(
-    "GUI Color",
-    {
-        "Blue",
-        "Cyan",
-        "Purple",
-        "Green",
-        "Red",
-        "Orange",
-        "Pink",
-        "Gold",
-        "White"
-    },
-    ConfigPage,
-    tostring(
-        Settings.GUIColorName
-        or "Blue"
-    ),
-    function(value)
-        Settings.GUIColorName =
-            value
-
-        if getgenv().SetToxGuiColor then
-            getgenv().SetToxGuiColor(
-                value
+        if AutoFarmCoinSerial == serialBefore
+        and AutoFarmBagCoins <= bagBefore
+        and not AutoFarmBagKnown then
+            AutoFarmBagCoins = math.min(
+                AutoFarmBagCoins + 1,
+                AutoFarmBagMax
             )
         end
-    end
-)
 
-CreateKeybindButton("GUI Keybind", ConfigPage, Settings.GUIKeybind, function(key)
-    Settings.GUIKeybind = key
-
-    if getgenv().AutoSaveConfiguration then
-        getgenv().AutoSaveConfiguration()
-    end
-end)
-
-CreateKeybindButton("Panic Key", ConfigPage, Settings.PanicKey, function(key)
-    Settings.PanicKey = key
-
-    if getgenv().AutoSaveConfiguration then
-        getgenv().AutoSaveConfiguration()
-    end
-end)
-
-if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Server Operations", "🌐") end
-CreateButton("Server Hop", ConfigPage, function(button) ShowServerHopMenu(button) end)
-CreateConfirmButton("Rejoin Server", ConfigPage, function()
-	if #Players:GetPlayers() <= 1 then TeleportService:Teleport(game.PlaceId, Player)
-	else TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player) end
-end)
-
-CreateConfirmButton("DESTROY", ConfigPage, function()
-    if AutoSaveConfiguration then
-        pcall(AutoSaveConfiguration)
-    end
-
-    LoopFlingInput = nil
-    LoopFlingGeneration = LoopFlingGeneration + 1
-
-    if RenderBackdropGui
-    and RenderBackdropGui.Parent then
-        pcall(function()
-            RenderBackdropGui:
-                Destroy()
-        end)
-    end
-
-    Destroyed = true
-    getgenv().Destroyed = true
-    ScriptLoaded = false
-    getgenv().ScriptLoaded = false
-    getgenv().ToxOptionsReady = false
-
-    if getgenv().ToxUniversal2ExtraCleanup then
-        pcall(getgenv().ToxUniversal2ExtraCleanup)
-    end
-
-    if getgenv().ToxUniversal2Cleanup then
-        pcall(getgenv().ToxUniversal2Cleanup)
-    end
-
-    if getgenv().ToxLightingCleanup then
-        pcall(getgenv().ToxLightingCleanup)
-    end
-
-    if getgenv().ToxChatCleanup then
-        pcall(getgenv().ToxChatCleanup)
-    end
-
-    if getgenv().ToxNDSCleanup then
-        pcall(getgenv().ToxNDSCleanup)
-    end
-
-    if getgenv().ToxMM2Cleanup then
-        pcall(getgenv().ToxMM2Cleanup)
-    end
-
-    if getgenv().SetNDSWaterFly then
-        pcall(function()
-            getgenv().SetNDSWaterFly(false, true)
-        end)
-    end
-
-    if getgenv().SetNDSNoTP then
-        pcall(function()
-            getgenv().SetNDSNoTP(false, true)
-        end)
-    end
-
-    SetFPSBooster(
-        false,
-        true
-    )
-
-    for key, value in pairs(Settings) do
-        if typeof(value) == "boolean" then
-            Settings[key] = false
-        end
-    end
-
-    Settings.Render3D = true
-    Settings.LoopTPTarget = nil
-    Settings.NDSAutoWin = false
-    Settings.NDSWaterFly = false
-    Settings.NDSNoTP = false
-    Settings.MM2AutoFarm = false
-    Settings.MM2RoleESP = false
-    Settings.MM2KillAllAuto = false
-    Settings.MM2ShootMurderAuto = false
-    Settings.MM2GrabGunAuto = false
-
-    local sharedKeys =
-        getgenv().SharedPersistentKeys or {}
-    local baseShared =
-        getgenv().BaseSharedSettings or {}
-
-    for key in pairs(sharedKeys) do
-        if typeof(Settings[key]) == "boolean" then
-            Settings[key] = false
-        end
-
-        if typeof(baseShared[key]) == "boolean" then
-            baseShared[key] = false
-        end
-    end
-
-    pcall(function()
-        RunService:Set3dRenderingEnabled(true)
-    end)
-
-    Settings.Fullbright = false
-    UpdateFullbright()
-
-    Settings.AirWalk = false
-    UpdateAirWalk()
-
-    Settings.Speed = false
-    Settings.Jump = false
-    Settings.Noclip = false
-    Settings.AntiFling = false
-    Settings.WalkFling = false
-    StopWalkFling()
-    StopAntiVoid()
-    if getgenv().ToxSystemsCleanup then
-        pcall(
-            getgenv().ToxSystemsCleanup
-        )
-    end
-    Settings.HitboxExpander = false
-    Settings.FOVEnabled = false
-    Settings.ForceShiftLock = false
-    Settings.SmoothFly = false
-    Settings.NormalFly = false
-    Settings.CarFly = false
-    DestroyCarFlyMovers()
-    Settings.ChatLogs = false
-    Settings.MusicAutoPlay = false
-    Settings.MusicLoop = false
-    Settings.AutoExecute = false
-
-    RestoreSpeed()
-    RestoreJump()
-    RestoreNoclipDefaults()
-    RestoreAntiFlingDefaults()
-    RestoreHitboxDefaults()
-    RestoreFOVDefault()
-    RestoreShiftLockDefaults()
-
-    isShiftLockActive = false
-    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-
-    if ChatLogGui then
-        ChatLogGui.Visible = false
-    end
-
-    local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-    local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-
-    if Hum then
-        Hum.PlatformStand = false
-        Hum.Sit = false
-        Hum.AutoRotate = true
-    end
-
-    if Root then
-        Root.AssemblyLinearVelocity = Vector3.zero
-        Root.AssemblyAngularVelocity = Vector3.zero
-    end
-
-    RunService.Heartbeat:Wait()
-    RunService.Heartbeat:Wait()
-
-    if getgenv().ActiveSound then
-        pcall(function()
-            getgenv().ActiveSound:Stop()
-            getgenv().ActiveSound:Destroy()
-        end)
-
-        getgenv().ActiveSound = nil
-    end
-
-    ClearAllESPVisuals()
-
-    if FOVCircle then
-        pcall(function()
-            FOVCircle:Remove()
-        end)
-    end
-
-    if CrosshairH then
-        pcall(function()
-            CrosshairH:Remove()
-        end)
-    end
-
-    if CrosshairV then
-        pcall(function()
-            CrosshairV:Remove()
-        end)
-    end
-
-    for _, conn in ipairs(ScriptConnections) do
-        pcall(function()
-            conn:Disconnect()
-        end)
-    end
-
-    pcall(function()
-        NotifGui:Destroy()
-    end)
-
-    pcall(function()
-        Gui:Destroy()
-    end)
-end)
-
-AddConnection(UserInputService.InputBegan:Connect(function(input, gpe)
-    if not gpe and Settings.ForceShiftLock then
-        local key = Settings.ShiftLockKey
-        local match = false
-        if key == "Shift" and (input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.RightShift) then
-            match = true
-        elseif key == "Ctrl" and (input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl) then
-            match = true
-        end
-        if match then
-            isShiftLockActive = not isShiftLockActive
-            UserInputService.MouseBehavior = isShiftLockActive and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
-        end
-    end
-end))
-
-AddConnection(UserInputService.JumpRequest:Connect(function()
-    local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-    if ScriptLoaded and Settings.InfiniteJump and Hum and Hum.Health > 0 then
-        Hum:ChangeState(Enum.HumanoidStateType.Jumping)
-    end
-end))
-
-SubGuisPreKeyHiddenState = {}
-
-local function IsBadCtrlClickTeleportPart(part)
-    if not part
-    or not part:IsA("BasePart") then
-        return true
-    end
-
-    local lower = string.lower(tostring(part.Name or "") .. " " .. tostring(part.Parent and part.Parent.Name or ""))
-
-    if string.find(lower, "barrier", 1, true)
-    or string.find(lower, "invisible", 1, true)
-    or string.find(lower, "kill", 1, true)
-    or string.find(lower, "void", 1, true)
-    or string.find(lower, "death", 1, true) then
-        return true
-    end
-
-    if part.Transparency >= 0.985
-    and not part.CanCollide then
         return true
     end
 
     return false
 end
 
-local function GetCtrlClickTeleportOffset(root, humanoid, normal)
-    local standHeight =
-        math.max(
-            2.5,
-            (root.Size.Y * 0.5)
-            + (humanoid and humanoid.HipHeight or 2)
-            + 0.15
-        )
-
-    if normal.Y >= 0.55 then
-        return Vector3.new(
-            0,
-            standHeight,
-            0
-        )
+function CollectFarmCoin(coin)
+    if not IsCoinValid(coin)
+    or not AutoFarmRoot
+    or not AutoFarmRoot.Parent then
+        return true
     end
 
-    local sideClearance =
-        math.max(
-            root.Size.X,
-            root.Size.Z
-        ) * 0.5 + 0.65
+    local generation = AutoFarmGeneration
+    local serialBefore = AutoFarmCoinSerial
+    local bagBefore = AutoFarmBagCoins
+    local farmPosition = GetCoinFarmPosition(coin)
 
-    return normal.Unit * sideClearance
+    if not farmPosition then
+        return false
+    end
+
+    AutoFarmAtCoin = true
+    SetAutoFarmCoinPosition(farmPosition, Vector3.new(0, 0.1, 0))
+
+    local holdUntil = os.clock() + 0.06
+
+    while Settings.MM2AutoFarmV2
+    and generation == AutoFarmGeneration
+    and not IsFarmBagFull()
+    and IsCoinValid(coin)
+    and AutoFarmRoot
+    and AutoFarmRoot.Parent
+    and AutoFarmHumanoid
+    and AutoFarmHumanoid.Health > 0
+    and IsAutoFarmPlayerEligible()
+    and os.clock() <= holdUntil do
+        TouchCoin(coin)
+
+        if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
+            AutoFarmAtCoin = false
+            AutoFarmHoldPosition = nil
+            return true
+        end
+
+        RunService.Heartbeat:Wait()
+    end
+
+    AutoFarmAtCoin = false
+    AutoFarmHoldPosition = nil
+    return not IsCoinValid(coin)
 end
 
-local function GetCtrlClickTeleportCFrame()
-    local mouse = Player:GetMouse()
-    local character = Player.Character
-    local root = character and character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-
-    if not mouse
-    or not root then
-        return nil
+function AutoFarmCoin(coin)
+    if not IsAutoFarmPlayerEligible()
+    or not IsAutoFarmRoundActive()
+    or not IsCoinValid(coin)
+    or not PrepareAutoFarm() then
+        return false
     end
 
-    local excluded = {}
+    RefreshFarmBagState()
 
-    if character then
-        table.insert(excluded, character)
+    if IsFarmBagFull() then
+        CompleteAutoFarm()
+        return true
     end
 
-    if getgenv().Gui then
-        table.insert(excluded, getgenv().Gui)
+    local travelPosition = GetCoinFarmPosition(coin)
+    if not travelPosition then
+        return false
     end
 
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = excluded
-    params.IgnoreWater = false
+    -- TELEPORT MODE
+    if tostring(Settings.MM2AutoFarmMode) == "Teleport" then
+        local tpPos = travelPosition - Vector3.new(0, 3.8, 0)
+        AutoFarmRoot.CFrame = CFrame.new(tpPos)
+        AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+        AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+        AutoFarmHoldPosition = tpPos
 
-    local camera = workspace.CurrentCamera or Camera
+        local serialBefore = AutoFarmCoinSerial
+        local bagBefore = AutoFarmBagCoins
 
-    if not camera then
-        return nil
+        TouchCoin(coin)
+        RegisterFarmCoinCollected(coin, serialBefore, bagBefore)
+        MM2CoinBlacklist[coin] = os.clock() + 0.2
+
+        local tpDelay = math.clamp(tonumber(Settings.MM2AutoFarmTeleportDelay) or 1.2, 0.2, 10)
+        local delayEnd = os.clock() + tpDelay
+        while os.clock() < delayEnd
+        and Settings.MM2AutoFarmV2
+        and not IsFarmBagFull()
+        and IsAutoFarmPlayerEligible()
+        and IsAutoFarmRoundActive() do
+            RunService.Heartbeat:Wait()
+        end
+
+        RefreshFarmBagState()
+        if IsFarmBagFull() then
+            CompleteAutoFarm()
+        end
+        return true
     end
 
-    local ray = camera:ScreenPointToRay(
-        mouse.X,
-        mouse.Y
+    -- TWEEN MODE
+    local speedValue = math.clamp(
+        tonumber(Settings.MM2AutoFarmSpeed) or 5,
+        1,
+        250
     )
 
-    local result = workspace:Raycast(
-        ray.Origin,
-        ray.Direction * 5000,
-        params
+    local speed = math.clamp(speedValue * 4, AutoFarmMinTweenSpeed, 120)
+    local currentPosition = AutoFarmRoot.Position
+    local distance = (travelPosition - currentPosition).Magnitude
+    local arrived = TweenFarmRoot(
+        travelPosition,
+        distance / speed,
+        coin
     )
 
-    if not result
-    or not result.Instance
-    or IsBadCtrlClickTeleportPart(result.Instance) then
-        return nil
+    if not Settings.MM2AutoFarmV2 then
+        return false
     end
 
-    local normal = result.Normal
+    RefreshFarmBagState()
 
-    if normal.Magnitude <= 0 then
-        return nil
+    if IsFarmBagFull() then
+        CompleteAutoFarm()
+        return true
     end
 
-    local targetPosition =
-        result.Position
-        + GetCtrlClickTeleportOffset(
-            root,
-            humanoid,
-            normal
-        )
+    if not arrived
+    and not IsCoinValid(coin) then
+        AutoFarmSessionCollected = AutoFarmSessionCollected + 1
+        return true
+    end
 
-    local _, yaw, _ =
-        root.CFrame:ToOrientation()
+    if not arrived then
+        MM2CoinBlacklist[coin] = os.clock() + 0.1
+        return false
+    end
 
-    return CFrame.new(
-        targetPosition
-    ) * CFrame.Angles(
-        0,
-        yaw,
-        0
-    )
+    local collected = CollectFarmCoin(coin)
+
+    if collected then
+        MM2CoinBlacklist[coin] = os.clock() + 0.02
+    else
+        MM2CoinBlacklist[coin] = os.clock() + 0.12
+    end
+
+    RefreshFarmBagState()
+
+    if IsFarmBagFull() then
+        CompleteAutoFarm()
+    end
+
+    return collected
 end
 
-AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed and Settings.CtrlClickTP and input.UserInputType == Enum.UserInputType.MouseButton1 then
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
-            local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-            local targetCFrame = GetCtrlClickTeleportCFrame()
-
-            if targetCFrame and Root then
-                if getgenv().ToxSafeTeleportToCFrame then
-                    getgenv().ToxSafeTeleportToCFrame(
-                        targetCFrame,
-                        false,
-                        "Ctrl Click TP"
-                    )
-                else
-                    if getgenv().RecordToxTeleportReturn then
-                        getgenv().RecordToxTeleportReturn()
-                    end
-
-                    if getgenv().AllowToxTeleport then
-                        getgenv().AllowToxTeleport(1.25, "Ctrl Click TP")
-                    end
-
-                    Root.AssemblyLinearVelocity = Vector3.zero
-                    Root.AssemblyAngularVelocity = Vector3.zero
-
-                    if Player.Character then
-                        Player.Character:PivotTo(targetCFrame)
-                    else
-                        Root.CFrame = targetCFrame
-                    end
-                end
-            end
-        end
-    end
-
-    local isGuiKey = false
-    if typeof(Settings.GUIKeybind) == "EnumItem" then
-        isGuiKey = (input.KeyCode == Settings.GUIKeybind)
-    elseif typeof(Settings.GUIKeybind) == "string" then
-        isGuiKey = (input.KeyCode.Name == Settings.GUIKeybind)
-    end
-    if isGuiKey then
-        if getgenv().ToggleToxGui then
-            return
-        end
-        if Main.Visible then
-            SubGuisPreKeyHiddenState.ChatLog = ChatLogGui.Visible
-            SubGuisPreKeyHiddenState.Music = MusicGui.Visible
-            SubGuisPreKeyHiddenState.Waypoints = WaypointsGui.Visible
-            SubGuisPreKeyHiddenState.QuickJoin = JoinGamesGui and JoinGamesGui.Visible or false
-
-            Main.Visible = false
-            ChatLogGui.Visible = false
-            MusicGui.Visible = false
-            WaypointsGui.Visible = false
-            if JoinGamesGui then JoinGamesGui.Visible = false end
-
-            for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
-                if gui and gui.Parent then
-                    SubGuisPreKeyHiddenState["Extra_" .. tostring(key)] = gui.Visible
-                    gui.Visible = false
-                end
-            end
-        else
-            Main.Visible = true
-
-            if Tabs.Visible then
-                if SubGuisPreKeyHiddenState.ChatLog ~= nil then
-                    ChatLogGui.Visible = SubGuisPreKeyHiddenState.ChatLog
-                end
-                if SubGuisPreKeyHiddenState.Music ~= nil then
-                    MusicGui.Visible = SubGuisPreKeyHiddenState.Music
-                end
-                if SubGuisPreKeyHiddenState.Waypoints ~= nil then
-                    WaypointsGui.Visible = SubGuisPreKeyHiddenState.Waypoints
-                end
-                if JoinGamesGui and SubGuisPreKeyHiddenState.QuickJoin ~= nil then
-                    JoinGamesGui.Visible = SubGuisPreKeyHiddenState.QuickJoin
-                end
-
-                for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
-                    local saved = SubGuisPreKeyHiddenState["Extra_" .. tostring(key)]
-
-                    if gui and gui.Parent and saved ~= nil then
-                        gui.Visible = saved
-                    end
-                end
-            else
-                ChatLogGui.Visible = false
-                MusicGui.Visible = false
-                WaypointsGui.Visible = false
-                    if JoinGamesGui then JoinGamesGui.Visible = false end
-            end
-        end
-    end
-end))
-
-if Settings.WalkFling then
-    StartWalkFling()
-end
-
-AddConnection(Player.Idled:Connect(function()
-    if ScriptLoaded and Settings.AntiAFK then
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
-    end
-end))
-
-AddConnection(RunService.Stepped:Connect(function()
-    if Destroyed then return end
-
-    if not ScriptLoaded then
-        if Settings.AntiFling then
-            for _, p in ipairs(
-                Players:GetPlayers()
-            ) do
-                if p ~= Player
-                and p.Character then
-                    for _, part in ipairs(
-                        p.Character:GetChildren()
-                    ) do
-                        if part:IsA(
-                            "BasePart"
-                        ) then
-                            if AntiFlingDefaults[part]
-                            == nil then
-                                AntiFlingDefaults[part] =
-                                    part.CanCollide
-                            end
-
-                            part.CanCollide = false
-                        end
-                    end
-                end
-            end
-        end
-
+AddConnection(RunService.Heartbeat:Connect(function()
+    if not Settings.MM2AutoFarmV2
+    or not AutoFarmPrepared
+    or not AutoFarmRoot
+    or not AutoFarmRoot.Parent then
         return
     end
 
-    if Settings.Noclip and Player.Character then
-        for _, part in ipairs(Player.Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                if NoclipDefaults[part] == nil then
-                    NoclipDefaults[part] = part.CanCollide
-                end
-                part.CanCollide = false
-            end
-        end
+    if not AutoFarmHumanoid
+    or not AutoFarmHumanoid.Parent
+    or AutoFarmHumanoid.Health <= 0
+    or not IsAutoFarmPlayerEligible() then
+        StopAutoFarm(false)
+        return
     end
 
-    if Settings.AntiFling then
-        if Settings.WalkFling then
-            local root =
-                Player.Character
-                and Player.Character:
-                    FindFirstChild(
-                        "HumanoidRootPart"
+    AutoFarmRoot.Anchored = false
+    AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+    AutoFarmHumanoid.PlatformStand = false
+    AutoFarmHumanoid.Sit = false
+    AutoFarmHumanoid.AutoRotate = true
+end))
+
+task.spawn(function()
+    while not getgenv().Destroyed and game.PlaceId == 142823291 do
+        if not ToxScriptReady() then
+            if AutoFarmPrepared then
+                StopAutoFarm(false)
+            end
+
+            task.wait(0.1)
+        else
+
+        if Settings.MM2AutoFarmV2 then
+            RefreshFarmBagState()
+
+            local roundActive,
+                currentMap,
+                currentContainer =
+                UpdateAutoFarmRoundLifecycle()
+
+            local _,
+                humanoid,
+                root,
+                alive =
+                IsAliveCharacter()
+            local farmPlayerEligible = IsAutoFarmPlayerEligible()
+
+            if AutoFarmPausedFull then
+                local bagReset =
+                    AutoFarmBagKnown
+                    and not IsFarmBagFull()
+
+                local roundChanged =
+                    (
+                        AutoFarmPauseMap
+                        and currentMap
+                        and currentMap ~= AutoFarmPauseMap
+                    )
+                    or (
+                        AutoFarmPauseContainer
+                        and currentContainer
+                        and currentContainer ~= AutoFarmPauseContainer
                     )
 
-            if root
-            and not WalkFlingImpulseActive
-            and root.AssemblyLinearVelocity.Magnitude
-                > 350 then
-                root.AssemblyLinearVelocity =
-                    Vector3.zero
-                root.AssemblyAngularVelocity =
-                    Vector3.zero
-            end
-        else
-            for _, p in ipairs(
-                Players:GetPlayers()
-            ) do
-                if p ~= Player
-                and p.Character then
-                    for _, part in ipairs(
-                        p.Character:GetChildren()
-                    ) do
-                        if part:IsA(
-                            "BasePart"
-                        ) then
-                            if AntiFlingDefaults[part]
-                            == nil then
-                                AntiFlingDefaults[part] =
-                                    part.CanCollide
-                            end
-
-                            part.CanCollide = false
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-    if Settings.NoFallDamage and Root then
-        local velocity = Root.AssemblyLinearVelocity
-        local triggerVelocity = game.PlaceId == 189707 and -60 or -40
-        local safeVelocity = game.PlaceId == 189707 and -45 or -35
-
-        if velocity.Y < triggerVelocity then
-            Root.AssemblyLinearVelocity = Vector3.new(velocity.X, safeVelocity, velocity.Z)
-        end
-    end
-
-    UpdateAirWalk()
-    if Settings.Fullbright then UpdateFullbright() end
-end))
-
-FlyBV = nil
-FlyBG = nil
-
-function DisableNormalFlyPhysics()
-    local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-    if FlyBV then FlyBV:Destroy() FlyBV = nil end
-    if FlyBG then FlyBG:Destroy() FlyBG = nil end
-    if Hum then Hum.PlatformStand = false end
-end
-
-AddConnection(RunService.RenderStepped:Connect(function(delta)
-	if Destroyed or not ScriptLoaded then return end
-
-    local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-    local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-
-    if Hum and Hum.Health > 0 then
-        local defaults = GetHumanoidDefaults(Hum)
-
-        if Settings.Speed then
-            Hum.WalkSpeed = Settings.SpeedValue
-        end
-
-        if Settings.Jump then
-            Hum.UseJumpPower = true
-            Hum.JumpPower = Settings.JumpValue
-        elseif defaults and HumanoidDefaults[Hum] == defaults then
-            if Hum.UseJumpPower ~= defaults.UseJumpPower and not Settings.Jump then
-                Hum.UseJumpPower = defaults.UseJumpPower
-                Hum.JumpPower = defaults.JumpPower
-                Hum.JumpHeight = defaults.JumpHeight
-            end
-        end
-
-        if Settings.Bhop then
-            local interval = math.max(0.05, tonumber(Settings.BhopInterval) or 0.2)
-            getgenv().BhopTimer = (getgenv().BhopTimer or 0) + delta
-            if getgenv().BhopTimer >= interval and (Hum.FloorMaterial ~= Enum.Material.Air or Hum:GetState() == Enum.HumanoidStateType.Landed) then
-                getgenv().BhopTimer = 0
-                Hum:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        else
-            getgenv().BhopTimer = 0
-        end
-    end
-
-    if Settings.FOVEnabled then
-        CaptureFOVDefault()
-        Camera.FieldOfView = Settings.FOVValue or FOVDefault
-    end
-
-    if Settings.ForceShiftLock then
-        CaptureShiftLockDefaults()
-        Player.DevEnableMouseLock = true
-        if isShiftLockActive and Root then
-            Camera.CFrame = Camera.CFrame * CFrame.new(1.7, 0.5, 0)
-            Root.CFrame = CFrame.new(Root.Position, Root.Position + Vector3.new(Camera.CFrame.LookVector.X, 0, Camera.CFrame.LookVector.Z))
-        end
-    end
-
-    if Settings.LoopTPTarget and Settings.LoopTPTarget.Character and Settings.LoopTPTarget.Character:FindFirstChild("HumanoidRootPart") and Root then
-        if getgenv().AllowToxTeleport then getgenv().AllowToxTeleport(0.2, "Loop TP") end
-        Root.CFrame = Settings.LoopTPTarget.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3)
-    end
-
-    local seat = Hum and Hum.SeatPart
-
-    if seat and Settings.CarSpeed and not Settings.CarFly then
-        seat.AssemblyLinearVelocity =
-            seat.CFrame.LookVector * (Settings.CarSpeedValue or 100)
-    end
-
-    if Settings.CarFly
-    and seat
-    and Root then
-        if EnsureCarFlyMovers(
-            Root,
-            seat
-        ) then
-            local flySpeed =
-                math.clamp(
-                    tonumber(
-                        Settings.CarFlySpeed
-                    ) or 80,
-                    5,
-                    300
-                )
-
-            local moveVector =
-                GetCarFlyMoveVector()
-
-            local velocity =
-                Vector3.zero
-
-            velocity = velocity + (Camera.CFrame.RightVector * (moveVector.X * flySpeed))
-
-            velocity = velocity - (Camera.CFrame.LookVector * (moveVector.Z * flySpeed))
-
-            if UserInputService:
-                IsKeyDown(
-                    Enum.KeyCode.Space
-                )
-            or UserInputService:
-                IsKeyDown(
-                    Enum.KeyCode.E
-                ) then
-                velocity = velocity + Vector3.new(0, flySpeed * 2, 0)
-            end
-
-            if UserInputService:
-                IsKeyDown(
-                    Enum.KeyCode.LeftShift
-                )
-            or UserInputService:
-                IsKeyDown(
-                    Enum.KeyCode.Q
-                ) then
-                velocity = velocity - Vector3.new(0, flySpeed * 2, 0)
-            end
-
-            CarFlyVelocity.Velocity =
-                velocity
-
-            CarFlyGyro.CFrame =
-                Camera.CFrame
-
-            Root.AssemblyAngularVelocity =
-                Vector3.zero
-        end
-    else
-        DestroyCarFlyMovers()
-    end
-
-    if Settings.Spinbot and Root then
-        Root.CFrame = Root.CFrame * CFrame.Angles(0, math.rad(Settings.SpinSpeed or 50), 0)
-    end
-
-    local actualFlySpeed = (Settings.FlySpeed or 10) * 10
-
-    if Settings.SmoothFly and Root and Hum and Hum.Health > 0 then
-        DisableNormalFlyPhysics()
-        Hum.PlatformStand = true
-        Root.AssemblyLinearVelocity = Vector3.zero
-        Root.AssemblyAngularVelocity = Vector3.zero
-
-        local moveDir = Vector3.zero
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then moveDir = moveDir + Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then moveDir = moveDir - Vector3.new(0, 1, 0) end
-
-        if moveDir.Magnitude > 0 then
-            moveDir = moveDir.Unit
-            Root.CFrame = Root.CFrame + (moveDir * (actualFlySpeed * delta))
-        end
-    elseif Settings.NormalFly and Root and Hum and Hum.Health > 0 then
-        if not FlyBV or FlyBV.Parent ~= Root then
-            DisableNormalFlyPhysics()
-            FlyBV = Instance.new("BodyVelocity")
-            FlyBV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-            FlyBV.Velocity = Vector3.zero
-            FlyBV.Parent = Root
-
-            FlyBG = Instance.new("BodyGyro")
-            FlyBG.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-            FlyBG.CFrame = Root.CFrame
-            FlyBG.Parent = Root
-        end
-
-        Hum.PlatformStand = true
-        local dir = Vector3.zero
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then dir = dir + Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then dir = dir - Vector3.new(0, 1, 0) end
-
-        FlyBV.Velocity = dir * actualFlySpeed
-        FlyBG.CFrame = Camera.CFrame
-    else
-        DisableNormalFlyPhysics()
-    end
-
-    if FOVCircle then
-        FOVCircle.Visible = Settings.Aimbot and Settings.ShowFOV
-        FOVCircle.Radius = Settings.FOVRadius or 120
-        FOVCircle.Position = UserInputService:GetMouseLocation()
-    end
-
-    if CrosshairH and CrosshairV then
-        CrosshairH.Visible = false
-        CrosshairV.Visible = false
-    end
-
-    if not getgenv().ToxUniversal2OwnsAimbot
-    and Settings.Aimbot
-    and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-        local Target = GetClosestPlayerToMouse()
-        if Target then
-            local Smooth = Settings.AimbotSmoothness or 2
-            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, Target.Position), 1 / Smooth)
-        end
-    end
-
-    if Settings.Triggerbot then
-        local mousePos = UserInputService:GetMouseLocation()
-        local ray = Camera:ViewportPointToRay(mousePos.X, mousePos.Y)
-        local result = workspace:Raycast(ray.Origin, ray.Direction * 1000)
-        if result and result.Instance then
-            local targetModel = result.Instance:FindFirstAncestorOfClass("Model")
-            local targetPlayer = targetModel and Players:GetPlayerFromCharacter(targetModel)
-            if targetPlayer and targetPlayer ~= Player then
-                local tool = Player.Character and Player.Character:FindFirstChildOfClass("Tool")
-                if tool then tool:Activate() end
-            end
-        end
-    end
-
-    local mm2RoleESPActive = (game.GameId == MM2GameId or game.PlaceId == MM2PlaceId)
-        and Settings.MM2RoleESP == true
-    local effectiveESPEnabled = Settings.ESPEnabled or mm2RoleESPActive
-    local effectiveESPNames = Settings.ESPNames or mm2RoleESPActive
-    local effectiveChams = Settings.Chams or mm2RoleESPActive
-    local effectiveTeamColors = Settings.ESPTeamColors or mm2RoleESPActive
-    local toxRoleGetter =
-        getgenv().GetToxRole
-    local toxUserChecker =
-        getgenv().IsToxUser
-    local toxRoleESPActive =
-        effectiveESPEnabled
-        and type(toxRoleGetter)
-            == "function"
-        and type(toxUserChecker)
-            == "function"
-
-    local anyESPActive = effectiveESPEnabled and (effectiveESPNames
-        or Settings.ESPDistance
-        or Settings.ESPTracers
-        or Settings.ESPBox
-        or Settings.ESPHeadDot
-        or effectiveChams
-        or toxRoleESPActive)
-
-    if anyESPActive and tick() - LastESPSafetyRefresh >= 6 then
-        LastESPSafetyRefresh = tick()
-
-        local refreshPlayers = {}
-
-        for p in pairs(ESPDrawings) do
-            table.insert(refreshPlayers, p)
-        end
-
-        for p in pairs(Highlights) do
-            if not ESPDrawings[p] then
-                table.insert(refreshPlayers, p)
-            end
-        end
-
-        for p in pairs(ESPLabels) do
-            if not ESPDrawings[p] and not Highlights[p] then
-                table.insert(refreshPlayers, p)
-            end
-        end
-
-        for _, p in ipairs(refreshPlayers) do
-            ClearESPForPlayer(p)
-        end
-    end
-
-    for p, _ in pairs(ESPDrawings) do
-        if not p or not p.Parent or not Players:FindFirstChild(p.Name) then
-            ClearESPForPlayer(p)
-        end
-    end
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= Player then
-            if p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChildOfClass("Humanoid") then
-                local char = p.Character
-
-                if ESPCharacterRefs[p] and ESPCharacterRefs[p] ~= char then
-                    ClearESPForPlayer(p)
-                end
-
-                ESPCharacterRefs[p] = char
-
-                local hrp = char.HumanoidRootPart
-                local hum = char:FindFirstChildOfClass("Humanoid")
-                local espColor, espRole = GetESPVisualInfo(p)
-
-                if effectiveESPEnabled and effectiveChams then
-                    local hl = Highlights[p]
-                    if not hl or hl.Parent ~= char then
-                        if hl then hl:Destroy() end
-                        hl = Instance.new("Highlight")
-                        hl.Name = "ToxChams"
-                        hl.Adornee = char
-                        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                        hl.Parent = char
-                        Highlights[p] = hl
-                    end
-                    hl.FillColor = espColor
-                    hl.OutlineColor = espColor
-                    hl.FillTransparency = 0.5
+                if bagReset
+                or roundChanged
+                or (AutoFarmSawRoundEnd and roundActive) then
+                    ResetAutoFarmFullPause()
+                    AutoFarmBagKnown = false
+                    AutoFarmBagCoins = 0
+                    RefreshFarmBagState()
                 else
-                    if Highlights[p] then Highlights[p]:Destroy() Highlights[p] = nil end
+                    if AutoFarmPrepared then
+                        StopAutoFarm(false)
+                    end
+
+                    task.wait(0.2)
+                end
+            elseif not alive or not farmPlayerEligible then
+                if AutoFarmPrepared then
+                    StopAutoFarm(false)
                 end
 
-                local distFromMe = Root and (Root.Position - hrp.Position).Magnitude or 0
-                local withinDist = (Settings.EspMaxDistance <= 0) or (distFromMe <= Settings.EspMaxDistance)
-
-                if effectiveESPEnabled
-                and (
-                    effectiveESPNames
-                    or Settings.ESPDistance
-                    or toxRoleESPActive
-                )
-                and hum.Health > 0
-                and withinDist then
-                    local billboard = ESPLabels[p]
-
-                    if not billboard or billboard.Parent ~= char then
-                        if billboard then billboard:Destroy() end
-
-                        billboard = Instance.new("BillboardGui")
-                        billboard.Name = "ToxESPName"
-                        billboard.Adornee = char:FindFirstChild("Head") or hrp
-                        billboard.AlwaysOnTop = true
-                        billboard.Size = UDim2.fromOffset(320, 44)
-                        billboard.StudsOffset = Vector3.new(0, 3.2, 0)
-                        billboard.MaxDistance = Settings.EspMaxDistance > 0 and Settings.EspMaxDistance or 100000
-                        billboard.Parent = char
-
-                        local label = Instance.new("TextLabel")
-                        label.Name = "Label"
-                        label.Size = UDim2.fromScale(1, 1)
-                        label.BackgroundTransparency = 1
-                        label.TextColor3 = espColor
-                        label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-                        label.TextStrokeTransparency = 0
-                        label.TextSize = 13
-                        label.Font = Enum.Font.Gotham
-                        label.TextWrapped = true
-                        label.TextXAlignment = Enum.TextXAlignment.Center
-                        label.TextYAlignment = Enum.TextYAlignment.Center
-                        label.Parent = billboard
-
-                        ESPLabels[p] = billboard
-                    end
-
-                    local label = billboard:FindFirstChild("Label")
-                    local lines = {}
-
-                    if effectiveESPNames then
-                        local mode = Settings.ESPNameMode or "Display"
-                        local nameText
-
-                        if mode == "Name" then
-                            nameText = "@" .. p.Name
-                        elseif mode == "Name + Display" then
-                            nameText = p.DisplayName .. " (@" .. p.Name .. ")"
-                        else
-                            nameText = p.DisplayName
-                        end
-
-                        if effectiveTeamColors and espRole then
-                            nameText = nameText .. " [" .. espRole .. "]"
-                        end
-
-                        table.insert(lines, nameText)
-                    end
-
-                    if toxRoleESPActive then
-                        local activeOk,
-                            isToxUser =
-                            pcall(
-                                toxUserChecker,
-                                p
-                            )
-
-                        if activeOk
-                        and isToxUser then
-                            local roleOk,
-                                toxRole =
-                                pcall(
-                                    toxRoleGetter,
-                                    p
-                                )
-
-                            if roleOk
-                            and typeof(toxRole)
-                                == "string"
-                            and toxRole ~= "" then
-                                table.insert(
-                                    lines,
-                                    "Tox: "
-                                    .. toxRole
-                                )
-                            end
-                        end
-                    end
-
-                    if Settings.ESPDistance then
-                        table.insert(lines, "Dist: " .. math.floor(distFromMe) .. "m")
-                    end
-
-                    if label then
-                        label.Text = table.concat(lines, "\n")
-                        label.TextColor3 = espColor
-                    end
-
-                    billboard.Enabled = #lines > 0
-                    billboard.MaxDistance = Settings.EspMaxDistance > 0 and Settings.EspMaxDistance or 100000
-                elseif ESPLabels[p] then
-                    ESPLabels[p]:Destroy()
-                    ESPLabels[p] = nil
+                task.wait(0.15)
+            elseif not roundActive then
+                if AutoFarmPrepared then
+                    StopAutoFarm(false)
                 end
 
-                local hasDrawingESP = effectiveESPEnabled and (Settings.ESPTracers or Settings.ESPBox or Settings.ESPHeadDot)
+                task.wait(0.25)
+            elseif IsFarmBagFull() then
+                CompleteAutoFarm()
+                task.wait(0.2)
+            elseif not ActionBusy then
+                local origin = root and root.Position or nil
 
-                if hasDrawingESP and Drawing and hum.Health > 0 and withinDist then
-                    local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+                if AutoFarmRoot
+                and AutoFarmRoot.Parent then
+                    origin = AutoFarmRoot.Position
+                end
 
-                    if not ESPDrawings[p] then
-                        ESPDrawings[p] = {
-                            Line = Drawing.new("Line"),
-                            Box = Drawing.new("Square"),
-                            HeadDot = Drawing.new("Circle")
-                        }
+                local coin = GetBestCoin(origin, false)
+
+                if coin then
+                    AutoFarmCoin(coin)
+                else
+                    if AutoFarmPrepared then
+                        StopAutoFarm(false)
                     end
 
-                    local lineDraw = ESPDrawings[p].Line
-                    local boxDraw = ESPDrawings[p].Box
-                    local headDraw = ESPDrawings[p].HeadDot
-
-                    if onScreen then
-                        if Settings.ESPTracers then
-                            local startVector = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-
-                            if Settings.TracerOrigin == "UP" then
-                                startVector = Vector2.new(Camera.ViewportSize.X / 2, 0)
-                            elseif Settings.TracerOrigin == "MOUSE" then
-                                startVector = UserInputService:GetMouseLocation()
-                            end
-
-                            lineDraw.From = startVector
-                            lineDraw.To = Vector2.new(pos.X, pos.Y)
-                            lineDraw.Color = espColor
-                            lineDraw.Thickness = 1
-                            lineDraw.Visible = true
-                        else
-                            lineDraw.Visible = false
-                        end
-
-                        if Settings.ESPBox then
-                            local boxHeight = math.clamp(1000 / pos.Z, 10, 300)
-                            local boxWidth = boxHeight * 0.65
-                            boxDraw.Size = Vector2.new(boxWidth, boxHeight)
-                            boxDraw.Position = Vector2.new(pos.X - boxWidth / 2, pos.Y - boxHeight / 2)
-                            boxDraw.Color = espColor
-                            boxDraw.Thickness = 1.5
-                            boxDraw.Filled = false
-                            boxDraw.Visible = true
-                        else
-                            boxDraw.Visible = false
-                        end
-
-                        if Settings.ESPHeadDot then
-                            local head = char:FindFirstChild("Head")
-
-                            if head then
-                                local hp, hon = Camera:WorldToViewportPoint(head.Position)
-                                headDraw.Position = Vector2.new(hp.X, hp.Y)
-                                headDraw.Radius = 4
-                                headDraw.Filled = true
-                                headDraw.Color = espColor
-                                headDraw.Visible = hon
-                            else
-                                headDraw.Visible = false
-                            end
-                        else
-                            headDraw.Visible = false
-                        end
-                    else
-                        lineDraw.Visible = false
-                        boxDraw.Visible = false
-                        headDraw.Visible = false
-                    end
-                elseif ESPDrawings[p] then
-                    for _, drawing in pairs(ESPDrawings[p]) do
-                        drawing.Visible = false
-                    end
+                    task.wait(0.12)
                 end
             else
-                ClearESPForPlayer(p)
+                task.wait(0.06)
             end
-        end
-    end
+        else
+            if AutoFarmPrepared then
+                StopAutoFarm(true)
+            else
+                local character = Player.Character
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                local root = character and character:FindFirstChild("HumanoidRootPart")
 
-    if Settings.HitboxExpander then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= Player and p.Character then
-                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    if not HitboxDefaults[hrp] then
-                        HitboxDefaults[hrp] = {
-                            Size = hrp.Size,
-                            Transparency = hrp.Transparency,
-                            CanCollide = hrp.CanCollide
-                        }
-                    end
+                if humanoid and humanoid.Health > 0 then
+                    humanoid.PlatformStand = false
+                    humanoid.Sit = false
+                    humanoid.AutoRotate = true
+                end
 
-                    hrp.Size = Vector3.new(Settings.HitboxSize or 10, Settings.HitboxSize or 10, Settings.HitboxSize or 10)
-                    hrp.Transparency = 0.7
-                    hrp.CanCollide = false
+                if root then
+                    root.Anchored = false
                 end
             end
+
+            task.wait(0.1)
+        end
         end
     end
+end)
 
-    if Settings.KillAura and Root then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= Player and p.Character then
-                local tHrp = p.Character:FindFirstChild("HumanoidRootPart")
-                local tHum = p.Character:FindFirstChildOfClass("Humanoid")
-                if tHrp and tHum and tHum.Health > 0 then
-                    if (Root.Position - tHrp.Position).Magnitude <= (Settings.KillAuraRange or 15) then
-                        local tool = Player.Character and Player.Character:FindFirstChildOfClass("Tool")
-                        if tool then tool:Activate() end
-                    end
-                end
-            end
-        end
-    end
-end))
+function ApplyRoleESP(enabled)
+    Settings.MM2RoleESP = enabled == true
 
-function ShowCenterLoadSequence()
-    local blur = Instance.new("BlurEffect")
-    blur.Size = 18
-    blur.Parent = Lighting
-
-    local SplashFrame = Instance.new("Frame")
-    SplashFrame.Size = UDim2.new(0, 360, 0, 110)
-    SplashFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-    SplashFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-    SplashFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
-    SplashFrame.BorderSizePixel = 0
-    SplashFrame.ClipsDescendants = true
-    SplashFrame.Parent = NotifGui
-
-    local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 10) Corner.Parent = SplashFrame
-    local Stroke = Instance.new("UIStroke") Stroke.Color = MAIN_COLOR Stroke.Thickness = 2 Stroke.Parent = SplashFrame
-
-    local SplashLogo = Instance.new("ImageLabel")
-    SplashLogo.Size = UDim2.new(0, 48, 0, 48)
-    SplashLogo.Position = UDim2.new(0, 18, 0, 16)
-    SplashLogo.BackgroundTransparency = 1
-    SplashLogo.Image = LOGO_ID
-    SplashLogo.Parent = SplashFrame
-
-    local TitleLabel = Instance.new("TextLabel")
-    TitleLabel.Size = UDim2.new(1, -85, 0, 24)
-    TitleLabel.Position = UDim2.new(0, 78, 0, 16)
-    TitleLabel.BackgroundTransparency = 1
-    TitleLabel.Text = "ToxHub"
-    TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    TitleLabel.Font = Enum.Font.GothamBold
-    TitleLabel.TextSize = 15
-    TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    TitleLabel.Parent = SplashFrame
-
-    local SubLabel = Instance.new("TextLabel")
-    SubLabel.Size = UDim2.new(1, -85, 0, 20)
-    SubLabel.Position = UDim2.new(0, 78, 0, 40)
-    SubLabel.BackgroundTransparency = 1
-    SubLabel.Text = "Made by @BG_0o"
-    SubLabel.TextColor3 = Color3.fromRGB(150, 150, 180)
-    SubLabel.Font = Enum.Font.GothamMedium
-    SubLabel.TextSize = 12
-    SubLabel.TextXAlignment = Enum.TextXAlignment.Left
-    SubLabel.Parent = SplashFrame
-
-    local BarBackground = Instance.new("Frame")
-    BarBackground.Size = UDim2.new(1, -36, 0, 8)
-    BarBackground.Position = UDim2.new(0, 18, 1, -22)
-    BarBackground.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
-    BarBackground.BorderSizePixel = 0
-    BarBackground.Parent = SplashFrame
-
-    local BarCorner = Instance.new("UICorner") BarCorner.CornerRadius = UDim.new(0, 4) BarCorner.Parent = BarBackground
-    local BarFill = Instance.new("Frame")
-    BarFill.Size = UDim2.new(0, 0, 1, 0)
-    BarFill.BackgroundColor3 = MAIN_COLOR
-    BarFill.BorderSizePixel = 0
-    BarFill.Parent = BarBackground
-    local BarFillCorner = Instance.new("UICorner") BarFillCorner.CornerRadius = UDim.new(0, 4) BarFillCorner.Parent = BarFill
-
-    local PercentLabel = Instance.new("TextLabel")
-    PercentLabel.Size = UDim2.new(0, 40, 0, 18)
-    PercentLabel.Position = UDim2.new(1, -58, 0, 16)
-    PercentLabel.BackgroundTransparency = 1
-    PercentLabel.Text = "0%"
-    PercentLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    PercentLabel.Font = Enum.Font.GothamBold
-    PercentLabel.TextSize = 12
-    PercentLabel.TextXAlignment = Enum.TextXAlignment.Right
-    PercentLabel.Parent = SplashFrame
-
-    local duration = 4.0
-    local steps = 50
-    for i = 1, steps do
-        local p = i / steps
-        BarFill.Size = UDim2.new(p, 0, 1, 0)
-        PercentLabel.Text = math.floor(p * 100) .. "%"
-        if i == steps then TitleLabel.Text = "ToxHub Loaded Successfully" end
-        task.wait(duration / steps)
+    if enabled and getgenv().ToxRefreshMM2Roles then
+        getgenv().ToxRefreshMM2Roles(true)
     end
 
-    if blur then blur:Destroy() end
+    if AutoSaveConfiguration then
+        AutoSaveConfiguration()
+    end
+end
 
-    local fallTween = TweenService:Create(SplashFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-        Position = UDim2.new(0.5, 0, 1.3, 0),
-        BackgroundTransparency = 1
-    })
-    local finished = false
-
-    local function FinishLoading()
-        if finished then
+function FlingSelectedRole()
+    local target = nil
+    if Settings.MM2FlingTarget == "Custom Player" then
+        local nick = string.lower(tostring(Settings.MM2FlingCustomNick or "")):gsub("%s+", "")
+        if nick == "" then
+            CustomNotify("Enter player name to fling", Color3.fromRGB(255, 180, 70))
             return
         end
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= Player then
+                local pName = string.lower(p.Name)
+                local pDisplay = string.lower(p.DisplayName)
+                if pName == nick or pDisplay == nick or string.find(pName, nick, 1, true) or string.find(pDisplay, nick, 1, true) then
+                    target = p
+                    break
+                end
+            end
+        end
+        if not target then
+            CustomNotify("Player not found: " .. tostring(Settings.MM2FlingCustomNick), Color3.fromRGB(255, 180, 70))
+            return
+        end
+    else
+        local role = Settings.MM2FlingTarget == "Sheriff" and "Sheriff" or "Murderer"
+        target = GetPlayerByRole(role)
+        if not target then
+            CustomNotify(role .. " not found", Color3.fromRGB(255, 180, 70))
+            return
+        end
+    end
 
-        finished = true
+    local fling = getgenv().ToxFlingPlayer
+    if not fling then
+        CustomNotify("Fling system unavailable", Color3.fromRGB(255, 100, 100))
+        return
+    end
+
+    local restoreAntiFling = Settings.AntiFling == true
+
+    task.spawn(function()
+        if restoreAntiFling then
+            SetSharedTemporary("AntiFling", false)
+        end
 
         pcall(function()
-            if SplashFrame and SplashFrame.Parent then
-                SplashFrame:Destroy()
-            end
+            fling(target)
         end)
 
-        ScriptLoaded = true
-        getgenv().ScriptLoaded = true
-
-        if not Destroyed and not getgenv().Destroyed then
-            local finalPosition = (getgenv().GetSavedGuiPosition and getgenv().GetSavedGuiPosition("Main")) or UDim2.new(0.5, -360, 0.5, -240)
-
-            local finalSize =
-                (
-                    getgenv().GetSavedGuiSize
-                    and getgenv().GetSavedGuiSize(
-                        "Main",
-                        UDim2.new(
-                            0,
-                            720,
-                            0,
-                            480
-                        )
-                    )
-                )
-                or UDim2.new(
-                    0,
-                    720,
-                    0,
-                    480
-                )
-
-            Main.Size = UDim2.new(0, 0, 0, 0)
-            Main.Position = finalPosition
-            Main.Visible = true
-
-            Main:TweenSizeAndPosition(
-                finalSize,
-                finalPosition,
-                Enum.EasingDirection.Out,
-                Enum.EasingStyle.Back,
-                0.5,
-                true
-            )
-
-            CustomNotify("ToxHub Revolution Loaded Successfully!", Color3.fromRGB(100, 255, 100))
-        end
-    end
-
-    fallTween.Completed:Connect(FinishLoading)
-    fallTween:Play()
-
-    task.delay(0.75, function()
-        if not finished then
-            FinishLoading()
+        if restoreAntiFling then
+            SetSharedTemporary("AntiFling", true)
         end
     end)
 end
 
-task.spawn(function()
-    local ok, err = pcall(ShowCenterLoadSequence)
-
-    if not ok then
-        warn("[ToxHub Loading Error]: " .. tostring(err))
-        ScriptLoaded = true
-        getgenv().ScriptLoaded = true
-
-        if Main and Main.Parent and not getgenv().Destroyed then
-            Main.Visible = true
-        end
-    end
-end)
-
-SubGuisPreMinimizedState = {}
-Minimize = getgenv().Minimize
-Minimized = false
-getgenv().ToxMainMinimized = false
-MainExpandedSize =
-    (
-        getgenv().GetSavedGuiSize
-        and getgenv().GetSavedGuiSize(
-            "Main",
-            UDim2.new(
-                0,
-                720,
-                0,
-                480
-            )
-        )
-    )
-    or UDim2.new(
-        0,
-        720,
-        0,
-        480
-    )
-
-function CollapseSubGuiWithMain(key, gui)
-    if not gui then return end
-
-    local control = SubGuiControls[gui]
-
-    SubGuisPreMinimizedState[key] = {
-        Visible = gui.Visible,
-        WasMinimized = control and control.Minimized or false
-    }
-
-    if gui.Visible and control and not control.Minimized then
-        SetSubGuiMinimized(control, true)
-    end
-end
-
-function RestoreSubGuiAfterMain(key, gui)
-    if not gui then return end
-
-    local state = SubGuisPreMinimizedState[key]
-    if not state then return end
-
-    gui.Visible = state.Visible
-
-    local control = SubGuiControls[gui]
-    if control then
-        SetSubGuiMinimized(control, state.WasMinimized)
-    end
-end
-
-if Minimize and not getgenv().SetToxMinimized then
-    Minimize.MouseButton1Click:Connect(function()
-        Minimized = not Minimized
-
-        getgenv().ToxMainMinimized = Minimized
-
-        local resizeHandle = Main and Main:FindFirstChild("ToxResizeHandle")
-
-        if resizeHandle then
-            resizeHandle.Visible = not Minimized
-            resizeHandle.Active = not Minimized
-        end
-
-        if Minimized then
-            if Main.Size.Y.Offset > 44 then
-                MainExpandedSize =
-                    Main.Size
-                getgenv().ToxMainExpandedSize = MainExpandedSize
-            end
-
-            Main.Size =
-                UDim2.new(
-                    MainExpandedSize.X.Scale,
-                    MainExpandedSize.X.Offset,
-                    0,
-                    38
-                )
-        else
-            local savedSize =
-                (
-                    getgenv().GetSavedGuiSize
-                    and getgenv().GetSavedGuiSize(
-                        "Main",
-                        MainExpandedSize
-                    )
-                )
-                or MainExpandedSize
-
-            MainExpandedSize =
-                savedSize
-            getgenv().ToxMainExpandedSize = MainExpandedSize
-
-            Main.Size =
-                MainExpandedSize
-        end
-
-        Tabs.Visible = not Minimized
-        if getgenv().CurrentPage then getgenv().CurrentPage.Visible = not Minimized end
-        Minimize.Text = Minimized and "+" or "-"
-
-        if Minimized then
-            CollapseSubGuiWithMain("ChatLog", ChatLogGui)
-            CollapseSubGuiWithMain("Music", MusicGui)
-            CollapseSubGuiWithMain("Waypoints", WaypointsGui)
-
-            for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
-                CollapseSubGuiWithMain("Extra_" .. tostring(key), gui)
-            end
-        else
-            RestoreSubGuiAfterMain("ChatLog", ChatLogGui)
-            RestoreSubGuiAfterMain("Music", MusicGui)
-            RestoreSubGuiAfterMain("Waypoints", WaypointsGui)
-
-            for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
-                RestoreSubGuiAfterMain("Extra_" .. tostring(key), gui)
-            end
-        end
-    end)
-end
-
-local function ApplyUniversalSavedOptionsAfterLoad()
-    if Destroyed
-    or not ScriptLoaded then
-        return
-    end
-
-    if Settings.AntiVoid then
-        StartAntiVoid()
-    end
-
-    if Settings.FPSBooster then
-        SetFPSBooster(
-            true,
-            true
-        )
-    end
-
-    if Settings.ToxServerInfoVisible then
-        SetServerInfoVisible(true)
-    end
-end
-
-local function ShowUniversalUpdateAfterLoad()
-    if getgenv().ShowToxUpdateGui then
-        getgenv().ShowToxUpdateGui(
-            ToxUpdateVersion,
-            {
-                ADDED = {},
-                FIXED = {
-                    "Server Info ALL mode now shows FPS, ping, players, region, PlaceId, JobId and JoinId.",
-                    "Server Info size was increased to stop cutting long server ids."
-                },
-                CHANGED = {
-                    "Server Info COPY now copies only the JoinId."
-                },
-                REMOVED = {}
-            }
-        )
-    end
-end
-
-task.spawn(function()
-    while not Destroyed
-    and not ScriptLoaded do
-        task.wait(0.05)
-    end
-
-    if Destroyed then
-        return
-    end
-
-    ApplyUniversalSavedOptionsAfterLoad()
-
-    task.wait(0.2)
-
-    ShowUniversalUpdateAfterLoad()
-end)
-
-getgenv().ToxUniversalLoaded = true
-
-
--- ==============================================================================
--- WASOR PORTED FEATURES (Save Game, No 3D Render, AirWalk Platform, Return By Death)
--- ==============================================================================
-
-task.spawn(function()
-    -- Save Game (Standard & Decompile)
-    if getgenv().ScriptsPage then
-        local function RunSaveGame(decompile)
-            local modeText = decompile and " (Decompiled Scripts)" or " (Standard)"
-            CustomNotify("Starting Save Game" .. modeText .. "...", Color3.fromRGB(218, 170, 42))
-            task.spawn(function()
-                local ok, err = pcall(function()
-                    local SaveInstance = saveinstance or (getgenv and getgenv().saveinstance)
-                    if not SaveInstance then
-                        SaveInstance = loadstring(game:HttpGet("https://raw.githubusercontent.com/luau/UniversalSynSaveInstance/main/saveinstance.lua"))()
-                        if type(SaveInstance) == "table" and SaveInstance.Save then
-                            SaveInstance = SaveInstance.Save
-                        end
-                    end
-
-                    if type(SaveInstance) == "function" then
-                        if decompile then
-                            SaveInstance({Decompile = true, DecompileTimeout = 10})
-                        else
-                            SaveInstance()
-                        end
-                    else
-                        error("saveinstance API not supported by executor")
-                    end
-                end)
-
-                if ok then
-                    CustomNotify("Save Game completed successfully!", Color3.fromRGB(50, 220, 90))
-                else
-                    CustomNotify("Save Game failed: " .. tostring(err), Color3.fromRGB(255, 80, 80))
-                end
-            end)
-        end
-
-        CreateSection("Save Game & World (WASOR)", getgenv().ScriptsPage)
-        CreateButton("Save Place (Standard)", getgenv().ScriptsPage, function() RunSaveGame(false) end)
-        CreateButton("Save Place (Decompile Scripts)", getgenv().ScriptsPage, function() RunSaveGame(true) end)
-    end
-
-    -- No 3D Rendering (Ultra AFK FPS Boost)
-    if getgenv().VisualsPage then
-        CreateToggle("No 3D Rendering (AFK Max FPS)", getgenv().VisualsPage, Settings.No3DRender == true, function(v)
-            Settings.No3DRender = v
-            pcall(function()
-                RunService:Set3dRenderingEnabled(not v)
-            end)
-            if v then
-                CustomNotify("3D Rendering Disabled (Max FPS)", Color3.fromRGB(80, 255, 120))
-            else
-                CustomNotify("3D Rendering Restored", Color3.fromRGB(100, 200, 255))
-            end
-        end, "No3DRender")
-    end
-
-    -- Air Walk Platform (Walking platform in the air)
-    local airPlatform = nil
-    if getgenv().PlayerPage then
-        CreateToggle("Air Walk Platform", getgenv().PlayerPage, Settings.AirWalkPlatform == true, function(v)
-            Settings.AirWalkPlatform = v
-            if v then
-                task.spawn(function()
-                    while Settings.AirWalkPlatform and not getgenv().Destroyed do
-                        local char = Player.Character
-                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                        if hrp then
-                            if not airPlatform or not airPlatform.Parent then
-                                airPlatform = Instance.new("Part")
-                                airPlatform.Name = "ToxAirPlatform"
-                                airPlatform.Size = Vector3.new(6, 1, 6)
-                                airPlatform.Anchored = true
-                                airPlatform.Transparency = 0.8
-                                airPlatform.CanCollide = true
-                                airPlatform.Color = Theme and Theme.Accent or Color3.fromRGB(45, 95, 255)
-                                airPlatform.Parent = workspace
-                            end
-                            airPlatform.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y - 3.4, hrp.Position.Z)
-                        end
-                        task.wait(0.03)
-                    end
-                    if airPlatform then pcall(function() airPlatform:Destroy() end) airPlatform = nil end
-                end)
-            else
-                if airPlatform then pcall(function() airPlatform:Destroy() end) airPlatform = nil end
-            end
-        end, "AirWalkPlatform")
-
-        -- Return By Death
-        local lastDeathCFrame = nil
-        Player.CharacterAdded:Connect(function(char)
-            if Settings.ReturnByDeath and lastDeathCFrame then
-                task.wait(0.5)
-                local hrp = char:WaitForChild("HumanoidRootPart", 5)
-                if hrp and lastDeathCFrame then
-                    hrp.CFrame = lastDeathCFrame
-                    CustomNotify("Returned to death location!", Color3.fromRGB(80, 255, 140))
-                    lastDeathCFrame = nil
-                end
-            end
-
-            local hum = char:WaitForChild("Humanoid", 5)
-            if hum then
-                hum.Died:Connect(function()
-                    local hrp = char:FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        lastDeathCFrame = hrp.CFrame
-                    end
-                end)
-            end
-        end)
-
-        CreateToggle("Return By Death", getgenv().PlayerPage, Settings.ReturnByDeath == true, function(v)
-            Settings.ReturnByDeath = v
-        end, "ReturnByDeath")
-    end
-
-    -- Instant Prompts & Tool Magnet in Extras/World
-    if getgenv().FlingPage then
-        CreateSection("World & Prompts (WASOR)", getgenv().FlingPage)
-        CreateToggle("Instant Proximity Prompts", getgenv().FlingPage, Settings.InstantPrompts == true, function(v)
-            Settings.InstantPrompts = v
-            if v then
-                for _, prompt in ipairs(workspace:GetDescendants()) do
-                    if prompt:IsA("ProximityPrompt") then
-                        prompt.HoldDuration = 0
-                    end
-                end
-            end
-        end, "InstantPrompts")
-
-        workspace.DescendantAdded:Connect(function(desc)
-            if Settings.InstantPrompts and desc:IsA("ProximityPrompt") then
-                desc.HoldDuration = 0
-            end
-        end)
-
-        CreateToggle("Tool Magnet", getgenv().FlingPage, Settings.ToolMagnet == true, function(v)
-            Settings.ToolMagnet = v
-            if v then
-                task.spawn(function()
-                    while Settings.ToolMagnet and not getgenv().Destroyed do
-                        local char = Player.Character
-                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                        if hrp then
-                            for _, item in ipairs(workspace:GetChildren()) do
-                                if item:IsA("BackpackItem") or item:IsA("Tool") then
-                                    local handle = item:FindFirstChild("Handle")
-                                    if handle then
-                                        handle.CFrame = hrp.CFrame
-                                    end
-                                end
-                            end
-                        end
-                        task.wait(0.5)
-                    end
-                end)
-            end
-        end, "ToolMagnet")
-    end
-end)
+getgenv().ToxMM2CoreReady = true
+getgenv().ToxMM2CoreVersion = MM2ModuleVersion
