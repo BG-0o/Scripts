@@ -220,6 +220,11 @@ ScreenWeatherGui.ResetOnSpawn = false
 ScreenWeatherGui.DisplayOrder = 999999990
 ScreenWeatherGui.Parent = ParentContainer
 
+-- UI Forward Declarations to prevent nil-scoping bugs
+local ContentArea = nil
+-- forward declarations moved to header
+local SearchResultsScroll = nil
+
 -- Left Sidebar
 local isSidebarCollapsed = Settings.CollapseSidebar == true
 local sidebarExpandedWidth = tonumber(Settings.SidebarExpandedWidth) or 185
@@ -487,7 +492,7 @@ UserExpiryLabel.Parent = SidebarFooter
 -- Collapse button moved to SidebarHeader for clean footer layout
 
 -- Content Area
-local ContentArea = Instance.new("Frame")
+ContentArea = Instance.new("Frame")
 ContentArea.Name = "ContentArea"
 ContentArea.Size = UDim2.new(1, -(isSidebarCollapsed and sidebarCollapsedWidth or sidebarExpandedWidth), 1, 0)
 ContentArea.Position = UDim2.new(0, isSidebarCollapsed and sidebarCollapsedWidth or sidebarExpandedWidth, 0, 0)
@@ -657,45 +662,55 @@ local function SetMinimized(minimized)
     getgenv().Minimized = isMinimized
 
     if isMinimized then
-        if Main.Size.Y.Offset > 46 then
+        if Main and Main.Size.Y.Offset > 46 then
             MainExpandedSize = Main.Size
             getgenv().ToxMainExpandedSize = MainExpandedSize
         end
-        for _, ch in ipairs(Main:GetChildren()) do
-            if ch.Name == "ToxResizeHandle" or ch.Name == "ResizeHandle" then
-                ch.Visible = false
+        if Main then
+            for _, ch in ipairs(Main:GetChildren()) do
+                if ch.Name == "ToxResizeHandle" or ch.Name == "ResizeHandle" then
+                    ch.Visible = false
+                end
             end
         end
-        Sidebar.Visible = false
-        SidebarFooter.Visible = false
-        UserAvatar.Visible = false
+        if Sidebar then Sidebar.Visible = false end
+        if SidebarFooter then SidebarFooter.Visible = false end
+        if UserAvatar then UserAvatar.Visible = false end
         if SearchPill then SearchPill.Visible = false end
         if PagesContainer then PagesContainer.Visible = false end
-        SearchResultsScroll.Visible = false
-        ContentArea.Position = UDim2.new(0, 0, 0, 0)
-        ContentArea.Size = UDim2.new(1, 0, 1, 0)
-        savedPageTitle = CurrentTabTitle.Text
-        CurrentTabTitle.Text = "ToxHub"
-        Main.ClipsDescendants = true
-        Main.Size = UDim2.new(MainExpandedSize.X.Scale, MainExpandedSize.X.Offset, 0, 46)
-        MinimizeBtn.Text = "+"
+        if SearchResultsScroll then SearchResultsScroll.Visible = false end
+        if ContentArea then
+            ContentArea.Position = UDim2.new(0, 0, 0, 0)
+            ContentArea.Size = UDim2.new(1, 0, 1, 0)
+        end
+        savedPageTitle = (CurrentTabTitle and CurrentTabTitle.Text) or "Home"
+        if CurrentTabTitle then CurrentTabTitle.Text = "ToxHub" end
+        if Main then
+            Main.ClipsDescendants = true
+            Main.Size = UDim2.new(MainExpandedSize.X.Scale, MainExpandedSize.X.Offset, 0, 46)
+        end
+        if MinimizeBtn then MinimizeBtn.Text = "+" end
     else
-        Main.Size = MainExpandedSize
-        Sidebar.Visible = true
-        SidebarFooter.Visible = true
-        UserAvatar.Visible = true
-        if SearchPill then SearchPill.Visible = true end
-        if PagesContainer then PagesContainer.Visible = true end
-        for _, ch in ipairs(Main:GetChildren()) do
-            if ch.Name == "ToxResizeHandle" or ch.Name == "ResizeHandle" then
-                ch.Visible = true
+        if Main then
+            Main.Size = MainExpandedSize
+            for _, ch in ipairs(Main:GetChildren()) do
+                if ch.Name == "ToxResizeHandle" or ch.Name == "ResizeHandle" then
+                    ch.Visible = true
+                end
             end
         end
+        if Sidebar then Sidebar.Visible = true end
+        if SidebarFooter then SidebarFooter.Visible = true end
+        if UserAvatar then UserAvatar.Visible = true end
+        if SearchPill then SearchPill.Visible = true end
+        if PagesContainer then PagesContainer.Visible = true end
         local targetW = isSidebarCollapsed and sidebarCollapsedWidth or sidebarExpandedWidth
-        ContentArea.Position = UDim2.new(0, targetW, 0, 0)
-        ContentArea.Size = UDim2.new(1, -targetW, 1, 0)
-        CurrentTabTitle.Text = savedPageTitle or "Home"
-        MinimizeBtn.Text = "-"
+        if ContentArea then
+            ContentArea.Position = UDim2.new(0, targetW, 0, 0)
+            ContentArea.Size = UDim2.new(1, -targetW, 1, 0)
+        end
+        if CurrentTabTitle then CurrentTabTitle.Text = savedPageTitle or "Home" end
+        if MinimizeBtn then MinimizeBtn.Text = "-" end
     end
 end
 getgenv().SetToxMinimized = SetMinimized
@@ -731,7 +746,7 @@ CloseBtn.MouseButton1Click:Connect(function()
 end)
 
 -- Search Results Floating Dropdown
-local SearchResultsScroll = Instance.new("ScrollingFrame")
+SearchResultsScroll = Instance.new("ScrollingFrame")
 SearchResultsScroll.Name = "SearchResultsScroll"
 SearchResultsScroll.Size = UDim2.new(0, 260, 0, 200)
 SearchResultsScroll.Position = UDim2.new(1, -290, 0, 44)
@@ -777,7 +792,7 @@ PagesContainer.Parent = ContentArea
 -- Resize Handle managed by MakeResizable
 
 if getgenv().MakeResizable then
-    getgenv().MakeResizable(Main, "Main", Vector2.new(160, 90), Vector2.new(3840, 2160))
+    getgenv().MakeResizable(Main, "Main", Vector2.new(480, 320), Vector2.new(3840, 2160))
 end
 
 
@@ -3719,6 +3734,17 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
             Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
         }):Play()
     end
+
+    table.insert(RegisteredToggles, {
+        UpdateColor = function()
+            ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
+            tgStroke.Color = Theme.Outline
+            cStroke.Color = Theme.Outline
+            cbStroke.Color = Theme.Outline
+            ChoiceBtn.TextColor3 = Theme.Accent
+            ChoiceBtn.BackgroundColor3 = Theme.Panel
+        end
+    })
 
     local Controller = {
         Button = Container,
