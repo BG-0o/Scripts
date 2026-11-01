@@ -230,6 +230,38 @@ CreateToggle(
 )
 
 CreateToggle(
+    "Auto Vote",
+    GamePage,
+    Settings.MM2AutoVote,
+    function(v)
+        Settings.MM2AutoVote = v == true
+        AutoSaveConfiguration()
+    end,
+    "MM2AutoVote"
+)
+
+CreateDropdown(
+    "Vote Map",
+    {
+        "Priority (Best Coins)",
+        "Factory",
+        "BioLab",
+        "Hospital3",
+        "House2",
+        "Workplace",
+        "MilBase",
+        "Mansion2",
+        "First Available"
+    },
+    GamePage,
+    Settings.MM2VoteMap or "Priority (Best Coins)",
+    function(choice)
+        Settings.MM2VoteMap = choice
+        AutoSaveConfiguration()
+    end
+)
+
+CreateToggle(
     "Reset On Full",
     GamePage,
     Settings.MM2AutoFarmResetOnFull,
