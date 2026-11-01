@@ -1968,15 +1968,11 @@ local function StageOptionsUntilLoadScreen()
     for key, value in pairs(Settings) do
         if typeof(value) == "boolean" then
             staged[key] = value == true
-
-            if key ~= "Render3D" then
-                Settings[key] = false
-            end
         end
     end
 
     getgenv().ToxStartupBooleanState = staged
-    getgenv().ToxStartupToggleCallbacks = {}
+    getgenv().ToxStartupToggleCallbacks = getgenv().ToxStartupToggleCallbacks or {}
     getgenv().ToxStartupOptionsApplied = false
     getgenv().ToxOptionsReady = true
 end
