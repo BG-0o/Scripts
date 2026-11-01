@@ -213,6 +213,36 @@ end, function(value)
     AutoSaveConfiguration()
 end, "MM2AutoFarmV2")
 
+CreateToggleWithChoice("Farm Mode", GamePage, {"Tween", "Teleport"}, Settings.MM2AutoFarmMode == "Teleport", Settings.MM2AutoFarmMode or "Tween", function(enabled, choice)
+    Settings.MM2AutoFarmMode = choice
+    AutoSaveConfiguration()
+end, function(choice)
+    Settings.MM2AutoFarmMode = choice
+    AutoSaveConfiguration()
+end, "MM2AutoFarmMode")
+
+CreateToggleWithValue("Teleport Delay", GamePage, Settings.MM2AutoFarmMode == "Teleport", Settings.MM2AutoFarmTeleportDelay or 1.2, function(v)
+    AutoSaveConfiguration()
+end, function(val)
+    local num = math.clamp(tonumber(val) or 1.2, 0.2, 10)
+    Settings.MM2AutoFarmTeleportDelay = num
+    AutoSaveConfiguration()
+end, "MM2AutoFarmTeleportDelay")
+
+CreateToggle(
+    "Safe Lobby",
+    GamePage,
+    Settings.MM2SafeLobby,
+    function(v)
+        Settings.MM2SafeLobby = v == true
+        if getgenv().SetSafeLobbyEnabled then
+            getgenv().SetSafeLobbyEnabled(v)
+        end
+        AutoSaveConfiguration()
+    end,
+    "MM2SafeLobby"
+)
+
 CreateToggle(
     "Reset On Full",
     GamePage,
