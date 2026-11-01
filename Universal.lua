@@ -6445,11 +6445,27 @@ end)
 
 CreateKeybindButton("Panic Key", ConfigPage, Settings.PanicKey, function(key)
     Settings.PanicKey = key
-
     if getgenv().AutoSaveConfiguration then
         getgenv().AutoSaveConfiguration()
     end
 end)
+
+CreateToggle("Start Hidden", ConfigPage, Settings.StartHidden, function(value)
+    Settings.StartHidden = value == true
+    if getgenv().AutoSaveConfiguration then
+        getgenv().AutoSaveConfiguration()
+    end
+end, "StartHidden")
+
+CreateToggle("Unlock Cursor", ConfigPage, Settings.UnlockCursor, function(value)
+    Settings.UnlockCursor = value == true
+    if getgenv().SetUnlockCursor then
+        getgenv().SetUnlockCursor(value)
+    end
+    if getgenv().AutoSaveConfiguration then
+        getgenv().AutoSaveConfiguration()
+    end
+end, "UnlockCursor")
 
 if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Server Operations", "🌐") end
 CreateButton("Server Hop", ConfigPage, function(button) ShowServerHopMenu(button) end)
