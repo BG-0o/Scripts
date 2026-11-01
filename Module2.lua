@@ -3813,20 +3813,6 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     RegisterThemedObject(ChoiceBtn, "TextColor3", "Accent")
     RegisterThemedObject(cbStroke, "Color", "Outline")
 
-    local CurrentIdx = 1
-    for i, opt in ipairs(Options) do
-        if opt == DefaultChoice then CurrentIdx = i break end
-    end
-
-    ChoiceBtn.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed  then return end
-        CurrentIdx = CurrentIdx + 1
-        if CurrentIdx > #Options then CurrentIdx = 1 end
-        ChoiceBtn.Text = tostring(Options[CurrentIdx])
-        if CallbackChoice then CallbackChoice(Options[CurrentIdx]) end
-        AutoSaveConfiguration()
-    end)
-
     local initialToggle = DefaultToggle
     if SyncKey and Settings[SyncKey] ~= nil then
         initialToggle = Settings[SyncKey]
@@ -3840,9 +3826,102 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
         initialChoice = Settings[SyncKey .. "Choice"]
     end
     ChoiceBtn.Text = tostring(initialChoice)
-    for i, opt in ipairs(Options) do
-        if opt == initialChoice then CurrentIdx = i break end
+
+    local isChoiceOpen = false
+    local choiceItemHeight = 22
+    local choiceListHeight = math.min(#Options * (choiceItemHeight + 2), 100)
+    local choiceOpenHeight = 36 + choiceListHeight + 8
+
+    Container.ClipsDescendants = true
+
+    local ChoiceScroll = Instance.new("ScrollingFrame")
+    ChoiceScroll.Size = UDim2.new(1, -16, 0, choiceListHeight)
+    ChoiceScroll.Position = UDim2.new(0, 8, 0, 36)
+    ChoiceScroll.BackgroundColor3 = Theme.Panel
+    ChoiceScroll.BorderSizePixel = 0
+    ChoiceScroll.ScrollBarThickness = 3
+    ChoiceScroll.ScrollBarImageColor3 = Theme.Accent
+    ChoiceScroll.CanvasSize = UDim2.new(0, 0, 0, #Options * (choiceItemHeight + 2))
+    ChoiceScroll.Visible = false
+    ChoiceScroll.Parent = Container
+    local csCorner = Instance.new("UICorner") csCorner.CornerRadius = UDim.new(0, 4) csCorner.Parent = ChoiceScroll
+    local csStroke = Instance.new("UIStroke") csStroke.Color = Theme.Outline csStroke.Thickness = 1 csStroke.Parent = ChoiceScroll
+    RegisterThemedObject(ChoiceScroll, "BackgroundColor3", "Panel")
+    RegisterThemedObject(csStroke, "Color", "Outline")
+
+    local csLayout = Instance.new("UIListLayout")
+    csLayout.Padding = UDim.new(0, 2)
+    csLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    csLayout.Parent = ChoiceScroll
+
+    local csPadding = Instance.new("UIPadding")
+    csPadding.PaddingTop = UDim.new(0, 2)
+    csPadding.PaddingBottom = UDim.new(0, 2)
+    csPadding.PaddingLeft = UDim.new(0, 4)
+    csPadding.PaddingRight = UDim.new(0, 4)
+    csPadding.Parent = ChoiceScroll
+
+    local choiceButtons = {}
+    local function RefreshChoiceButtons()
+        for optVal, btn in pairs(choiceButtons) do
+            if optVal == initialChoice then
+                btn.TextColor3 = Theme.Accent
+                btn.BackgroundColor3 = Theme.Element
+            else
+                btn.TextColor3 = Theme.Text
+                btn.BackgroundColor3 = Theme.Panel
+            end
+        end
     end
+
+    for idx, opt in ipairs(Options) do
+        local cOptBtn = Instance.new("TextButton")
+        cOptBtn.Size = UDim2.new(1, -2, 0, choiceItemHeight)
+        cOptBtn.BackgroundColor3 = (opt == initialChoice) and Theme.Element or Theme.Panel
+        cOptBtn.BorderSizePixel = 0
+        cOptBtn.Text = tostring(opt)
+        cOptBtn.TextColor3 = (opt == initialChoice) and Theme.Accent or Theme.Text
+        cOptBtn.TextSize = 11
+        cOptBtn.Font = Enum.Font.GothamMedium
+        cOptBtn.TextXAlignment = Enum.TextXAlignment.Left
+        cOptBtn.LayoutOrder = idx
+        cOptBtn.Parent = ChoiceScroll
+        local cbCorner2 = Instance.new("UICorner") cbCorner2.CornerRadius = UDim.new(0, 3) cbCorner2.Parent = cOptBtn
+        local cbPad2 = Instance.new("UIPadding") cbPad2.PaddingLeft = UDim.new(0, 8) cbPad2.Parent = cOptBtn
+
+        choiceButtons[opt] = cOptBtn
+
+        cOptBtn.MouseButton1Click:Connect(function()
+            if getgenv().Destroyed then return end
+            initialChoice = opt
+            ChoiceBtn.Text = tostring(opt)
+            RefreshChoiceButtons()
+            isChoiceOpen = false
+            ChoiceScroll.Visible = false
+            TweenService:Create(Container, TweenInfo.new(0.18, Enum.EasingStyle.Quad), { Size = UDim2.new(1, -4, 0, 36) }):Play()
+            if CallbackChoice then CallbackChoice(opt) end
+            AutoSaveConfiguration()
+        end)
+    end
+
+    local function ToggleChoiceOpen()
+        isChoiceOpen = not isChoiceOpen
+        if isChoiceOpen then
+            ChoiceScroll.Visible = true
+            RefreshChoiceButtons()
+            TweenService:Create(Container, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Size = UDim2.new(1, -4, 0, choiceOpenHeight) }):Play()
+        else
+            TweenService:Create(Container, TweenInfo.new(0.18, Enum.EasingStyle.Quad), { Size = UDim2.new(1, -4, 0, 36) }):Play()
+            task.delay(0.2, function()
+                if not isChoiceOpen then ChoiceScroll.Visible = false end
+            end)
+        end
+    end
+
+    ChoiceBtn.MouseButton1Click:Connect(function()
+        if getgenv().Destroyed  then return end
+        ToggleChoiceOpen()
+    end)
 
     local ToggleButton = Instance.new("TextButton")
     ToggleButton.Size = UDim2.new(0, 38, 0, 20)
@@ -4149,52 +4228,145 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback
     Box.Size = UDim2.new(1, -4, 0, 36)
     Box.BackgroundColor3 = Theme.Element
     Box.BorderSizePixel = 0
+    Box.ClipsDescendants = true
     Box.Parent = parentTarget
     local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 6) bCorner.Parent = Box
     local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border bStroke.Parent = Box
     RegisterThemedObject(Box, "BackgroundColor3", "Element")
     RegisterThemedObject(bStroke, "Color", "Outline")
 
+    local TopRow = Instance.new("Frame")
+    TopRow.Size = UDim2.new(1, 0, 0, 36)
+    TopRow.BackgroundTransparency = 1
+    TopRow.Parent = Box
+
+    local risky = IsFeatureRisky(Name)
     local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(1, -115, 1, 0)
+    Label.Size = UDim2.new(1, -140, 1, 0)
     Label.Position = UDim2.new(0, 12, 0, 0)
     Label.BackgroundTransparency = 1
     Label.Text = Name
-    Label.TextColor3 = Theme.Text
+    Label.TextColor3 = risky and Theme.Risky or Theme.Text
     Label.TextSize = 12
     Label.Font = Enum.Font.GothamMedium
     Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.Parent = Box
-    RegisterThemedObject(Label, "TextColor3", "Text")
+    Label.Parent = TopRow
+    RegisterThemedObject(Label, "TextColor3", risky and "Risky" or "Text")
 
+    local SelectedOption = DefaultOption
     local Button = Instance.new("TextButton")
-    Button.Size = UDim2.new(0, 95, 0, 24)
-    Button.Position = UDim2.new(1, -105, 0.5, -12)
+    Button.Size = UDim2.new(0, 120, 0, 24)
+    Button.Position = UDim2.new(1, -128, 0.5, -12)
     Button.BackgroundColor3 = Theme.Panel
     Button.BorderSizePixel = 0
     Button.Text = tostring(DefaultOption) .. "  ▼"
     Button.TextColor3 = Theme.Accent
     Button.TextSize = 11
     Button.Font = Enum.Font.GothamBold
-    Button.Parent = Box
+    Button.TextTruncate = Enum.TextTruncate.AtEnd
+    Button.Parent = TopRow
     local btnCorner = Instance.new("UICorner") btnCorner.CornerRadius = UDim.new(0, 4) btnCorner.Parent = Button
     local btnStroke = Instance.new("UIStroke") btnStroke.Color = Theme.Outline btnStroke.Thickness = 1 btnStroke.Parent = Button
     RegisterThemedObject(Button, "BackgroundColor3", "Panel")
     RegisterThemedObject(Button, "TextColor3", "Accent")
     RegisterThemedObject(btnStroke, "Color", "Outline")
 
-    local CurrentIdx = 1
-    for i, opt in ipairs(Options) do
-        if opt == DefaultOption then CurrentIdx = i break end
+    local itemHeight = 24
+    local maxVisibleItems = 5
+    local listHeight = math.min(#Options * (itemHeight + 2), maxVisibleItems * (itemHeight + 2))
+    local totalOpenHeight = 36 + listHeight + 8
+
+    local DropdownScroll = Instance.new("ScrollingFrame")
+    DropdownScroll.Size = UDim2.new(1, -16, 0, listHeight)
+    DropdownScroll.Position = UDim2.new(0, 8, 0, 36)
+    DropdownScroll.BackgroundColor3 = Theme.Panel
+    DropdownScroll.BorderSizePixel = 0
+    DropdownScroll.ScrollBarThickness = 3
+    DropdownScroll.ScrollBarImageColor3 = Theme.Accent
+    DropdownScroll.CanvasSize = UDim2.new(0, 0, 0, #Options * (itemHeight + 2))
+    DropdownScroll.Visible = false
+    DropdownScroll.Parent = Box
+    local dsCorner = Instance.new("UICorner") dsCorner.CornerRadius = UDim.new(0, 4) dsCorner.Parent = DropdownScroll
+    local dsStroke = Instance.new("UIStroke") dsStroke.Color = Theme.Outline dsStroke.Thickness = 1 dsStroke.Parent = DropdownScroll
+    RegisterThemedObject(DropdownScroll, "BackgroundColor3", "Panel")
+    RegisterThemedObject(dsStroke, "Color", "Outline")
+
+    local dsLayout = Instance.new("UIListLayout")
+    dsLayout.Padding = UDim.new(0, 2)
+    dsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    dsLayout.Parent = DropdownScroll
+
+    local dsPadding = Instance.new("UIPadding")
+    dsPadding.PaddingTop = UDim.new(0, 2)
+    dsPadding.PaddingBottom = UDim.new(0, 2)
+    dsPadding.PaddingLeft = UDim.new(0, 4)
+    dsPadding.PaddingRight = UDim.new(0, 4)
+    dsPadding.Parent = DropdownScroll
+
+    local isOpen = false
+    local OptionButtons = {}
+
+    local function RefreshOptionButtons()
+        for optVal, optBtn in pairs(OptionButtons) do
+            if optVal == SelectedOption then
+                optBtn.TextColor3 = Theme.Accent
+                optBtn.BackgroundColor3 = Theme.Element
+            else
+                optBtn.TextColor3 = Theme.Text
+                optBtn.BackgroundColor3 = Theme.Panel
+            end
+        end
+    end
+
+    for idx, opt in ipairs(Options) do
+        local optBtn = Instance.new("TextButton")
+        optBtn.Size = UDim2.new(1, -2, 0, itemHeight)
+        optBtn.BackgroundColor3 = (opt == SelectedOption) and Theme.Element or Theme.Panel
+        optBtn.BorderSizePixel = 0
+        optBtn.Text = tostring(opt)
+        optBtn.TextColor3 = (opt == SelectedOption) and Theme.Accent or Theme.Text
+        optBtn.TextSize = 11
+        optBtn.Font = Enum.Font.GothamMedium
+        optBtn.TextXAlignment = Enum.TextXAlignment.Left
+        optBtn.LayoutOrder = idx
+        optBtn.Parent = DropdownScroll
+        local obCorner = Instance.new("UICorner") obCorner.CornerRadius = UDim.new(0, 3) obCorner.Parent = optBtn
+        local obPad = Instance.new("UIPadding") obPad.PaddingLeft = UDim.new(0, 8) obPad.Parent = optBtn
+
+        OptionButtons[opt] = optBtn
+
+        optBtn.MouseButton1Click:Connect(function()
+            if getgenv().Destroyed then return end
+            SelectedOption = opt
+            Button.Text = tostring(opt) .. "  ▼"
+            RefreshOptionButtons()
+            isOpen = false
+            DropdownScroll.Visible = false
+            TweenService:Create(Box, TweenInfo.new(0.18, Enum.EasingStyle.Quad), { Size = UDim2.new(1, -4, 0, 36) }):Play()
+            if Callback then Callback(opt) end
+            AutoSaveConfiguration()
+        end)
+    end
+
+    local function ToggleOpen()
+        isOpen = not isOpen
+        if isOpen then
+            DropdownScroll.Visible = true
+            RefreshOptionButtons()
+            Button.Text = tostring(SelectedOption) .. "  ▲"
+            TweenService:Create(Box, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Size = UDim2.new(1, -4, 0, totalOpenHeight) }):Play()
+        else
+            Button.Text = tostring(SelectedOption) .. "  ▼"
+            TweenService:Create(Box, TweenInfo.new(0.18, Enum.EasingStyle.Quad), { Size = UDim2.new(1, -4, 0, 36) }):Play()
+            task.delay(0.2, function()
+                if not isOpen then DropdownScroll.Visible = false end
+            end)
+        end
     end
 
     Button.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed  then return end
-        CurrentIdx = CurrentIdx + 1
-        if CurrentIdx > #Options then CurrentIdx = 1 end
-        Button.Text = tostring(Options[CurrentIdx]) .. "  ▼"
-        Callback(Options[CurrentIdx])
-        AutoSaveConfiguration()
+        if getgenv().Destroyed then return end
+        ToggleOpen()
     end)
 
     if getgenv().RegisterToxSearchControl then
@@ -4521,6 +4693,111 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
 end
 
 
+
+local function InitializeHomePage()
+    local targetPage = (getgenv and getgenv().HomePage) or HomePage
+    if not targetPage then return end
+    local plr = (Players and Players.LocalPlayer) or Player or (game:GetService("Players").LocalPlayer)
+
+    -- Card 1: User Profile & Status Banner
+    CreateSection(targetPage, "Perfil do Usuário", "👤")
+
+    local bannerFrame = Instance.new("Frame")
+    bannerFrame.Size = UDim2.new(1, -4, 0, 72)
+    bannerFrame.BackgroundColor3 = Theme.Element
+    bannerFrame.BorderSizePixel = 0
+    bannerFrame.Parent = ResolveElementParent(targetPage)
+    local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 8) bCorner.Parent = bannerFrame
+    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.Parent = bannerFrame
+    RegisterThemedObject(bannerFrame, "BackgroundColor3", "Element")
+    RegisterThemedObject(bStroke, "Color", "Outline")
+
+    local avatarImg = Instance.new("ImageLabel")
+    avatarImg.Size = UDim2.new(0, 52, 0, 52)
+    avatarImg.Position = UDim2.new(0, 10, 0.5, -26)
+    avatarImg.BackgroundColor3 = Theme.Panel
+    avatarImg.BorderSizePixel = 0
+    avatarImg.Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(plr and plr.UserId or 0) .. "&w=150&h=150"
+    avatarImg.Parent = bannerFrame
+    local avCorner = Instance.new("UICorner") avCorner.CornerRadius = UDim.new(1, 0) avCorner.Parent = avatarImg
+    local avStroke = Instance.new("UIStroke") avStroke.Color = Theme.Accent avStroke.Thickness = 1.5 avStroke.Parent = avatarImg
+    RegisterThemedObject(avStroke, "Color", "Accent")
+
+    local welcomeLbl = Instance.new("TextLabel")
+    welcomeLbl.Size = UDim2.new(1, -78, 0, 20)
+    welcomeLbl.Position = UDim2.new(0, 72, 0, 12)
+    welcomeLbl.BackgroundTransparency = 1
+    welcomeLbl.Text = "Bem-vindo, " .. tostring(plr and (plr.DisplayName or plr.Name) or "Player") .. " (@" .. tostring(plr and plr.Name or "Player") .. ")"
+    welcomeLbl.TextColor3 = Theme.Text
+    welcomeLbl.TextSize = 13
+    welcomeLbl.Font = Enum.Font.GothamBold
+    welcomeLbl.TextXAlignment = Enum.TextXAlignment.Left
+    welcomeLbl.Parent = bannerFrame
+    RegisterThemedObject(welcomeLbl, "TextColor3", "Text")
+
+    local subLbl = Instance.new("TextLabel")
+    subLbl.Size = UDim2.new(1, -78, 0, 18)
+    subLbl.Position = UDim2.new(0, 72, 0, 36)
+    subLbl.BackgroundTransparency = 1
+    subLbl.Text = "ToxHub v2.0 Revolution • Assinatura Vitalícia (Lifetime)"
+    subLbl.TextColor3 = Theme.Accent
+    subLbl.TextSize = 11
+    subLbl.Font = Enum.Font.GothamMedium
+    subLbl.TextXAlignment = Enum.TextXAlignment.Left
+    subLbl.Parent = bannerFrame
+    RegisterThemedObject(subLbl, "TextColor3", "Accent")
+
+    -- Card 2: Store & Community Links
+    CreateSection(targetPage, "Loja & Comunidade", "🛒")
+
+    CreateButton("Comprar Robux com R$ (BRL)", targetPage, function()
+        if setclipboard then
+            setclipboard("https://discord.gg/A7tZ9VbVvM")
+        end
+        CustomNotify("Link copiado! Acesse o Discord no canal #robux para comprar via PIX/BRL.", Color3.fromRGB(0, 230, 120), 6)
+    end)
+
+    CreateButton("Discord Oficial (discord.gg/A7tZ9VbVvM)", targetPage, function()
+        if setclipboard then
+            setclipboard("https://discord.gg/A7tZ9VbVvM")
+        end
+        CustomNotify("Convite copiado: discord.gg/A7tZ9VbVvM", Color3.fromRGB(80, 160, 255), 5)
+    end)
+
+    CreateButton("Copiar Link do Script / Loader", targetPage, function()
+        if setclipboard then
+            setclipboard('loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BigFroot.lua"))()')
+        end
+        CustomNotify("Loadstring copiado para a área de transferência!", Color3.fromRGB(255, 200, 50), 5)
+    end)
+
+    -- Card 3: Quick Operations
+    CreateSection(targetPage, "Operações Rápidas", "⚡")
+
+    CreateButton("Reconectar ao Servidor (Rejoin)", targetPage, function()
+        pcall(function()
+            if getgenv().AllowToxTeleport then
+                getgenv().AllowToxTeleport(15, "Rejoin")
+            end
+            TeleportService:Teleport(game.PlaceId, plr)
+        end)
+    end)
+
+    CreateButton("Trocar de Servidor (Server Hop)", targetPage, function(button)
+        if ShowServerHopMenu then
+            ShowServerHopMenu(button)
+        end
+    end)
+
+    CreateButton("Resetar Personagem (Respawn)", targetPage, function()
+        local character = plr and plr.Character
+        local hum = character and character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.Health = 0 end
+    end)
+end
+getgenv().InitializeHomePage = InitializeHomePage
+
+InitializeHomePage()
 
 local function ApplyStagedOptionsAfterLoadScreen()
     local staged = getgenv().ToxStartupBooleanState
