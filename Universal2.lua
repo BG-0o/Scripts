@@ -1219,38 +1219,88 @@ local function ApplyOutlineSettings()
 end
 
 local function CreateVisualNumberOption(name, page, defaultValue, minValue, maxValue, callback)
+    local parentTarget = (type(raw.ResolveElementParent) == "function" and raw.ResolveElementParent(page))
+        or (type(env.ResolveElementParent) == "function" and env.ResolveElementParent(page))
+        or page
+
+    local th = (raw.Theme) or (env.Theme) or {}
+    local elementCol = th.Element or Color3.fromRGB(22, 22, 34)
+    local outlineCol = th.Outline or Color3.fromRGB(36, 36, 56)
+    local textCol = th.Text or Color3.fromRGB(240, 240, 245)
+    local panelCol = th.Panel or Color3.fromRGB(16, 16, 26)
+
     local box = Instance.new("Frame")
-    box.Size = UDim2.new(1, -5, 0, 39)
-    box.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    box.Size = UDim2.new(1, -4, 0, 36)
+    box.BackgroundColor3 = elementCol
     box.BorderSizePixel = 0
-    box.Parent = page
+    box.Parent = parentTarget
+
+    local bCorner = Instance.new("UICorner")
+    bCorner.CornerRadius = UDim.new(0, 6)
+    bCorner.Parent = box
+
+    local bStroke = Instance.new("UIStroke")
+    bStroke.Color = outlineCol
+    bStroke.Thickness = 1
+    bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    bStroke.Parent = box
+
+    if type(raw.RegisterThemedObject) == "function" then
+        raw.RegisterThemedObject(box, "BackgroundColor3", "Element")
+        raw.RegisterThemedObject(bStroke, "Color", "Outline")
+    elseif type(env.RegisterThemedObject) == "function" then
+        env.RegisterThemedObject(box, "BackgroundColor3", "Element")
+        env.RegisterThemedObject(bStroke, "Color", "Outline")
+    end
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -80, 1, 0)
+    label.Size = UDim2.new(1, -85, 1, 0)
     label.Position = UDim2.new(0, 12, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = name
-    label.TextColor3 = Color3.fromRGB(240, 240, 240)
-    label.TextSize = 13
+    label.TextColor3 = textCol
+    label.TextSize = 12
     label.Font = Enum.Font.GothamMedium
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = box
 
+    if type(raw.RegisterThemedObject) == "function" then
+        raw.RegisterThemedObject(label, "TextColor3", "Text")
+    elseif type(env.RegisterThemedObject) == "function" then
+        env.RegisterThemedObject(label, "TextColor3", "Text")
+    end
+
     local input = Instance.new("TextBox")
-    input.Size = UDim2.new(0, 64, 0, 25)
-    input.Position = UDim2.new(1, -72, 0.5, -12)
-    input.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    input.Size = UDim2.new(0, 68, 0, 22)
+    input.Position = UDim2.new(1, -78, 0.5, -11)
+    input.BackgroundColor3 = panelCol
     input.BorderSizePixel = 0
     input.Text = tostring(defaultValue)
-    input.TextColor3 = Color3.fromRGB(255, 255, 255)
+    input.TextColor3 = textCol
     input.TextSize = 11
     input.Font = Enum.Font.Gotham
     input.ClearTextOnFocus = false
     input.Parent = box
 
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 4)
-    corner.Parent = input
+    local inCorner = Instance.new("UICorner")
+    inCorner.CornerRadius = UDim.new(0, 4)
+    inCorner.Parent = input
+
+    local inStroke = Instance.new("UIStroke")
+    inStroke.Color = outlineCol
+    inStroke.Thickness = 1
+    inStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    inStroke.Parent = input
+
+    if type(raw.RegisterThemedObject) == "function" then
+        raw.RegisterThemedObject(input, "BackgroundColor3", "Panel")
+        raw.RegisterThemedObject(input, "TextColor3", "Text")
+        raw.RegisterThemedObject(inStroke, "Color", "Outline")
+    elseif type(env.RegisterThemedObject) == "function" then
+        env.RegisterThemedObject(input, "BackgroundColor3", "Panel")
+        env.RegisterThemedObject(input, "TextColor3", "Text")
+        env.RegisterThemedObject(inStroke, "Color", "Outline")
+    end
 
     input.FocusLost:Connect(function()
         if env.Destroyed or env.ToxOptionsReady == false then
@@ -3161,41 +3211,25 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             return false
         end
 
-        local controls = {}
         local panic = nil
         local guiToggle = nil
 
-        for _, child in ipairs(page:GetChildren()) do
-            if child:IsA("GuiObject") then
-                if ControlHasName(child, "Panic Key") then
-                    panic = child
-                elseif ControlHasName(child, "GUI Toggle")
-                or ControlHasName(child, "GUI Keybind") then
-                    guiToggle = child
-                end
-                controls[#controls + 1] = child
-            end
-        end
-
-        if not panic or not guiToggle then
-            return false
-        end
-
-        local reordered = {}
-        for _, control in ipairs(controls) do
-            if control ~= panic then
-                reordered[#reordered + 1] = control
-                if control == guiToggle then
-                    reordered[#reordered + 1] = panic
+        for _, desc in ipairs(page:GetDescendants()) do
+            if desc:IsA("GuiObject") then
+                if ControlHasName(desc, "Panic Key") then
+                    panic = desc
+                elseif ControlHasName(desc, "GUI Toggle") or ControlHasName(desc, "GUI Keybind") then
+                    guiToggle = desc
                 end
             end
         end
 
-        for index, control in ipairs(reordered) do
-            control.LayoutOrder = index
+        if panic and guiToggle and panic.Parent == guiToggle.Parent then
+            panic.LayoutOrder = guiToggle.LayoutOrder + 1
+            return true
         end
 
-        return true
+        return false
     end
 
     local function InstallConfigUI()
@@ -3216,15 +3250,25 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         configUIInstalled = true
         RenameGuiToggleLabel()
     
-        CreateKeybindButton(
-            "Panic Key",
-            page,
-            Settings.PanicKey,
-            function(key)
-                Settings.PanicKey = key
-                Save()
+        local hasPanic = false
+        for _, ch in ipairs(page:GetDescendants()) do
+            if ControlHasName(ch, "Panic Key") then
+                hasPanic = true
+                break
             end
-        )
+        end
+
+        if not hasPanic then
+            CreateKeybindButton(
+                "Panic Key",
+                page,
+                Settings.PanicKey,
+                function(key)
+                    Settings.PanicKey = key
+                    Save()
+                end
+            )
+        end
     
         CreateToggle(
             "Start Hidden",
