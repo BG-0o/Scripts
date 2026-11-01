@@ -1194,66 +1194,6 @@ function TouchKnifeTarget(
 
     activate()
     touchParts()
-
-    if stationary == true then
-        return touched
-    end
-
-    for pass = 1, 3 do
-        if getgenv().Destroyed
-        or not KnifeTargetAlive(target) then
-            break
-        end
-
-        local aim = predictedPoint(0.08 + pass * 0.04)
-
-        if not aim then
-            break
-        end
-
-        local currentRoot = GetKnifeTargetRoot(target)
-        local right = currentRoot and currentRoot.CFrame.RightVector or Vector3.new(1, 0, 0)
-        local look = currentRoot and currentRoot.CFrame.LookVector or Vector3.new(0, 0, -1)
-
-        local positions = {
-            aim + Vector3.new(0, 0.65, 0),
-            aim - look * 1.15 + Vector3.new(0, 0.9, 0),
-            aim + look * 1.15 + Vector3.new(0, 0.9, 0),
-            aim + right * 1.35 + Vector3.new(0, 0.45, 0),
-            aim - right * 1.35 + Vector3.new(0, 0.45, 0),
-            aim + Vector3.new(0, 1.85, 0),
-            aim + Vector3.new(0, -0.8, 0)
-        }
-
-        for _, position in ipairs(positions) do
-            if getgenv().Destroyed
-            or not targetRoot
-            or not targetRoot.Parent
-            or not KnifeTargetAlive(target) then
-                break
-            end
-
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.AssemblyAngularVelocity = Vector3.zero
-            character:PivotTo(CFrame.lookAt(position, targetRoot.Position))
-            activate()
-            touchParts()
-            task.wait()
-        end
-    end
-
-    if oldCFrame
-    and character
-    and character.Parent
-    and root
-    and root.Parent
-    and humanoid
-    and humanoid.Health > 0 then
-        root.AssemblyLinearVelocity = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
-        character:PivotTo(oldCFrame)
-    end
-
     return touched
 end
 
@@ -4126,51 +4066,39 @@ function GetAutoFarmMapRoot(forceRefresh)
     local normal = workspace:FindFirstChild("Normal")
         or workspace:FindFirstChild("Zombie")
         or workspace:FindFirstChild("Halloween")
-    local normalContainer = normal
-        and (
-            normal:FindFirstChild("CoinContainer", true)
-            or normal:FindFirstChild("CandyContainer", true)
-            or normal:FindFirstChild("Candies", true)
-            or normal:FindFirstChild("Coins", true)
-        )
-        or nil
 
-    local selectedRoot = nil
-    local selectedContainer = nil
-    local fallbackRoot = normalContainer and normal or nil
-    local fallbackContainer = normalContainer
+    local function FindAllContainers(rootModel)
+        if not rootModel then return {} end
+        local containers = {}
+        for _, desc in ipairs(rootModel:GetDescendants()) do
+            if desc:IsA("Model") or desc:IsA("Folder") or desc:IsA("Configuration") then
+                local low = string.lower(desc.Name)
+                if string.find(low, "coin") or string.find(low, "cand") or string.find(low, "token") or string.find(low, "drop") or string.find(low, "pumpkin") then
+                    table.insert(containers, desc)
+                end
+            end
+        end
+        return containers
+    end
 
-    if normalContainer and HasPotentialFarmCoins(normalContainer) then
-        selectedRoot = normal
-        selectedContainer = normalContainer
-    else
+    local selectedRoot = normal
+    local normalContainers = FindAllContainers(normal)
+    local selectedContainer = normalContainers[1]
+
+    if not selectedContainer or not HasPotentialFarmCoins(selectedContainer) then
         for _, object in ipairs(workspace:GetChildren()) do
             if object ~= Player.Character
             and object ~= normal
             and object.Name ~= "Lobby"
             and object:IsA("Model") then
-                local container = object:FindFirstChild("CoinContainer", true)
-                    or object:FindFirstChild("CandyContainer", true)
-                    or object:FindFirstChild("Candies", true)
-                    or object:FindFirstChild("Coins", true)
-
-                if container then
-                    if HasPotentialFarmCoins(container) then
-                        selectedRoot = object
-                        selectedContainer = container
-                        break
-                    elseif not fallbackContainer then
-                        fallbackRoot = object
-                        fallbackContainer = container
-                    end
+                local found = FindAllContainers(object)
+                if #found > 0 then
+                    selectedRoot = object
+                    selectedContainer = found[1]
+                    break
                 end
             end
         end
-    end
-
-    if not selectedContainer then
-        selectedRoot = fallbackRoot
-        selectedContainer = fallbackContainer
     end
 
     AutoFarmMapRootCache = selectedRoot
@@ -4201,6 +4129,10 @@ function IsCoinTouchPart(part)
         or string.find(lower, "doce", 1, true) ~= nil
         or string.find(lower, "token", 1, true) ~= nil
         or string.find(lower, "credit", 1, true) ~= nil
+        or string.find(lower, "pumpkin", 1, true) ~= nil
+        or string.find(lower, "gingerbread", 1, true) ~= nil
+        or string.find(lower, "drop", 1, true) ~= nil
+        or string.find(lower, "collectible", 1, true) ~= nil
 end
 
 function IsCoinValid(coin)
@@ -4869,6 +4801,12 @@ function ToxMM2RunKillOnFull()
                 Color3.fromRGB(255, 60, 60)
             )
 
+            local _, _, mRoot = IsAliveCharacter()
+            if mRoot then
+                mRoot.CFrame = mRoot.CFrame + Vector3.new(0, 40, 0)
+                mRoot.AssemblyLinearVelocity = Vector3.zero
+            end
+
             while active() and #GetKnifeTargets() > 0 do
                 knife = FindNamedTool({"knife"}) or knife
                 if not knife then
@@ -4915,6 +4853,16 @@ function ToxMM2RunKillOnFull()
                     "Bag full • Sheriff Shooting Murderer",
                     Color3.fromRGB(80, 180, 255)
                 )
+
+                local murderer = FindGuidedMurderer() or GetPlayerByRole("Murderer")
+                local mChar = murderer and murderer.Character
+                local mRootPart = mChar and (mChar:FindFirstChild("HumanoidRootPart") or mChar:FindFirstChild("Torso"))
+                local _, _, sRoot = IsAliveCharacter()
+                if sRoot and mRootPart then
+                    local skyPos = Vector3.new(mRootPart.Position.X, mRootPart.Position.Y + 38, mRootPart.Position.Z)
+                    sRoot.CFrame = CFrame.lookAt(skyPos, mRootPart.Position)
+                    sRoot.AssemblyLinearVelocity = Vector3.zero
+                end
 
                 while active() do
                     local murderer = FindGuidedMurderer() or GetPlayerByRole("Murderer")
@@ -5410,16 +5358,40 @@ end
 task.spawn(function()
     while not getgenv().Destroyed and game.PlaceId == 142823291 do
         if Settings.MM2SafeLobby then
-            local roundActive = IsAutoFarmRoundActive()
-            local eligible = IsAutoFarmPlayerEligible()
+            local mapRoot = workspace:FindFirstChild("Normal")
+                or workspace:FindFirstChild("Zombie")
+                or workspace:FindFirstChild("Halloween")
+                or workspace:FindFirstChild("Christmas")
+
+            local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+            local mainGui = playerGui and playerGui:FindFirstChild("MainGUI")
+            local gameGui = mainGui and mainGui:FindFirstChild("Game")
+            local lobbyGui = mainGui and mainGui:FindFirstChild("Lobby")
+
+            local isMatchLive = (mapRoot ~= nil) or (gameGui and gameGui.Visible == true)
             local character, humanoid, root, alive = IsAliveCharacter()
 
-            if alive and root and humanoid and humanoid.Health > 0 and (not roundActive or not eligible) then
-                EnsureSafeLobbyPlatform()
-                if root.Position.Y > 0 then
-                    root.CFrame = CFrame.new(SafeLobbyPosition + Vector3.new(0, 4, 0))
-                    root.AssemblyLinearVelocity = Vector3.zero
-                    root.AssemblyAngularVelocity = Vector3.zero
+            if alive and root and humanoid and humanoid.Health > 0 then
+                if isMatchLive then
+                    -- Match is active! Player must NOT be in the safe room below map
+                    if root.Position.Y < -30 then
+                        local spawnPart = mapRoot and mapRoot:FindFirstChild("Spawns", true)
+                        local targetPos = (spawnPart and spawnPart:FindFirstChildWhichIsA("BasePart") and spawnPart:FindFirstChildWhichIsA("BasePart").Position)
+                            or (mapRoot and mapRoot:GetPivot().Position)
+                            or Vector3.new(0, 15, 0)
+
+                        root.CFrame = CFrame.new(targetPos + Vector3.new(0, 4, 0))
+                        root.AssemblyLinearVelocity = Vector3.zero
+                        root.AssemblyAngularVelocity = Vector3.zero
+                    end
+                else
+                    -- We are in the lobby!
+                    EnsureSafeLobbyPlatform()
+                    if root.Position.Y > 0 then
+                        root.CFrame = CFrame.new(SafeLobbyPosition + Vector3.new(0, 4, 0))
+                        root.AssemblyLinearVelocity = Vector3.zero
+                        root.AssemblyAngularVelocity = Vector3.zero
+                    end
                 end
             end
         end
@@ -5484,6 +5456,10 @@ function TweenFarmRoot(targetPosition, duration, coin)
         end)
 
         AutoFarmTween = nil
+    end
+
+    if AutoFarmHumanoid then
+        AutoFarmHumanoid.PlatformStand = true
     end
 
     while Settings.MM2AutoFarmV2
@@ -5673,7 +5649,7 @@ function AutoFarmCoin(coin)
 
     -- TELEPORT MODE
     if tostring(Settings.MM2AutoFarmMode) == "Teleport" then
-        local tpPos = travelPosition + Vector3.new(0, 1.2, 0)
+        local tpPos = travelPosition - Vector3.new(0, 3.8, 0)
         AutoFarmRoot.CFrame = CFrame.new(tpPos)
         AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
         AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
@@ -5912,16 +5888,37 @@ function ApplyRoleESP(enabled)
 end
 
 function FlingSelectedRole()
-    local role = Settings.MM2FlingTarget == "Sheriff" and "Sheriff" or "Murderer"
-    local target = GetPlayerByRole(role)
-
-    if not target then
-        CustomNotify(role .. " not found", Color3.fromRGB(255, 180, 70))
-        return
+    local target = nil
+    if Settings.MM2FlingTarget == "Custom Player" then
+        local nick = string.lower(tostring(Settings.MM2FlingCustomNick or "")):gsub("%s+", "")
+        if nick == "" then
+            CustomNotify("Enter player name to fling", Color3.fromRGB(255, 180, 70))
+            return
+        end
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= Player then
+                local pName = string.lower(p.Name)
+                local pDisplay = string.lower(p.DisplayName)
+                if pName == nick or pDisplay == nick or string.find(pName, nick, 1, true) or string.find(pDisplay, nick, 1, true) then
+                    target = p
+                    break
+                end
+            end
+        end
+        if not target then
+            CustomNotify("Player not found: " .. tostring(Settings.MM2FlingCustomNick), Color3.fromRGB(255, 180, 70))
+            return
+        end
+    else
+        local role = Settings.MM2FlingTarget == "Sheriff" and "Sheriff" or "Murderer"
+        target = GetPlayerByRole(role)
+        if not target then
+            CustomNotify(role .. " not found", Color3.fromRGB(255, 180, 70))
+            return
+        end
     end
 
     local fling = getgenv().ToxFlingPlayer
-
     if not fling then
         CustomNotify("Fling system unavailable", Color3.fromRGB(255, 100, 100))
         return
