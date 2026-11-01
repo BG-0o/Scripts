@@ -5929,9 +5929,10 @@ function AutoFarmCoin(coin)
     local currentPosition = AutoFarmRoot.Position
     local distance = (travelPosition - currentPosition).Magnitude
 
-    -- Initial entry from lobby to map: instant teleport directly to first coin vicinity
-    if distance > 60 then
-        AutoFarmRoot.CFrame = CFrame.new(travelPosition)
+    -- Initial entry from lobby to map: ONLY if character is in the lobby high above (Y > 70)
+    -- and target coin is on the map below (Y < 50). Between coins on the map, NEVER teleport!
+    if currentPosition.Y > 70 and travelPosition.Y < 50 then
+        AutoFarmRoot.CFrame = CFrame.new(travelPosition + Vector3.new(0, 3, 0))
         AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
         AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
         task.wait(0.08)
