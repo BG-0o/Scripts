@@ -129,6 +129,115 @@ getgenv().SetToxGuiColor = function(colorName)
     return false
 end
 
+local UIThemePresets = {
+    ["Dark Neon"] = {
+        Background = Color3.fromRGB(12, 12, 18),
+        Panel = Color3.fromRGB(16, 16, 26),
+        Element = Color3.fromRGB(22, 22, 34),
+        Hover = Color3.fromRGB(30, 30, 48),
+        Outline = Color3.fromRGB(36, 36, 56),
+        Text = Color3.fromRGB(255, 255, 255),
+        DimText = Color3.fromRGB(165, 165, 185),
+        Risky = Color3.fromRGB(255, 55, 65)
+    },
+    ["OLED Black"] = {
+        Background = Color3.fromRGB(4, 4, 6),
+        Panel = Color3.fromRGB(10, 10, 14),
+        Element = Color3.fromRGB(16, 16, 22),
+        Hover = Color3.fromRGB(24, 24, 34),
+        Outline = Color3.fromRGB(32, 32, 44),
+        Text = Color3.fromRGB(255, 255, 255),
+        DimText = Color3.fromRGB(150, 150, 170),
+        Risky = Color3.fromRGB(255, 60, 70)
+    },
+    ["Clean White"] = {
+        Background = Color3.fromRGB(240, 242, 248),
+        Panel = Color3.fromRGB(255, 255, 255),
+        Element = Color3.fromRGB(230, 234, 242),
+        Hover = Color3.fromRGB(218, 222, 232),
+        Outline = Color3.fromRGB(195, 200, 215),
+        Text = Color3.fromRGB(20, 20, 30),
+        DimText = Color3.fromRGB(95, 100, 115),
+        Risky = Color3.fromRGB(220, 40, 50)
+    },
+    ["Translucent Glass"] = {
+        Background = Color3.fromRGB(12, 12, 18),
+        Panel = Color3.fromRGB(18, 18, 28),
+        Element = Color3.fromRGB(24, 24, 36),
+        Hover = Color3.fromRGB(34, 34, 50),
+        Outline = Color3.fromRGB(45, 45, 68),
+        Text = Color3.fromRGB(255, 255, 255),
+        DimText = Color3.fromRGB(170, 170, 190),
+        Risky = Color3.fromRGB(255, 55, 65)
+    },
+    ["Midnight Purple"] = {
+        Background = Color3.fromRGB(14, 10, 22),
+        Panel = Color3.fromRGB(20, 14, 32),
+        Element = Color3.fromRGB(28, 20, 44),
+        Hover = Color3.fromRGB(40, 28, 62),
+        Outline = Color3.fromRGB(56, 38, 86),
+        Text = Color3.fromRGB(255, 255, 255),
+        DimText = Color3.fromRGB(175, 160, 200),
+        Risky = Color3.fromRGB(255, 55, 65)
+    },
+    ["Cyberpunk Cyan"] = {
+        Background = Color3.fromRGB(8, 14, 18),
+        Panel = Color3.fromRGB(12, 20, 26),
+        Element = Color3.fromRGB(18, 28, 36),
+        Hover = Color3.fromRGB(24, 38, 50),
+        Outline = Color3.fromRGB(32, 54, 70),
+        Text = Color3.fromRGB(255, 255, 255),
+        DimText = Color3.fromRGB(150, 185, 200),
+        Risky = Color3.fromRGB(255, 55, 65)
+    }
+}
+
+getgenv().SetToxUITheme = function(themeName)
+    local preset = UIThemePresets[tostring(themeName)]
+    if preset then
+        for k, v in pairs(preset) do
+            Theme[k] = v
+        end
+        Settings.ToxUITheme = tostring(themeName)
+        if tostring(themeName) == "Translucent Glass" then
+            if not Settings.ToxUITransparency or Settings.ToxUITransparency < 0.25 then
+                Settings.ToxUITransparency = 0.35
+            end
+        elseif tostring(themeName) == "Clean White" then
+            Theme.Accent = Color3.fromRGB(20, 100, 255)
+        end
+        ApplyTheme()
+        if getgenv().SetToxUITransparency then
+            getgenv().SetToxUITransparency(Settings.ToxUITransparency or 0)
+        end
+        if getgenv().AutoSaveConfiguration then
+            getgenv().AutoSaveConfiguration()
+        end
+        return true
+    end
+    return false
+end
+
+getgenv().SetToxUITransparency = function(transparency)
+    local val = math.clamp(tonumber(transparency) or 0, 0, 0.85)
+    Settings.ToxUITransparency = val
+    if Main then
+        Main.BackgroundTransparency = val
+    end
+    if getgenv().ThemedObjects then
+        for _, entry in ipairs(getgenv().ThemedObjects) do
+            if entry.Key == "Background" and entry.Instance and entry.Instance:IsA("GuiObject") then
+                entry.Instance.BackgroundTransparency = val
+            elseif (entry.Key == "Panel" or entry.Key == "Element") and entry.Instance and entry.Instance:IsA("GuiObject") then
+                entry.Instance.BackgroundTransparency = math.clamp(val * 0.7, 0, 0.75)
+            end
+        end
+    end
+    if getgenv().AutoSaveConfiguration then
+        getgenv().AutoSaveConfiguration()
+    end
+end
+
 -- ScreenGui Parent Container
 local ParentContainer = (gethui and gethui()) or game:GetService("CoreGui")
 local Gui = Instance.new("ScreenGui")
@@ -3416,10 +3525,16 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
         RegisterThemedObject(Label, "TextColor3", "Risky")
     end
 
+    local initialValue = DefaultValue
+    if SyncKey and Settings[SyncKey] ~= nil then
+        initialValue = Settings[SyncKey]
+    end
+    local Enabled = (initialValue == true)
+
     local ToggleBg = Instance.new("Frame")
     ToggleBg.Size = UDim2.new(0, 38, 0, 20)
     ToggleBg.Position = UDim2.new(1, -48, 0.5, -10)
-    ToggleBg.BackgroundColor3 = DefaultValue and Theme.Accent or Theme.Panel
+    ToggleBg.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
     ToggleBg.BorderSizePixel = 0
     ToggleBg.Parent = Container
     local tgCorner = Instance.new("UICorner") tgCorner.CornerRadius = UDim.new(1, 0) tgCorner.Parent = ToggleBg
@@ -3432,17 +3547,11 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
 
     local Indicator = Instance.new("Frame")
     Indicator.Size = UDim2.new(0, 14, 0, 14)
-    Indicator.Position = DefaultValue and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+    Indicator.Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
     Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Indicator.BorderSizePixel = 0
     Indicator.Parent = ToggleBg
     local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
-
-    local initialValue = DefaultValue
-    if SyncKey and Settings[SyncKey] ~= nil then
-        initialValue = Settings[SyncKey]
-    end
-    local Enabled = (initialValue == true)
 
     local function Update()
         TweenService:Create(ToggleBg, TweenInfo.new(0.2), {
@@ -3547,10 +3656,16 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     RegisterThemedObject(Input, "TextColor3", "Text")
     RegisterThemedObject(inStroke, "Color", "Outline")
 
+    local initialToggle = DefaultToggle
+    if SyncKey and Settings[SyncKey] ~= nil then
+        initialToggle = Settings[SyncKey]
+    end
+    local Enabled = (initialToggle == true)
+
     local ToggleButton = Instance.new("TextButton")
     ToggleButton.Size = UDim2.new(0, 38, 0, 20)
     ToggleButton.Position = UDim2.new(1, -48, 0.5, -10)
-    ToggleButton.BackgroundColor3 = DefaultToggle and Theme.Accent or Theme.Panel
+    ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
     ToggleButton.BorderSizePixel = 0
     ToggleButton.Text = ""
     ToggleButton.AutoButtonColor = false
@@ -3561,17 +3676,11 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
 
     local Indicator = Instance.new("Frame")
     Indicator.Size = UDim2.new(0, 14, 0, 14)
-    Indicator.Position = DefaultToggle and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+    Indicator.Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
     Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Indicator.BorderSizePixel = 0
     Indicator.Parent = ToggleButton
     local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
-
-    local initialToggle = DefaultToggle
-    if SyncKey and Settings[SyncKey] ~= nil then
-        initialToggle = Settings[SyncKey]
-    end
-    local Enabled = (initialToggle == true)
 
     local function UpdateToggle()
         TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
@@ -3718,10 +3827,27 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
         AutoSaveConfiguration()
     end)
 
+    local initialToggle = DefaultToggle
+    if SyncKey and Settings[SyncKey] ~= nil then
+        initialToggle = Settings[SyncKey]
+    end
+    local Enabled = (initialToggle == true)
+
+    local initialChoice = DefaultChoice
+    if SyncKey and Settings[SyncKey .. "Target"] ~= nil then
+        initialChoice = Settings[SyncKey .. "Target"]
+    elseif SyncKey and Settings[SyncKey .. "Choice"] ~= nil then
+        initialChoice = Settings[SyncKey .. "Choice"]
+    end
+    ChoiceBtn.Text = tostring(initialChoice)
+    for i, opt in ipairs(Options) do
+        if opt == initialChoice then CurrentIdx = i break end
+    end
+
     local ToggleButton = Instance.new("TextButton")
     ToggleButton.Size = UDim2.new(0, 38, 0, 20)
     ToggleButton.Position = UDim2.new(1, -48, 0.5, -10)
-    ToggleButton.BackgroundColor3 = DefaultToggle and Theme.Accent or Theme.Panel
+    ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
     ToggleButton.BorderSizePixel = 0
     ToggleButton.Text = ""
     ToggleButton.AutoButtonColor = false
@@ -3732,17 +3858,11 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
 
     local Indicator = Instance.new("Frame")
     Indicator.Size = UDim2.new(0, 14, 0, 14)
-    Indicator.Position = DefaultToggle and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+    Indicator.Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
     Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Indicator.BorderSizePixel = 0
     Indicator.Parent = ToggleButton
     local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
-
-    local initialToggle = DefaultToggle
-    if SyncKey and Settings[SyncKey] ~= nil then
-        initialToggle = Settings[SyncKey]
-    end
-    local Enabled = (initialToggle == true)
 
     local function UpdateToggle()
         TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
@@ -4297,10 +4417,16 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     RegisterThemedObject(KeyButton, "TextColor3", "DimText")
     RegisterThemedObject(kbStroke, "Color", "Outline")
 
+    local initialToggle = DefaultToggle
+    if SyncKey and Settings[SyncKey] ~= nil then
+        initialToggle = Settings[SyncKey]
+    end
+    local Enabled = (initialToggle == true)
+
     local Toggle = Instance.new("TextButton")
     Toggle.Size = UDim2.new(0, 38, 0, 20)
     Toggle.Position = UDim2.new(1, -48, 0.5, -10)
-    Toggle.BackgroundColor3 = DefaultToggle and Theme.Accent or Theme.Panel
+    Toggle.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
     Toggle.BorderSizePixel = 0
     Toggle.Text = ""
     Toggle.AutoButtonColor = false
@@ -4311,7 +4437,7 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
 
     local Indicator = Instance.new("Frame")
     Indicator.Size = UDim2.new(0, 14, 0, 14)
-    Indicator.Position = DefaultToggle and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+    Indicator.Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
     Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Indicator.BorderSizePixel = 0
     Indicator.Parent = Toggle
@@ -4319,7 +4445,6 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
 
     local Binding = false
     local CurrentKey = DefaultKey
-    local Enabled = (DefaultToggle == true)
 
     local function UpdateToggle()
         TweenService:Create(Toggle, TweenInfo.new(0.2), {
