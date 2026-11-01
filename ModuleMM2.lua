@@ -4347,10 +4347,7 @@ function GetBestCoin(origin, competitionAware)
             local distance = 0
 
             if typeof(origin) == "Vector3" then
-                distance = (
-                    Vector2.new(origin.X, origin.Z)
-                    - Vector2.new(coin.Position.X, coin.Position.Z)
-                ).Magnitude
+                distance = (origin - coin.Position).Magnitude
             end
 
             if distance < bestDistance then
@@ -4358,11 +4355,6 @@ function GetBestCoin(origin, competitionAware)
                 bestCoin = coin
             end
         end
-    end
-
-    if AutoFarmRandomNextCoin and #candidates > 1 then
-        AutoFarmRandomNextCoin = false
-        return candidates[math.random(1, #candidates)]
     end
 
     AutoFarmRandomNextCoin = false
@@ -4579,6 +4571,10 @@ function StopAutoFarm(restore)
         root.AssemblyAngularVelocity = Vector3.zero
     end
 
+    if DestroyAutoFarmStandPlatform then
+        DestroyAutoFarmStandPlatform()
+    end
+
     if restore then
         RestoreAutoFarmPosition()
         RunService.Heartbeat:Wait()
@@ -4612,6 +4608,10 @@ function StopAutoFarm(restore)
         root.Anchored = false
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
+    end
+
+    if DestroyAutoFarmStandPlatform then
+        DestroyAutoFarmStandPlatform()
     end
 
     EnableLocalControls()
@@ -4655,6 +4655,9 @@ function UpdateAutoFarmRoundLifecycle()
     if not roundActive then
         if AutoFarmRoundWasActive or mapChanged then
             AutoFarmSawRoundEnd = true
+            if getgenv().ToxClearMM2Roles then
+                getgenv().ToxClearMM2Roles()
+            end
         end
 
         AutoFarmRoundWasActive = false
@@ -5152,6 +5155,10 @@ function CompleteAutoFarm()
 
     StopAutoFarm(true)
 
+    if DestroyAutoFarmStandPlatform then
+        DestroyAutoFarmStandPlatform()
+    end
+
     if Settings.MM2AutoWin
     and getgenv().ToxMM2RunAutoWinFromFull then
         CustomNotify(
@@ -5378,6 +5385,180 @@ local function DestroySafeLobbyPlatform()
     end
 end
 
+-- ==============================================================================
+-- AUTO FARM STAND PLATFORM (ANTI-VOID FALLING)
+-- ==============================================================================
+local AutoFarmStandPlatform = nil
+local function EnsureAutoFarmStandPlatform(position)
+    if not AutoFarmStandPlatform or not AutoFarmStandPlatform.Parent then
+        local p = Instance.new("Part")
+        p.Name = "ToxMM2StandPlatform"
+        p.Size = Vector3.new(8, 1, 8)
+        p.Anchored = true
+        p.CanCollide = true
+        p.Transparency = 1
+        p.CastShadow = false
+        p.Material = Enum.Material.SmoothPlastic
+        p.Parent = workspace
+        AutoFarmStandPlatform = p
+    end
+    AutoFarmStandPlatform.CFrame = CFrame.new(position - Vector3.new(0, 3.1, 0))
+    return AutoFarmStandPlatform
+end
+
+local function DestroyAutoFarmStandPlatform()
+    if AutoFarmStandPlatform and AutoFarmStandPlatform.Parent then
+        pcall(function() AutoFarmStandPlatform:Destroy() end)
+    end
+    AutoFarmStandPlatform = nil
+    local p = workspace:FindFirstChild("ToxMM2StandPlatform")
+    if p then pcall(function() p:Destroy() end) end
+end
+
+-- ==============================================================================
+-- MM2 MAP VOTING SYSTEM (INFINITE RESET & COIN PRIORITY)
+-- ==============================================================================
+local MM2CoinBestMaps = {
+    "factory",
+    "biolab",
+    "hospital",
+    "house",
+    "workplace",
+    "milbase",
+    "mansion",
+    "hotel",
+    "bank",
+    "police",
+    "station",
+    "research"
+}
+
+local function FindMM2VotingPads()
+    local pads = {}
+    local lobby = workspace:FindFirstChild("Lobby") or workspace
+    
+    local containers = {}
+    for _, name in ipairs({"Voting", "MapVoting", "VotingPads", "VotePads", "Pads", "Vote"}) do
+        local c = lobby:FindFirstChild(name, true)
+        if c then table.insert(containers, c) end
+    end
+    
+    for _, c in ipairs(containers) do
+        for _, child in ipairs(c:GetChildren()) do
+            local part = child:IsA("BasePart") and child or child:FindFirstChildWhichIsA("BasePart", true)
+            if part then
+                local mapName = child.Name
+                for _, desc in ipairs(child:GetDescendants()) do
+                    if desc:IsA("TextLabel") and desc.Text and #desc.Text > 1 then
+                        local t = desc.Text
+                        if not string.find(string.lower(t), "vote") or string.len(t) > 6 then
+                            mapName = t:gsub("%s*%(%d+%)", ""):gsub("%s*votes?.*", ""):gsub("\n.*", "")
+                        end
+                    end
+                end
+                table.insert(pads, { Object = child, Part = part, MapName = mapName })
+            end
+        end
+    end
+    
+    if #pads == 0 then
+        for _, desc in ipairs(lobby:GetDescendants()) do
+            local lname = string.lower(desc.Name)
+            if (string.find(lname, "vote") or string.find(lname, "pad")) and (desc:IsA("BasePart") or desc:IsA("Model")) then
+                local part = desc:IsA("BasePart") and desc or desc:FindFirstChildWhichIsA("BasePart", true)
+                if part and (not desc:IsA("BasePart") or desc.Size.Y < 3) then
+                    table.insert(pads, { Object = desc, Part = part, MapName = desc.Name })
+                end
+            end
+        end
+    end
+    return pads
+end
+
+local function GetTargetVotingPad()
+    local pads = FindMM2VotingPads()
+    if #pads == 0 then return nil end
+    
+    local choice = tostring(Settings.MM2VoteMap or "Priority (Best Coins)")
+    
+    if choice == "Priority (Best Coins)" then
+        for _, wanted in ipairs(MM2CoinBestMaps) do
+            for _, pad in ipairs(pads) do
+                local padMap = string.lower(pad.MapName)
+                if string.find(padMap, wanted, 1, true) then
+                    return pad
+                end
+            end
+        end
+        return pads[1]
+    elseif choice == "First Available" then
+        return pads[1]
+    else
+        local targetLower = string.lower(choice)
+        for _, pad in ipairs(pads) do
+            local padMap = string.lower(pad.MapName)
+            if string.find(padMap, targetLower, 1, true) then
+                return pad
+            end
+        end
+        for _, wanted in ipairs(MM2CoinBestMaps) do
+            for _, pad in ipairs(pads) do
+                if string.find(string.lower(pad.MapName), wanted, 1, true) then
+                    return pad
+                end
+            end
+        end
+        return pads[1]
+    end
+end
+
+task.spawn(function()
+    while not getgenv().Destroyed and game.PlaceId == 142823291 do
+        if Settings.MM2AutoVote then
+            local isRoundActive = IsAutoFarmRoundActive()
+            if not isRoundActive then
+                local character, humanoid, root, alive = IsAliveCharacter()
+                if alive and humanoid and humanoid.Health > 0 and root then
+                    local pad = GetTargetVotingPad()
+                    if pad and pad.Part then
+                        local padPos = pad.Part.Position
+                        root.CFrame = CFrame.new(padPos + Vector3.new(0, 2.2, 0))
+                        root.AssemblyLinearVelocity = Vector3.zero
+                        if firetouchinterest then
+                            pcall(function()
+                                firetouchinterest(root, pad.Part, 0)
+                                firetouchinterest(pad.Part, root, 0)
+                                firetouchinterest(root, pad.Part, 1)
+                                firetouchinterest(pad.Part, root, 1)
+                            end)
+                        end
+                        task.wait(0.12)
+                        -- Infinite reset loop
+                        if Settings.MM2AutoVote and humanoid and humanoid.Health > 0 and (Settings.MM2VoteInfinite ~= false) then
+                            humanoid.Health = 0
+                            local t0 = os.clock()
+                            while os.clock() - t0 < 6 and (not Player.Character or not Player.Character:FindFirstChild("Humanoid") or Player.Character.Humanoid.Health <= 0) do
+                                task.wait(0.1)
+                            end
+                            task.wait(0.35)
+                        else
+                            task.wait(0.5)
+                        end
+                    else
+                        task.wait(0.5)
+                    end
+                else
+                    task.wait(0.2)
+                end
+            else
+                task.wait(1)
+            end
+        else
+            task.wait(0.5)
+        end
+    end
+end)
+
 getgenv().SetSafeLobbyEnabled = function(enabled)
     Settings.MM2SafeLobby = (enabled == true)
     if not Settings.MM2SafeLobby then
@@ -5437,7 +5618,7 @@ task.spawn(function()
     end
 end)
 
-function SetAutoFarmCoinPosition(position, velocity)
+function SetAutoFarmCoinPosition(position, velocity, direction)
     if not AutoFarmRoot
     or not AutoFarmRoot.Parent
     or not AutoFarmHumanoid
@@ -5460,10 +5641,24 @@ function SetAutoFarmCoinPosition(position, velocity)
         AutoFarmRoot.AssemblyLinearVelocity = Vector3.new(0, 0.05, 0)
     end
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
-    AutoFarmRoot.CFrame = CFrame.new(position)
+
+    if direction and direction.Magnitude > 0.05 then
+        local lookDir = Vector3.new(direction.X, 0, direction.Z)
+        if lookDir.Magnitude > 0.01 then
+            AutoFarmRoot.CFrame = CFrame.lookAt(position, position + lookDir)
+        else
+            AutoFarmRoot.CFrame = CFrame.new(position)
+        end
+    else
+        AutoFarmRoot.CFrame = CFrame.new(position)
+    end
+
     AutoFarmHumanoid.PlatformStand = false
     AutoFarmHumanoid.Sit = false
     AutoFarmHumanoid.AutoRotate = true
+    pcall(function()
+        AutoFarmHumanoid:ChangeState(Enum.HumanoidStateType.Running)
+    end)
 
     return true
 end
@@ -5497,7 +5692,9 @@ function TweenFarmRoot(targetPosition, duration, coin)
     end
 
     if AutoFarmHumanoid then
-        AutoFarmHumanoid.PlatformStand = true
+        AutoFarmHumanoid.PlatformStand = false
+        AutoFarmHumanoid.Sit = false
+        AutoFarmHumanoid.AutoRotate = true
     end
 
     while Settings.MM2AutoFarmV2
@@ -5524,7 +5721,7 @@ function TweenFarmRoot(targetPosition, duration, coin)
 
         local position = startPosition + delta * alpha
 
-        if not SetAutoFarmCoinPosition(position, velocity) then
+        if not SetAutoFarmCoinPosition(position, velocity, direction) then
             return false
         end
 
@@ -5688,6 +5885,7 @@ function AutoFarmCoin(coin)
     -- TELEPORT MODE
     if tostring(Settings.MM2AutoFarmMode) == "Teleport" then
         local tpPos = travelPosition - Vector3.new(0, 3.8, 0)
+        EnsureAutoFarmStandPlatform(tpPos)
         AutoFarmRoot.CFrame = CFrame.new(tpPos)
         AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
         AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
@@ -5707,6 +5905,10 @@ function AutoFarmCoin(coin)
         and not IsFarmBagFull()
         and IsAutoFarmPlayerEligible()
         and IsAutoFarmRoundActive() do
+            if AutoFarmRoot and AutoFarmRoot.Parent then
+                AutoFarmRoot.CFrame = CFrame.new(tpPos)
+                AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+            end
             RunService.Heartbeat:Wait()
         end
 
@@ -5724,9 +5926,20 @@ function AutoFarmCoin(coin)
         250
     )
 
-    local speed = math.clamp(speedValue * 4, AutoFarmMinTweenSpeed, 120)
     local currentPosition = AutoFarmRoot.Position
     local distance = (travelPosition - currentPosition).Magnitude
+
+    -- Initial entry from lobby to map: instant teleport directly to first coin vicinity
+    if distance > 60 then
+        AutoFarmRoot.CFrame = CFrame.new(travelPosition)
+        AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+        AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+        task.wait(0.08)
+        currentPosition = AutoFarmRoot.Position
+        distance = (travelPosition - currentPosition).Magnitude
+    end
+
+    local speed = math.clamp(speedValue * 4, AutoFarmMinTweenSpeed, 120)
     local arrived = TweenFarmRoot(
         travelPosition,
         distance / speed,
