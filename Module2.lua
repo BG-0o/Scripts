@@ -208,7 +208,8 @@ ScreenWeatherGui.Parent = ParentContainer
 
 -- Left Sidebar
 local isSidebarCollapsed = Settings.CollapseSidebar == true
-local sidebarExpandedWidth = 185
+local sidebarExpandedWidth = tonumber(Settings.SidebarExpandedWidth) or 185
+if sidebarExpandedWidth < 100 or sidebarExpandedWidth > 380 then sidebarExpandedWidth = 185 end
 local sidebarCollapsedWidth = 56
 
 local Sidebar = Instance.new("Frame")
@@ -250,6 +251,16 @@ SidebarSplitter.Parent = Sidebar
 local isDraggingSplitter = false
 local splitterStartX = 0
 local splitterStartWidth = 0
+
+SidebarSplitter.Active = true
+SidebarSplitter.MouseEnter:Connect(function()
+    SidebarRightBorder.BackgroundColor3 = Theme.Accent
+end)
+SidebarSplitter.MouseLeave:Connect(function()
+    if not isDraggingSplitter then
+        SidebarRightBorder.BackgroundColor3 = Theme.Outline
+    end
+end)
 
 SidebarSplitter.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
