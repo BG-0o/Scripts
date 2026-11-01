@@ -6372,14 +6372,16 @@ SetRender3DEnabled(true)
 CreateToggle(
     "3D Rendering",
     ConfigPage,
-    false,
+    Settings.Render3DDisabled == true,
     function(v)
+        Settings.Render3DDisabled = v == true
         SetRender3DEnabled(
             not v
         )
 
         AutoSaveConfiguration()
-    end
+    end,
+    "Render3DDisabled"
 )
 
 CreateDropdown(
@@ -6440,6 +6442,15 @@ CreateKeybindButton("GUI Keybind", ConfigPage, Settings.GUIKeybind, function(key
         getgenv().AutoSaveConfiguration()
     end
 end)
+
+CreateKeybindButton("Panic Key", ConfigPage, Settings.PanicKey, function(key)
+    Settings.PanicKey = key
+
+    if getgenv().AutoSaveConfiguration then
+        getgenv().AutoSaveConfiguration()
+    end
+end)
+
 if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Server Operations", "🌐") end
 CreateButton("Server Hop", ConfigPage, function(button) ShowServerHopMenu(button) end)
 CreateConfirmButton("Rejoin Server", ConfigPage, function()
