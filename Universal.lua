@@ -5303,6 +5303,9 @@ local function BuildMM2FallbackRoles()
         return true
     end
 
+    MM2RoleCache = {}
+    MM2DeadCache = {}
+    getgenv().ToxMM2StableRoleCache = {}
     return false
 end
 
@@ -5341,6 +5344,14 @@ local function RefreshMM2Roles(force)
 end
 
 getgenv().ToxRefreshMM2Roles = RefreshMM2Roles
+
+getgenv().ToxClearMM2Roles = function()
+    MM2RoleCache = {}
+    MM2DeadCache = {}
+    getgenv().ToxMM2StableRoleCache = {}
+    MM2RoleCacheTime = 0
+    MM2HasAuthoritativeData = false
+end
 
 getgenv().ToxGetMM2Role = function(p)
     if not p then
@@ -6431,6 +6442,63 @@ CreateDropdown(
             getgenv().SetToxGuiColor(
                 value
             )
+        end
+    end
+)
+
+CreateDropdown(
+    "UI Theme",
+    {
+        "Dark Neon",
+        "OLED Black",
+        "Clean White",
+        "Translucent Glass",
+        "Midnight Purple",
+        "Cyberpunk Cyan"
+    },
+    ConfigPage,
+    tostring(Settings.ToxUITheme or "Dark Neon"),
+    function(value)
+        Settings.ToxUITheme = value
+        if getgenv().SetToxUITheme then
+            getgenv().SetToxUITheme(value)
+        end
+        if getgenv().AutoSaveConfiguration then
+            getgenv().AutoSaveConfiguration()
+        end
+    end
+)
+
+CreateDropdown(
+    "UI Transparency",
+    {
+        "0% (Opaque)",
+        "15%",
+        "30%",
+        "50%",
+        "70%"
+    },
+    ConfigPage,
+    tostring(
+        Settings.ToxUITransparency == 0.7 and "70%"
+        or Settings.ToxUITransparency == 0.5 and "50%"
+        or Settings.ToxUITransparency == 0.3 and "30%"
+        or Settings.ToxUITransparency == 0.15 and "15%"
+        or "0% (Opaque)"
+    ),
+    function(value)
+        local val = 0
+        if value == "70%" then val = 0.7
+        elseif value == "50%" then val = 0.5
+        elseif value == "30%" then val = 0.3
+        elseif value == "15%" then val = 0.15
+        end
+        Settings.ToxUITransparency = val
+        if getgenv().SetToxUITransparency then
+            getgenv().SetToxUITransparency(val)
+        end
+        if getgenv().AutoSaveConfiguration then
+            getgenv().AutoSaveConfiguration()
         end
     end
 )
