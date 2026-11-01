@@ -135,6 +135,16 @@ end
 Settings.MM2AutoWin =
     Settings.MM2AutoWin == true
 
+Settings.MM2SafeLobby = Settings.MM2SafeLobby == true
+Settings.MM2AutoFarmMode = tostring(Settings.MM2AutoFarmMode or "Tween")
+if Settings.MM2AutoFarmMode ~= "Tween" and Settings.MM2AutoFarmMode ~= "Teleport" then
+    Settings.MM2AutoFarmMode = "Tween"
+end
+Settings.MM2AutoFarmTeleportDelay = tonumber(Settings.MM2AutoFarmTeleportDelay) or 1.2
+if Settings.MM2AutoFarmTeleportDelay < 0.2 then
+    Settings.MM2AutoFarmTeleportDelay = 0.2
+end
+
 configuredAutoFarmSpeed = tonumber(Settings.MM2AutoFarmSpeed)
 
 if not configuredAutoFarmSpeed or configuredAutoFarmSpeed == 50 then
@@ -4837,6 +4847,8 @@ function ToxMM2RunKillOnFull()
                 and not getgenv().Destroyed
                 and game.PlaceId == 142823291
                 and generation == KillOnFullGeneration
+                and IsAutoFarmRoundActive()
+                and IsAutoFarmPlayerEligible()
         end
 
         task.wait(0.15)
@@ -4893,6 +4905,9 @@ function ToxMM2RunKillOnFull()
 
                 task.wait(0.12)
             end
+
+            KillOnFullBusy = false
+            return
 
         elseif role == "Sheriff" or gun then
             if targetMode == "Murderer" or targetMode == "Both" then
@@ -5050,7 +5065,7 @@ function ToxMM2RunKillOnFull()
                     local flingAttempts = 0
                     local flingStartTime = tick()
 
-                    while active() and targetPlayer and IsMM2PlayerAlive(targetPlayer) and flingAttempts < 3 and (tick() - flingStartTime) < 8 do
+                    while active() and targetPlayer and IsMM2PlayerAlive(targetPlayer) and IsAutoFarmRoundActive() and IsAutoFarmPlayerEligible() and flingAttempts < 3 and (tick() - flingStartTime) < 8 do
                         flingAttempts = flingAttempts + 1
                         if not IsTargetFlying(targetPlayer) then
                             CustomNotify(
@@ -5310,7 +5325,109 @@ function GetCoinFarmPosition(coin)
     )
 end
 
-function SetAutoFarmCoinPosition(position)
+
+-- ==============================================================================
+-- SAFE LOBBY SYSTEM
+-- ==============================================================================
+local SafeLobbyPlatform = nil
+local SafeLobbyPosition = Vector3.new(-108, -60, -10)
+
+local function EnsureSafeLobbyPlatform()
+    if SafeLobbyPlatform and SafeLobbyPlatform.Parent then
+        return SafeLobbyPlatform
+    end
+
+    local container = workspace:FindFirstChild("ToxMM2SafeLobby")
+    if not container then
+        container = Instance.new("Folder")
+        container.Name = "ToxMM2SafeLobby"
+        container.Parent = workspace
+    end
+
+    local floor = container:FindFirstChild("Floor")
+    if not floor then
+        floor = Instance.new("Part")
+        floor.Name = "Floor"
+        floor.Size = Vector3.new(30, 2, 30)
+        floor.Position = SafeLobbyPosition
+        floor.Anchored = true
+        floor.CanCollide = true
+        floor.Material = Enum.Material.SmoothPlastic
+        floor.Color = Color3.fromRGB(15, 15, 24)
+        floor.Parent = container
+    end
+
+    local function makeWall(name, size, pos)
+        local w = container:FindFirstChild(name)
+        if not w then
+            w = Instance.new("Part")
+            w.Name = name
+            w.Size = size
+            w.Position = pos
+            w.Anchored = true
+            w.CanCollide = true
+            w.Transparency = 0.65
+            w.Material = Enum.Material.ForceField
+            w.Color = Color3.fromRGB(30, 95, 255)
+            w.Parent = container
+        end
+        return w
+    end
+
+    makeWall("WallN", Vector3.new(30, 12, 1), SafeLobbyPosition + Vector3.new(0, 6, 15))
+    makeWall("WallS", Vector3.new(30, 12, 1), SafeLobbyPosition + Vector3.new(0, 6, -15))
+    makeWall("WallE", Vector3.new(1, 12, 30), SafeLobbyPosition + Vector3.new(15, 6, 0))
+    makeWall("WallW", Vector3.new(1, 12, 30), SafeLobbyPosition + Vector3.new(-15, 6, 0))
+
+    SafeLobbyPlatform = container
+    return container
+end
+
+local function DestroySafeLobbyPlatform()
+    if SafeLobbyPlatform and SafeLobbyPlatform.Parent then
+        pcall(function() SafeLobbyPlatform:Destroy() end)
+    end
+    SafeLobbyPlatform = nil
+    local existing = workspace:FindFirstChild("ToxMM2SafeLobby")
+    if existing then
+        pcall(function() existing:Destroy() end)
+    end
+end
+
+getgenv().SetSafeLobbyEnabled = function(enabled)
+    Settings.MM2SafeLobby = (enabled == true)
+    if not Settings.MM2SafeLobby then
+        DestroySafeLobbyPlatform()
+        local character, _, root, alive = IsAliveCharacter()
+        if alive and root and root.Position.Y < 0 then
+            root.CFrame = CFrame.new(-108, 140, -10)
+        end
+    else
+        EnsureSafeLobbyPlatform()
+    end
+end
+
+task.spawn(function()
+    while not getgenv().Destroyed and game.PlaceId == 142823291 do
+        if Settings.MM2SafeLobby then
+            local roundActive = IsAutoFarmRoundActive()
+            local eligible = IsAutoFarmPlayerEligible()
+            local character, humanoid, root, alive = IsAliveCharacter()
+
+            if alive and root and humanoid and humanoid.Health > 0 and (not roundActive or not eligible) then
+                EnsureSafeLobbyPlatform()
+                if root.Position.Y > 0 then
+                    root.CFrame = CFrame.new(SafeLobbyPosition + Vector3.new(0, 4, 0))
+                    root.AssemblyLinearVelocity = Vector3.zero
+                    root.AssemblyAngularVelocity = Vector3.zero
+                end
+            end
+        end
+        task.wait(0.5)
+    end
+end)
+
+function SetAutoFarmCoinPosition(position, velocity)
     if not AutoFarmRoot
     or not AutoFarmRoot.Parent
     or not AutoFarmHumanoid
@@ -5327,9 +5444,13 @@ function SetAutoFarmCoinPosition(position)
 
     AutoFarmHoldPosition = position
     AutoFarmRoot.Anchored = false
-    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+    if velocity then
+        AutoFarmRoot.AssemblyLinearVelocity = velocity
+    else
+        AutoFarmRoot.AssemblyLinearVelocity = Vector3.new(0, 0.05, 0)
+    end
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
-    character:PivotTo(CFrame.new(position))
+    AutoFarmRoot.CFrame = CFrame.new(position)
     AutoFarmHumanoid.PlatformStand = false
     AutoFarmHumanoid.Sit = false
     AutoFarmHumanoid.AutoRotate = true
@@ -5346,9 +5467,16 @@ function TweenFarmRoot(targetPosition, duration, coin)
     local generation = AutoFarmGeneration
     local startPosition = AutoFarmRoot.Position
     local delta = targetPosition - startPosition
+    local distance = delta.Magnitude
+    local direction = distance > 0.01 and delta.Unit or Vector3.zero
     local startTime = os.clock()
 
     duration = math.max(duration, 0.05)
+    local moveSpeed = math.max(5, distance / duration)
+    local velocity = direction * math.min(moveSpeed, 45)
+
+    local serialBefore = AutoFarmCoinSerial
+    local bagBefore = AutoFarmBagCoins
 
     if AutoFarmTween then
         pcall(function()
@@ -5367,7 +5495,7 @@ function TweenFarmRoot(targetPosition, duration, coin)
     and AutoFarmHumanoid.Health > 0
     and IsAutoFarmPlayerEligible() do
         if coin and not IsCoinValid(coin) then
-            return false
+            return true
         end
 
         if IsFarmBagFull() then
@@ -5382,12 +5510,15 @@ function TweenFarmRoot(targetPosition, duration, coin)
 
         local position = startPosition + delta * alpha
 
-        if not SetAutoFarmCoinPosition(position) then
+        if not SetAutoFarmCoinPosition(position, velocity) then
             return false
         end
 
         if coin then
             TouchCoin(coin)
+            if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
+                return true
+            end
         end
 
         if alpha >= 1 then
@@ -5477,24 +5608,22 @@ function CollectFarmCoin(coin)
     if not IsCoinValid(coin)
     or not AutoFarmRoot
     or not AutoFarmRoot.Parent then
-        return false
+        return true
     end
 
     local generation = AutoFarmGeneration
     local serialBefore = AutoFarmCoinSerial
     local bagBefore = AutoFarmBagCoins
-    local position = GetCoinBasePosition(coin)
     local farmPosition = GetCoinFarmPosition(coin)
 
-    if not position
-    or not farmPosition then
+    if not farmPosition then
         return false
     end
 
     AutoFarmAtCoin = true
-    SetAutoFarmCoinPosition(farmPosition)
+    SetAutoFarmCoinPosition(farmPosition, Vector3.new(0, 0.1, 0))
 
-    local holdUntil = os.clock() + AutoFarmCoinHoldTime
+    local holdUntil = os.clock() + 0.06
 
     while Settings.MM2AutoFarmV2
     and generation == AutoFarmGeneration
@@ -5509,6 +5638,8 @@ function CollectFarmCoin(coin)
         TouchCoin(coin)
 
         if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
+            AutoFarmAtCoin = false
+            AutoFarmHoldPosition = nil
             return true
         end
 
@@ -5517,7 +5648,7 @@ function CollectFarmCoin(coin)
 
     AutoFarmAtCoin = false
     AutoFarmHoldPosition = nil
-    return false
+    return not IsCoinValid(coin)
 end
 
 function AutoFarmCoin(coin)
@@ -5535,6 +5666,44 @@ function AutoFarmCoin(coin)
         return true
     end
 
+    local travelPosition = GetCoinFarmPosition(coin)
+    if not travelPosition then
+        return false
+    end
+
+    -- TELEPORT MODE
+    if tostring(Settings.MM2AutoFarmMode) == "Teleport" then
+        local tpPos = travelPosition + Vector3.new(0, 1.2, 0)
+        AutoFarmRoot.CFrame = CFrame.new(tpPos)
+        AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+        AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+        AutoFarmHoldPosition = tpPos
+
+        local serialBefore = AutoFarmCoinSerial
+        local bagBefore = AutoFarmBagCoins
+
+        TouchCoin(coin)
+        RegisterFarmCoinCollected(coin, serialBefore, bagBefore)
+        MM2CoinBlacklist[coin] = os.clock() + 0.2
+
+        local tpDelay = math.clamp(tonumber(Settings.MM2AutoFarmTeleportDelay) or 1.2, 0.2, 10)
+        local delayEnd = os.clock() + tpDelay
+        while os.clock() < delayEnd
+        and Settings.MM2AutoFarmV2
+        and not IsFarmBagFull()
+        and IsAutoFarmPlayerEligible()
+        and IsAutoFarmRoundActive() do
+            RunService.Heartbeat:Wait()
+        end
+
+        RefreshFarmBagState()
+        if IsFarmBagFull() then
+            CompleteAutoFarm()
+        end
+        return true
+    end
+
+    -- TWEEN MODE
     local speedValue = math.clamp(
         tonumber(Settings.MM2AutoFarmSpeed) or 5,
         1,
@@ -5543,12 +5712,6 @@ function AutoFarmCoin(coin)
 
     local speed = math.clamp(speedValue * 4, AutoFarmMinTweenSpeed, 120)
     local currentPosition = AutoFarmRoot.Position
-    local travelPosition = GetCoinFarmPosition(coin)
-
-    if not travelPosition then
-        return false
-    end
-
     local distance = (travelPosition - currentPosition).Magnitude
     local arrived = TweenFarmRoot(
         travelPosition,
