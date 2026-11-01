@@ -581,6 +581,12 @@ getgenv().Settings = {
     MM2GrabGunAuto = false,
     MM2GrabGunAutoV2 = false,
     MM2FlingTarget = "Murderer",
+    MM2FlingCustomNick = "",
+    MM2KillOnFull = false,
+    MM2KillOnFullTarget = "Both",
+    MM2SafeLobby = false,
+    MM2AutoFarmMode = "Tween",
+    MM2AutoFarmTeleportDelay = 1.2,
 
     ADMINPrefix = ".",
     ADMINKillTarget = "",
