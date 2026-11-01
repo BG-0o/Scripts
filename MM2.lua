@@ -260,32 +260,24 @@ CreateToggle(
     "MM2AutoFarmResetOnFull"
 )
 
-CreateToggle(
+CreateToggleWithChoice(
     "Kill On Full",
     GamePage,
+    {"Both", "Murderer", "Sheriff"},
     Settings.MM2KillOnFull,
+    Settings.MM2KillOnFullTarget or "Both",
     function(v)
-        Settings.MM2KillOnFull =
-            v == true
-
+        Settings.MM2KillOnFull = v == true
         if not Settings.MM2KillOnFull then
             AutoFarmKillTriggered = false
         end
-
+        AutoSaveConfiguration()
+    end,
+    function(choice)
+        Settings.MM2KillOnFullTarget = choice
         AutoSaveConfiguration()
     end,
     "MM2KillOnFull"
-)
-
-CreateDropdown(
-    "Kill On Full Target",
-    {"Both", "Murderer", "Sheriff"},
-    GamePage,
-    Settings.MM2KillOnFullTarget or "Both",
-    function(value)
-        Settings.MM2KillOnFullTarget = value
-        AutoSaveConfiguration()
-    end
 )
 
 CreateMM2Section(
@@ -383,10 +375,15 @@ CreateMM2Section(
     "TARGETING"
 )
 
-CreateDropdown("Fling Target", {"Murderer", "Sheriff"}, GamePage, Settings.MM2FlingTarget, function(value)
+CreateDropdown("Fling Target", {"Murderer", "Sheriff", "Custom Player"}, GamePage, Settings.MM2FlingTarget or "Murderer", function(value)
     Settings.MM2FlingTarget = value
     AutoSaveConfiguration()
 end)
+
+CreateTextBox("Target Player", GamePage, Settings.MM2FlingCustomNick or "", function(txt)
+    Settings.MM2FlingCustomNick = txt
+    AutoSaveConfiguration()
+end, "Enter player name...")
 
 CreateButton("Fling", GamePage, FlingSelectedRole)
 
