@@ -220,10 +220,13 @@ ScreenWeatherGui.ResetOnSpawn = false
 ScreenWeatherGui.DisplayOrder = 999999990
 ScreenWeatherGui.Parent = ParentContainer
 
--- UI Forward Declarations to prevent nil-scoping bugs
+-- Forward declarations for main container hierarchy
 local ContentArea = nil
--- forward declarations moved to header
+local TopBar = nil
+local SearchPill = nil
 local SearchResultsScroll = nil
+local PagesContainer = nil
+local ResizeHandle = nil
 
 -- Left Sidebar
 local isSidebarCollapsed = Settings.CollapseSidebar == true
@@ -255,18 +258,19 @@ SidebarRightBorder.ZIndex = 11
 SidebarRightBorder.Parent = Sidebar
 RegisterThemedObject(SidebarRightBorder, "BackgroundColor3", "Outline")
 
-do
 local SidebarSplitter = Instance.new("TextButton")
 SidebarSplitter.Name = "SidebarSplitter"
-SidebarSplitter.Size = UDim2.new(0, 14, 1, 0)
-SidebarSplitter.Position = UDim2.new(1, -7, 0, 0)
+SidebarSplitter.Size = UDim2.new(0, 10, 1, 0)
+SidebarSplitter.Position = UDim2.new(0, (isSidebarCollapsed and sidebarCollapsedWidth or sidebarExpandedWidth) - 5, 0, 0)
 SidebarSplitter.BackgroundTransparency = 1
 SidebarSplitter.BorderSizePixel = 0
 SidebarSplitter.Text = ""
 SidebarSplitter.AutoButtonColor = false
-SidebarSplitter.ZIndex = 30
-SidebarSplitter.Parent = Sidebar
+SidebarSplitter.ZIndex = 50
+SidebarSplitter.Visible = not isSidebarCollapsed
+SidebarSplitter.Parent = Main
 
+do
 local isDraggingSplitter = false
 local splitterStartX = 0
 local splitterStartWidth = 0
@@ -294,13 +298,16 @@ SidebarSplitter.InputBegan:Connect(function(input)
         moveConn = UserInputService.InputChanged:Connect(function(moveInput)
             if moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch then
                 local delta = moveInput.Position.X - splitterStartX
-                local newW = math.clamp(splitterStartWidth + delta, 110, 360)
+                local newW = math.clamp(splitterStartWidth + delta, 130, 320)
                 sidebarExpandedWidth = newW
                 Settings.SidebarExpandedWidth = newW
                 if not isSidebarCollapsed then
                     Sidebar.Size = UDim2.new(0, newW, 1, 0)
-                    ContentArea.Position = UDim2.new(0, newW, 0, 0)
-                    ContentArea.Size = UDim2.new(1, -newW, 1, 0)
+                    SidebarSplitter.Position = UDim2.new(0, newW - 5, 0, 0)
+                    if ContentArea then
+                        ContentArea.Position = UDim2.new(0, newW, 0, 0)
+                        ContentArea.Size = UDim2.new(1, -newW, 1, 0)
+                    end
                 end
             end
         end)
@@ -515,6 +522,11 @@ local function SetSidebarCollapsed(collapsed)
         Size = UDim2.new(1, -targetW, 1, 0)
     }):Play()
 
+    if SidebarSplitter then
+        SidebarSplitter.Visible = not isSidebarCollapsed
+        SidebarSplitter.Position = UDim2.new(0, targetW - 5, 0, 0)
+    end
+
     HubTitle.Visible = not isSidebarCollapsed
     HubVersion.Visible = not isSidebarCollapsed
     CategoryLabel.Visible = not isSidebarCollapsed
@@ -561,7 +573,7 @@ CollapseSidebarBtn.MouseButton1Click:Connect(function()
 end)
 
 -- TopBar
-local TopBar = Instance.new("Frame")
+TopBar = Instance.new("Frame")
 TopBar.Name = "TopBar"
 TopBar.Size = UDim2.new(1, 0, 0, 46)
 TopBar.Position = UDim2.new(0, 0, 0, 0)
@@ -647,9 +659,7 @@ RegisterThemedObject(MinimizeBtn, "TextColor3", "Text")
 local MinCorner = Instance.new("UICorner") MinCorner.CornerRadius = UDim.new(0, 6) MinCorner.Parent = MinimizeBtn
 getgenv().Minimize = MinimizeBtn
 
-local PagesContainer = nil
-local ResizeHandle = nil
-local SearchPill = nil
+-- (Container references forward-declared above)
 
 do
 local isMinimized = false
@@ -661,18 +671,16 @@ local function SetMinimized(minimized)
     getgenv().ToxMainMinimized = isMinimized
     getgenv().Minimized = isMinimized
 
+    local targetW = isSidebarCollapsed and sidebarCollapsedWidth or sidebarExpandedWidth
+    local resizeHandle = Main and (Main:FindFirstChild("ToxResizeHandle") or Main:FindFirstChild("ResizeHandle"))
+
     if isMinimized then
-        if Main and Main.Size.Y.Offset > 46 then
+        if Main and Main.Size.Y.Offset > 50 then
             MainExpandedSize = Main.Size
             getgenv().ToxMainExpandedSize = MainExpandedSize
         end
-        if Main then
-            for _, ch in ipairs(Main:GetChildren()) do
-                if ch.Name == "ToxResizeHandle" or ch.Name == "ResizeHandle" then
-                    ch.Visible = false
-                end
-            end
-        end
+        if resizeHandle then resizeHandle.Visible = false end
+        if SidebarSplitter then SidebarSplitter.Visible = false end
         if Sidebar then Sidebar.Visible = false end
         if SidebarFooter then SidebarFooter.Visible = false end
         if UserAvatar then UserAvatar.Visible = false end
@@ -687,28 +695,38 @@ local function SetMinimized(minimized)
         if CurrentTabTitle then CurrentTabTitle.Text = "ToxHub" end
         if Main then
             Main.ClipsDescendants = true
-            Main.Size = UDim2.new(MainExpandedSize.X.Scale, MainExpandedSize.X.Offset, 0, 46)
+            local currentW = MainExpandedSize and MainExpandedSize.X.Offset or 680
+            if currentW < 400 then currentW = 680 end
+            Main.Size = UDim2.new(0, currentW, 0, 46)
         end
         if MinimizeBtn then MinimizeBtn.Text = "+" end
     else
+        local currentW = MainExpandedSize and MainExpandedSize.X.Offset or 680
+        local currentH = MainExpandedSize and MainExpandedSize.Y.Offset or 480
+        if currentW < 480 then currentW = 680 end
+        if currentH < 320 then currentH = 480 end
+
         if Main then
-            Main.Size = MainExpandedSize
-            for _, ch in ipairs(Main:GetChildren()) do
-                if ch.Name == "ToxResizeHandle" or ch.Name == "ResizeHandle" then
-                    ch.Visible = true
-                end
-            end
+            Main.Size = UDim2.new(0, currentW, 0, currentH)
+            Main.ClipsDescendants = true
+            if resizeHandle then resizeHandle.Visible = true end
         end
-        if Sidebar then Sidebar.Visible = true end
+        if Sidebar then
+            Sidebar.Size = UDim2.new(0, targetW, 1, 0)
+            Sidebar.Visible = true
+        end
         if SidebarFooter then SidebarFooter.Visible = true end
         if UserAvatar then UserAvatar.Visible = true end
-        if SearchPill then SearchPill.Visible = true end
-        if PagesContainer then PagesContainer.Visible = true end
-        local targetW = isSidebarCollapsed and sidebarCollapsedWidth or sidebarExpandedWidth
+        if SidebarSplitter then
+            SidebarSplitter.Visible = not isSidebarCollapsed
+            SidebarSplitter.Position = UDim2.new(0, targetW - 5, 0, 0)
+        end
         if ContentArea then
             ContentArea.Position = UDim2.new(0, targetW, 0, 0)
             ContentArea.Size = UDim2.new(1, -targetW, 1, 0)
         end
+        if PagesContainer then PagesContainer.Visible = true end
+        if SearchPill then SearchPill.Visible = true end
         if CurrentTabTitle then CurrentTabTitle.Text = savedPageTitle or "Home" end
         if MinimizeBtn then MinimizeBtn.Text = "-" end
     end
