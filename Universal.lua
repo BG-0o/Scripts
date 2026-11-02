@@ -1734,7 +1734,8 @@ local SupportedToxGames = {
     { Name = "Build A Boat For Treasure", PlaceId = 537413528, Code = "BABFT", Status = "online" },
     { Name = "Lucky Block Battleground", PlaceId = 662417684, Code = "LBB", Status = "online" },
     { Name = "Flee the Facility", PlaceId = 893973440, Code = "FTF", Status = "updating" },
-    { Name = "Prison Life", PlaceId = 155615604, Code = "PL", Status = "online" }
+    { Name = "Prison Life", PlaceId = 155615604, Code = "PL", Status = "online" },
+    { Name = "Steal Or Die", PlaceId = 119925538689885, Code = "SOD", Status = "online" }
 }
 
 local function RefreshQuickJoinGames()
@@ -6279,6 +6280,7 @@ local gameName = (game.GameId == 142823291 or game.PlaceId == 142823291) and "MM
     or (game.PlaceId == 537413528) and "BABFT"
     or (game.PlaceId == 3851622793) and "WID"
     or (game.PlaceId == 111311599) and "ADMIN"
+    or (game.PlaceId == 119925538689885) and "SOD"
     or ("Place " .. placeKeyStr)
 
 local function GetSaveStatusText()
