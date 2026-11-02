@@ -12,7 +12,6 @@ if env.ToxCombatConnections then
     end
 end
 env.ToxCombatConnections = {}
-env.ToxCombatLoaded = true
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -515,7 +514,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
     end
 
     -- 4. Spinbot
-    if Settings.Spinbot and Player.Character then
+    if Settings.Spinbot and Player and Player.Character then
         local hrp = Player.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
             local speed = tonumber(Settings.SpinSpeed) or 50
@@ -582,7 +581,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
     end
 
     -- 7. Kill Aura
-    if Settings.KillAura and Player.Character then
+    if Settings.KillAura and Player and Player.Character then
         local myHrp = Player.Character:FindFirstChild("HumanoidRootPart")
         if myHrp then
             local range = tonumber(Settings.KillAuraRange) or 15
@@ -592,7 +591,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
                     local tHum = p.Character:FindFirstChildOfClass("Humanoid")
                     if tHrp and tHum and tHum.Health > 0 then
                         if (myHrp.Position - tHrp.Position).Magnitude <= range then
-                            local tool = Player.Character:FindFirstChildOfClass("Tool")
+                            local tool = Player.Character and Player.Character:FindFirstChildOfClass("Tool")
                             if tool then tool:Activate() end
                         end
                     end
@@ -627,16 +626,16 @@ table.insert(connections, inputEnded)
 -- ==============================================================================
 local function BuildCombatUI()
     if not CombatPage then
-        CombatPage = env.CombatPage or env.UniversalPage
+        CombatPage = env.CombatPage or env.UniversalPage or (env.Pages and env.Pages["UNIVERSAL_COMBAT"])
     end
     if not CombatPage then return end
 
-    local CreateSection = env.CreateSection or function(p, t) return p end
-    local CreateToggle = env.CreateToggle
-    local CreateToggleWithValue = env.CreateToggleWithValue
-    local CreateToggleWithChoice = env.CreateToggleWithChoice
-    local CreateDropdown = env.CreateDropdown
-    local CreateKeybindToggle = env.CreateKeybindToggle
+    local CreateSection = env.CreateSection or getgenv().CreateSection or function(p, t) return p end
+    local CreateToggle = env.CreateToggle or getgenv().CreateToggle
+    local CreateToggleWithValue = env.CreateToggleWithValue or getgenv().CreateToggleWithValue
+    local CreateToggleWithChoice = env.CreateToggleWithChoice or getgenv().CreateToggleWithChoice
+    local CreateDropdown = env.CreateDropdown or getgenv().CreateDropdown
+    local CreateKeybindToggle = env.CreateKeybindToggle or getgenv().CreateKeybindToggle
 
     if type(CreateToggle) ~= "function" or type(CreateToggleWithValue) ~= "function" or type(CreateDropdown) ~= "function" then
         return
@@ -804,6 +803,8 @@ local function BuildCombatUI()
 end
 
 BuildCombatUI()
+env.ToxCombatLoaded = true
+getgenv().ToxCombatLoaded = true
 
 -- Clean up on shutdown
 local function CleanupCombat()
