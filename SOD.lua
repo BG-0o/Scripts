@@ -47,7 +47,7 @@ end
 getgenv().ToxSODGeneration = (tonumber(getgenv().ToxSODGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxSODGeneration
 
-local SODModuleVersion = "2026-11-02-sod-v4"
+local SODModuleVersion = "2026-11-02-sod-v5"
 
 if getgenv().ToxSODModuleLoadedJobId == game.JobId
 and getgenv().ToxSODModuleVersion == SODModuleVersion
@@ -163,6 +163,108 @@ local RarityRank = {
     ["Mythic"] = 6,
     ["Secret"] = 6
 }
+
+local KnownItemRarities = {
+    -- Mythic
+    ["cursed idol"] = "Mythic",
+    ["idol"] = "Mythic",
+    ["secret core"] = "Mythic",
+    ["alien artifact"] = "Mythic",
+    ["golden skull"] = "Mythic",
+    ["mythic"] = "Mythic",
+    ["secret"] = "Mythic",
+    ["cursed"] = "Mythic",
+
+    -- Legendary
+    ["gold bar"] = "Legendary",
+    ["gold"] = "Legendary",
+    ["vault"] = "Legendary",
+    ["diamond case"] = "Legendary",
+    ["relic"] = "Legendary",
+    ["prototype"] = "Legendary",
+    ["laser"] = "Legendary",
+    ["ancient vase"] = "Legendary",
+    ["legendary"] = "Legendary",
+
+    -- Epic (including Projector!)
+    ["projector"] = "Epic",
+    ["safe"] = "Epic",
+    ["diamond"] = "Epic",
+    ["statue"] = "Epic",
+    ["crown"] = "Epic",
+    ["chalice"] = "Epic",
+    ["server"] = "Epic",
+    ["trophy"] = "Epic",
+    ["generator"] = "Epic",
+    ["microscope"] = "Epic",
+    ["telescope"] = "Epic",
+    ["plasma"] = "Epic",
+    ["epic"] = "Epic",
+
+    -- Rare
+    ["laptop"] = "Rare",
+    ["painting"] = "Rare",
+    ["gpu"] = "Rare",
+    ["console"] = "Rare",
+    ["microwave"] = "Rare",
+    ["monitor"] = "Rare",
+    ["pc"] = "Rare",
+    ["drone"] = "Rare",
+    ["camera"] = "Rare",
+    ["art"] = "Rare",
+    ["rare"] = "Rare",
+
+    -- Uncommon
+    ["tablet"] = "Uncommon",
+    ["watch"] = "Uncommon",
+    ["headphones"] = "Uncommon",
+    ["router"] = "Uncommon",
+    ["iron"] = "Uncommon",
+    ["blender"] = "Uncommon",
+    ["radio"] = "Uncommon",
+    ["drill"] = "Uncommon",
+    ["uncommon"] = "Uncommon",
+
+    -- Common
+    ["phone"] = "Common",
+    ["wallet"] = "Common",
+    ["cash"] = "Common",
+    ["money"] = "Common",
+    ["coins"] = "Common",
+    ["coin"] = "Common",
+    ["key"] = "Common",
+    ["cup"] = "Common",
+    ["clock"] = "Common",
+    ["toaster"] = "Common",
+    ["common"] = "Common",
+}
+
+local function DetectRarityFromColor(color)
+    if not color then return nil end
+    local r, g, b = color.R * 255, color.G * 255, color.B * 255
+
+    -- Purple / Magenta -> Epic
+    if (r > 110 and b > 160 and g < 160) or (r > 140 and b > 190 and g < 180) then
+        return "Epic"
+    end
+    -- Red -> Mythic
+    if r > 190 and g < 90 and b < 90 then
+        return "Mythic"
+    end
+    -- Gold / Orange / Yellow -> Legendary
+    if (r > 200 and g > 130 and b < 90) or (r > 230 and g > 180 and b < 60) then
+        return "Legendary"
+    end
+    -- Blue / Cyan -> Rare
+    if (b > 170 and r < 130) or (b > 190 and g > 100 and r < 90) then
+        return "Rare"
+    end
+    -- Green -> Uncommon
+    if g > 150 and r < 140 and b < 140 then
+        return "Uncommon"
+    end
+    return nil
+end
 
 local FilterMinRank = {
     ["All"] = 1,
@@ -335,36 +437,152 @@ end
 
 local function InferRarity(nameLower, value)
     if nameLower then
-        if string.find(nameLower, "mythic") or string.find(nameLower, "secret") or string.find(nameLower, "cursed") or string.find(nameLower, "idol") then
-            return "Mythic"
-        elseif string.find(nameLower, "gold bar") or string.find(nameLower, "legendary") or string.find(nameLower, "vault") or string.find(nameLower, "diamond case") or string.find(nameLower, "relic") then
-            return "Legendary"
-        elseif string.find(nameLower, "epic") or string.find(nameLower, "safe") or string.find(nameLower, "diamond") or string.find(nameLower, "statue") or string.find(nameLower, "crown") then
-            return "Epic"
-        elseif string.find(nameLower, "rare") or string.find(nameLower, "laptop") or string.find(nameLower, "painting") or string.find(nameLower, "gpu") or string.find(nameLower, "console") then
-            return "Rare"
-        elseif string.find(nameLower, "uncommon") or string.find(nameLower, "tablet") or string.find(nameLower, "watch") or string.find(nameLower, "camera") or string.find(nameLower, "headphones") then
-            return "Uncommon"
+        for k, r in pairs(KnownItemRarities) do
+            if string.find(nameLower, k, 1, true) then
+                return r
+            end
         end
     end
 
-    if value then
-        if value >= 2500 then
-            return "Mythic"
-        elseif value >= 1000 then
-            return "Legendary"
-        elseif value >= 600 then
-            return "Epic"
-        elseif value >= 300 then
-            return "Rare"
-        elseif value >= 100 then
-            return "Uncommon"
-        else
-            return "Common"
-        end
+    local v = value or 0
+    if v >= 1200 then
+        return "Mythic"
+    elseif v >= 600 then
+        return "Legendary"
+    elseif v >= 250 then
+        return "Epic"
+    elseif v >= 180 then
+        return "Rare"
+    elseif v >= 80 then
+        return "Uncommon"
     end
 
     return "Common"
+end
+
+local function GetItemHierarchy(prompt)
+    local list = {}
+    if not prompt then return list end
+    table.insert(list, prompt)
+
+    local curr = prompt.Parent
+    while curr and curr ~= Workspace and curr ~= game do
+        table.insert(list, curr)
+        curr = curr.Parent
+    end
+    return list
+end
+
+local function ResolveItemData(prompt, instance, nameLower)
+    local hierarchy = GetItemHierarchy(prompt)
+
+    local rawRarity = nil
+    local rawValue = nil
+    local rawWeight = nil
+    local guiColorRarity = nil
+    local guiPrice = nil
+
+    for _, obj in ipairs(hierarchy) do
+        -- Rarity string / number
+        if not rawRarity then
+            for _, k in ipairs({ "Rarity", "rarity", "Tier", "tier", "ItemRarity", "Grade", "Quality" }) do
+                local a = obj:GetAttribute(k)
+                if typeof(a) == "string" and a ~= "" then
+                    rawRarity = a
+                    break
+                elseif typeof(a) == "number" then
+                    local tiers = { [1] = "Common", [2] = "Uncommon", [3] = "Rare", [4] = "Epic", [5] = "Legendary", [6] = "Mythic" }
+                    if tiers[a] then
+                        rawRarity = tiers[a]
+                        break
+                    end
+                end
+                local c = obj:FindFirstChild(k)
+                if c and c:IsA("StringValue") and c.Value ~= "" then
+                    rawRarity = c.Value
+                    break
+                end
+            end
+        end
+
+        -- Value number
+        if not rawValue then
+            for _, k in ipairs({ "Value", "Price", "Worth", "Cash", "Amount", "CurrentValue" }) do
+                local a = obj:GetAttribute(k)
+                if typeof(a) == "number" and a > 0 then
+                    rawValue = a
+                    break
+                elseif typeof(a) == "string" then
+                    local n = tonumber(string.match(a, "[%d%.]+"))
+                    if n and n > 0 then
+                        rawValue = n
+                        break
+                    end
+                end
+                local c = obj:FindFirstChild(k)
+                if c and (c:IsA("NumberValue") or c:IsA("IntValue")) and c.Value > 0 then
+                    rawValue = c.Value
+                    break
+                end
+            end
+        end
+
+        -- Weight number
+        if not rawWeight then
+            for _, k in ipairs({ "Weight", "Mass", "Kg", "KG", "CarryWeight", "ItemWeight" }) do
+                local a = obj:GetAttribute(k)
+                if typeof(a) == "number" and a > 0 then
+                    rawWeight = a
+                    break
+                elseif typeof(a) == "string" then
+                    local n = tonumber(string.match(a, "[%d%.]+"))
+                    if n and n > 0 then
+                        rawWeight = n
+                        break
+                    end
+                end
+            end
+        end
+
+        -- Inspect in-game BillboardGui / TextLabels for exact displayed price and rarity color!
+        for _, child in ipairs(obj:GetChildren()) do
+            if child:IsA("BillboardGui") and child.Name ~= "ToxSODItemTag" then
+                for _, desc in ipairs(child:GetDescendants()) do
+                    if desc:IsA("TextLabel") then
+                        if not guiPrice and string.find(desc.Text, "%$") then
+                            local n = tonumber(string.match(desc.Text, "%$([%d%,%.]+)"))
+                            if n and n > 0 then guiPrice = n end
+                        end
+                        if not guiColorRarity and desc.TextColor3 then
+                            local detected = DetectRarityFromColor(desc.TextColor3)
+                            if detected then guiColorRarity = detected end
+                        end
+                    elseif desc:IsA("Frame") and not guiColorRarity then
+                        local detected = DetectRarityFromColor(desc.BackgroundColor3)
+                        if detected then guiColorRarity = detected end
+                    end
+                end
+            end
+        end
+    end
+
+    if guiPrice and guiPrice > 0 then
+        rawValue = guiPrice
+    end
+
+    if guiColorRarity then
+        rawRarity = guiColorRarity
+    end
+
+    if not rawRarity or rawRarity == "" then
+        rawRarity = InferRarity(nameLower, rawValue)
+    end
+
+    if not rawValue or rawValue == 0 then
+        rawValue = InferValue(nameLower)
+    end
+
+    return rawRarity, rawValue or 100, rawWeight or 0
 end
 
 local function FormatCurrency(num)
@@ -964,22 +1182,7 @@ local function RegisterPrompt(prompt)
 
     -- Loot
     if IsLootObject(prompt, instance, nameLower) then
-        local val = ReadNumberAttr(instance, { "Value", "Price", "Worth", "Cash", "Amount" })
-            or ReadNumberAttr(instance.Parent, { "Value", "Price", "Worth", "Cash", "Amount" })
-
-        local weight = ReadNumberAttr(instance, { "Weight", "Mass", "Kg", "KG", "CarryWeight", "ItemWeight" })
-            or ReadNumberAttr(instance.Parent, { "Weight", "Mass", "Kg", "KG", "CarryWeight", "ItemWeight" })
-
-        local rarity = ReadStringAttr(instance, { "Rarity", "ItemRarity", "Tier" })
-            or ReadStringAttr(instance.Parent, { "Rarity", "ItemRarity", "Tier" })
-
-        if not val or val == 0 then
-            val = InferValue(nameLower)
-        end
-
-        if not rarity or rarity == "" then
-            rarity = InferRarity(nameLower, val)
-        end
+        local rarity, val, weight = ResolveItemData(prompt, instance, nameLower)
 
         ItemPrompts[prompt] = {
             Object = instance,
@@ -987,8 +1190,8 @@ local function RegisterPrompt(prompt)
             Name = name,
             NameLower = nameLower,
             Rarity = rarity,
-            Value = val or 0,
-            Weight = weight or 0
+            Value = val,
+            Weight = weight
         }
 
         if Settings.SODInstantSteal then
@@ -1323,8 +1526,7 @@ local function UpdateMonsterESP(charRoot)
                     MonsterESPObjects[model] = esp
                 end
 
-                esp.Label.Text = string.format("[%s] %s (%dm)",
-                    string.upper(tostring(data.Kind or "MONSTER")),
+                esp.Label.Text = string.format("%s (%dm)",
                     data.Name,
                     math.floor(dist)
                 )
