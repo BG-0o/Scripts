@@ -4770,30 +4770,175 @@ do
 end
 
 -- ==============================================================================
--- COMBAT MODULE LOADER (Combat.lua)
+-- COMBAT MODULE LOADER (Combat.lua) & RESILIENT FALLBACK
 -- ==============================================================================
 do
-    if not getgenv().ToxCombatLoaded then
-        local loaded = false
+    local combatLoaded = getgenv().ToxCombatLoaded == true
+
+    -- 1. Attempt to load Combat.lua (local executor file, standard file IO, or GitHub)
+    if not combatLoaded then
+        -- 1a. Executor local file (readfile)
         pcall(function()
-            if io and io.open then
-                local f = io.open("c:/Users/BG_0o/.gemini/antigravity-ide/scratch/scripts/Combat.lua", "r")
-                if f then
-                    local s = f:read("*a")
-                    f:close()
-                    local fn = loadstring(s)
-                    if fn then fn() loaded = true end
+            if typeof(readfile) == "function" then
+                local paths = {"Combat.lua", "scripts/Combat.lua", "c:/Users/BG_0o/.gemini/antigravity-ide/scratch/scripts/Combat.lua"}
+                for _, p in ipairs(paths) do
+                    local ok, content = pcall(readfile, p)
+                    if ok and content and #content > 50 then
+                        local fn, compileErr = loadstring(content)
+                        if fn then
+                            local runOk, runErr = pcall(fn)
+                            if runOk then
+                                combatLoaded = true
+                                break
+                            end
+                        end
+                    end
                 end
             end
         end)
-        if not loaded then
+
+        -- 1b. Standard Lua io.open (if available in environment)
+        if not combatLoaded then
+            pcall(function()
+                if io and io.open then
+                    local f = io.open("c:/Users/BG_0o/.gemini/antigravity-ide/scratch/scripts/Combat.lua", "r")
+                        or io.open("Combat.lua", "r")
+                    if f then
+                        local s = f:read("*a")
+                        f:close()
+                        local fn, compileErr = loadstring(s)
+                        if fn then
+                            local runOk, runErr = pcall(fn)
+                            if runOk then
+                                combatLoaded = true
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+
+        -- 1c. Remote GitHub download with cache-buster
+        if not combatLoaded then
             pcall(function()
                 local combatUrl = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Combat.lua"
                     .. "?toxcache=" .. tostring(os.time()) .. "_" .. tostring(math.random(1000, 999999))
                 local s = game:HttpGet(combatUrl)
-                local fn = loadstring(s)
-                if fn then fn() end
+                if s and #s > 100 and not s:sub(1, 15):find("404") then
+                    local fn, compileErr = loadstring(s)
+                    if fn then
+                        local runOk, runErr = pcall(fn)
+                        if runOk then
+                            combatLoaded = true
+                        end
+                    end
+                end
             end)
+        end
+    end
+
+    -- 2. Check if CombatPage has any controls or cards
+    local cPage = getgenv().CombatPage or getgenv().UniversalPage
+    local hasChildren = cPage and #cPage:GetChildren() > 0
+
+    -- 3. Fail-Safe Fallback: If Combat.lua failed or CombatPage is still empty, populate immediately!
+    if not combatLoaded or not hasChildren then
+        local Settings = getgenv().Settings or Settings or {}
+        local beginSection = getgenv().BeginUniversalSection or (typeof(BeginUniversalSection) == "function" and BeginUniversalSection)
+        if typeof(beginSection) == "function" then
+            beginSection("Combat")
+        end
+
+        local createToggle = getgenv().CreateToggle or (typeof(CreateToggle) == "function" and CreateToggle)
+        local createToggleWithValue = getgenv().CreateToggleWithValue or (typeof(CreateToggleWithValue) == "function" and CreateToggleWithValue)
+        local createDropdown = getgenv().CreateDropdown or (typeof(CreateDropdown) == "function" and CreateDropdown)
+
+        if typeof(createToggle) == "function" then
+            createToggle("Aimbot (Right Click)", cPage, Settings.Aimbot, function(v)
+                Settings.Aimbot = v == true
+                if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
+            end, "Aimbot")
+        end
+
+        if typeof(createToggleWithValue) == "function" then
+            createToggleWithValue("Aim Smoothness", cPage, Settings.AimbotSmoothnessEnabled, Settings.AimbotSmoothness or 2, function(v)
+                Settings.AimbotSmoothnessEnabled = v == true
+                if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
+            end, function(val)
+                Settings.AimbotSmoothness = tonumber(val) or 2
+                if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
+            end, "AimbotSmoothnessEnabled")
+        end
+
+        if typeof(createDropdown) == "function" then
+            createDropdown("Aim Part", {"Head", "HumanoidRootPart", "Torso"}, cPage, Settings.AimPart or "Head", function(v)
+                Settings.AimPart = v
+                if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
+            end)
+        end
+
+        if typeof(createToggle) == "function" then
+            createToggle("Aim Wall Check", cPage, Settings.AimWallCheck, function(v)
+                Settings.AimWallCheck = v == true
+                if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
+            end, "AimWallCheck")
+        end
+
+        if typeof(createToggleWithValue) == "function" then
+            createToggleWithValue("Show FOV Circle", cPage, Settings.ShowFOV, Settings.FOVRadius or 120, function(v)
+                Settings.ShowFOV = v == true
+                if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
+            end, function(val)
+                Settings.FOVRadius = tonumber(val) or 120
+                if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
+            end, "ShowFOV")
+        end
+
+        if typeof(createToggle) == "function" then
+            createToggle("Silent Aim", cPage, Settings.SilentAim, function(v)
+                Settings.SilentAim = v == true
+                if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
+            end, "SilentAim")
+        end
+
+        if typeof(createToggle) == "function" then
+            createToggle("Triggerbot", cPage, Settings.Triggerbot, function(v)
+                Settings.Triggerbot = v == true
+                if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
+            end, "Triggerbot")
+        end
+
+        if typeof(createToggleWithValue) == "function" then
+            createToggleWithValue("Spinbot", cPage, Settings.Spinbot, Settings.SpinSpeed or 50, function(v)
+                Settings.Spinbot = v == true
+                if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
+            end, function(val)
+                Settings.SpinSpeed = tonumber(val) or 50
+                if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
+            end, "Spinbot")
+        end
+
+        if typeof(createToggleWithValue) == "function" then
+            createToggleWithValue("Hitbox Expander", cPage, Settings.HitboxExpander, Settings.HitboxSize or 10, function(v)
+                Settings.HitboxExpander = v == true
+                if not v and getgenv().RestoreHitboxDefaults then
+                    pcall(getgenv().RestoreHitboxDefaults)
+                end
+                if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
+            end, function(val)
+                Settings.HitboxSize = tonumber(val) or 10
+                if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
+            end, "HitboxExpander")
+        end
+
+        if typeof(createToggleWithValue) == "function" then
+            createToggleWithValue("Kill Aura", cPage, Settings.KillAura, Settings.KillAuraRange or 15, function(v)
+                Settings.KillAura = v == true
+                if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
+            end, function(val)
+                Settings.KillAuraRange = tonumber(val) or 15
+                if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
+            end, "KillAura")
         end
     end
 end
