@@ -2285,7 +2285,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
     end
     
     local function InstallCombatUI()
-        if combatUIInstalled then
+        if combatUIInstalled or env.ToxCombatLoaded then
             return
         end
     
