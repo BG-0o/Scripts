@@ -1585,6 +1585,9 @@ end
 local UNIVERSAL_URL =
     "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Universal.lua"
 
+local COMBAT_URL =
+    "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Combat.lua"
+
 local TOX_CHAT_URL =
     "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ToxChat.lua"
 
@@ -1716,6 +1719,13 @@ if not getgenv().ToxUniversalLoaded then
     ) then
         return
     end
+end
+
+if not getgenv().ToxCombatLoaded then
+    LoadRemote(
+        "Combat.lua",
+        COMBAT_URL
+    )
 end
 
 if not getgenv().ToxChatLoaded then
