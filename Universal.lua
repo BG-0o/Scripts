@@ -4877,6 +4877,9 @@ CreateToggle("ESP", VisualsPage, Settings.ESPEnabled, function(v)
     else
         Settings.ESPEnabled = v
     end
+    if not v then
+        ClearAllESPVisuals()
+    end
 end, "ESPEnabled")
 
 CreateToggle("Charms", VisualsPage, Settings.Chams, function(v)
@@ -5014,9 +5017,16 @@ end
 
 CreateToggleCycleOption("Tracers", VisualsPage, Settings.ESPTracers, {"DOWN", "UP", "MOUSE"}, Settings.TracerOrigin or "DOWN", function(v)
     Settings.ESPTracers = v
+    if not v then
+        for _, group in pairs(ESPDrawings) do
+            if group.Line then
+                pcall(function() group.Line.Visible = false end)
+            end
+        end
+    end
 end, function(v)
     Settings.TracerOrigin = v
-end)
+end, "ESPTracers")
 
 CreateToggleCycleOption("Names", VisualsPage, Settings.ESPNames, {"Name", "Display", "Name + Display"}, Settings.ESPNameMode or "Display", function(v)
     if getgenv().ToxSetSharedOption then
@@ -5042,6 +5052,15 @@ end)
 
 CreateToggle("Skeleton ESP", VisualsPage, Settings.ESPSkeleton, function(v)
     Settings.ESPSkeleton = v == true
+    if not v then
+        for _, group in pairs(ESPDrawings) do
+            if group.Skeleton and typeof(group.Skeleton) == "table" then
+                for _, line in pairs(group.Skeleton) do
+                    pcall(function() line.Visible = false end)
+                end
+            end
+        end
+    end
 end, "ESPSkeleton")
 
 CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
@@ -5073,12 +5092,29 @@ CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", 
 end)
 
 
+local function SafeRemoveDrawing(d)
+    if not d then return end
+    pcall(function() d.Visible = false end)
+    pcall(function() d:Remove() end)
+end
+
 if getgenv().ToxESPDrawings then
     for _, drawings in pairs(getgenv().ToxESPDrawings) do
-        for _, drawing in pairs(drawings) do
-            pcall(function() drawing:Remove() end)
+        if typeof(drawings) == "table" then
+            for k, drawing in pairs(drawings) do
+                if k == "Skeleton" and typeof(drawing) == "table" then
+                    for _, line in pairs(drawing) do
+                        SafeRemoveDrawing(line)
+                    end
+                else
+                    SafeRemoveDrawing(drawing)
+                end
+            end
         end
     end
+end
+if typeof(cleardrawcache) == "function" then
+    pcall(cleardrawcache)
 end
 
 if getgenv().ToxESPHighlights then
@@ -5617,10 +5653,12 @@ end
 local function ClearESPForPlayer(p)
     if ESPDrawings[p] then
         for k, d in pairs(ESPDrawings[p]) do
-            if k == "Skeleton" and type(d) == "table" then
-                for _, line in pairs(d) do pcall(function() line:Remove() end) end
-            elseif type(d) == "table" and d.Remove then
-                pcall(function() d:Remove() end)
+            if k == "Skeleton" and typeof(d) == "table" then
+                for _, line in pairs(d) do
+                    SafeRemoveDrawing(line)
+                end
+            else
+                SafeRemoveDrawing(d)
             end
         end
         ESPDrawings[p] = nil
@@ -6680,7 +6718,7 @@ end, "UnlockCursor")
 -- ==============================================================================
 -- GAME CONFIGURATION & SAVES (PER-GAME PROFILE SYSTEM)
 -- ==============================================================================
-if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Game Configuration & Saves", "\xf0\x9f\x92\xbe") end
+if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Game Configuration & Profiles", "\xf0\x9f\x92\xbe") end
 
 local placeKeyStr = tostring(game.PlaceId)
 local gameName = (game.GameId == 142823291 or game.PlaceId == 142823291) and "MM2"
@@ -6693,62 +6731,62 @@ local gameName = (game.GameId == 142823291 or game.PlaceId == 142823291) and "MM
 local function GetSaveStatusText()
     local hasSave = (getgenv().HasSavedConfigForCurrentPlace and getgenv().HasSavedConfigForCurrentPlace())
         or getgenv().ToxHasPlaceConfig == true
-    return hasSave and "[\xe2\x9c\x93 Salvo]" or "[Padr\xc3\xa3o / Sem Save]"
+    return hasSave and "[Saved]" or "[Default / Unsaved]"
 end
 
 local saveStatusLabel = nil
-saveStatusLabel = CreateButton("Jogo: " .. gameName .. " " .. GetSaveStatusText(), ConfigPage, function(btn)
-    btn.Text = "Jogo: " .. gameName .. " " .. GetSaveStatusText()
+saveStatusLabel = CreateButton("Game: " .. gameName .. " " .. GetSaveStatusText(), ConfigPage, function(btn)
+    btn.Text = "Game: " .. gameName .. " " .. GetSaveStatusText()
 end)
 
-CreateButton("\xf0\x9f\x92\xbe Salvar Config deste Jogo", ConfigPage, function(button)
+CreateButton("\xf0\x9f\x92\xbe Save Game Config", ConfigPage, function(button)
     if getgenv().SavePlaceConfiguration then
         local ok = getgenv().SavePlaceConfiguration()
         if ok ~= false then
-            button.Text = "\xe2\x9c\x93 Config Salva!"
-            if saveStatusLabel then saveStatusLabel.Text = "Jogo: " .. gameName .. " [\xe2\x9c\x93 Salvo]" end
+            button.Text = "\xe2\x9c\x93 Config Saved!"
+            if saveStatusLabel then saveStatusLabel.Text = "Game: " .. gameName .. " [Saved]" end
             task.delay(2, function()
-                button.Text = "\xf0\x9f\x92\xbe Salvar Config deste Jogo"
+                button.Text = "\xf0\x9f\x92\xbe Save Game Config"
             end)
         else
-            button.Text = "Erro ao Salvar"
+            button.Text = "Save Failed"
             task.delay(2, function()
-                button.Text = "\xf0\x9f\x92\xbe Salvar Config deste Jogo"
+                button.Text = "\xf0\x9f\x92\xbe Save Game Config"
             end)
         end
     end
 end)
 
-CreateButton("\xf0\x9f\x94\x84 Carregar Config deste Jogo", ConfigPage, function(button)
+CreateButton("\xf0\x9f\x94\x84 Load Game Config", ConfigPage, function(button)
     if getgenv().LoadPlaceConfiguration then
         local loaded = getgenv().LoadPlaceConfiguration()
         if loaded then
-            button.Text = "\xe2\x9c\x93 Carregado!"
-            if saveStatusLabel then saveStatusLabel.Text = "Jogo: " .. gameName .. " [\xe2\x9c\x93 Salvo]" end
+            button.Text = "\xe2\x9c\x93 Config Loaded!"
+            if saveStatusLabel then saveStatusLabel.Text = "Game: " .. gameName .. " [Saved]" end
             task.delay(2, function()
-                button.Text = "\xf0\x9f\x94\x84 Carregar Config deste Jogo"
+                button.Text = "\xf0\x9f\x94\x84 Load Game Config"
             end)
         else
-            button.Text = "Nenhum save encontrado"
+            button.Text = "No Save Found"
             task.delay(2, function()
-                button.Text = "\xf0\x9f\x94\x84 Carregar Config deste Jogo"
+                button.Text = "\xf0\x9f\x94\x84 Load Game Config"
             end)
         end
     end
 end)
 
-CreateConfirmButton("\xf0\x9f\x97\x91\xef\xb8\x8f Resetar Config deste Jogo", ConfigPage, function()
+CreateConfirmButton("\xf0\x9f\x97\x91\xef\xb8\x8f Reset Game Config", ConfigPage, function()
     if getgenv().ResetPlaceConfiguration then
         getgenv().ResetPlaceConfiguration()
-        if saveStatusLabel then saveStatusLabel.Text = "Jogo: " .. gameName .. " [Padr\xc3\xa3o / Sem Save]" end
+        if saveStatusLabel then saveStatusLabel.Text = "Game: " .. gameName .. " [Default / Unsaved]" end
     end
 end)
 
-CreateToggle("Auto-Save Neste Jogo", ConfigPage, getgenv().ToxAutoSaveEnabled == true, function(val)
+CreateToggle("Auto-Save Game Config", ConfigPage, getgenv().ToxAutoSaveEnabled == true, function(val)
     getgenv().ToxAutoSaveEnabled = val == true
     if val and getgenv().AutoSaveConfiguration then
         getgenv().AutoSaveConfiguration(true)
-        if saveStatusLabel then saveStatusLabel.Text = "Jogo: " .. gameName .. " [\xe2\x9c\x93 Salvo]" end
+        if saveStatusLabel then saveStatusLabel.Text = "Game: " .. gameName .. " [Saved]" end
     end
 end, "ToxAutoSaveEnabled")
 
@@ -7583,31 +7621,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         or effectiveChams
         or toxRoleESPActive)
 
-    if anyESPActive and tick() - LastESPSafetyRefresh >= 6 then
-        LastESPSafetyRefresh = tick()
-
-        local refreshPlayers = {}
-
-        for p in pairs(ESPDrawings) do
-            table.insert(refreshPlayers, p)
-        end
-
-        for p in pairs(Highlights) do
-            if not ESPDrawings[p] then
-                table.insert(refreshPlayers, p)
-            end
-        end
-
-        for p in pairs(ESPLabels) do
-            if not ESPDrawings[p] and not Highlights[p] then
-                table.insert(refreshPlayers, p)
-            end
-        end
-
-        for _, p in ipairs(refreshPlayers) do
-            ClearESPForPlayer(p)
-        end
-    end
+    -- Clean up disconnected drawings on player removal or character despawn
 
     for p, _ in pairs(ESPDrawings) do
         if not p or not p.Parent or not Players:FindFirstChild(p.Name) then
@@ -7903,10 +7917,12 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                     end
                 elseif ESPDrawings[p] then
                     for k, drawing in pairs(ESPDrawings[p]) do
-                        if k == "Skeleton" and type(drawing) == "table" then
-                            for _, line in pairs(drawing) do line.Visible = false end
-                        elseif type(drawing) == "table" and drawing.Visible ~= nil then
-                            drawing.Visible = false
+                        if k == "Skeleton" and typeof(drawing) == "table" then
+                            for _, line in pairs(drawing) do
+                                pcall(function() line.Visible = false end)
+                            end
+                        elseif drawing then
+                            pcall(function() drawing.Visible = false end)
                         end
                     end
                 end
