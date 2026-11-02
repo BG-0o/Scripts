@@ -91,6 +91,10 @@ local function RestoreHitboxDefaults()
                 part.Size = data.Size
                 part.Transparency = data.Transparency
                 part.CanCollide = data.CanCollide
+                part.Massless = data.Massless
+                if data.CustomPhysicalProperties then
+                    part.CustomPhysicalProperties = data.CustomPhysicalProperties
+                end
             end)
         end
     end
@@ -104,6 +108,10 @@ local function RestoreHeadHitboxDefaults()
                 part.Size = data.Size
                 part.Transparency = data.Transparency
                 part.CanCollide = data.CanCollide
+                part.Massless = data.Massless
+                if data.CustomPhysicalProperties then
+                    part.CustomPhysicalProperties = data.CustomPhysicalProperties
+                end
             end)
         end
     end
@@ -260,7 +268,7 @@ end
 getgenv().GetClosestCombatTarget = GetClosestTarget
 
 -- ==============================================================================
--- MAGIC BULLET HOOK
+-- MAGIC BULLET HOOK (Safeguarded against breaking character physics / ground checks)
 -- ==============================================================================
 local hookInstalled = false
 local function InstallMagicBulletHook()
@@ -272,29 +280,61 @@ local function InstallMagicBulletHook()
             local oldNamecall
             oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
                 local method = getnamecallmethod()
-                local args = {...}
 
                 if Settings.MagicBullet and not env.Destroyed then
-                    if method == "Raycast" and self == Workspace then
-                        local fov = Settings.MagicBulletFOVEnabled and Settings.MagicBulletFOV or 200
-                        local target = GetClosestTarget(fov)
-                        if target then
-                            local origin = args[1]
-                            local dir = args[2]
-                            if typeof(origin) == "Vector3" and typeof(dir) == "Vector3" then
-                                local newDir = (target.Position - origin).Unit * dir.Magnitude
-                                args[2] = newDir
-                                return oldNamecall(self, unpack(args))
+                    local char = Player.Character
+                    local tool = char and char:FindFirstChildOfClass("Tool")
+                    if tool and Camera then
+                        local isSafeCaller = true
+                        if typeof(getcallingscript) == "function" then
+                            local caller = getcallingscript()
+                            if caller then
+                                local cName = tostring(caller.Name):lower()
+                                if cName:find("camera") or cName:find("popper") or cName:find("control") or cName:find("movement") or cName:find("animate") or cName:find("foot") or cName:find("character") then
+                                    isSafeCaller = false
+                                end
                             end
                         end
-                    elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
-                        local fov = Settings.MagicBulletFOVEnabled and Settings.MagicBulletFOV or 200
-                        local target = GetClosestTarget(fov)
-                        if target and typeof(args[1]) == "Ray" then
-                            local r = args[1]
-                            local newDir = (target.Position - r.Origin).Unit * r.Direction.Magnitude
-                            args[1] = Ray.new(r.Origin, newDir)
-                            return oldNamecall(self, unpack(args))
+
+                        if isSafeCaller then
+                            local args = {...}
+                            local fov = Settings.MagicBulletFOVEnabled and Settings.MagicBulletFOV or 200
+
+                            if method == "Raycast" and self == Workspace then
+                                local origin = args[1]
+                                local dir = args[2]
+
+                                if typeof(origin) == "Vector3" and typeof(dir) == "Vector3" and dir.Magnitude >= 15 then
+                                    local isDownwardFloorCheck = dir.Unit.Y < -0.75
+                                    local rootPos = (char.PrimaryPart and char.PrimaryPart.Position) or Camera.CFrame.Position
+                                    local distFromChar = (origin - rootPos).Magnitude
+
+                                    if not isDownwardFloorCheck and distFromChar <= 50 then
+                                        local target = GetClosestTarget(fov)
+                                        if target then
+                                            local newDir = (target.Position - origin).Unit * dir.Magnitude
+                                            args[2] = newDir
+                                            return oldNamecall(self, unpack(args))
+                                        end
+                                    end
+                                end
+                            elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
+                                local r = args[1]
+                                if typeof(r) == "Ray" and r.Direction.Magnitude >= 15 then
+                                    local isDownwardFloorCheck = r.Direction.Unit.Y < -0.75
+                                    local rootPos = (char.PrimaryPart and char.PrimaryPart.Position) or Camera.CFrame.Position
+                                    local distFromChar = (r.Origin - rootPos).Magnitude
+
+                                    if not isDownwardFloorCheck and distFromChar <= 50 then
+                                        local target = GetClosestTarget(fov)
+                                        if target then
+                                            local newDir = (target.Position - r.Origin).Unit * r.Direction.Magnitude
+                                            args[1] = Ray.new(r.Origin, newDir)
+                                            return oldNamecall(self, unpack(args))
+                                        end
+                                    end
+                                end
+                            end
                         end
                     end
                 end
@@ -437,6 +477,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
     -- 5. Normal Hitbox Expander (HumanoidRootPart / Torso)
     if Settings.HitboxExpander then
         local hbSize = tonumber(Settings.HitboxSize) or 10
+        local heightLimit = math.min(hbSize, 3.5)
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= Player and p.Character then
                 local hrp = p.Character:FindFirstChild("HumanoidRootPart")
@@ -445,12 +486,18 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
                         HitboxDefaults[hrp] = {
                             Size = hrp.Size,
                             Transparency = hrp.Transparency,
-                            CanCollide = hrp.CanCollide
+                            CanCollide = hrp.CanCollide,
+                            Massless = hrp.Massless,
+                            CustomPhysicalProperties = hrp.CustomPhysicalProperties
                         }
                     end
-                    hrp.Size = Vector3.new(hbSize, hbSize, hbSize)
+                    hrp.Size = Vector3.new(hbSize, heightLimit, hbSize)
                     hrp.Transparency = 0.7
                     hrp.CanCollide = false
+                    hrp.Massless = true
+                    pcall(function()
+                        hrp.CustomPhysicalProperties = PhysicalProperties.new(0.001, 0, 0, 0, 0)
+                    end)
                 end
             end
         end
@@ -467,12 +514,18 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
                         HeadHitboxDefaults[head] = {
                             Size = head.Size,
                             Transparency = head.Transparency,
-                            CanCollide = head.CanCollide
+                            CanCollide = head.CanCollide,
+                            Massless = head.Massless,
+                            CustomPhysicalProperties = head.CustomPhysicalProperties
                         }
                     end
                     head.Size = Vector3.new(headSize, headSize, headSize)
                     head.Transparency = 0.5
                     head.CanCollide = false
+                    head.Massless = true
+                    pcall(function()
+                        head.CustomPhysicalProperties = PhysicalProperties.new(0.001, 0, 0, 0, 0)
+                    end)
                 end
             end
         end
