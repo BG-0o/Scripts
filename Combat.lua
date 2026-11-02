@@ -160,14 +160,21 @@ local connections = {}
 
 local function IsFriend(otherPlayer)
     if not otherPlayer or otherPlayer == Player then return false end
-    if friendCache[otherPlayer.UserId] ~= nil then
-        return friendCache[otherPlayer.UserId]
+    local uid = otherPlayer.UserId
+    if not uid then return false end
+    if friendCache[uid] ~= nil then
+        return friendCache[uid]
     end
-    local ok, res = pcall(function()
-        return Player:IsFriendsWith(otherPlayer.UserId)
+    friendCache[uid] = false
+    task.spawn(function()
+        local ok, res = pcall(function()
+            return Player and Player:IsFriendsWith(uid)
+        end)
+        if ok and res ~= nil then
+            friendCache[uid] = (res == true)
+        end
     end)
-    friendCache[otherPlayer.UserId] = ok and res == true
-    return friendCache[otherPlayer.UserId]
+    return false
 end
 
 local function GetTargetPart(character, partName)
@@ -256,7 +263,7 @@ local function GetClosestTarget(maxRadius, partName)
     end
 
     if checkNPCs then
-        for _, obj in ipairs(Workspace:GetDescendants()) do
+        for _, obj in ipairs(Workspace:GetChildren()) do
             if obj:IsA("Model") and not Players:GetPlayerFromCharacter(obj) then
                 local hum = obj:FindFirstChildOfClass("Humanoid")
                 if hum and hum.Health > 0 then
@@ -287,7 +294,6 @@ getgenv().GetClosestCombatTarget = GetClosestTarget
 -- MAGIC BULLET HOOK (CRASH-PROOF, NON-RECURSIVE, ZERO-LAG METAMETHOD HOOK)
 -- ==============================================================================
 local hookInstalled = false
-local inNamecallHook = false
 local currentMagicTarget = nil
 
 local function InstallMagicBulletHook()
@@ -295,80 +301,97 @@ local function InstallMagicBulletHook()
     hookInstalled = true
 
     pcall(function()
-        if typeof(hookmetamethod) == "function" then
-            local oldNamecall
+        if typeof(hookmetamethod) ~= "function" then return end
 
-            local hookHandler = function(self, ...)
-                local method = getnamecallmethod and getnamecallmethod()
+        local oldNamecall
 
-                if inNamecallHook or (typeof(checkcaller) == "function" and checkcaller()) then
-                    if typeof(setnamecallmethod) == "function" and method then
-                        setnamecallmethod(method)
-                    end
-                    return oldNamecall(self, ...)
-                end
+        local hookHandler = function(self, ...)
+            local method = getnamecallmethod and getnamecallmethod()
 
-                if Settings.MagicBullet and not env.Destroyed and currentMagicTarget and currentMagicTarget.Parent then
-                    local target = currentMagicTarget
-                    local targetChar = target.Parent
-                    local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
-
-                    if targetHum and targetHum.Health > 0 then
-                        local char = Player and Player.Character
-                        local tool = char and char:FindFirstChildOfClass("Tool")
-
-                        if tool and Camera then
-                            if method == "Raycast" and self == Workspace then
-                                local origin, dir = ...
-                                if typeof(origin) == "Vector3" and typeof(dir) == "Vector3" and dir.Magnitude >= 10 then
-                                    local newDir = (target.Position - origin).Unit * dir.Magnitude
-                                    inNamecallHook = true
-                                    if typeof(setnamecallmethod) == "function" then
-                                        setnamecallmethod(method)
-                                    end
-                                    local ok, res = pcall(oldNamecall, self, origin, newDir, select(3, ...))
-                                    inNamecallHook = false
-                                    if ok and res ~= nil then
-                                        return res
-                                    end
-                                end
-                            elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" then
-                                local r = ...
-                                if typeof(r) == "Ray" and r.Direction.Magnitude >= 10 then
-                                    local newDir = (target.Position - r.Origin).Unit * r.Direction.Magnitude
-                                    local newRay = Ray.new(r.Origin, newDir)
-                                    inNamecallHook = true
-                                    if typeof(setnamecallmethod) == "function" then
-                                        setnamecallmethod(method)
-                                    end
-                                    local ok, res = pcall(oldNamecall, self, newRay, select(2, ...))
-                                    inNamecallHook = false
-                                    if ok and res ~= nil then
-                                        return res
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-
+            -- 1. Exploit caller check: NEVER hook internal script calls (prevents recursion)
+            if typeof(checkcaller) == "function" and checkcaller() then
                 if typeof(setnamecallmethod) == "function" and method then
                     setnamecallmethod(method)
                 end
                 return oldNamecall(self, ...)
             end
 
-            if typeof(newcclosure) == "function" then
-                oldNamecall = hookmetamethod(game, "__namecall", newcclosure(hookHandler))
-            else
-                oldNamecall = hookmetamethod(game, "__namecall", hookHandler)
+            -- 2. Intercept Raycasts only when Magic Bullet or Silent Aim is enabled and target is valid
+            if (Settings.MagicBullet or Settings.SilentAim) and not env.Destroyed and currentMagicTarget and currentMagicTarget.Parent then
+                local target = currentMagicTarget
+                local targetChar = target.Parent
+                local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
+
+                if targetHum and targetHum.Health > 0 then
+                    local char = Player and Player.Character
+                    local tool = char and char:FindFirstChildOfClass("Tool")
+
+                    -- Must have a tool equipped
+                    if tool and Camera then
+                        -- Caller filter: ignore camera, popper, control and movement scripts
+                        local isSafeCaller = true
+                        if typeof(getcallingscript) == "function" then
+                            local caller = getcallingscript()
+                            if caller then
+                                local cName = tostring(caller.Name):lower()
+                                if cName:find("camera") or cName:find("popper") or cName:find("control")
+                                or cName:find("player") or cName:find("movement") or cName:find("animate") then
+                                    isSafeCaller = false
+                                end
+                            end
+                        end
+
+                        if isSafeCaller then
+                            if method == "Raycast" and self == Workspace then
+                                local origin, dir = ...
+                                if typeof(origin) == "Vector3" and typeof(dir) == "Vector3" and dir.Magnitude >= 15 then
+                                    -- Ignore downward ground checks and backward camera checks
+                                    local isDownward = dir.Unit.Y < -0.8
+                                    local isBehindCamera = dir:Dot(Camera.CFrame.LookVector) < -0.3
+                                    if not isDownward and not isBehindCamera then
+                                        local newDir = (target.Position - origin).Unit * dir.Magnitude
+                                        if typeof(setnamecallmethod) == "function" then
+                                            setnamecallmethod(method)
+                                        end
+                                        return oldNamecall(self, origin, newDir, select(3, ...))
+                                    end
+                                end
+                            elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" then
+                                local r = ...
+                                if typeof(r) == "Ray" and r.Direction.Magnitude >= 15 then
+                                    local isDownward = r.Direction.Unit.Y < -0.8
+                                    if not isDownward then
+                                        local newDir = (target.Position - r.Origin).Unit * r.Direction.Magnitude
+                                        local newRay = Ray.new(r.Origin, newDir)
+                                        if typeof(setnamecallmethod) == "function" then
+                                            setnamecallmethod(method)
+                                        end
+                                        return oldNamecall(self, newRay, select(2, ...))
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
             end
+
+            -- Default pass-through (never double call oldNamecall!)
+            if typeof(setnamecallmethod) == "function" and method then
+                setnamecallmethod(method)
+            end
+            return oldNamecall(self, ...)
+        end
+
+        if typeof(newcclosure) == "function" then
+            oldNamecall = hookmetamethod(game, "__namecall", newcclosure(hookHandler))
+        else
+            oldNamecall = hookmetamethod(game, "__namecall", hookHandler)
         end
     end)
 end
 
--- Hook installed on demand when Magic Bullet is enabled
-if Settings.MagicBullet then
+-- Hook installed on demand when Magic Bullet or Silent Aim is enabled
+if Settings.MagicBullet or Settings.SilentAim then
     InstallMagicBulletHook()
 end
 
