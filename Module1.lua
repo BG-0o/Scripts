@@ -1628,8 +1628,7 @@ local function ReadConfigMetadata(path)
 end
 
 local function ResolveConfigReadPath()
-    if not getgenv().CurrentGameModule
-    or not isfile then
+    if not isfile then
         return nil, false
     end
 
@@ -1649,12 +1648,30 @@ local function ResolveConfigReadPath()
     return nil, false
 end
 
-getgenv().AutoSaveConfiguration = function()
+local function HasSavedConfigForCurrentPlace()
+    if not isfile or not readfile then return false, nil, false end
+    local placePath, isLegacy = ResolveConfigReadPath()
+    if placePath and isfile(placePath) then
+        local metadata = ReadConfigMetadata(placePath)
+        if metadata and (metadata.PlaceId == nil or tonumber(metadata.PlaceId) == game.PlaceId) then
+            return true, placePath, isLegacy
+        end
+    end
+    return false, nil, false
+end
+
+getgenv().HasSavedConfigForCurrentPlace = HasSavedConfigForCurrentPlace
+
+getgenv().AutoSaveConfiguration = function(force)
     if getgenv().Destroyed then
         return false
     end
 
     if getgenv().ToxOptionsReady == false then
+        return false
+    end
+
+    if not force and getgenv().ToxAutoSaveEnabled ~= true then
         return false
     end
 
@@ -1785,19 +1802,27 @@ getgenv().AutoSaveConfiguration = function()
 end
 
 local function LoadConfiguration()
-    if not getgenv().CurrentGameModule
-    or not readfile then
+    if not readfile then
         return
     end
 
-    local sourcePath,
-        migratedFromLegacy =
-        ResolveConfigReadPath()
+    local hasSave, sourcePath, migratedFromLegacy = HasSavedConfigForCurrentPlace()
 
-    if not sourcePath then
+    if not hasSave or not sourcePath then
+        getgenv().ToxHasPlaceConfig = false
+        getgenv().ToxAutoSaveEnabled = false
+        for key, value in pairs(Settings) do
+            if typeof(value) == "boolean" and key ~= "Render3D" then
+                Settings[key] = false
+            end
+        end
+        Settings.Render3D = true
+        Settings.Render3DDisabled = false
         return
     end
 
+    getgenv().ToxHasPlaceConfig = true
+    getgenv().ToxAutoSaveEnabled = true
     getgenv().ToxConfigLoadedFrom = sourcePath
 
     local loaded = false
@@ -1966,7 +1991,7 @@ local function NormalizeStartupDefaultToggles()
 end
 
 local function DisableUnsupportedGameActions()
-    if getgenv().CurrentGameModule then
+    if getgenv().CurrentGameModule or getgenv().ToxHasPlaceConfig then
         return
     end
 
@@ -1994,6 +2019,60 @@ local function StageOptionsUntilLoadScreen()
     getgenv().ToxStartupToggleCallbacks = getgenv().ToxStartupToggleCallbacks or {}
     getgenv().ToxStartupOptionsApplied = false
     getgenv().ToxOptionsReady = true
+end
+
+getgenv().SavePlaceConfiguration = function()
+    getgenv().ToxAutoSaveEnabled = true
+    getgenv().ToxHasPlaceConfig = true
+    return getgenv().AutoSaveConfiguration(true)
+end
+
+getgenv().LoadPlaceConfiguration = function()
+    local hasSave = HasSavedConfigForCurrentPlace()
+    if hasSave then
+        LoadConfiguration()
+        getgenv().ToxHasPlaceConfig = true
+        getgenv().ToxAutoSaveEnabled = true
+        if getgenv().SyncAllTogglesToUI then
+            pcall(getgenv().SyncAllTogglesToUI)
+        end
+        return true
+    end
+    return false
+end
+
+getgenv().ResetPlaceConfiguration = function()
+    if isfile and isfile(ConfigFilePath) then
+        if typeof(delfile) == "function" then
+            pcall(delfile, ConfigFilePath)
+            if isfile(ConfigBackupFilePath) then pcall(delfile, ConfigBackupFilePath) end
+        elseif typeof(writefile) == "function" then
+            pcall(writefile, ConfigFilePath, "")
+        end
+    end
+
+    getgenv().ToxHasPlaceConfig = false
+    getgenv().ToxAutoSaveEnabled = false
+
+    for key, val in pairs(Settings) do
+        if typeof(val) == "boolean" and key ~= "Render3D" then
+            Settings[key] = false
+        end
+    end
+    Settings.Render3D = true
+    Settings.Render3DDisabled = false
+    Settings.WalkSpeed = 16
+    Settings.JumpPower = 50
+    Settings.HitboxSize = 10
+    Settings.HeadHitboxSize = 7
+
+    if getgenv().RestoreHitboxDefaults then pcall(getgenv().RestoreHitboxDefaults) end
+    if getgenv().RestoreHeadHitboxDefaults then pcall(getgenv().RestoreHeadHitboxDefaults) end
+
+    if getgenv().SyncAllTogglesToUI then
+        pcall(getgenv().SyncAllTogglesToUI)
+    end
+    return true
 end
 
 LoadConfiguration()
