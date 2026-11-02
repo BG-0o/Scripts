@@ -22,6 +22,17 @@ local Player = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera or Workspace:FindFirstChildOfClass("Camera")
 local Mouse = Player and Player:GetMouse()
 
+local function IsLocalPlayer(p)
+    if not p then return true end
+    if p == Player or p == Players.LocalPlayer then return true end
+    local lp = Players.LocalPlayer or Player
+    if lp then
+        if p.UserId and lp.UserId and p.UserId == lp.UserId then return true end
+        if p.Name and lp.Name and p.Name == lp.Name then return true end
+    end
+    return false
+end
+
 local Settings = env.Settings or {}
 local CombatPage = env.CombatPage or env.UniversalPage
 
@@ -215,7 +226,7 @@ local function GetClosestTarget(maxRadius, partName)
 
     if checkPlayers then
         for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= Player and p.Character then
+            if not IsLocalPlayer(p) and p.Character then
                 if not (Settings.IgnoreFriends and IsFriend(p)) then
                     local char = p.Character
                     local hum = char:FindFirstChildOfClass("Humanoid")
@@ -268,9 +279,12 @@ end
 getgenv().GetClosestCombatTarget = GetClosestTarget
 
 -- ==============================================================================
--- MAGIC BULLET HOOK (Safeguarded against breaking character physics / ground checks)
+-- MAGIC BULLET HOOK (CRASH-PROOF, NON-RECURSIVE, ZERO-LAG METAMETHOD HOOK)
 -- ==============================================================================
 local hookInstalled = false
+local inNamecallHook = false
+local currentMagicTarget = nil
+
 local function InstallMagicBulletHook()
     if hookInstalled then return end
     hookInstalled = true
@@ -278,61 +292,74 @@ local function InstallMagicBulletHook()
     pcall(function()
         if typeof(hookmetamethod) == "function" then
             local oldNamecall
-            oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+
+            local hookHandler = function(self, ...)
+                if inNamecallHook then
+                    return oldNamecall(self, ...)
+                end
+
+                -- 1. Exploit caller check: NEVER hook internal script calls (prevents infinite recursion)
+                if typeof(checkcaller) == "function" and checkcaller() then
+                    return oldNamecall(self, ...)
+                end
+
                 local method = getnamecallmethod()
 
-                if Settings.MagicBullet and not env.Destroyed then
-                    local char = Player.Character
-                    local tool = char and char:FindFirstChildOfClass("Tool")
-                    if tool and Camera then
-                        local isSafeCaller = true
-                        if typeof(getcallingscript) == "function" then
-                            local caller = getcallingscript()
-                            if caller then
-                                local cName = tostring(caller.Name):lower()
-                                if cName:find("camera") or cName:find("popper") or cName:find("control") or cName:find("movement") or cName:find("animate") or cName:find("foot") or cName:find("character") then
-                                    isSafeCaller = false
+                if Settings.MagicBullet and not env.Destroyed and currentMagicTarget and currentMagicTarget.Parent then
+                    local target = currentMagicTarget
+                    local targetChar = target.Parent
+                    local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
+
+                    if targetHum and targetHum.Health > 0 then
+                        local char = Player.Character
+                        local tool = char and char:FindFirstChildOfClass("Tool")
+
+                        if tool and Camera then
+                            local isSafeCaller = true
+                            if typeof(getcallingscript) == "function" then
+                                local caller = getcallingscript()
+                                if caller then
+                                    local cName = tostring(caller.Name):lower()
+                                    if cName:find("camera") or cName:find("popper") or cName:find("control") or cName:find("movement") or cName:find("animate") or cName:find("foot") or cName:find("character") then
+                                        isSafeCaller = false
+                                    end
                                 end
                             end
-                        end
 
-                        if isSafeCaller then
-                            local args = {...}
-                            local fov = Settings.MagicBulletFOVEnabled and Settings.MagicBulletFOV or 200
+                            if isSafeCaller then
+                                inNamecallHook = true
+                                local res = nil
 
-                            if method == "Raycast" and self == Workspace then
-                                local origin = args[1]
-                                local dir = args[2]
+                                if method == "Raycast" and self == Workspace then
+                                    local origin, dir = ...
+                                    if typeof(origin) == "Vector3" and typeof(dir) == "Vector3" and dir.Magnitude >= 15 then
+                                        local isDownwardFloorCheck = dir.Unit.Y < -0.75
+                                        local rootPos = (char.PrimaryPart and char.PrimaryPart.Position) or Camera.CFrame.Position
+                                        local distFromChar = (origin - rootPos).Magnitude
 
-                                if typeof(origin) == "Vector3" and typeof(dir) == "Vector3" and dir.Magnitude >= 15 then
-                                    local isDownwardFloorCheck = dir.Unit.Y < -0.75
-                                    local rootPos = (char.PrimaryPart and char.PrimaryPart.Position) or Camera.CFrame.Position
-                                    local distFromChar = (origin - rootPos).Magnitude
-
-                                    if not isDownwardFloorCheck and distFromChar <= 50 then
-                                        local target = GetClosestTarget(fov)
-                                        if target then
+                                        if not isDownwardFloorCheck and distFromChar <= 60 then
                                             local newDir = (target.Position - origin).Unit * dir.Magnitude
-                                            args[2] = newDir
-                                            return oldNamecall(self, unpack(args))
+                                            res = oldNamecall(self, origin, newDir, select(3, ...))
+                                        end
+                                    end
+                                elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
+                                    local r = ...
+                                    if typeof(r) == "Ray" and r.Direction.Magnitude >= 15 then
+                                        local isDownwardFloorCheck = r.Direction.Unit.Y < -0.75
+                                        local rootPos = (char.PrimaryPart and char.PrimaryPart.Position) or Camera.CFrame.Position
+                                        local distFromChar = (r.Origin - rootPos).Magnitude
+
+                                        if not isDownwardFloorCheck and distFromChar <= 60 then
+                                            local newDir = (target.Position - r.Origin).Unit * r.Direction.Magnitude
+                                            local newRay = Ray.new(r.Origin, newDir)
+                                            res = oldNamecall(self, newRay, select(2, ...))
                                         end
                                     end
                                 end
-                            elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
-                                local r = args[1]
-                                if typeof(r) == "Ray" and r.Direction.Magnitude >= 15 then
-                                    local isDownwardFloorCheck = r.Direction.Unit.Y < -0.75
-                                    local rootPos = (char.PrimaryPart and char.PrimaryPart.Position) or Camera.CFrame.Position
-                                    local distFromChar = (r.Origin - rootPos).Magnitude
 
-                                    if not isDownwardFloorCheck and distFromChar <= 50 then
-                                        local target = GetClosestTarget(fov)
-                                        if target then
-                                            local newDir = (target.Position - r.Origin).Unit * r.Direction.Magnitude
-                                            args[1] = Ray.new(r.Origin, newDir)
-                                            return oldNamecall(self, unpack(args))
-                                        end
-                                    end
+                                inNamecallHook = false
+                                if res ~= nil then
+                                    return res
                                 end
                             end
                         end
@@ -340,7 +367,13 @@ local function InstallMagicBulletHook()
                 end
 
                 return oldNamecall(self, ...)
-            end)
+            end
+
+            if typeof(newcclosure) == "function" then
+                oldNamecall = hookmetamethod(game, "__namecall", newcclosure(hookHandler))
+            else
+                oldNamecall = hookmetamethod(game, "__namecall", hookHandler)
+            end
         end
     end)
 end
@@ -358,6 +391,14 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
     if not Camera then Camera = Workspace.CurrentCamera end
     if not Camera then return end
 
+    -- Pre-cache Magic Bullet target without running heavy Raycast inside __namecall!
+    if Settings.MagicBullet then
+        local mbFov = Settings.MagicBulletFOVEnabled and (Settings.MagicBulletFOV or 200) or 200
+        currentMagicTarget = GetClosestTarget(mbFov)
+    else
+        currentMagicTarget = nil
+    end
+
     local mousePos = GetMousePos()
 
     -- 1. FOV Circle Update
@@ -374,6 +415,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
 
     -- 2. Aimbot Logic
     local aimbotActive = false
+    local currentCombatTargetPart = nil
     if Settings.Aimbot then
         if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
             aimbotActive = true
@@ -401,6 +443,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         end
 
         if targetPart then
+            currentCombatTargetPart = targetPart
             if Settings.AimbotMode == "CAMERA" then
                 local smooth = 1
                 if not Settings.AimbotBlatant and Settings.AimbotSmoothnessEnabled then
@@ -421,6 +464,17 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         lockedTarget = nil
     end
 
+    -- Update Global Target for Target ESP
+    local activeTargetPart = currentCombatTargetPart or currentMagicTarget
+    if not activeTargetPart and Settings.TargetESP then
+        activeTargetPart = GetClosestTarget(Settings.FOVRadius or 120)
+    end
+    if activeTargetPart and activeTargetPart.Parent then
+        getgenv().ToxCurrentTarget = activeTargetPart.Parent
+    else
+        getgenv().ToxCurrentTarget = nil
+    end
+
     -- 3. Fixed Triggerbot
     if Settings.Triggerbot then
         local ray = Camera:ViewportPointToRay(mousePos.X, mousePos.Y)
@@ -437,7 +491,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
             local isNPC = model and not targetPlayer and model:FindFirstChildOfClass("Humanoid")
             local isValidEnemy = false
 
-            if targetPlayer and targetPlayer ~= Player then
+            if targetPlayer and not IsLocalPlayer(targetPlayer) then
                 if not (Settings.IgnoreFriends and IsFriend(targetPlayer)) then
                     local hum = model:FindFirstChildOfClass("Humanoid")
                     if hum and hum.Health > 0 then
@@ -479,7 +533,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         local hbSize = tonumber(Settings.HitboxSize) or 10
         local heightLimit = math.min(hbSize, 3.5)
         for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= Player and p.Character then
+            if not IsLocalPlayer(p) and p.Character then
                 local hrp = p.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
                     if not HitboxDefaults[hrp] then
@@ -507,7 +561,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
     if Settings.HeadHitboxExpander then
         local headSize = tonumber(Settings.HeadHitboxSize) or 7
         for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= Player and p.Character then
+            if not IsLocalPlayer(p) and p.Character then
                 local head = p.Character:FindFirstChild("Head")
                 if head then
                     if not HeadHitboxDefaults[head] then
@@ -537,7 +591,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         if myHrp then
             local range = tonumber(Settings.KillAuraRange) or 15
             for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= Player and p.Character then
+                if not IsLocalPlayer(p) and p.Character then
                     local tHrp = p.Character:FindFirstChild("HumanoidRootPart")
                     local tHum = p.Character:FindFirstChildOfClass("Humanoid")
                     if tHrp and tHum and tHum.Health > 0 then
