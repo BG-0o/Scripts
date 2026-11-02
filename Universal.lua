@@ -21,6 +21,17 @@ local StatsService = game:GetService("Stats")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
+local function IsLocalPlayer(p)
+    if not p then return true end
+    if p == Player or p == Players.LocalPlayer then return true end
+    local lp = Players.LocalPlayer or Player
+    if lp then
+        if p.UserId and lp.UserId and p.UserId == lp.UserId then return true end
+        if p.Name and lp.Name and p.Name == lp.Name then return true end
+    end
+    return false
+end
+
 getgenv().Settings = getgenv().Settings or {}
 Settings = getgenv().Settings
 
@@ -5056,12 +5067,35 @@ CreateToggle("Skeleton ESP", VisualsPage, Settings.ESPSkeleton, function(v)
         for _, group in pairs(ESPDrawings) do
             if group.Skeleton and typeof(group.Skeleton) == "table" then
                 for _, line in pairs(group.Skeleton) do
-                    pcall(function() line.Visible = false end)
+                    pcall(function()
+                        line.Visible = false
+                        line.Transparency = 0
+                        line.From = Vector2.new(-10000, -10000)
+                        line.To = Vector2.new(-10000, -10000)
+                    end)
                 end
             end
         end
     end
 end, "ESPSkeleton")
+
+CreateToggle("Target ESP", VisualsPage, Settings.TargetESP, function(v)
+    Settings.TargetESP = v == true
+end, "TargetESP")
+
+CreateToggle("Spectator List", VisualsPage, Settings.SpectatorList, function(v)
+    Settings.SpectatorList = v == true
+    if getgenv().ToxSpectatorsFrame then
+        getgenv().ToxSpectatorsFrame.Visible = Settings.SpectatorList
+    end
+end, "SpectatorList")
+
+CreateToggle("Keybinds List", VisualsPage, Settings.KeybindsList, function(v)
+    Settings.KeybindsList = v == true
+    if getgenv().ToxKeybindsFrame then
+        getgenv().ToxKeybindsFrame.Visible = Settings.KeybindsList
+    end
+end, "KeybindsList")
 
 CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
     if getgenv().ToxSetSharedOption then
@@ -5095,8 +5129,19 @@ end)
 local function SafeRemoveDrawing(d)
     if not d then return end
     pcall(function() d.Visible = false end)
+    pcall(function() d.Transparency = 0 end)
+    pcall(function() d.From = Vector2.new(-10000, -10000) end)
+    pcall(function() d.To = Vector2.new(-10000, -10000) end)
     pcall(function() d:Remove() end)
+    pcall(function() d:Destroy() end)
 end
+
+if getgenv().ToxMasterDrawingsList then
+    for _, d in ipairs(getgenv().ToxMasterDrawingsList) do
+        SafeRemoveDrawing(d)
+    end
+end
+getgenv().ToxMasterDrawingsList = {}
 
 if getgenv().ToxESPDrawings then
     for _, drawings in pairs(getgenv().ToxESPDrawings) do
@@ -5138,6 +5183,384 @@ local LastESPSafetyRefresh = tick()
 getgenv().ToxESPDrawings = ESPDrawings
 getgenv().ToxESPHighlights = Highlights
 getgenv().ToxESPLabels = ESPLabels
+
+local function CreateTrackedDrawing(drawingType)
+    if not Drawing or not Drawing.new then return nil end
+    local ok, d = pcall(Drawing.new, drawingType)
+    if ok and d then
+        pcall(function()
+            d.Visible = false
+            d.Transparency = 0
+            if drawingType == "Line" then
+                d.From = Vector2.new(-10000, -10000)
+                d.To = Vector2.new(-10000, -10000)
+            end
+        end)
+        table.insert(getgenv().ToxMasterDrawingsList, d)
+        return d
+    end
+    return nil
+end
+
+local function HidePlayerDrawings(p)
+    local grp = ESPDrawings[p]
+    if not grp then return end
+    if grp.Line then
+        pcall(function()
+            grp.Line.Visible = false
+            grp.Line.Transparency = 0
+            grp.Line.From = Vector2.new(-10000, -10000)
+            grp.Line.To = Vector2.new(-10000, -10000)
+        end)
+    end
+    if grp.Box then
+        pcall(function()
+            grp.Box.Visible = false
+            grp.Box.Transparency = 0
+            grp.Box.Position = Vector2.new(-10000, -10000)
+        end)
+    end
+    if grp.HeadDot then
+        pcall(function()
+            grp.HeadDot.Visible = false
+            grp.HeadDot.Transparency = 0
+            grp.HeadDot.Position = Vector2.new(-10000, -10000)
+        end)
+    end
+    if grp.Skeleton and typeof(grp.Skeleton) == "table" then
+        for _, line in pairs(grp.Skeleton) do
+            pcall(function()
+                line.Visible = false
+                line.Transparency = 0
+                line.From = Vector2.new(-10000, -10000)
+                line.To = Vector2.new(-10000, -10000)
+            end)
+        end
+    end
+end
+
+-- ==============================================================================
+-- FLOATING HUD WIDGETS: SPECTATOR LIST & KEYBINDS LIST
+-- ==============================================================================
+do
+    local Theme_Panel = Color3.fromRGB(16, 16, 26)
+local Theme_Outline = Color3.fromRGB(36, 36, 56)
+local Theme_Accent = Color3.fromRGB(30, 95, 255)
+local Theme_Text = Color3.fromRGB(255, 255, 255)
+local Theme_DimText = Color3.fromRGB(140, 140, 160)
+
+pcall(function()
+    if getgenv().ToxSpectatorsFrame then
+        getgenv().ToxSpectatorsFrame:Destroy()
+        getgenv().ToxSpectatorsFrame = nil
+    end
+    if getgenv().ToxKeybindsFrame then
+        getgenv().ToxKeybindsFrame:Destroy()
+        getgenv().ToxKeybindsFrame = nil
+    end
+end)
+
+local hudTargetParent = getgenv().Gui or (gethui and gethui()) or CoreGui
+
+-- 1. Spectator List Frame
+local ToxSpectatorsFrame = Instance.new("Frame")
+ToxSpectatorsFrame.Name = "ToxSpectatorsFrame"
+ToxSpectatorsFrame.Size = UDim2.new(0, 180, 0, 120)
+ToxSpectatorsFrame.Position = UDim2.new(0, 20, 0, 310)
+ToxSpectatorsFrame.BackgroundColor3 = Theme_Panel
+ToxSpectatorsFrame.BorderSizePixel = 0
+ToxSpectatorsFrame.ZIndex = 999990
+ToxSpectatorsFrame.Visible = Settings.SpectatorList == true
+pcall(function() ToxSpectatorsFrame.Parent = hudTargetParent end)
+getgenv().ToxSpectatorsFrame = ToxSpectatorsFrame
+
+local sfCorner = Instance.new("UICorner") sfCorner.CornerRadius = UDim.new(0, 6) sfCorner.Parent = ToxSpectatorsFrame
+local sfStroke = Instance.new("UIStroke") sfStroke.Color = Theme_Outline sfStroke.Thickness = 1 sfStroke.Parent = ToxSpectatorsFrame
+
+local sfAccent = Instance.new("Frame")
+sfAccent.Size = UDim2.new(1, 0, 0, 2)
+sfAccent.BackgroundColor3 = Theme_Accent
+sfAccent.BorderSizePixel = 0
+sfAccent.ZIndex = 999991
+sfAccent.Parent = ToxSpectatorsFrame
+
+local SpectatorsTitleLabel = Instance.new("TextLabel")
+SpectatorsTitleLabel.Name = "Title"
+SpectatorsTitleLabel.Size = UDim2.new(1, -12, 0, 22)
+SpectatorsTitleLabel.Position = UDim2.new(0, 8, 0, 3)
+SpectatorsTitleLabel.BackgroundTransparency = 1
+SpectatorsTitleLabel.Font = Enum.Font.GothamBold
+SpectatorsTitleLabel.TextSize = 11
+SpectatorsTitleLabel.TextColor3 = Theme_Text
+SpectatorsTitleLabel.Text = "Spectators (0)"
+SpectatorsTitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+SpectatorsTitleLabel.ZIndex = 999991
+SpectatorsTitleLabel.Parent = ToxSpectatorsFrame
+
+local SpectatorsContainer = Instance.new("ScrollingFrame")
+SpectatorsContainer.Name = "Container"
+SpectatorsContainer.Size = UDim2.new(1, -12, 1, -28)
+SpectatorsContainer.Position = UDim2.new(0, 6, 0, 24)
+SpectatorsContainer.BackgroundTransparency = 1
+SpectatorsContainer.BorderSizePixel = 0
+SpectatorsContainer.ScrollBarThickness = 2
+SpectatorsContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+SpectatorsContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+SpectatorsContainer.ZIndex = 999991
+SpectatorsContainer.Parent = ToxSpectatorsFrame
+
+local scList = Instance.new("UIListLayout")
+scList.SortOrder = Enum.SortOrder.LayoutOrder
+scList.Padding = UDim.new(0, 2)
+scList.Parent = SpectatorsContainer
+
+if getgenv().MakeDraggable then
+    getgenv().MakeDraggable(ToxSpectatorsFrame, ToxSpectatorsFrame)
+end
+
+-- 2. Keybinds List Frame
+local ToxKeybindsFrame = Instance.new("Frame")
+ToxKeybindsFrame.Name = "ToxKeybindsFrame"
+ToxKeybindsFrame.Size = UDim2.new(0, 190, 0, 150)
+ToxKeybindsFrame.Position = UDim2.new(0, 20, 0, 440)
+ToxKeybindsFrame.BackgroundColor3 = Theme_Panel
+ToxKeybindsFrame.BorderSizePixel = 0
+ToxKeybindsFrame.ZIndex = 999990
+ToxKeybindsFrame.Visible = Settings.KeybindsList == true
+pcall(function() ToxKeybindsFrame.Parent = hudTargetParent end)
+getgenv().ToxKeybindsFrame = ToxKeybindsFrame
+
+local kfCorner = Instance.new("UICorner") kfCorner.CornerRadius = UDim.new(0, 6) kfCorner.Parent = ToxKeybindsFrame
+local kfStroke = Instance.new("UIStroke") kfStroke.Color = Theme_Outline kfStroke.Thickness = 1 kfStroke.Parent = ToxKeybindsFrame
+
+local kfAccent = Instance.new("Frame")
+kfAccent.Size = UDim2.new(1, 0, 0, 2)
+kfAccent.BackgroundColor3 = Theme_Accent
+kfAccent.BorderSizePixel = 0
+kfAccent.ZIndex = 999991
+kfAccent.Parent = ToxKeybindsFrame
+
+local KeybindsTitleLabel = Instance.new("TextLabel")
+KeybindsTitleLabel.Name = "Title"
+KeybindsTitleLabel.Size = UDim2.new(1, -12, 0, 22)
+KeybindsTitleLabel.Position = UDim2.new(0, 8, 0, 3)
+KeybindsTitleLabel.BackgroundTransparency = 1
+KeybindsTitleLabel.Font = Enum.Font.GothamBold
+KeybindsTitleLabel.TextSize = 11
+KeybindsTitleLabel.TextColor3 = Theme_Text
+KeybindsTitleLabel.Text = "Keybinds"
+KeybindsTitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+KeybindsTitleLabel.ZIndex = 999991
+KeybindsTitleLabel.Parent = ToxKeybindsFrame
+
+local KeybindsContainer = Instance.new("ScrollingFrame")
+KeybindsContainer.Name = "Container"
+KeybindsContainer.Size = UDim2.new(1, -12, 1, -28)
+KeybindsContainer.Position = UDim2.new(0, 6, 0, 24)
+KeybindsContainer.BackgroundTransparency = 1
+KeybindsContainer.BorderSizePixel = 0
+KeybindsContainer.ScrollBarThickness = 2
+KeybindsContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+KeybindsContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+KeybindsContainer.ZIndex = 999991
+KeybindsContainer.Parent = ToxKeybindsFrame
+
+local kcList = Instance.new("UIListLayout")
+kcList.SortOrder = Enum.SortOrder.LayoutOrder
+kcList.Padding = UDim.new(0, 3)
+kcList.Parent = KeybindsContainer
+
+if getgenv().MakeDraggable then
+    getgenv().MakeDraggable(ToxKeybindsFrame, ToxKeybindsFrame)
+end
+
+local lastSpecUpdate = 0
+local function ToxUpdateSpectators()
+    if not ToxSpectatorsFrame or not ToxSpectatorsFrame.Visible then return end
+    local now = tick()
+    if now - lastSpecUpdate < 0.5 then return end
+    lastSpecUpdate = now
+
+    local specs = {}
+    local myChar = Player.Character
+    local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if not IsLocalPlayer(p) then
+            local isSpec = false
+            local pChar = p.Character
+            local pHum = pChar and pChar:FindFirstChildOfClass("Humanoid")
+
+            local specVal = p:FindFirstChild("Spectating") or p:FindFirstChild("Spectate") or (pChar and pChar:FindFirstChild("Spectating"))
+            if specVal and (specVal.Value == Player or specVal.Value == myChar) then
+                isSpec = true
+            end
+            if p:GetAttribute("Spectating") == Player.Name or p:GetAttribute("SpectateTarget") == Player.Name then
+                isSpec = true
+            end
+
+            pcall(function()
+                if p.CameraSubject and (p.CameraSubject == myChar or p.CameraSubject == (myChar and myChar:FindFirstChildOfClass("Humanoid"))) then
+                    isSpec = true
+                end
+            end)
+
+            if pChar and pHum and pHum.Health > 0 and myHrp then
+                local pHead = pChar:FindFirstChild("Head")
+                if pHead then
+                    local lookDir = pHead.CFrame.LookVector
+                    local diff = myHrp.Position - pHead.Position
+                    local dist = diff.Magnitude
+                    if dist > 2 and dist < 65 then
+                        local dot = lookDir:Dot(diff.Unit)
+                        if dot > 0.985 and not pChar:FindFirstChildOfClass("Tool") then
+                            isSpec = true
+                        end
+                    end
+                end
+            end
+
+            if isSpec then
+                table.insert(specs, p.DisplayName or p.Name)
+            end
+        end
+    end
+
+    if SpectatorsTitleLabel then
+        SpectatorsTitleLabel.Text = "Spectators (" .. #specs .. ")"
+    end
+
+    for _, child in ipairs(SpectatorsContainer:GetChildren()) do
+        if child:IsA("TextLabel") then
+            child:Destroy()
+        end
+    end
+
+    if #specs == 0 then
+        local emptyLbl = Instance.new("TextLabel")
+        emptyLbl.Size = UDim2.new(1, 0, 0, 16)
+        emptyLbl.BackgroundTransparency = 1
+        emptyLbl.Font = Enum.Font.Gotham
+        emptyLbl.TextSize = 10
+        emptyLbl.TextColor3 = Theme_DimText
+        emptyLbl.Text = "None"
+        emptyLbl.TextXAlignment = Enum.TextXAlignment.Left
+        emptyLbl.ZIndex = 999992
+        emptyLbl.Parent = SpectatorsContainer
+    else
+        for _, name in ipairs(specs) do
+            local itemLbl = Instance.new("TextLabel")
+            itemLbl.Size = UDim2.new(1, 0, 0, 16)
+            itemLbl.BackgroundTransparency = 1
+            itemLbl.Font = Enum.Font.GothamMedium
+            itemLbl.TextSize = 10
+            itemLbl.TextColor3 = Theme_Text
+            itemLbl.Text = name
+            itemLbl.TextXAlignment = Enum.TextXAlignment.Left
+            itemLbl.ZIndex = 999992
+            itemLbl.Parent = SpectatorsContainer
+        end
+    end
+end
+
+local lastKeyUpdate = 0
+local function ToxUpdateKeybinds()
+    if not ToxKeybindsFrame or not ToxKeybindsFrame.Visible then return end
+    local now = tick()
+    if now - lastKeyUpdate < 0.25 then return end
+    lastKeyUpdate = now
+
+    local binds = {}
+    table.insert(binds, { Name = "UI Toggle", Key = "[RightShift]", Active = true })
+
+    if Settings.Aimbot then
+        local keyStr = "[M2]"
+        if Settings.AimbotBindEnabled and Settings.AimbotKey then
+            keyStr = "[" .. tostring(Settings.AimbotKey.Name or Settings.AimbotKey):gsub("Enum.KeyCode.", "") .. "]"
+        end
+        table.insert(binds, { Name = "Aimbot", Key = keyStr, Active = true })
+    end
+
+    if Settings.MagicBullet then
+        table.insert(binds, { Name = "Magic Bullet", Key = "[Active]", Active = true })
+    end
+
+    if Settings.Triggerbot then
+        table.insert(binds, { Name = "Triggerbot", Key = "[Active]", Active = true })
+    end
+
+    if Settings.NormalFly or Settings.SmoothFly or Settings.Fly then
+        table.insert(binds, { Name = "Fly", Key = "[X]", Active = true })
+    end
+
+    if Settings.Spinbot then
+        table.insert(binds, { Name = "Spinbot", Key = "[Active]", Active = true })
+    end
+
+    if Settings.Bhop then
+        table.insert(binds, { Name = "Bhop", Key = "[Active]", Active = true })
+    end
+
+    if Settings.HitboxExpander or Settings.HeadHitboxExpander then
+        table.insert(binds, { Name = "Hitboxes", Key = "[Active]", Active = true })
+    end
+
+    if Settings.PanicKey then
+        local pKey = "[" .. tostring(Settings.PanicKey.Name or Settings.PanicKey):gsub("Enum.KeyCode.", "") .. "]"
+        table.insert(binds, { Name = "Panic Key", Key = pKey, Active = false })
+    end
+
+    for _, child in ipairs(KeybindsContainer:GetChildren()) do
+        if child:IsA("Frame") or child:IsA("TextLabel") then
+            child:Destroy()
+        end
+    end
+
+    if #binds == 0 then
+        local emptyLbl = Instance.new("TextLabel")
+        emptyLbl.Size = UDim2.new(1, 0, 0, 16)
+        emptyLbl.BackgroundTransparency = 1
+        emptyLbl.Font = Enum.Font.Gotham
+        emptyLbl.TextSize = 10
+        emptyLbl.TextColor3 = Theme_DimText
+        emptyLbl.Text = "No Active Binds"
+        emptyLbl.TextXAlignment = Enum.TextXAlignment.Left
+        emptyLbl.ZIndex = 999992
+        emptyLbl.Parent = KeybindsContainer
+    else
+        for _, b in ipairs(binds) do
+            local row = Instance.new("Frame")
+            row.Size = UDim2.new(1, 0, 0, 16)
+            row.BackgroundTransparency = 1
+            row.ZIndex = 999992
+            row.Parent = KeybindsContainer
+
+            local nameLbl = Instance.new("TextLabel")
+            nameLbl.Size = UDim2.new(0.6, 0, 1, 0)
+            nameLbl.BackgroundTransparency = 1
+            nameLbl.Font = Enum.Font.GothamMedium
+            nameLbl.TextSize = 10
+            nameLbl.TextColor3 = Theme_Text
+            nameLbl.Text = b.Name
+            nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+            nameLbl.ZIndex = 999992
+            nameLbl.Parent = row
+
+            local keyLbl = Instance.new("TextLabel")
+            keyLbl.Size = UDim2.new(0.4, 0, 1, 0)
+            keyLbl.Position = UDim2.new(0.6, 0, 0, 0)
+            keyLbl.BackgroundTransparency = 1
+            keyLbl.Font = Enum.Font.GothamBold
+            keyLbl.TextSize = 10
+            keyLbl.TextColor3 = b.Active and Theme_Accent or Theme_DimText
+            keyLbl.Text = b.Key
+            keyLbl.TextXAlignment = Enum.TextXAlignment.Right
+            keyLbl.ZIndex = 999992
+            keyLbl.Parent = row
+        end
+    end
+end
+end
 
 local MM2GameId = 66654135
 local MM2PlaceId = 142823291
@@ -5652,6 +6075,7 @@ end
 
 local function ClearESPForPlayer(p)
     if ESPDrawings[p] then
+        HidePlayerDrawings(p)
         for k, d in pairs(ESPDrawings[p]) do
             if k == "Skeleton" and typeof(d) == "table" then
                 for _, line in pairs(d) do
@@ -5674,6 +6098,19 @@ local function ClearESPForPlayer(p)
         ESPLabels[p] = nil
     end
 
+    ESPCharacterRefs[p] = nil
+end
+
+local function OnPlayerCharacterDespawn(p)
+    HidePlayerDrawings(p)
+    if Highlights[p] then
+        pcall(function() Highlights[p]:Destroy() end)
+        Highlights[p] = nil
+    end
+    if ESPLabels[p] then
+        pcall(function() ESPLabels[p]:Destroy() end)
+        ESPLabels[p] = nil
+    end
     ESPCharacterRefs[p] = nil
 end
 
@@ -7621,8 +8058,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         or effectiveChams
         or toxRoleESPActive)
 
-    -- Clean up disconnected drawings on player removal or character despawn
-
+    -- Clean up disconnected drawings on player removal
     for p, _ in pairs(ESPDrawings) do
         if not p or not p.Parent or not Players:FindFirstChild(p.Name) then
             ClearESPForPlayer(p)
@@ -7630,12 +8066,12 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
     end
 
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= Player then
+        if not IsLocalPlayer(p) then
             if p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChildOfClass("Humanoid") then
                 local char = p.Character
 
                 if ESPCharacterRefs[p] and ESPCharacterRefs[p] ~= char then
-                    ClearESPForPlayer(p)
+                    OnPlayerCharacterDespawn(p)
                 end
 
                 ESPCharacterRefs[p] = char
@@ -7643,6 +8079,10 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 local hrp = char.HumanoidRootPart
                 local hum = char:FindFirstChildOfClass("Humanoid")
                 local espColor, espRole = GetESPVisualInfo(p)
+                local isCurrentTarget = Settings.TargetESP and getgenv().ToxCurrentTarget and (char == getgenv().ToxCurrentTarget)
+                if isCurrentTarget then
+                    espColor = Settings.TargetESPColor or Color3.fromRGB(255, 30, 30)
+                end
 
                 if effectiveESPEnabled and effectiveChams then
                     local hl = Highlights[p]
@@ -7655,9 +8095,15 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                         hl.Parent = char
                         Highlights[p] = hl
                     end
-                    hl.FillColor = espColor
-                    hl.OutlineColor = espColor
-                    hl.FillTransparency = 0.5
+                    if isCurrentTarget then
+                        hl.FillColor = Settings.TargetESPColor or Color3.fromRGB(255, 30, 30)
+                        hl.OutlineColor = Color3.fromRGB(255, 0, 0)
+                        hl.FillTransparency = 0.3
+                    else
+                        hl.FillColor = espColor
+                        hl.OutlineColor = espColor
+                        hl.FillTransparency = 0.5
+                    end
                 else
                     if Highlights[p] then Highlights[p]:Destroy() Highlights[p] = nil end
                 end
@@ -7723,6 +8169,10 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                             nameText = nameText .. " [" .. espRole .. "]"
                         end
 
+                        if isCurrentTarget then
+                            nameText = "[TARGET] " .. nameText
+                        end
+
                         table.insert(lines, nameText)
                     end
 
@@ -7779,9 +8229,9 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
 
                     if not ESPDrawings[p] then
                         ESPDrawings[p] = {
-                            Line = Drawing.new("Line"),
-                            Box = Drawing.new("Square"),
-                            HeadDot = Drawing.new("Circle")
+                            Line = CreateTrackedDrawing("Line"),
+                            Box = CreateTrackedDrawing("Square"),
+                            HeadDot = CreateTrackedDrawing("Circle")
                         }
                     end
 
@@ -7799,43 +8249,57 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                                 startVector = UserInputService:GetMouseLocation()
                             end
 
-                            lineDraw.From = startVector
-                            lineDraw.To = Vector2.new(pos.X, pos.Y)
-                            lineDraw.Color = espColor
-                            lineDraw.Thickness = 1
-                            lineDraw.Visible = true
-                        else
+                            if lineDraw then
+                                lineDraw.From = startVector
+                                lineDraw.To = Vector2.new(pos.X, pos.Y)
+                                lineDraw.Color = espColor
+                                lineDraw.Thickness = isCurrentTarget and 2 or 1
+                                lineDraw.Transparency = 1
+                                lineDraw.Visible = true
+                            end
+                        elseif lineDraw then
                             lineDraw.Visible = false
+                            lineDraw.From = Vector2.new(-10000, -10000)
+                            lineDraw.To = Vector2.new(-10000, -10000)
                         end
 
-                        if Settings.ESPBox then
+                        if Settings.ESPBox and boxDraw then
                             local boxHeight = math.clamp(1000 / pos.Z, 10, 300)
                             local boxWidth = boxHeight * 0.65
                             boxDraw.Size = Vector2.new(boxWidth, boxHeight)
                             boxDraw.Position = Vector2.new(pos.X - boxWidth / 2, pos.Y - boxHeight / 2)
                             boxDraw.Color = espColor
-                            boxDraw.Thickness = 1.5
+                            boxDraw.Thickness = isCurrentTarget and 2.5 or 1.5
                             boxDraw.Filled = false
+                            boxDraw.Transparency = 1
                             boxDraw.Visible = true
-                        else
+                        elseif boxDraw then
                             boxDraw.Visible = false
+                            boxDraw.Position = Vector2.new(-10000, -10000)
                         end
 
-                        if Settings.ESPHeadDot then
+                        if Settings.ESPHeadDot and headDraw then
                             local head = char:FindFirstChild("Head")
-
                             if head then
                                 local hp, hon = Camera:WorldToViewportPoint(head.Position)
-                                headDraw.Position = Vector2.new(hp.X, hp.Y)
-                                headDraw.Radius = 4
-                                headDraw.Filled = true
-                                headDraw.Color = espColor
-                                headDraw.Visible = hon
+                                if hon and hp.Z > 1 then
+                                    headDraw.Position = Vector2.new(hp.X, hp.Y)
+                                    headDraw.Radius = isCurrentTarget and 6 or 4
+                                    headDraw.Filled = true
+                                    headDraw.Color = espColor
+                                    headDraw.Transparency = 1
+                                    headDraw.Visible = true
+                                else
+                                    headDraw.Visible = false
+                                    headDraw.Position = Vector2.new(-10000, -10000)
+                                end
                             else
                                 headDraw.Visible = false
+                                headDraw.Position = Vector2.new(-10000, -10000)
                             end
-                        else
+                        elseif headDraw then
                             headDraw.Visible = false
+                            headDraw.Position = Vector2.new(-10000, -10000)
                         end
 
                         if Settings.ESPSkeleton and Drawing then
@@ -7872,64 +8336,68 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
 
                             for idx, pair in ipairs(boneList) do
                                 if not skelLines[idx] then
-                                    skelLines[idx] = Drawing.new("Line")
+                                    skelLines[idx] = CreateTrackedDrawing("Line")
                                 end
                                 local line = skelLines[idx]
                                 local partA = char:FindFirstChild(pair[1])
                                 local partB = char:FindFirstChild(pair[2])
 
-                                if partA and partB then
-                                    local posA, onA = Camera:WorldToViewportPoint(partA.Position)
-                                    local posB, onB = Camera:WorldToViewportPoint(partB.Position)
+                                if line then
+                                    if partA and partB then
+                                        local posA, onA = Camera:WorldToViewportPoint(partA.Position)
+                                        local posB, onB = Camera:WorldToViewportPoint(partB.Position)
 
-                                    if posA.Z > 1 and posB.Z > 1 and onA and onB then
-                                        line.From = Vector2.new(posA.X, posA.Y)
-                                        line.To = Vector2.new(posB.X, posB.Y)
-                                        line.Color = espColor
-                                        line.Thickness = 1.5
-                                        line.Transparency = 1
-                                        line.Visible = true
+                                        if posA.Z > 1 and posB.Z > 1 and onA and onB then
+                                            line.From = Vector2.new(posA.X, posA.Y)
+                                            line.To = Vector2.new(posB.X, posB.Y)
+                                            line.Color = espColor
+                                            line.Thickness = isCurrentTarget and 2.5 or 1.5
+                                            line.Transparency = 1
+                                            line.Visible = true
+                                        else
+                                            line.Visible = false
+                                            line.From = Vector2.new(-10000, -10000)
+                                            line.To = Vector2.new(-10000, -10000)
+                                        end
                                     else
                                         line.Visible = false
+                                        line.From = Vector2.new(-10000, -10000)
+                                        line.To = Vector2.new(-10000, -10000)
                                     end
-                                else
-                                    line.Visible = false
                                 end
                             end
 
                             for i = #boneList + 1, #skelLines do
-                                skelLines[i].Visible = false
+                                if skelLines[i] then
+                                    skelLines[i].Visible = false
+                                    skelLines[i].From = Vector2.new(-10000, -10000)
+                                    skelLines[i].To = Vector2.new(-10000, -10000)
+                                end
                             end
                         elseif ESPDrawings[p].Skeleton then
                             for _, line in ipairs(ESPDrawings[p].Skeleton) do
                                 line.Visible = false
+                                line.From = Vector2.new(-10000, -10000)
+                                line.To = Vector2.new(-10000, -10000)
                             end
                         end
                     else
-                        lineDraw.Visible = false
-                        boxDraw.Visible = false
-                        headDraw.Visible = false
-                        if ESPDrawings[p] and ESPDrawings[p].Skeleton then
-                            for _, line in ipairs(ESPDrawings[p].Skeleton) do
-                                line.Visible = false
-                            end
-                        end
+                        HidePlayerDrawings(p)
                     end
                 elseif ESPDrawings[p] then
-                    for k, drawing in pairs(ESPDrawings[p]) do
-                        if k == "Skeleton" and typeof(drawing) == "table" then
-                            for _, line in pairs(drawing) do
-                                pcall(function() line.Visible = false end)
-                            end
-                        elseif drawing then
-                            pcall(function() drawing.Visible = false end)
-                        end
-                    end
+                    HidePlayerDrawings(p)
                 end
             else
-                ClearESPForPlayer(p)
+                OnPlayerCharacterDespawn(p)
             end
         end
+    end
+
+    if getgenv().ToxUpdateSpectators then
+        getgenv().ToxUpdateSpectators()
+    end
+    if getgenv().ToxUpdateKeybinds then
+        getgenv().ToxUpdateKeybinds()
     end
 
     if not getgenv().ToxCombatLoaded then
