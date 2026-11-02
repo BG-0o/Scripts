@@ -4752,21 +4752,34 @@ do
     end
 end
 
-BeginUniversalSection("Combat")
-
-CreateToggle("Aimbot (Right Click)", CombatPage, Settings.Aimbot, function(v) Settings.Aimbot = v end)
-CreateToggleWithValue("Aim Smoothness", CombatPage, Settings.AimbotSmoothnessEnabled, Settings.AimbotSmoothness, function(v) Settings.AimbotSmoothnessEnabled = v == true end, function(val) Settings.AimbotSmoothness = val end, "AimbotSmoothnessEnabled")
-CreateDropdown("Aim Part", {"Head", "HumanoidRootPart", "Torso"}, CombatPage, Settings.AimPart, function(v) Settings.AimPart = v end)
-CreateToggle("Aim Wall Check", CombatPage, Settings.AimWallCheck, function(v) Settings.AimWallCheck = v end)
-CreateToggleWithValue("Show FOV Circle", CombatPage, Settings.ShowFOV, Settings.FOVRadius, function(v) Settings.ShowFOV = v end, function(val) Settings.FOVRadius = val end)
-CreateToggle("Silent Aim", CombatPage, Settings.SilentAim, function(v) Settings.SilentAim = v end)
-CreateToggle("Triggerbot", CombatPage, Settings.Triggerbot, function(v) Settings.Triggerbot = v end)
-CreateToggleWithValue("Spinbot", CombatPage, Settings.Spinbot, Settings.SpinSpeed, function(v) Settings.Spinbot = v end, function(val) Settings.SpinSpeed = val end)
-CreateToggleWithValue("Hitbox Expander", CombatPage, Settings.HitboxExpander, Settings.HitboxSize, function(v) 
-    Settings.HitboxExpander = v
-    if not v then RestoreHitboxDefaults() end
-end, function(val) Settings.HitboxSize = val end)
-CreateToggleWithValue("Kill Aura", CombatPage, Settings.KillAura, Settings.KillAuraRange, function(v) Settings.KillAura = v end, function(val) Settings.KillAuraRange = val end)
+-- ==============================================================================
+-- COMBAT MODULE LOADER (Combat.lua)
+-- ==============================================================================
+do
+    if not getgenv().ToxCombatLoaded then
+        local loaded = false
+        pcall(function()
+            if io and io.open then
+                local f = io.open("c:/Users/BG_0o/.gemini/antigravity-ide/scratch/scripts/Combat.lua", "r")
+                if f then
+                    local s = f:read("*a")
+                    f:close()
+                    local fn = loadstring(s)
+                    if fn then fn() loaded = true end
+                end
+            end
+        end)
+        if not loaded then
+            pcall(function()
+                local combatUrl = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Combat.lua"
+                    .. "?toxcache=" .. tostring(os.time()) .. "_" .. tostring(math.random(1000, 999999))
+                local s = game:HttpGet(combatUrl)
+                local fn = loadstring(s)
+                if fn then fn() end
+            end)
+        end
+    end
+end
 
 BeginUniversalSection("Player")
 
@@ -5020,6 +5033,10 @@ end)
 CreateToggle("Head Dot ESP", VisualsPage, Settings.ESPHeadDot, function(v)
     Settings.ESPHeadDot = v
 end)
+
+CreateToggle("Skeleton ESP", VisualsPage, Settings.ESPSkeleton, function(v)
+    Settings.ESPSkeleton = v == true
+end, "ESPSkeleton")
 
 CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
     if getgenv().ToxSetSharedOption then
@@ -5593,7 +5610,13 @@ end
 
 local function ClearESPForPlayer(p)
     if ESPDrawings[p] then
-        for _, d in pairs(ESPDrawings[p]) do pcall(function() d:Remove() end) end
+        for k, d in pairs(ESPDrawings[p]) do
+            if k == "Skeleton" and type(d) == "table" then
+                for _, line in pairs(d) do pcall(function() line:Remove() end) end
+            elseif type(d) == "table" and d.Remove then
+                pcall(function() d:Remove() end)
+            end
+        end
         ESPDrawings[p] = nil
     end
 
@@ -7417,26 +7440,28 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         CrosshairV.Visible = false
     end
 
-    if not getgenv().ToxUniversal2OwnsAimbot
-    and Settings.Aimbot
-    and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-        local Target = GetClosestPlayerToMouse()
-        if Target then
-            local Smooth = Settings.AimbotSmoothness or 2
-            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, Target.Position), 1 / Smooth)
+    if not getgenv().ToxCombatLoaded then
+        if not getgenv().ToxUniversal2OwnsAimbot
+        and Settings.Aimbot
+        and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+            local Target = GetClosestPlayerToMouse()
+            if Target then
+                local Smooth = Settings.AimbotSmoothness or 2
+                Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, Target.Position), 1 / Smooth)
+            end
         end
-    end
 
-    if Settings.Triggerbot then
-        local mousePos = UserInputService:GetMouseLocation()
-        local ray = Camera:ViewportPointToRay(mousePos.X, mousePos.Y)
-        local result = workspace:Raycast(ray.Origin, ray.Direction * 1000)
-        if result and result.Instance then
-            local targetModel = result.Instance:FindFirstAncestorOfClass("Model")
-            local targetPlayer = targetModel and Players:GetPlayerFromCharacter(targetModel)
-            if targetPlayer and targetPlayer ~= Player then
-                local tool = Player.Character and Player.Character:FindFirstChildOfClass("Tool")
-                if tool then tool:Activate() end
+        if Settings.Triggerbot then
+            local mousePos = UserInputService:GetMouseLocation()
+            local ray = Camera:ViewportPointToRay(mousePos.X, mousePos.Y)
+            local result = workspace:Raycast(ray.Origin, ray.Direction * 1000)
+            if result and result.Instance then
+                local targetModel = result.Instance:FindFirstAncestorOfClass("Model")
+                local targetPlayer = targetModel and Players:GetPlayerFromCharacter(targetModel)
+                if targetPlayer and targetPlayer ~= Player then
+                    local tool = Player.Character and Player.Character:FindFirstChildOfClass("Tool")
+                    if tool then tool:Activate() end
+                end
             end
         end
     end
@@ -7463,6 +7488,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         or Settings.ESPTracers
         or Settings.ESPBox
         or Settings.ESPHeadDot
+        or Settings.ESPSkeleton
         or effectiveChams
         or toxRoleESPActive)
 
@@ -7641,7 +7667,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                     ESPLabels[p] = nil
                 end
 
-                local hasDrawingESP = effectiveESPEnabled and (Settings.ESPTracers or Settings.ESPBox or Settings.ESPHeadDot)
+                local hasDrawingESP = effectiveESPEnabled and (Settings.ESPTracers or Settings.ESPBox or Settings.ESPHeadDot or Settings.ESPSkeleton)
 
                 if hasDrawingESP and Drawing and hum.Health > 0 and withinDist then
                     local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
@@ -7706,14 +7732,91 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                         else
                             headDraw.Visible = false
                         end
+
+                        if Settings.ESPSkeleton and Drawing then
+                            local bonesR15 = {
+                                {"Head", "UpperTorso"},
+                                {"UpperTorso", "LowerTorso"},
+                                {"UpperTorso", "LeftUpperArm"},
+                                {"LeftUpperArm", "LeftLowerArm"},
+                                {"LeftLowerArm", "LeftHand"},
+                                {"UpperTorso", "RightUpperArm"},
+                                {"RightUpperArm", "RightLowerArm"},
+                                {"RightLowerArm", "RightHand"},
+                                {"LowerTorso", "LeftUpperLeg"},
+                                {"LeftUpperLeg", "LeftLowerLeg"},
+                                {"LeftLowerLeg", "LeftFoot"},
+                                {"LowerTorso", "RightUpperLeg"},
+                                {"RightUpperLeg", "RightLowerLeg"},
+                                {"RightLowerLeg", "RightFoot"}
+                            }
+                            local bonesR6 = {
+                                {"Head", "Torso"},
+                                {"Torso", "Left Arm"},
+                                {"Torso", "Right Arm"},
+                                {"Torso", "Left Leg"},
+                                {"Torso", "Right Leg"}
+                            }
+                            local isR15 = char:FindFirstChild("UpperTorso") ~= nil
+                            local boneList = isR15 and bonesR15 or bonesR6
+
+                            if not ESPDrawings[p].Skeleton then
+                                ESPDrawings[p].Skeleton = {}
+                            end
+                            local skelLines = ESPDrawings[p].Skeleton
+
+                            for idx, pair in ipairs(boneList) do
+                                if not skelLines[idx] then
+                                    skelLines[idx] = Drawing.new("Line")
+                                end
+                                local line = skelLines[idx]
+                                local partA = char:FindFirstChild(pair[1])
+                                local partB = char:FindFirstChild(pair[2])
+
+                                if partA and partB then
+                                    local posA, onA = Camera:WorldToViewportPoint(partA.Position)
+                                    local posB, onB = Camera:WorldToViewportPoint(partB.Position)
+
+                                    if posA.Z > 0 and posB.Z > 0 and (onA or onB) then
+                                        line.From = Vector2.new(posA.X, posA.Y)
+                                        line.To = Vector2.new(posB.X, posB.Y)
+                                        line.Color = espColor
+                                        line.Thickness = 1.5
+                                        line.Transparency = 1
+                                        line.Visible = true
+                                    else
+                                        line.Visible = false
+                                    end
+                                else
+                                    line.Visible = false
+                                end
+                            end
+
+                            for i = #boneList + 1, #skelLines do
+                                skelLines[i].Visible = false
+                            end
+                        elseif ESPDrawings[p].Skeleton then
+                            for _, line in ipairs(ESPDrawings[p].Skeleton) do
+                                line.Visible = false
+                            end
+                        end
                     else
                         lineDraw.Visible = false
                         boxDraw.Visible = false
                         headDraw.Visible = false
+                        if ESPDrawings[p] and ESPDrawings[p].Skeleton then
+                            for _, line in ipairs(ESPDrawings[p].Skeleton) do
+                                line.Visible = false
+                            end
+                        end
                     end
                 elseif ESPDrawings[p] then
-                    for _, drawing in pairs(ESPDrawings[p]) do
-                        drawing.Visible = false
+                    for k, drawing in pairs(ESPDrawings[p]) do
+                        if k == "Skeleton" and type(drawing) == "table" then
+                            for _, line in pairs(drawing) do line.Visible = false end
+                        elseif type(drawing) == "table" and drawing.Visible ~= nil then
+                            drawing.Visible = false
+                        end
                     end
                 end
             else
@@ -7722,36 +7825,38 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         end
     end
 
-    if Settings.HitboxExpander then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= Player and p.Character then
-                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    if not HitboxDefaults[hrp] then
-                        HitboxDefaults[hrp] = {
-                            Size = hrp.Size,
-                            Transparency = hrp.Transparency,
-                            CanCollide = hrp.CanCollide
-                        }
-                    end
+    if not getgenv().ToxCombatLoaded then
+        if Settings.HitboxExpander then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= Player and p.Character then
+                    local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        if not HitboxDefaults[hrp] then
+                            HitboxDefaults[hrp] = {
+                                Size = hrp.Size,
+                                Transparency = hrp.Transparency,
+                                CanCollide = hrp.CanCollide
+                            }
+                        end
 
-                    hrp.Size = Vector3.new(Settings.HitboxSize or 10, Settings.HitboxSize or 10, Settings.HitboxSize or 10)
-                    hrp.Transparency = 0.7
-                    hrp.CanCollide = false
+                        hrp.Size = Vector3.new(Settings.HitboxSize or 10, Settings.HitboxSize or 10, Settings.HitboxSize or 10)
+                        hrp.Transparency = 0.7
+                        hrp.CanCollide = false
+                    end
                 end
             end
         end
-    end
 
-    if Settings.KillAura and Root then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= Player and p.Character then
-                local tHrp = p.Character:FindFirstChild("HumanoidRootPart")
-                local tHum = p.Character:FindFirstChildOfClass("Humanoid")
-                if tHrp and tHum and tHum.Health > 0 then
-                    if (Root.Position - tHrp.Position).Magnitude <= (Settings.KillAuraRange or 15) then
-                        local tool = Player.Character and Player.Character:FindFirstChildOfClass("Tool")
-                        if tool then tool:Activate() end
+        if Settings.KillAura and Root then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= Player and p.Character then
+                    local tHrp = p.Character:FindFirstChild("HumanoidRootPart")
+                    local tHum = p.Character:FindFirstChildOfClass("Humanoid")
+                    if tHrp and tHum and tHum.Health > 0 then
+                        if (Root.Position - tHrp.Position).Magnitude <= (Settings.KillAuraRange or 15) then
+                            local tool = Player.Character and Player.Character:FindFirstChildOfClass("Tool")
+                            if tool then tool:Activate() end
+                        end
                     end
                 end
             end
