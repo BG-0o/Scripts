@@ -6,9 +6,12 @@
 
 local env = getgenv()
 
-if env.ToxCombatLoaded then
-    return
+if env.ToxCombatConnections then
+    for _, c in ipairs(env.ToxCombatConnections) do
+        pcall(function() c:Disconnect() end)
+    end
 end
+env.ToxCombatConnections = {}
 env.ToxCombatLoaded = true
 
 local Players = game:GetService("Players")
@@ -192,7 +195,10 @@ local function IsPartVisible(targetPart)
 
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
-    local filterList = {Player.Character, Camera}
+    local filterList = {}
+    local char = Player and Player.Character
+    if char then table.insert(filterList, char) end
+    if Camera then table.insert(filterList, Camera) end
     params.FilterDescendantsInstances = filterList
     params.IgnoreWater = true
 
@@ -294,16 +300,14 @@ local function InstallMagicBulletHook()
             local oldNamecall
 
             local hookHandler = function(self, ...)
-                if inNamecallHook then
+                local method = getnamecallmethod and getnamecallmethod()
+
+                if inNamecallHook or (typeof(checkcaller) == "function" and checkcaller()) then
+                    if typeof(setnamecallmethod) == "function" and method then
+                        setnamecallmethod(method)
+                    end
                     return oldNamecall(self, ...)
                 end
-
-                -- 1. Exploit caller check: NEVER hook internal script calls (prevents infinite recursion)
-                if typeof(checkcaller) == "function" and checkcaller() then
-                    return oldNamecall(self, ...)
-                end
-
-                local method = getnamecallmethod()
 
                 if Settings.MagicBullet and not env.Destroyed and currentMagicTarget and currentMagicTarget.Parent then
                     local target = currentMagicTarget
@@ -311,61 +315,47 @@ local function InstallMagicBulletHook()
                     local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
 
                     if targetHum and targetHum.Health > 0 then
-                        local char = Player.Character
+                        local char = Player and Player.Character
                         local tool = char and char:FindFirstChildOfClass("Tool")
 
                         if tool and Camera then
-                            local isSafeCaller = true
-                            if typeof(getcallingscript) == "function" then
-                                local caller = getcallingscript()
-                                if caller then
-                                    local cName = tostring(caller.Name):lower()
-                                    if cName:find("camera") or cName:find("popper") or cName:find("control") or cName:find("movement") or cName:find("animate") or cName:find("foot") or cName:find("character") then
-                                        isSafeCaller = false
+                            if method == "Raycast" and self == Workspace then
+                                local origin, dir = ...
+                                if typeof(origin) == "Vector3" and typeof(dir) == "Vector3" and dir.Magnitude >= 10 then
+                                    local newDir = (target.Position - origin).Unit * dir.Magnitude
+                                    inNamecallHook = true
+                                    if typeof(setnamecallmethod) == "function" then
+                                        setnamecallmethod(method)
+                                    end
+                                    local ok, res = pcall(oldNamecall, self, origin, newDir, select(3, ...))
+                                    inNamecallHook = false
+                                    if ok and res ~= nil then
+                                        return res
                                     end
                                 end
-                            end
-
-                            if isSafeCaller then
-                                inNamecallHook = true
-                                local res = nil
-
-                                if method == "Raycast" and self == Workspace then
-                                    local origin, dir = ...
-                                    if typeof(origin) == "Vector3" and typeof(dir) == "Vector3" and dir.Magnitude >= 15 then
-                                        local isDownwardFloorCheck = dir.Unit.Y < -0.75
-                                        local rootPos = (char.PrimaryPart and char.PrimaryPart.Position) or Camera.CFrame.Position
-                                        local distFromChar = (origin - rootPos).Magnitude
-
-                                        if not isDownwardFloorCheck and distFromChar <= 60 then
-                                            local newDir = (target.Position - origin).Unit * dir.Magnitude
-                                            res = oldNamecall(self, origin, newDir, select(3, ...))
-                                        end
+                            elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" then
+                                local r = ...
+                                if typeof(r) == "Ray" and r.Direction.Magnitude >= 10 then
+                                    local newDir = (target.Position - r.Origin).Unit * r.Direction.Magnitude
+                                    local newRay = Ray.new(r.Origin, newDir)
+                                    inNamecallHook = true
+                                    if typeof(setnamecallmethod) == "function" then
+                                        setnamecallmethod(method)
                                     end
-                                elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
-                                    local r = ...
-                                    if typeof(r) == "Ray" and r.Direction.Magnitude >= 15 then
-                                        local isDownwardFloorCheck = r.Direction.Unit.Y < -0.75
-                                        local rootPos = (char.PrimaryPart and char.PrimaryPart.Position) or Camera.CFrame.Position
-                                        local distFromChar = (r.Origin - rootPos).Magnitude
-
-                                        if not isDownwardFloorCheck and distFromChar <= 60 then
-                                            local newDir = (target.Position - r.Origin).Unit * r.Direction.Magnitude
-                                            local newRay = Ray.new(r.Origin, newDir)
-                                            res = oldNamecall(self, newRay, select(2, ...))
-                                        end
+                                    local ok, res = pcall(oldNamecall, self, newRay, select(2, ...))
+                                    inNamecallHook = false
+                                    if ok and res ~= nil then
+                                        return res
                                     end
-                                end
-
-                                inNamecallHook = false
-                                if res ~= nil then
-                                    return res
                                 end
                             end
                         end
                     end
                 end
 
+                if typeof(setnamecallmethod) == "function" and method then
+                    setnamecallmethod(method)
+                end
                 return oldNamecall(self, ...)
             end
 
@@ -378,7 +368,10 @@ local function InstallMagicBulletHook()
     end)
 end
 
-InstallMagicBulletHook()
+-- Hook installed on demand when Magic Bullet is enabled
+if Settings.MagicBullet then
+    InstallMagicBulletHook()
+end
 
 -- ==============================================================================
 -- COMBAT MAIN LOOP (RenderStepped & Heartbeat)
@@ -480,7 +473,10 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         local ray = Camera:ViewportPointToRay(mousePos.X, mousePos.Y)
         local params = RaycastParams.new()
         params.FilterType = Enum.RaycastFilterType.Exclude
-        local filterList = {Player.Character, Camera}
+        local filterList = {}
+        local char = Player and Player.Character
+        if char then table.insert(filterList, char) end
+        if Camera then table.insert(filterList, Camera) end
         params.FilterDescendantsInstances = filterList
         params.IgnoreWater = true
 
@@ -507,12 +503,12 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
 
             if isValidEnemy and (os.clock() - lastTriggerTime >= (Settings.TriggerbotDelay or 0.12)) then
                 lastTriggerTime = os.clock()
-                local tool = Player.Character and Player.Character:FindFirstChildOfClass("Tool")
+                local tool = Player and Player.Character and Player.Character:FindFirstChildOfClass("Tool")
                 if tool then
-                    tool:Activate()
+                    pcall(function() tool:Activate() end)
                 end
                 if typeof(mouse1click) == "function" then
-                    mouse1click()
+                    pcall(mouse1click)
                 end
             end
         end
@@ -646,8 +642,8 @@ local function BuildCombatUI()
         return
     end
 
-    -- Card 1: Aimbot & Mira
-    CreateSection(CombatPage, "Aimbot & Mira", "🎯")
+    -- Card 1: Aimbot & Aiming
+    CreateSection(CombatPage, "Aimbot & Aiming", "🎯")
 
     if type(CreateToggleWithChoice) == "function" then
         CreateToggleWithChoice("Aimbot", CombatPage, {"Camera", "Mouse"}, Settings.Aimbot, Settings.AimbotMode == "MOUSE" and "Mouse" or "Camera", function(v)
@@ -740,8 +736,8 @@ local function BuildCombatUI()
         AutoSaveConfiguration()
     end, "IgnoreFriends")
 
-    -- Card 2: Assistência & Armas
-    CreateSection(CombatPage, "Assistência & Armas", "⚡")
+    -- Card 2: Combat Assistance
+    CreateSection(CombatPage, "Combat Assistance", "⚡")
 
     CreateToggle("Silent Aim", CombatPage, Settings.SilentAim, function(v)
         Settings.SilentAim = v == true
@@ -750,6 +746,9 @@ local function BuildCombatUI()
 
     CreateToggle("Magic Bullet", CombatPage, Settings.MagicBullet, function(v)
         Settings.MagicBullet = v == true
+        if v then
+            InstallMagicBulletHook()
+        end
         AutoSaveConfiguration()
     end, "MagicBullet")
 
@@ -782,10 +781,10 @@ local function BuildCombatUI()
         AutoSaveConfiguration()
     end, "Spinbot")
 
-    -- Card 3: Expansores de Hitbox
-    CreateSection(CombatPage, "Expansores de Hitbox", "📦")
+    -- Card 3: Hitbox Expanders
+    CreateSection(CombatPage, "Hitbox Expanders", "📦")
 
-    CreateToggleWithValue("Hitbox Expander (Normal)", CombatPage, Settings.HitboxExpander, Settings.HitboxSize, function(v)
+    CreateToggleWithValue("Hitbox Expander", CombatPage, Settings.HitboxExpander, Settings.HitboxSize, function(v)
         Settings.HitboxExpander = v == true
         if not v then RestoreHitboxDefaults() end
         AutoSaveConfiguration()
