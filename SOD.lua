@@ -47,7 +47,7 @@ end
 getgenv().ToxSODGeneration = (tonumber(getgenv().ToxSODGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxSODGeneration
 
-local SODModuleVersion = "2026-11-02-sod-v3"
+local SODModuleVersion = "2026-11-02-sod-v4"
 
 if getgenv().ToxSODModuleLoadedJobId == game.JobId
 and getgenv().ToxSODModuleVersion == SODModuleVersion
@@ -74,17 +74,20 @@ Settings.SODCollapsedSections = typeof(Settings.SODCollapsedSections) == "table"
     and Settings.SODCollapsedSections
     or {}
 
--- Visuals
+-- Visuals (All disabled by default)
 Settings.SODItemESP = Settings.SODItemESP == true
+Settings.SODShowItemValue = Settings.SODShowItemValue == true
+Settings.SODShowItemRarity = Settings.SODShowItemRarity == true
 Settings.SODRarityFilter = tostring(Settings.SODRarityFilter or "All")
 Settings.SODMinValueEnabled = Settings.SODMinValueEnabled == true
 Settings.SODMinValue = tonumber(Settings.SODMinValue) or 250
-Settings.SODItemDetails = Settings.SODItemDetails == true
 Settings.SODMonsterESP = Settings.SODMonsterESP == true
 Settings.SODMonsterWarn = Settings.SODMonsterWarn == true
 Settings.SODMonsterWarnDistance = tonumber(Settings.SODMonsterWarnDistance) or 60
 Settings.SODPlayerESP = Settings.SODPlayerESP == true
-Settings.SODExitVentESP = Settings.SODExitVentESP == true
+Settings.SODExitESP = Settings.SODExitESP == true
+Settings.SODVentESP = Settings.SODVentESP == true
+Settings.SODClosetESP = Settings.SODClosetESP == true
 Settings.SODFullBright = Settings.SODFullBright == true
 
 -- Looting
@@ -197,10 +200,14 @@ local GenericNames = {
 }
 
 local NonLootKeywords = {
-    "door", "vent", "locker", "closet", "button", "switch", "barricade",
-    "exit", "gate", "wall", "floor", "light", "chair", "table", "desk",
-    "bed", "shelf", "cabinet", "plant", "trash", "pipe", "stair", "sign",
-    "fuse", "generator", "breaker", "elevator"
+    "door", "gate", "vent", "locker", "closet", "wardrobe", "hidespot",
+    "exit", "escape", "extract", "evac", "button", "switch",
+    "breaker", "fuse", "elevator", "barrier", "barricade"
+}
+
+local NonMonsterKeywords = {
+    "door", "gate", "room", "spawn", "barrier", "zone", "prop", "wall", "floor",
+    "vent", "closet", "locker", "wardrobe", "hidespot", "elevator", "box", "crate"
 }
 
 local LootKeywords = {
@@ -812,6 +819,7 @@ end
 -- ==============================================================================
 
 local function SetInstantPrompt(prompt, enable)
+    if not prompt then return end
     pcall(function()
         if enable then
             if OrigHoldDurations[prompt] == nil then
@@ -820,6 +828,7 @@ local function SetInstantPrompt(prompt, enable)
             if prompt.HoldDuration ~= 0 then
                 prompt.HoldDuration = 0
             end
+            prompt.RequiresLineOfSight = false
         elseif OrigHoldDurations[prompt] ~= nil then
             prompt.HoldDuration = OrigHoldDurations[prompt]
             OrigHoldDurations[prompt] = nil
@@ -863,12 +872,20 @@ local function IsLootObject(prompt, instance, nameLower)
         or string.find(action, "grab")
         or string.find(action, "loot")
         or string.find(action, "pick")
+        or string.find(action, "search")
         or string.find(action, "collect")
         or string.find(action, "bag") then
             return true
         end
-        if string.find(action, "open door") or string.find(action, "unscrew") or string.find(action, "hide") then
+        if string.find(action, "door") or string.find(action, "unscrew") or string.find(action, "hide") then
             return false
+        end
+    end
+
+    if prompt.ObjectText and prompt.ObjectText ~= "" then
+        local objLower = string.lower(prompt.ObjectText)
+        if not HasSubstring(objLower, NonLootKeywords) then
+            return true
         end
     end
 
@@ -977,6 +994,12 @@ local function RegisterPrompt(prompt)
         if Settings.SODInstantSteal then
             SetInstantPrompt(prompt, true)
         end
+
+        TrackConnection(prompt:GetPropertyChangedSignal("HoldDuration"):Connect(function()
+            if Settings.SODInstantSteal and prompt.HoldDuration ~= 0 then
+                prompt.HoldDuration = 0
+            end
+        end))
     end
 end
 
@@ -1003,22 +1026,43 @@ local function IsMonsterEntity(model)
     if not model or not model:IsA("Model") then return false end
     if model == Player.Character then return false end
 
+    local nameLower = string.lower(model.Name)
+
+    -- CRITICAL FIX: Exclude doors, gates, rooms, spawns, props, barriers, etc.
+    if HasSubstring(nameLower, NonMonsterKeywords) then
+        return false
+    end
+
     local plr = Players:GetPlayerFromCharacter(model)
     if plr then
-        if plr:GetAttribute("IsEntity") == true then return true, plr.Name, plr:GetAttribute("EntityKind") or "PLAYER_MONSTER" end
+        if plr:GetAttribute("IsEntity") == true then
+            return true, plr.DisplayName or plr.Name, plr:GetAttribute("EntityKind") or "PLAYER_MONSTER"
+        end
         local kind = plr:GetAttribute("EntityKind")
-        if typeof(kind) == "string" and kind ~= "" then return true, plr.Name, kind end
+        if typeof(kind) == "string" and kind ~= "" then
+            return true, plr.DisplayName or plr.Name, kind
+        end
+        return false
+    end
+
+    -- Real NPC monsters must have a Humanoid or AnimationController
+    local hum = model:FindFirstChildOfClass("Humanoid")
+    local anim = model:FindFirstChildOfClass("AnimationController")
+    if not hum and not anim then
+        if model:GetAttribute("IsEntity") ~= true and model:GetAttribute("EntityKind") == nil then
+            return false
+        end
     end
 
     if model:GetAttribute("IsEntity") == true then
         return true, model.Name, model:GetAttribute("EntityKind") or "ENTITY"
     end
+
     local charKind = model:GetAttribute("EntityKind")
     if typeof(charKind) == "string" and charKind ~= "" then
         return true, model.Name, charKind
     end
 
-    local nameLower = string.lower(model.Name)
     if HasSubstring(nameLower, MonsterKeywords) then
         return true, model.Name, "ENTITY"
     end
@@ -1191,25 +1235,25 @@ local function UpdateItemESP(charRoot)
                     esp.Label.TextColor3 = rColor
                 end
 
-                local text = ""
-                if Settings.SODItemDetails then
-                    text = string.format("[%s] %s\n%s%s (%dm)",
-                        string.upper(data.Rarity or "COMMON"),
-                        data.Name,
-                        FormatCurrency(data.Value),
-                        FormatWeight(data.Weight),
-                        math.floor(dist)
-                    )
-                else
-                    text = string.format("[%s] %s (%dm)",
-                        string.upper(data.Rarity or "COMMON"),
-                        data.Name,
-                        math.floor(dist)
-                    )
+                local line1 = data.Name
+                if Settings.SODShowItemRarity then
+                    line1 = string.format("[%s] %s", string.upper(data.Rarity or "COMMON"), data.Name)
                 end
 
-                if esp.Label.Text ~= text then
-                    esp.Label.Text = text
+                local details = {}
+                if Settings.SODShowItemValue then
+                    table.insert(details, FormatCurrency(data.Value))
+                end
+                if data.Weight and data.Weight > 0 then
+                    table.insert(details, string.format("%.1fkg", data.Weight))
+                end
+                table.insert(details, string.format("%dm", math.floor(dist)))
+
+                local line2 = table.concat(details, " | ")
+                local formattedText = line1 .. "\n" .. line2
+
+                if esp.Label.Text ~= formattedText then
+                    esp.Label.Text = formattedText
                 end
                 if not esp.Billboard.Enabled then
                     esp.Billboard.Enabled = true
@@ -1313,12 +1357,21 @@ local function UpdatePlayerESP(charRoot)
             local char = plr.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
             local hum = char and char:FindFirstChildOfClass("Humanoid")
+            local head = char and char:FindFirstChild("Head")
 
             if root and hum and hum.Health > 0 and not ActiveMonsters[char] then
                 local dist = charRoot and (root.Position - charRoot.Position).Magnitude or 0
                 local esp = PlayerESPObjects[plr]
+                local targetPart = head or root
 
-                if not esp or not esp.Billboard.Parent then
+                if not esp or not esp.Billboard or not esp.Billboard.Parent or esp.Character ~= char then
+                    if esp then
+                        pcall(function()
+                            if esp.Billboard then esp.Billboard:Destroy() end
+                            if esp.Highlight then esp.Highlight:Destroy() end
+                        end)
+                    end
+
                     local hl = Instance.new("Highlight")
                     hl.Name = "ToxSODPlayerHL"
                     hl.Adornee = char
@@ -1331,11 +1384,11 @@ local function UpdatePlayerESP(charRoot)
 
                     local bb = Instance.new("BillboardGui")
                     bb.Name = "ToxSODPlayerTag"
-                    bb.Size = UDim2.new(0, 180, 0, 26)
-                    bb.StudsOffset = Vector3.new(0, 2.8, 0)
+                    bb.Size = UDim2.new(0, 160, 0, 24)
+                    bb.StudsOffset = Vector3.new(0, 2.2, 0)
                     bb.AlwaysOnTop = true
                     bb.MaxDistance = 1500
-                    bb.Adornee = root
+                    bb.Adornee = targetPart
 
                     local label = Instance.new("TextLabel")
                     label.Size = UDim2.new(1, 0, 1, 0)
@@ -1347,8 +1400,8 @@ local function UpdatePlayerESP(charRoot)
                     label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
                     label.Parent = bb
 
-                    bb.Parent = root
-                    esp = { Highlight = hl, Billboard = bb, Label = label }
+                    bb.Parent = targetPart
+                    esp = { Highlight = hl, Billboard = bb, Label = label, Character = char }
                     PlayerESPObjects[plr] = esp
                 end
 
@@ -1357,23 +1410,22 @@ local function UpdatePlayerESP(charRoot)
                 esp.Highlight.Enabled = true
             else
                 if PlayerESPObjects[plr] then
-                    PlayerESPObjects[plr].Billboard.Enabled = false
-                    PlayerESPObjects[plr].Highlight.Enabled = false
+                    if PlayerESPObjects[plr].Billboard then PlayerESPObjects[plr].Billboard.Enabled = false end
+                    if PlayerESPObjects[plr].Highlight then PlayerESPObjects[plr].Highlight.Enabled = false end
                 end
             end
         end
     end
 end
 
-local function UpdateExitAndVentESP(charRoot)
-    if not Settings.SODExitVentESP then
-        for _, esp in pairs(ExitESPObjects) do if esp.Billboard then esp.Billboard.Enabled = false end end
-        for _, esp in pairs(VentESPObjects) do if esp.Billboard then esp.Billboard.Enabled = false end end
-        for _, esp in pairs(ClosetESPObjects) do if esp.Billboard then esp.Billboard.Enabled = false end end
+local function UpdateExitESP(charRoot)
+    if not Settings.SODExitESP then
+        for _, esp in pairs(ExitESPObjects) do
+            if esp.Billboard and esp.Billboard.Enabled then esp.Billboard.Enabled = false end
+        end
         return
     end
 
-    -- Exits
     for inst, data in pairs(ExitObjects) do
         if data.Part and data.Part.Parent then
             local dist = charRoot and (data.Part.Position - charRoot.Position).Magnitude or 0
@@ -1381,7 +1433,7 @@ local function UpdateExitAndVentESP(charRoot)
             if not esp or not esp.Billboard.Parent then
                 local bb = Instance.new("BillboardGui")
                 bb.Name = "ToxSODExitTag"
-                bb.Size = UDim2.new(0, 180, 0, 28)
+                bb.Size = UDim2.new(0, 160, 0, 28)
                 bb.StudsOffset = Vector3.new(0, 3, 0)
                 bb.AlwaysOnTop = true
                 bb.MaxDistance = 2500
@@ -1401,12 +1453,24 @@ local function UpdateExitAndVentESP(charRoot)
                 esp = { Billboard = bb, Label = label }
                 ExitESPObjects[inst] = esp
             end
-            esp.Label.Text = string.format("[EXTRACTION] %s (%dm)", data.Label or "Exit", math.floor(dist))
+            esp.Label.Text = string.format("[EXIT] %s (%dm)", data.Label or "Extraction", math.floor(dist))
             esp.Billboard.Enabled = true
+        else
+            if ExitESPObjects[inst] and ExitESPObjects[inst].Billboard then
+                ExitESPObjects[inst].Billboard.Enabled = false
+            end
         end
     end
+end
 
-    -- Vents
+local function UpdateVentESP(charRoot)
+    if not Settings.SODVentESP then
+        for _, esp in pairs(VentESPObjects) do
+            if esp.Billboard and esp.Billboard.Enabled then esp.Billboard.Enabled = false end
+        end
+        return
+    end
+
     for prompt, data in pairs(VentObjects) do
         if data.Part and data.Part.Parent then
             local dist = charRoot and (data.Part.Position - charRoot.Position).Magnitude or 0
@@ -1425,7 +1489,7 @@ local function UpdateExitAndVentESP(charRoot)
                 label.BackgroundTransparency = 1
                 label.TextSize = 11
                 label.Font = Enum.Font.GothamBold
-                label.TextColor3 = Color3.fromRGB(255, 205, 50)
+                label.TextColor3 = Color3.fromRGB(255, 190, 40)
                 label.TextStrokeTransparency = 0.2
                 label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
                 label.Parent = bb
@@ -1436,10 +1500,22 @@ local function UpdateExitAndVentESP(charRoot)
             end
             esp.Label.Text = string.format("[VENT] (%dm)", math.floor(dist))
             esp.Billboard.Enabled = true
+        else
+            if VentESPObjects[prompt] and VentESPObjects[prompt].Billboard then
+                VentESPObjects[prompt].Billboard.Enabled = false
+            end
         end
     end
+end
 
-    -- Closets
+local function UpdateClosetESP(charRoot)
+    if not Settings.SODClosetESP then
+        for _, esp in pairs(ClosetESPObjects) do
+            if esp.Billboard and esp.Billboard.Enabled then esp.Billboard.Enabled = false end
+        end
+        return
+    end
+
     for inst, data in pairs(ClosetObjects) do
         if data.Part and data.Part.Parent then
             local dist = charRoot and (data.Part.Position - charRoot.Position).Magnitude or 0
@@ -1458,7 +1534,7 @@ local function UpdateExitAndVentESP(charRoot)
                 label.BackgroundTransparency = 1
                 label.TextSize = 11
                 label.Font = Enum.Font.GothamBold
-                label.TextColor3 = Color3.fromRGB(130, 210, 255)
+                label.TextColor3 = Color3.fromRGB(100, 215, 255)
                 label.TextStrokeTransparency = 0.2
                 label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
                 label.Parent = bb
@@ -1469,6 +1545,10 @@ local function UpdateExitAndVentESP(charRoot)
             end
             esp.Label.Text = string.format("[CLOSET] (%dm)", math.floor(dist))
             esp.Billboard.Enabled = true
+        else
+            if ClosetESPObjects[inst] and ClosetESPObjects[inst].Billboard then
+                ClosetESPObjects[inst].Billboard.Enabled = false
+            end
         end
     end
 end
@@ -1731,7 +1811,9 @@ TrackConnection(RunService.Heartbeat:Connect(function(dt)
         local closestDist = UpdateMonsterESP(root)
         UpdateItemESP(root)
         UpdatePlayerESP(root)
-        UpdateExitAndVentESP(root)
+        UpdateExitESP(root)
+        UpdateVentESP(root)
+        UpdateClosetESP(root)
 
         if root and closestDist then
             CheckAutoEvacuate(closestDist)
@@ -1794,14 +1876,25 @@ SODCreateToggleWithValue(
 )
 
 SODCreateToggle(
-    "Item Details",
+    "Show Item Value",
     GamePage,
-    Settings.SODItemDetails,
+    Settings.SODShowItemValue,
     function(v)
-        Settings.SODItemDetails = v == true
+        Settings.SODShowItemValue = v == true
         AutoSaveConfiguration()
     end,
-    "SODItemDetails"
+    "SODShowItemValue"
+)
+
+SODCreateToggle(
+    "Show Item Rarity",
+    GamePage,
+    Settings.SODShowItemRarity,
+    function(v)
+        Settings.SODShowItemRarity = v == true
+        AutoSaveConfiguration()
+    end,
+    "SODShowItemRarity"
 )
 
 SODCreateToggle(
@@ -1858,19 +1951,45 @@ SODCreateToggle(
 )
 
 SODCreateToggle(
-    "Exit & Vent ESP",
+    "Exit ESP",
     GamePage,
-    Settings.SODExitVentESP,
+    Settings.SODExitESP,
     function(v)
-        Settings.SODExitVentESP = v == true
+        Settings.SODExitESP = v == true
         if not v then
             for _, esp in pairs(ExitESPObjects) do if esp.Billboard then esp.Billboard.Enabled = false end end
+        end
+        AutoSaveConfiguration()
+    end,
+    "SODExitESP"
+)
+
+SODCreateToggle(
+    "Vent ESP",
+    GamePage,
+    Settings.SODVentESP,
+    function(v)
+        Settings.SODVentESP = v == true
+        if not v then
             for _, esp in pairs(VentESPObjects) do if esp.Billboard then esp.Billboard.Enabled = false end end
+        end
+        AutoSaveConfiguration()
+    end,
+    "SODVentESP"
+)
+
+SODCreateToggle(
+    "Closet ESP",
+    GamePage,
+    Settings.SODClosetESP,
+    function(v)
+        Settings.SODClosetESP = v == true
+        if not v then
             for _, esp in pairs(ClosetESPObjects) do if esp.Billboard then esp.Billboard.Enabled = false end end
         end
         AutoSaveConfiguration()
     end,
-    "SODExitVentESP"
+    "SODClosetESP"
 )
 
 SODCreateToggle(
