@@ -378,9 +378,15 @@ end
 local function RestoreHitboxDefaults()
     for hrp, data in pairs(HitboxDefaults) do
         if hrp and hrp.Parent then
-            hrp.Size = data.Size
-            hrp.Transparency = data.Transparency
-            hrp.CanCollide = data.CanCollide
+            pcall(function()
+                hrp.Size = data.Size
+                hrp.Transparency = data.Transparency
+                hrp.CanCollide = data.CanCollide
+                hrp.Massless = data.Massless
+                if data.CustomPhysicalProperties then
+                    hrp.CustomPhysicalProperties = data.CustomPhysicalProperties
+                end
+            end)
         end
         HitboxDefaults[hrp] = nil
     end
@@ -6671,6 +6677,91 @@ CreateToggle("Unlock Cursor", ConfigPage, Settings.UnlockCursor, function(value)
     end
 end, "UnlockCursor")
 
+-- ==============================================================================
+-- GAME CONFIGURATION & SAVES (PER-GAME PROFILE SYSTEM)
+-- ==============================================================================
+if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Game Configuration & Saves", "\xf0\x9f\x92\xbe") end
+
+local placeKeyStr = tostring(game.PlaceId)
+local gameName = (game.GameId == 142823291 or game.PlaceId == 142823291) and "MM2"
+    or (game.PlaceId == 189707) and "NDS"
+    or (game.PlaceId == 537413528) and "BABFT"
+    or (game.PlaceId == 3851622793) and "WID"
+    or (game.PlaceId == 111311599) and "ADMIN"
+    or ("Place " .. placeKeyStr)
+
+local function GetSaveStatusText()
+    local hasSave = (getgenv().HasSavedConfigForCurrentPlace and getgenv().HasSavedConfigForCurrentPlace())
+        or getgenv().ToxHasPlaceConfig == true
+    return hasSave and "[\xe2\x9c\x93 Salvo]" or "[Padr\xc3\xa3o / Sem Save]"
+end
+
+local saveStatusLabel = nil
+saveStatusLabel = CreateButton("Jogo: " .. gameName .. " " .. GetSaveStatusText(), ConfigPage, function(btn)
+    btn.Text = "Jogo: " .. gameName .. " " .. GetSaveStatusText()
+end)
+
+CreateButton("\xf0\x9f\x92\xbe Salvar Config deste Jogo", ConfigPage, function(button)
+    if getgenv().SavePlaceConfiguration then
+        local ok = getgenv().SavePlaceConfiguration()
+        if ok ~= false then
+            button.Text = "\xe2\x9c\x93 Config Salva!"
+            if saveStatusLabel then saveStatusLabel.Text = "Jogo: " .. gameName .. " [\xe2\x9c\x93 Salvo]" end
+            task.delay(2, function()
+                button.Text = "\xf0\x9f\x92\xbe Salvar Config deste Jogo"
+            end)
+        else
+            button.Text = "Erro ao Salvar"
+            task.delay(2, function()
+                button.Text = "\xf0\x9f\x92\xbe Salvar Config deste Jogo"
+            end)
+        end
+    end
+end)
+
+CreateButton("\xf0\x9f\x94\x84 Carregar Config deste Jogo", ConfigPage, function(button)
+    if getgenv().LoadPlaceConfiguration then
+        local loaded = getgenv().LoadPlaceConfiguration()
+        if loaded then
+            button.Text = "\xe2\x9c\x93 Carregado!"
+            if saveStatusLabel then saveStatusLabel.Text = "Jogo: " .. gameName .. " [\xe2\x9c\x93 Salvo]" end
+            task.delay(2, function()
+                button.Text = "\xf0\x9f\x94\x84 Carregar Config deste Jogo"
+            end)
+        else
+            button.Text = "Nenhum save encontrado"
+            task.delay(2, function()
+                button.Text = "\xf0\x9f\x94\x84 Carregar Config deste Jogo"
+            end)
+        end
+    end
+end)
+
+CreateConfirmButton("\xf0\x9f\x97\x91\xef\xb8\x8f Resetar Config deste Jogo", ConfigPage, function()
+    if getgenv().ResetPlaceConfiguration then
+        getgenv().ResetPlaceConfiguration()
+        if saveStatusLabel then saveStatusLabel.Text = "Jogo: " .. gameName .. " [Padr\xc3\xa3o / Sem Save]" end
+    end
+end)
+
+CreateToggle("Auto-Save Neste Jogo", ConfigPage, getgenv().ToxAutoSaveEnabled == true, function(val)
+    getgenv().ToxAutoSaveEnabled = val == true
+    if val and getgenv().AutoSaveConfiguration then
+        getgenv().AutoSaveConfiguration(true)
+        if saveStatusLabel then saveStatusLabel.Text = "Jogo: " .. gameName .. " [\xe2\x9c\x93 Salvo]" end
+    end
+end, "ToxAutoSaveEnabled")
+
+getgenv().SyncAllTogglesToUI = function()
+    if getgenv().SyncToggleVisuals then
+        for k, v in pairs(Settings) do
+            if typeof(v) == "boolean" then
+                pcall(getgenv().SyncToggleVisuals, k, v)
+            end
+        end
+    end
+end
+
 if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Server Operations", "🌐") end
 CreateButton("Server Hop", ConfigPage, function(button) ShowServerHopMenu(button) end)
 CreateConfirmButton("Rejoin Server", ConfigPage, function()
@@ -7684,7 +7775,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                     local boxDraw = ESPDrawings[p].Box
                     local headDraw = ESPDrawings[p].HeadDot
 
-                    if onScreen then
+                    if onScreen and pos.Z > 1 then
                         if Settings.ESPTracers then
                             local startVector = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
 
@@ -7777,7 +7868,7 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                                     local posA, onA = Camera:WorldToViewportPoint(partA.Position)
                                     local posB, onB = Camera:WorldToViewportPoint(partB.Position)
 
-                                    if posA.Z > 0 and posB.Z > 0 and (onA or onB) then
+                                    if posA.Z > 1 and posB.Z > 1 and onA and onB then
                                         line.From = Vector2.new(posA.X, posA.Y)
                                         line.To = Vector2.new(posB.X, posB.Y)
                                         line.Color = espColor
@@ -7827,6 +7918,8 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
 
     if not getgenv().ToxCombatLoaded then
         if Settings.HitboxExpander then
+            local hbSize = tonumber(Settings.HitboxSize) or 10
+            local heightLimit = math.min(hbSize, 3.5)
             for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= Player and p.Character then
                     local hrp = p.Character:FindFirstChild("HumanoidRootPart")
@@ -7835,13 +7928,19 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                             HitboxDefaults[hrp] = {
                                 Size = hrp.Size,
                                 Transparency = hrp.Transparency,
-                                CanCollide = hrp.CanCollide
+                                CanCollide = hrp.CanCollide,
+                                Massless = hrp.Massless,
+                                CustomPhysicalProperties = hrp.CustomPhysicalProperties
                             }
                         end
 
-                        hrp.Size = Vector3.new(Settings.HitboxSize or 10, Settings.HitboxSize or 10, Settings.HitboxSize or 10)
+                        hrp.Size = Vector3.new(hbSize, heightLimit, hbSize)
                         hrp.Transparency = 0.7
                         hrp.CanCollide = false
+                        hrp.Massless = true
+                        pcall(function()
+                            hrp.CustomPhysicalProperties = PhysicalProperties.new(0.001, 0, 0, 0, 0)
+                        end)
                     end
                 end
             end
