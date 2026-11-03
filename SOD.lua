@@ -110,10 +110,10 @@ Settings.SODAutoEvacuateDistance = tonumber(Settings.SODAutoEvacuateDistance) or
 -- Teleports & Utilities (All disabled by default)
 Settings.SODClickTP = Settings.SODClickTP == true
 Settings.SODAutoVote = Settings.SODAutoVote == true
-Settings.SODVoteMonster = tostring(Settings.SODVoteMonster or "Player")
-Settings.SODVoteMapChoice1 = tostring(Settings.SODVoteMapChoice1 or "Facility")
-Settings.SODVoteMapChoice2 = tostring(Settings.SODVoteMapChoice2 or "Office")
-Settings.SODVoteMapChoice3 = tostring(Settings.SODVoteMapChoice3 or "American Dorm")
+Settings.SODVoteMonster = tostring(Settings.SODVoteMonster or "AI")
+Settings.SODVoteMapChoice1 = tostring(Settings.SODVoteMapChoice1 or "Office")
+Settings.SODVoteMapChoice2 = tostring(Settings.SODVoteMapChoice2 or "Supermarket")
+Settings.SODVoteMapChoice3 = tostring(Settings.SODVoteMapChoice3 or "Liminal Lucidity")
 Settings.SODAntiAFK = Settings.SODAntiAFK == true
 
 -- ==============================================================================
@@ -166,6 +166,7 @@ local LastESPInterval = 0
 local LastStaminaCheck = 0
 local LastDescendantSweep = 0
 local ProximityPromptService = game:GetService("ProximityPromptService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 -- ==============================================================================
 -- RARITIES & ITEM TAXONOMY
@@ -2558,283 +2559,196 @@ local function StartEntityKillLoop()
     end)
 end
 
-local HasVotedMapThisIntermission = false
-local HasVotedMonsterThisIntermission = false
-local LastVoteCheck = 0
+local HasVotedThisIntermission = false
+local SODAvailableMaps = { "Office", "Supermarket", "Liminal Lucidity", "Facility", "American Dorm", "Random" }
 
-local SODAvailableMaps = { "Facility", "Office", "American Dorm", "Supermarket", "Random" }
+local function FindVotingCards()
+    local pGui = Player:FindFirstChild("PlayerGui")
+    if not pGui then return nil, nil, nil end
 
-local function ButtonMatchesMap(btn, mapName)
-    if not btn or not mapName then return false end
-    mapName = string.lower(mapName)
+    local modalContainer = nil
+    local mapCards = {}
+    local entityCards = {}
 
-    local texts = {}
-    if btn.Name then table.insert(texts, string.lower(btn.Name)) end
-    if btn:IsA("TextButton") and btn.Text then
-        table.insert(texts, string.lower(btn.Text))
-    end
-    for _, child in ipairs(btn:GetChildren()) do
-        if child:IsA("TextLabel") and child.Text then
-            table.insert(texts, string.lower(child.Text))
+    -- Find the active voting modal
+    for _, gui in ipairs(pGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Enabled then
+            for _, desc in ipairs(gui:GetDescendants()) do
+                if desc:IsA("TextLabel") and desc.Visible and desc.Text then
+                    local txt = string.lower(desc.Text)
+                    if string.find(txt, "pick the map") or (desc.Text == "VOTE" and desc.TextSize and desc.TextSize >= 16) then
+                        local curr = desc.Parent
+                        while curr and curr.Parent and curr.Parent:IsA("GuiObject") and not curr.Parent:IsA("ScreenGui") do
+                            curr = curr.Parent
+                        end
+                        modalContainer = curr or desc.Parent
+                        break
+                    end
+                end
+            end
+            if modalContainer then break end
         end
     end
-    if btn.Parent then
-        table.insert(texts, string.lower(btn.Parent.Name))
-        for _, sib in ipairs(btn.Parent:GetChildren()) do
-            if sib:IsA("TextLabel") and sib.Text then
-                table.insert(texts, string.lower(sib.Text))
+
+    if not modalContainer then
+        return nil, nil, nil
+    end
+
+    -- Identify map and entity cards inside the modal container
+    for _, desc in ipairs(modalContainer:GetDescendants()) do
+        if desc:IsA("TextLabel") and desc.Visible and desc.Text and desc.Text ~= "" then
+            local t = string.upper(string.gsub(desc.Text, "^%s*(.-)%s*$", "%1"))
+            local card = desc.Parent
+
+            -- Map cards
+            if string.find(t, "OFFICE") then
+                mapCards["office"] = card or desc
+            elseif string.find(t, "SUPERMARKET") or string.find(t, "MARKET") then
+                mapCards["supermarket"] = card or desc
+            elseif string.find(t, "LIMINAL") or string.find(t, "LUCIDITY") then
+                mapCards["liminal lucidity"] = card or desc
+            elseif string.find(t, "FACILITY") then
+                mapCards["facility"] = card or desc
+            elseif string.find(t, "DORM") then
+                mapCards["american dorm"] = card or desc
+            end
+
+            -- Entity cards
+            if string.find(t, "AI") or string.find(t, "CONTROLLED BY THE GAME") then
+                entityCards["ai"] = card or desc
+            elseif string.find(t, "PLAYER") or string.find(t, "BECOMES THE ENTITY") then
+                entityCards["player"] = card or desc
             end
         end
     end
 
-    local keywords = { mapName }
-    if mapName == "facility" then
-        table.insert(keywords, "facility")
-    elseif mapName == "office" then
-        table.insert(keywords, "office")
-    elseif mapName == "american dorm" or string.find(mapName, "dorm") then
-        table.insert(keywords, "american dorm")
-        table.insert(keywords, "dorm")
-        table.insert(keywords, "dorms")
-    elseif mapName == "supermarket" or string.find(mapName, "market") then
-        table.insert(keywords, "supermarket")
-        table.insert(keywords, "market")
-        table.insert(keywords, "store")
-    end
-
-    for _, t in ipairs(texts) do
-        for _, kw in ipairs(keywords) do
-            if string.find(t, kw, 1, true) then
-                return true
-            end
-        end
-    end
-    return false
+    return modalContainer, mapCards, entityCards
 end
 
-local function ButtonMatchesMonster(btn, monsterPref)
-    if not btn or not monsterPref then return false end
-    monsterPref = string.lower(monsterPref)
+local function ClickCard(card)
+    if not card or not card:IsA("GuiObject") then return false end
+    local absPos = card.AbsolutePosition
+    local absSize = card.AbsoluteSize
+    if absSize.X <= 0 or absSize.Y <= 0 then return false end
 
-    local texts = {}
-    if btn.Name then table.insert(texts, string.lower(btn.Name)) end
-    if btn:IsA("TextButton") and btn.Text then
-        table.insert(texts, string.lower(btn.Text))
-    end
-    for _, child in ipairs(btn:GetChildren()) do
-        if child:IsA("TextLabel") and child.Text then
-            table.insert(texts, string.lower(child.Text))
-        end
-    end
-    if btn.Parent then
-        table.insert(texts, string.lower(btn.Parent.Name))
-        for _, sib in ipairs(btn.Parent:GetChildren()) do
-            if sib:IsA("TextLabel") and sib.Text then
-                table.insert(texts, string.lower(sib.Text))
-            end
-        end
-    end
+    local cx = absPos.X + (absSize.X / 2)
+    local cy = absPos.Y + (absSize.Y / 2)
 
-    local keywords = {}
-    if monsterPref == "player" then
-        keywords = { "player", "player monster", "player_monster", "survivor" }
-    elseif monsterPref == "bot" then
-        keywords = { "bot", "bot monster", "bot_monster", "ai", "entity" }
-    else
-        keywords = { "player", "bot" }
-    end
-
-    for _, t in ipairs(texts) do
-        for _, kw in ipairs(keywords) do
-            if string.find(t, kw, 1, true) then
-                return true
-            end
-        end
-    end
-    return false
-end
-
-local function TriggerVoteButton(btn)
-    if not btn then return end
     pcall(function()
-        local rem = btn:FindFirstChildWhichIsA("RemoteEvent") or btn:FindFirstChildWhichIsA("RemoteFunction")
-        if rem then
-            if rem:IsA("RemoteEvent") then rem:FireServer() else rem:InvokeServer() end
-        end
-        if firesignal then
-            firesignal(btn.MouseButton1Click)
-            firesignal(btn.Activated)
-        end
-        if getconnections then
-            for _, c in ipairs(getconnections(btn.MouseButton1Click)) do
-                pcall(function() c:Fire() end)
-            end
-            for _, c in ipairs(getconnections(btn.Activated)) do
-                pcall(function() c:Fire() end)
-            end
-        end
+        VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 0)
+        task.wait(0.04)
+        VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, false, game, 0)
     end)
+
+    if card:IsA("GuiButton") then
+        pcall(function()
+            if firesignal then
+                firesignal(card.MouseButton1Click)
+                firesignal(card.Activated)
+            end
+        end)
+    else
+        for _, child in ipairs(card:GetDescendants()) do
+            if child:IsA("GuiButton") then
+                pcall(function()
+                    if firesignal then
+                        firesignal(child.MouseButton1Click)
+                        firesignal(child.Activated)
+                    end
+                end)
+            end
+        end
+    end
+    return true
 end
 
 local function ProcessAutoVote()
-    if not Settings.SODAutoVote then return end
-
-    local now = os.clock()
-    if now - LastVoteCheck < 0.6 then return end
-    LastVoteCheck = now
-
-    local monsterPref = string.lower(Settings.SODVoteMonster or "Player")
-    local c1 = Settings.SODVoteMapChoice1 or "Facility"
-    local c2 = Settings.SODVoteMapChoice2 or "Office"
-    local c3 = Settings.SODVoteMapChoice3 or "American Dorm"
-
-    local mapPriority = {}
-    for _, choice in ipairs({ c1, c2, c3 }) do
-        if choice == "Random" then
-            local nonRandom = { "Facility", "Office", "American Dorm", "Supermarket" }
-            table.insert(mapPriority, nonRandom[math.random(1, #nonRandom)])
-        elseif choice and choice ~= "" then
-            table.insert(mapPriority, choice)
-        end
-    end
-    if #mapPriority == 0 then
-        mapPriority = { "Facility", "Office", "American Dorm", "Supermarket" }
-    end
-
-    -- Check if voting UI is currently active in PlayerGui
-    local pGui = Player:FindFirstChild("PlayerGui")
-    local votingGuiVisible = false
-    local candidateButtons = {}
-
-    if pGui then
-        for _, gui in ipairs(pGui:GetChildren()) do
-            if gui:IsA("ScreenGui") and gui.Enabled then
-                for _, desc in ipairs(gui:GetDescendants()) do
-                    if desc:IsA("TextButton") or desc:IsA("ImageButton") then
-                        if desc.Visible then
-                            table.insert(candidateButtons, desc)
-                        end
-                    end
-                    if not votingGuiVisible and desc:IsA("TextLabel") and desc.Visible and desc.Text then
-                        local t = string.lower(desc.Text)
-                        if string.find(t, "vote") or string.find(t, "intermission") or string.find(t, "map") then
-                            votingGuiVisible = true
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    -- If voting screen is NOT visible, reset state for next round
-    if not votingGuiVisible and #candidateButtons < 3 then
-        HasVotedMapThisIntermission = false
-        HasVotedMonsterThisIntermission = false
+    if not Settings.SODAutoVote then
+        HasVotedThisIntermission = false
         return
     end
 
-    -- 1. Targeted Map Vote: Click the exact map button in PlayerGui ONCE
-    if not HasVotedMapThisIntermission and #candidateButtons > 0 then
-        local votedMapName = nil
-
-        -- Priority 1, 2, 3 check
-        for _, prefMap in ipairs(mapPriority) do
-            for _, btn in ipairs(candidateButtons) do
-                if ButtonMatchesMap(btn, prefMap) then
-                    TriggerVoteButton(btn)
-                    votedMapName = prefMap
-                    HasVotedMapThisIntermission = true
-                    break
-                end
-            end
-            if HasVotedMapThisIntermission then break end
-        end
-
-        -- Fallback: check any available map button
-        if not HasVotedMapThisIntermission then
-            for _, anyMap in ipairs({ "Facility", "Office", "American Dorm", "Supermarket" }) do
-                for _, btn in ipairs(candidateButtons) do
-                    if ButtonMatchesMap(btn, anyMap) then
-                        TriggerVoteButton(btn)
-                        votedMapName = anyMap
-                        HasVotedMapThisIntermission = true
-                        break
-                    end
-                end
-                if HasVotedMapThisIntermission then break end
-            end
-        end
-
-        if votedMapName then
-            CustomNotify("Auto Vote: " .. votedMapName, Color3.fromRGB(0, 255, 140), 2)
-        end
+    local modal, mapCards, entityCards = FindVotingCards()
+    if not modal then
+        HasVotedThisIntermission = false
+        return
     end
 
-    -- 2. Targeted Monster Vote: Click the exact monster button in PlayerGui ONCE
-    if not HasVotedMonsterThisIntermission and #candidateButtons > 0 then
-        local targetPref = monsterPref == "random" and (math.random(1, 2) == 1 and "player" or "bot") or monsterPref
-        for _, btn in ipairs(candidateButtons) do
-            if ButtonMatchesMonster(btn, targetPref) then
-                TriggerVoteButton(btn)
-                HasVotedMonsterThisIntermission = true
-                CustomNotify("Auto Vote Monster: " .. (targetPref:sub(1,1):upper() .. targetPref:sub(2)), Color3.fromRGB(255, 180, 50), 2)
+    if HasVotedThisIntermission then
+        return
+    end
+
+    local c1 = string.lower(Settings.SODVoteMapChoice1 or "Office")
+    local c2 = string.lower(Settings.SODVoteMapChoice2 or "Supermarket")
+    local c3 = string.lower(Settings.SODVoteMapChoice3 or "Liminal Lucidity")
+    local userEntity = string.lower(Settings.SODVoteMonster or "AI")
+
+    -- 1. Click Map Card by priority order
+    local chosenCard = nil
+    local chosenMapName = nil
+
+    for _, choice in ipairs({ c1, c2, c3 }) do
+        if choice == "random" then
+            for mName, card in pairs(mapCards) do
+                chosenCard = card
+                chosenMapName = mName
                 break
             end
+        elseif mapCards[choice] then
+            chosenCard = mapCards[choice]
+            chosenMapName = choice
+            break
         end
     end
 
-    -- 3. Parallel Silent Remote Invocation in ReplicatedStorage with exact Map Names
-    pcall(function()
-        for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
-            if rem:IsA("RemoteEvent") or rem:IsA("RemoteFunction") then
-                local rLower = string.lower(rem.Name)
-                if string.find(rLower, "vote") or string.find(rLower, "gamemode") or string.find(rLower, "map") or string.find(rLower, "intermission") or string.find(rLower, "lobby") then
-                    pcall(function()
-                        if string.find(rLower, "monster") or string.find(rLower, "mode") or string.find(rLower, "entity") then
-                            local mArg = monsterPref == "bot" and "Bot" or (monsterPref == "player" and "Player" or (math.random(1, 2) == 1 and "Player" or "Bot"))
-                            if rem:IsA("RemoteEvent") then
-                                rem:FireServer(mArg)
-                                rem:FireServer(mArg .. "Monster")
-                                rem:FireServer(mArg == "Player" and 1 or 2)
-                            else
-                                rem:InvokeServer(mArg)
-                            end
-                        else
-                            for idx, mapName in ipairs(mapPriority) do
-                                if rem:IsA("RemoteEvent") then
-                                    rem:FireServer(mapName)
-                                    rem:FireServer(idx)
-                                    rem:FireServer("Map", mapName)
-                                    rem:FireServer("Map" .. idx)
-                                else
-                                    rem:InvokeServer(mapName)
-                                end
-                            end
-                        end
-                    end)
-                end
+    if not chosenCard then
+        for mName, card in pairs(mapCards) do
+            chosenCard = card
+            chosenMapName = mName
+            break
+        end
+    end
+
+    if chosenCard then
+        ClickCard(chosenCard)
+        CustomNotify("Voted Map: " .. string.upper(chosenMapName), Color3.fromRGB(0, 255, 140), 2.5)
+    end
+
+    task.wait(0.08)
+
+    -- 2. Click Entity Card (AI or PLAYER)
+    local targetEntity = "ai"
+    if string.find(userEntity, "player") then
+        targetEntity = "player"
+    elseif string.find(userEntity, "random") then
+        targetEntity = (math.random(1, 2) == 1) and "ai" or "player"
+    else
+        targetEntity = "ai"
+    end
+
+    local entityCard = entityCards[targetEntity] or entityCards["ai"] or entityCards["player"]
+    if entityCard then
+        ClickCard(entityCard)
+        CustomNotify("Voted Entity: " .. (targetEntity == "ai" and "AI" or "PLAYER"), Color3.fromRGB(255, 180, 50), 2.5)
+    end
+
+    HasVotedThisIntermission = true
+end
+
+local AutoVoteThread = nil
+local function StartAutoVoteLoop()
+    if AutoVoteThread then return end
+    AutoVoteThread = task.spawn(function()
+        local myGen = getgenv().ToxSODGeneration
+        while getgenv().ToxSODGeneration == myGen do
+            task.wait(0.7)
+            if Settings.SODAutoVote then
+                pcall(ProcessAutoVote)
+            else
+                HasVotedThisIntermission = false
             end
         end
-    end)
-
-    -- 4. Workspace lobby pads (touch interest)
-    pcall(function()
-        local _, _, root = GetCharacterState()
-        if not root or not firetouchinterest then return end
-
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if obj:IsA("BasePart") then
-                local oName = string.lower(obj.Name)
-                for _, mapName in ipairs(mapPriority) do
-                    if string.find(oName, string.lower(mapName), 1, true) then
-                        firetouchinterest(root, obj, 0)
-                        task.wait(0.02)
-                        firetouchinterest(root, obj, 1)
-                        break
-                    end
-                end
-            end
-        end
+        AutoVoteThread = nil
     end)
 end
 
@@ -3030,9 +2944,7 @@ TrackConnection(RunService.Heartbeat:Connect(function(dt)
         UpdateExitESP(root)
         UpdateVentClosetESP(root)
 
-        if Settings.SODAutoVote then
-            pcall(ProcessAutoVote)
-        end
+-- AutoVote handled in dedicated background loop (0 lag)
 
         if root and closestDist then
             CheckAutoEvacuate(closestDist)
@@ -3055,6 +2967,7 @@ end
 if Settings.SODAntiAFK then
     pcall(function() SetupAntiAFK(true) end)
 end
+pcall(StartAutoVoteLoop)
 
 -- ==============================================================================
 -- UI BUILDER - SECTION 1: VISUALS
@@ -3450,24 +3363,24 @@ SODCreateToggle(
     "SODAutoVote"
 )
 
+local MapChoicesList = { "Office", "Supermarket", "Liminal Lucidity", "Facility", "American Dorm", "Random" }
+
 SODCreateDropdown(
     "Vote Monster",
-    { "Player", "Bot", "Random" },
+    { "AI", "Player", "Random" },
     GamePage,
-    Settings.SODVoteMonster or "Player",
+    Settings.SODVoteMonster or "AI",
     function(choice)
         Settings.SODVoteMonster = tostring(choice)
         AutoSaveConfiguration()
     end
 )
 
-local MapChoicesList = { "Facility", "Office", "American Dorm", "Supermarket", "Random" }
-
 SODCreateDropdown(
     "Map 1st Choice",
     MapChoicesList,
     GamePage,
-    Settings.SODVoteMapChoice1 or "Facility",
+    Settings.SODVoteMapChoice1 or "Office",
     function(choice)
         Settings.SODVoteMapChoice1 = tostring(choice)
         AutoSaveConfiguration()
@@ -3478,7 +3391,7 @@ SODCreateDropdown(
     "Map 2nd Choice",
     MapChoicesList,
     GamePage,
-    Settings.SODVoteMapChoice2 or "Office",
+    Settings.SODVoteMapChoice2 or "Supermarket",
     function(choice)
         Settings.SODVoteMapChoice2 = tostring(choice)
         AutoSaveConfiguration()
@@ -3489,7 +3402,7 @@ SODCreateDropdown(
     "Map 3rd Choice",
     MapChoicesList,
     GamePage,
-    Settings.SODVoteMapChoice3 or "American Dorm",
+    Settings.SODVoteMapChoice3 or "Liminal Lucidity",
     function(choice)
         Settings.SODVoteMapChoice3 = tostring(choice)
         AutoSaveConfiguration()
