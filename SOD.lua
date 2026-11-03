@@ -429,9 +429,7 @@ local GenericNames = {
 local NonLootKeywords = {
     "door", "gate", "vent", "locker", "closet", "wardrobe", "hidespot",
     "exit", "escape", "extract", "evac", "button", "switch",
-    "breaker", "fuse", "elevator", "barrier", "barricade",
-    "sign", "plaque", "placa", "light", "lamp", "poster", "decal",
-    "board", "frame", "billboard", "texture"
+    "breaker", "fuse", "elevator", "barrier", "barricade"
 }
 
 local NonMonsterKeywords = {
@@ -1267,19 +1265,32 @@ end
 pcall(function()
     TrackConnection(ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt, plr)
         if plr ~= Player then return end
-        if Settings.SODInstantVent and (VentObjects[prompt] or string.find(string.lower(prompt.ActionText or ""), "unscrew") or (prompt.Parent and string.find(string.lower(prompt.Parent.Name or ""), "vent"))) then
+        local act = prompt.ActionText and string.lower(prompt.ActionText) or ""
+        local pName = prompt.Parent and string.lower(prompt.Parent.Name) or ""
+        local isVent = VentObjects[prompt] or string.find(act, "unscrew") or string.find(pName, "vent")
+        local isCloset = (prompt.Parent and ClosetObjects[prompt.Parent]) or string.find(act, "hide")
+
+        if Settings.SODInstantVent and isVent then
             pcall(function()
                 prompt.HoldDuration = 0
                 if fireproximityprompt then
                     fireproximityprompt(prompt, 0, true)
+                elseif prompt.InputHoldBegin and prompt.InputHoldEnd then
+                    prompt:InputHoldBegin()
+                    task.wait(0.01)
+                    prompt:InputHoldEnd()
                 end
             end)
-        end
-        if Settings.SODInstantSteal and ItemPrompts[prompt] then
+        elseif Settings.SODInstantSteal and not isCloset then
+            -- Triggers instant steal/collect on press
             pcall(function()
                 prompt.HoldDuration = 0
                 if fireproximityprompt then
                     fireproximityprompt(prompt, 0, true)
+                elseif prompt.InputHoldBegin and prompt.InputHoldEnd then
+                    prompt:InputHoldBegin()
+                    task.wait(0.01)
+                    prompt:InputHoldEnd()
                 end
             end)
         end
@@ -1293,12 +1304,11 @@ end)
 local function IsLootObject(prompt, instance, nameLower)
     if not prompt or not instance then return false end
 
-    if nameLower and HasSubstring(nameLower, NonLootKeywords) then
-        return false
-    end
-
     local action = prompt.ActionText and string.lower(prompt.ActionText) or ""
     if action ~= "" then
+        if string.find(action, "door") or string.find(action, "unscrew") or string.find(action, "hide") then
+            return false
+        end
         if string.find(action, "steal")
         or string.find(action, "take")
         or string.find(action, "grab")
@@ -1309,9 +1319,10 @@ local function IsLootObject(prompt, instance, nameLower)
         or string.find(action, "bag") then
             return true
         end
-        if string.find(action, "door") or string.find(action, "unscrew") or string.find(action, "hide") then
-            return false
-        end
+    end
+
+    if nameLower and HasSubstring(nameLower, NonLootKeywords) then
+        return false
     end
 
     if prompt.ObjectText and prompt.ObjectText ~= "" then
@@ -1694,6 +1705,28 @@ TrackConnection(ProximityPromptService.PromptShown:Connect(function(prompt)
     if prompt and not ItemPrompts[prompt] and not VentObjects[prompt] then
         pcall(RegisterPrompt, prompt)
     end
+    if prompt and Settings.SODInstantSteal then
+        local act = prompt.ActionText and string.lower(prompt.ActionText) or ""
+        local pName = prompt.Parent and string.lower(prompt.Parent.Name) or ""
+        local isVent = string.find(act, "unscrew") or string.find(pName, "vent")
+        local isCloset = string.find(act, "hide") or string.find(pName, "closet")
+        if not isVent and not isCloset then
+            pcall(function()
+                prompt.HoldDuration = 0
+                prompt.RequiresLineOfSight = false
+            end)
+        end
+    end
+    if prompt and Settings.SODInstantVent then
+        local act = prompt.ActionText and string.lower(prompt.ActionText) or ""
+        local pName = prompt.Parent and string.lower(prompt.Parent.Name) or ""
+        if string.find(act, "unscrew") or string.find(pName, "vent") then
+            pcall(function()
+                prompt.HoldDuration = 0
+                prompt.RequiresLineOfSight = false
+            end)
+        end
+    end
 end))
 
 TrackConnection(Workspace.DescendantRemoving:Connect(function(d)
@@ -1837,7 +1870,7 @@ local function UpdateItemESP(charRoot)
         local itemModel = data.Model or GetItemModel(prompt) or GetItemModel(part)
         local targetInst = itemModel or part
 
-        local isInvalid = not prompt.Parent or not part or not part.Parent or not prompt.Enabled
+        local isInvalid = not prompt.Parent or not part or not part.Parent
             or IsDescendantOfAnyPlayer(prompt)
             or IsDescendantOfAnyPlayer(part)
             or (targetInst and IsDescendantOfAnyPlayer(targetInst))
@@ -1865,7 +1898,7 @@ local function UpdateItemESP(charRoot)
                 handledTargets[targetInst] = true
             end
 
-            local show = Settings.SODItemESP and MatchesRarityFilter(data.Rarity, data.Value)
+            local show = Settings.SODItemESP and prompt.Enabled and MatchesRarityFilter(data.Rarity, data.Value)
             local dist = charRoot and (part.Position - charRoot.Position).Magnitude or 0
             local maxDist = tonumber(Settings.SODESPMaxDistance) or 350
 
@@ -3388,6 +3421,20 @@ SODCreateToggle(
         Settings.SODInstantSteal = v == true
         for prompt, _ in pairs(ItemPrompts) do
             SetInstantPrompt(prompt, v)
+        end
+        if v then
+            for _, d in ipairs(Workspace:GetDescendants()) do
+                if d:IsA("ProximityPrompt") then
+                    local act = d.ActionText and string.lower(d.ActionText) or ""
+                    local pName = d.Parent and string.lower(d.Parent.Name) or ""
+                    if not string.find(act, "hide") and not string.find(pName, "closet") and not string.find(act, "unscrew") and not string.find(pName, "vent") then
+                        pcall(function()
+                            d.HoldDuration = 0
+                            d.RequiresLineOfSight = false
+                        end)
+                    end
+                end
+            end
         end
         AutoSaveConfiguration()
     end,
