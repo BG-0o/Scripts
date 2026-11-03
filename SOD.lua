@@ -77,6 +77,7 @@ Settings.SODCollapsedSections = typeof(Settings.SODCollapsedSections) == "table"
 
 -- Visuals (All disabled by default)
 Settings.SODItemESP = Settings.SODItemESP == true
+Settings.SODItemESPStyle = tostring(Settings.SODItemESPStyle or "Name + Value")
 Settings.SODExitESP = Settings.SODExitESP == true
 Settings.SODMonsterESP = Settings.SODMonsterESP == true
 Settings.SODMonsterWarn = Settings.SODMonsterWarn == true
@@ -87,10 +88,12 @@ Settings.SODRarityFilter = tostring(Settings.SODRarityFilter or "All")
 Settings.SODMinValueEnabled = Settings.SODMinValueEnabled == true
 Settings.SODMinValue = tonumber(Settings.SODMinValue) or 250
 Settings.SODESPTextSize = math.clamp(tonumber(Settings.SODESPTextSize) or 10, 8, 18)
+Settings.SODESPMaxDistance = math.clamp(tonumber(Settings.SODESPMaxDistance) or 350, 100, 1000)
 Settings.SODFullBright = Settings.SODFullBright == true
 
 -- Looting & Autofarm (All disabled by default)
 Settings.SODAutoFarm = Settings.SODAutoFarm == true
+Settings.SODFarmSpeed = math.clamp(tonumber(Settings.SODFarmSpeed) or 40, 25, 55)
 Settings.SODAutoEscape = Settings.SODAutoEscape == true
 Settings.SODFarmDangerDist = tonumber(Settings.SODFarmDangerDist) or 50
 Settings.SODInstantSteal = Settings.SODInstantSteal == true
@@ -112,7 +115,9 @@ Settings.SODAutoEvacuateDistance = tonumber(Settings.SODAutoEvacuateDistance) or
 Settings.SODClickTP = Settings.SODClickTP == true
 Settings.SODAutoVote = Settings.SODAutoVote == true
 Settings.SODVoteMonster = tostring(Settings.SODVoteMonster or "Player")
-Settings.SODVoteMap = tostring(Settings.SODVoteMap or "Map 1")
+Settings.SODVoteMapChoice1 = tostring(Settings.SODVoteMapChoice1 or Settings.SODVoteMap or "Map 1")
+Settings.SODVoteMapChoice2 = tostring(Settings.SODVoteMapChoice2 or "Map 2")
+Settings.SODVoteMapChoice3 = tostring(Settings.SODVoteMapChoice3 or "Map 3")
 Settings.SODAntiAFK = Settings.SODAntiAFK == true
 
 -- ==============================================================================
@@ -654,15 +659,32 @@ local function ResolveItemData(prompt, instance, nameLower)
             end
         end
 
-        -- Inspect in-game BillboardGui / TextLabels for exact displayed price and rarity color!
+        -- Inspect in-game BillboardGui / TextLabels for exact displayed rarity word, price, and weight!
         for _, child in ipairs(obj:GetChildren()) do
-            if child:IsA("BillboardGui") and child.Name ~= "ToxSODItemTag" then
+            if child:IsA("BillboardGui") and child.Name ~= "ToxSODItemTag" and child.Name ~= "ToxSOD_ItemBB" then
                 for _, desc in ipairs(child:GetDescendants()) do
-                    if desc:IsA("TextLabel") then
+                    if desc:IsA("TextLabel") and desc.Text and desc.Text ~= "" then
+                        local tUpper = string.upper(desc.Text)
+                        -- 1. Exact Rarity Word directly from game UI text
+                        if not guiColorRarity then
+                            for _, rWord in ipairs({ "MYTHIC", "LEGENDARY", "EPIC", "RARE", "UNCOMMON", "COMMON" }) do
+                                if string.find(tUpper, rWord, 1, true) then
+                                    guiColorRarity = rWord:sub(1,1) .. rWord:sub(2):lower()
+                                    break
+                                end
+                            end
+                        end
+                        -- 2. Exact Price from game UI text
                         if not guiPrice and string.find(desc.Text, "%$") then
                             local n = tonumber(string.match(desc.Text, "%$([%d%,%.]+)"))
                             if n and n > 0 then guiPrice = n end
                         end
+                        -- 3. Exact Weight from game UI text
+                        if not rawWeight and (string.find(desc.Text, "kg") or string.find(desc.Text, "KG")) then
+                            local w = tonumber(string.match(desc.Text, "([%d%.]+)%s*[kK][gG]"))
+                            if w and w > 0 then rawWeight = w end
+                        end
+                        -- 4. Color fallback
                         if not guiColorRarity and desc.TextColor3 then
                             local detected = DetectRarityFromColor(desc.TextColor3)
                             if detected then guiColorRarity = detected end
@@ -1204,6 +1226,9 @@ end
 
 local function TriggerPrompt(prompt)
     if not prompt or not prompt.Parent then return false end
+    pcall(function()
+        prompt.HoldDuration = 0
+    end)
     if fireproximityprompt then
         pcall(function()
             fireproximityprompt(prompt, 0, true)
@@ -1212,13 +1237,36 @@ local function TriggerPrompt(prompt)
     elseif prompt.InputHoldBegin and prompt.InputHoldEnd then
         pcall(function()
             prompt:InputHoldBegin()
-            task.wait(prompt.HoldDuration or 0)
+            task.wait(0.01)
             prompt:InputHoldEnd()
         end)
         return true
     end
     return false
 end
+
+-- Global ProximityPromptService hook for instant vent and steal
+pcall(function()
+    TrackConnection(ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt, plr)
+        if plr ~= Player then return end
+        if Settings.SODInstantVent and (VentObjects[prompt] or string.find(string.lower(prompt.ActionText or ""), "unscrew") or (prompt.Parent and string.find(string.lower(prompt.Parent.Name or ""), "vent"))) then
+            pcall(function()
+                prompt.HoldDuration = 0
+                if fireproximityprompt then
+                    fireproximityprompt(prompt, 0, true)
+                end
+            end)
+        end
+        if Settings.SODInstantSteal and ItemPrompts[prompt] then
+            pcall(function()
+                prompt.HoldDuration = 0
+                if fireproximityprompt then
+                    fireproximityprompt(prompt, 0, true)
+                end
+            end)
+        end
+    end))
+end)
 
 -- ==============================================================================
 -- LOOT & OBJECT REGISTRATION
@@ -1305,6 +1353,11 @@ local function RegisterPrompt(prompt)
         if Settings.SODInstantVent then
             SetInstantPrompt(prompt, true)
         end
+        TrackConnection(prompt:GetPropertyChangedSignal("HoldDuration"):Connect(function()
+            if Settings.SODInstantVent and prompt.HoldDuration ~= 0 then
+                prompt.HoldDuration = 0
+            end
+        end))
         return
     end
 
@@ -1627,14 +1680,15 @@ local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
     local bb = adornee:FindFirstChild(name)
     local label = nil
     local textSize = tonumber(Settings.SODESPTextSize) or 10
+    local maxDist = tonumber(Settings.SODESPMaxDistance) or 350
 
     if not bb or not bb:IsA("BillboardGui") then
         bb = Instance.new("BillboardGui")
         bb.Name = name
-        bb.Size = UDim2.new(0, 150, 0, 26)
+        bb.Size = UDim2.new(0, 160, 0, 28)
         bb.StudsOffset = offset or Vector3.new(0, 2.0, 0)
         bb.AlwaysOnTop = true
-        bb.MaxDistance = 2500
+        bb.MaxDistance = maxDist
         bb.Adornee = adornee
 
         label = Instance.new("TextLabel")
@@ -1649,6 +1703,15 @@ local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
         bb.Parent = adornee
     else
         label = bb:FindFirstChild("Label")
+    end
+
+    if bb then
+        if offset and bb.StudsOffset ~= offset then
+            bb.StudsOffset = offset
+        end
+        if bb.MaxDistance ~= maxDist then
+            bb.MaxDistance = maxDist
+        end
     end
 
     if label then
@@ -1669,8 +1732,13 @@ local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
 end
 
 local function UpdateItemESP(charRoot)
+    local handledTargets = {}
+    local style = Settings.SODItemESPStyle or "Name + Value"
+
     for prompt, data in pairs(ItemPrompts) do
         local part = data.Part
+        local targetInst = data.Object and data.Object:IsA("Model") and data.Object or part
+
         if not prompt.Parent or not part or not part.Parent then
             if ItemESPObjects[prompt] then
                 pcall(function()
@@ -1680,19 +1748,47 @@ local function UpdateItemESP(charRoot)
                 ItemESPObjects[prompt] = nil
             end
         else
+            -- Prevent multiple ESP objects on the exact same item model/part
+            if targetInst and handledTargets[targetInst] then
+                if ItemESPObjects[prompt] then
+                    if ItemESPObjects[prompt].Highlight then ItemESPObjects[prompt].Highlight.Enabled = false end
+                    if ItemESPObjects[prompt].Billboard then ItemESPObjects[prompt].Billboard.Enabled = false end
+                end
+                continue
+            end
+            if targetInst then
+                handledTargets[targetInst] = true
+            end
+
             local show = Settings.SODItemESP and MatchesRarityFilter(data.Rarity, data.Value)
             local dist = charRoot and (part.Position - charRoot.Position).Magnitude or 0
+            local maxDist = tonumber(Settings.SODESPMaxDistance) or 350
 
-            if show and dist <= 1200 then
+            if show and dist <= maxDist then
                 local rColor = RarityColors[data.Rarity] or Color3.fromRGB(220, 220, 220)
-                local targetInst = data.Object and data.Object:IsA("Model") and data.Object or part
 
-                -- 3D Chams matching exact rarity color
+                -- 3D Chams (always enabled when Item ESP is on)
                 local hl = CreateOrUpdateHighlight(targetInst, rColor, "ToxSOD_ItemHL")
 
-                -- Compact billboard
-                local tagText = string.format("[%s] %s\n%s • %dm", string.upper(data.Rarity or "COMMON"), data.Name, FormatCurrency(data.Value), math.floor(dist))
-                local bb, label = CreateOrUpdateBillboard(part, "ToxSOD_ItemBB", tagText, rColor, Vector3.new(0, 1.8, 0))
+                local bb = nil
+                local label = nil
+
+                if style == "Chams Only" then
+                    -- User requested Chams Only: hide any billboard text for total visual cleanliness
+                    if ItemESPObjects[prompt] and ItemESPObjects[prompt].Billboard then
+                        ItemESPObjects[prompt].Billboard.Enabled = false
+                    end
+                elseif style == "Value Only" then
+                    -- User requested Value Only: compact price tag
+                    local tagText = string.format("%s (%dm)", FormatCurrency(data.Value), math.floor(dist))
+                    local offset = dist < 7 and Vector3.new(0, 2.8, 0) or Vector3.new(0, 1.8, 0)
+                    bb, label = CreateOrUpdateBillboard(part, "ToxSOD_ItemBB", tagText, rColor, offset)
+                else
+                    -- Name + Value: full informative label
+                    local tagText = string.format("[%s] %s\n%s (%dm)", string.upper(data.Rarity or "COMMON"), data.Name, FormatCurrency(data.Value), math.floor(dist))
+                    local offset = dist < 7 and Vector3.new(0, 3.0, 0) or Vector3.new(0, 1.8, 0)
+                    bb, label = CreateOrUpdateBillboard(part, "ToxSOD_ItemBB", tagText, rColor, offset)
+                end
 
                 ItemESPObjects[prompt] = { Highlight = hl, Billboard = bb, Label = label }
             else
@@ -1760,7 +1856,10 @@ local function UpdatePlayerESP(charRoot)
             local hum = char and char:FindFirstChildOfClass("Humanoid")
             local root = char and char:FindFirstChild("HumanoidRootPart")
 
-            if char and hum and root and hum.Health > 0 and not ActiveMonsters[char] then
+            -- If player is a monster, Monster ESP handles them with red highlight and tag
+            local isMonster = (char and ActiveMonsters[char] ~= nil) or plr:GetAttribute("IsEntity") == true or plr:GetAttribute("EntityKind") ~= nil
+
+            if char and hum and root and hum.Health > 0 and not isMonster then
                 if Settings.SODPlayerESP then
                     local dist = charRoot and (root.Position - charRoot.Position).Magnitude or 0
                     local cyan = Color3.fromRGB(0, 195, 255)
@@ -2029,168 +2128,139 @@ local function GetBestExit()
     return best
 end
 
-local function StopAutoFarm()
-    if CurrentFarmTween then
-        pcall(function()
-            CurrentFarmTween:Cancel()
+local FarmNoclipConn = nil
+local FarmGlideActive = false
+
+local function SetFarmNoclip(enabled)
+    if FarmNoclipConn then
+        pcall(function() FarmNoclipConn:Disconnect() end)
+        FarmNoclipConn = nil
+    end
+    if enabled then
+        FarmNoclipConn = RunService.Stepped:Connect(function()
+            if not Settings.SODAutoFarm then
+                if FarmNoclipConn then
+                    pcall(function() FarmNoclipConn:Disconnect() end)
+                    FarmNoclipConn = nil
+                end
+                return
+            end
+            local char = Player.Character
+            if char then
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") and part.CanCollide then
+                        part.CanCollide = false
+                    end
+                end
+            end
         end)
+    else
+        local char = Player.Character
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    if part.Name == "HumanoidRootPart" then
+                        part.CanCollide = false
+                    else
+                        part.CanCollide = true
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function CancelFarmTween()
+    FarmGlideActive = false
+    if CurrentFarmTween then
+        pcall(function() CurrentFarmTween:Cancel() end)
         CurrentFarmTween = nil
     end
-end
-
-local SODPath = PathfindingService:CreatePath({
-    AgentRadius = 1.0, -- Narrow radius to fit easily through all doors, vents and corridors
-    AgentHeight = 4.5,
-    AgentCanJump = true,
-    AgentCanClimb = false,
-    WaypointSpacing = 3.0,
-    Costs = {
-        Door = 1.0
-    }
-})
-
-local function MoveCharacterTowards(targetPos, speed)
-    local char, hum, root = GetCharacterState()
-    if not char or not hum or hum.Health <= 0 or not root then return false end
-
-    local dir = (targetPos - root.Position)
-    local flatDir = Vector3.new(dir.X, 0, dir.Z)
-    local dist = flatDir.Magnitude
-
-    if dist > 0.4 then
-        local unit = flatDir.Unit
-        -- Face forward towards the corridor direction
-        root.CFrame = CFrame.new(root.Position, root.Position + unit)
-        -- Send walking signal to Humanoid
-        hum:Move(unit, false)
-        -- Apply physics velocity along corridor direction (prevents ControlModule input-zeroing)
-        local moveSpeed = speed or math.clamp(tonumber(Settings.SODSpeedValue) or 22, 16, 35)
-        root.AssemblyLinearVelocity = Vector3.new(unit.X * moveSpeed, root.AssemblyLinearVelocity.Y, unit.Z * moveSpeed)
+    local _, hum, root = GetCharacterState()
+    if root then
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
     end
-    return dist <= 2.0
-end
-
-local function GetItemStandPosition(itemPart)
-    if not itemPart or not itemPart.Parent then return nil end
-    local itemPos = itemPart.Position
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    local exclude = {}
-    if Player.Character then table.insert(exclude, Player.Character) end
-    if SafePlatformModel then table.insert(exclude, SafePlatformModel) end
-    params.FilterDescendantsInstances = exclude
-
-    local ray = Workspace:Raycast(itemPos + Vector3.new(0, 1, 0), Vector3.new(0, -30, 0), params)
-    local floorY = ray and ray.Position.Y or (itemPos.Y - 2.5)
-
-    return Vector3.new(itemPos.X, floorY + 1.0, itemPos.Z)
-end
-
-local function GetPathWaypoints(targetPos)
-    local _, _, root = GetCharacterState()
-    if not root then return nil end
-
-    local success, _ = pcall(function()
-        SODPath:ComputeAsync(root.Position, targetPos)
-    end)
-
-    if success and SODPath.Status == Enum.PathStatus.Success then
-        local wps = SODPath:GetWaypoints()
-        if #wps > 0 then
-            return wps
-        end
+    if hum then
+        hum:Move(Vector3.zero, false)
     end
-
-    -- Fallback: generate smooth intermediate 3.5-stud waypoints along the route
-    local startPos = root.Position
-    local dist = (targetPos - startPos).Magnitude
-    local steps = math.max(1, math.ceil(dist / 3.5))
-    local wps = {}
-    for i = 1, steps do
-        local alpha = i / steps
-        local p = startPos:Lerp(targetPos, alpha)
-        table.insert(wps, { Position = p, Action = Enum.PathWaypointAction.Walk })
-    end
-    return wps
-end
-
-local function FollowPathWaypoints(waypoints, prompt, myGen)
-    local char, hum, root = GetCharacterState()
-    if not char or not hum or not root then return false end
-
-    for i = 1, #waypoints do
-        if not Settings.SODAutoFarm or getgenv().ToxSODFarmGen ~= myGen then return false end
-
-        local wp = waypoints[i]
-        local wpPos = wp.Position
-
-        -- Danger check
-        if Settings.SODFarmPauseDanger then
-            local dangerDist = tonumber(Settings.SODFarmDangerDist) or 50
-            for _, mData in pairs(ActiveMonsters) do
-                if mData.Root and (mData.Root.Position - root.Position).Magnitude <= dangerDist then
-                    root.AssemblyLinearVelocity = Vector3.zero
-                    hum:Move(Vector3.zero, false)
-                    task.wait(0.5)
-                    return false
-                end
-            end
-        end
-
-        -- Check if close enough to prompt to interact
-        if prompt and prompt.Parent then
-            local pPart = ResolveBasePart(prompt) or ResolveBasePart(prompt.Parent)
-            if pPart and (pPart.Position - root.Position).Magnitude <= (prompt.MaxActivationDistance or 8) - 1.0 then
-                return true
-            end
-        end
-
-        if wp.Action == Enum.PathWaypointAction.Jump then
-            hum.Jump = true
-        end
-
-        local t0 = os.clock()
-        local distToWp = (Vector3.new(wpPos.X, root.Position.Y, wpPos.Z) - root.Position).Magnitude
-        local maxWait = math.clamp(distToWp / 16, 0.2, 1.5)
-
-        while (Vector3.new(wpPos.X, root.Position.Y, wpPos.Z) - root.Position).Magnitude > 2.2 and (os.clock() - t0) < maxWait do
-            RunService.Heartbeat:Wait()
-            if not Settings.SODAutoFarm or getgenv().ToxSODFarmGen ~= myGen then return false end
-            MoveCharacterTowards(wpPos)
-
-            if prompt and prompt.Parent then
-                local pPart = ResolveBasePart(prompt) or ResolveBasePart(prompt.Parent)
-                if pPart and (pPart.Position - root.Position).Magnitude <= (prompt.MaxActivationDistance or 8) - 1.0 then
-                    return true
-                end
-            end
-        end
-    end
-
-    return true
 end
 
 local function StopAutoFarm()
     Settings.SODAutoFarm = false
     CancelFarmTween()
-    local _, hum, root = GetCharacterState()
-    if root then
-        root.AssemblyLinearVelocity = Vector3.zero
-    end
-    if hum then
-        hum:Move(Vector3.zero, false)
-    end
+    SetFarmNoclip(false)
     AutoFarmRunning = false
 end
 
+local function GlideToPosition(targetPos, speed, myGen, checkAbort)
+    local char, hum, root = GetCharacterState()
+    if not char or not hum or hum.Health <= 0 or not root then return false end
+
+    speed = tonumber(speed) or tonumber(Settings.SODFarmSpeed) or 40
+    speed = math.clamp(speed, 25, 55)
+
+    local startPos = root.Position
+    local dist = (targetPos - startPos).Magnitude
+    if dist <= 3.5 then
+        return true
+    end
+
+    local duration = dist / speed
+    local startTime = os.clock()
+    FarmGlideActive = true
+
+    while (os.clock() - startTime) < duration do
+        if not Settings.SODAutoFarm or getgenv().ToxSODFarmGen ~= myGen or not FarmGlideActive then
+            return false
+        end
+        if checkAbort and checkAbort() then
+            return false
+        end
+
+        local charCurr, humCurr, rootCurr = GetCharacterState()
+        if not charCurr or not humCurr or humCurr.Health <= 0 or not rootCurr then
+            return false
+        end
+
+        local elapsed = os.clock() - startTime
+        local alpha = math.clamp(elapsed / duration, 0, 1)
+        local curPos = startPos:Lerp(targetPos, alpha)
+
+        rootCurr.AssemblyLinearVelocity = Vector3.zero
+        rootCurr.AssemblyAngularVelocity = Vector3.zero
+
+        local lookTarget = Vector3.new(targetPos.X, curPos.Y, targetPos.Z)
+        if (lookTarget - curPos).Magnitude > 0.1 then
+            charCurr:PivotTo(CFrame.new(curPos, lookTarget))
+        else
+            charCurr:PivotTo(CFrame.new(curPos))
+        end
+
+        RunService.Heartbeat:Wait()
+    end
+
+    local charEnd, _, rootEnd = GetCharacterState()
+    if rootEnd and charEnd then
+        rootEnd.AssemblyLinearVelocity = Vector3.zero
+        rootEnd.AssemblyAngularVelocity = Vector3.zero
+        charEnd:PivotTo(CFrame.new(targetPos))
+    end
+    FarmGlideActive = false
+    return true
+end
+
 local function StartAutoFarmLoop()
+    if AutoFarmRunning then return end
     AutoFarmRunning = true
     getgenv().ToxSODFarmGen = (tonumber(getgenv().ToxSODFarmGen) or 0) + 1
     local myGen = getgenv().ToxSODFarmGen
 
+    SetFarmNoclip(true)
+
     task.spawn(function()
         while Settings.SODAutoFarm and getgenv().ToxSODFarmGen == myGen do
-            task.wait(0.08)
+            task.wait(0.05)
             if not Settings.SODAutoFarm then break end
 
             local char, hum, root = GetCharacterState()
@@ -2201,37 +2271,30 @@ local function StartAutoFarmLoop()
             end
 
             -- 1. Pause on Danger
-            if Settings.SODFarmPauseDanger then
-                local dangerDist = tonumber(Settings.SODFarmDangerDist) or 50
-                local isDanger = false
-                for _, mData in pairs(ActiveMonsters) do
-                    if mData.Root and mData.Root.Parent then
-                        local d = (mData.Root.Position - root.Position).Magnitude
-                        if d <= dangerDist then
-                            isDanger = true
-                            break
-                        end
+            local dangerDist = tonumber(Settings.SODFarmDangerDist) or 50
+            local isDanger = false
+            for _, mData in pairs(ActiveMonsters) do
+                if mData.Root and mData.Root.Parent then
+                    local d = (mData.Root.Position - root.Position).Magnitude
+                    if d <= dangerDist then
+                        isDanger = true
+                        break
                     end
                 end
-                if isDanger then
-                    CancelFarmTween()
-                    root.AssemblyLinearVelocity = Vector3.zero
-                    hum:Move(Vector3.zero, false)
-                    task.wait(0.5)
-                    continue
-                end
+            end
+            if isDanger then
+                CancelFarmTween()
+                task.wait(0.5)
+                continue
             end
 
             -- 2. Auto Escape if bag is full
             if Settings.SODAutoEscape and IsPlayerBagFull() then
                 local exit = GetBestExit()
                 if exit and exit.Part and exit.Part.Parent then
-                    local exitPos = exit.Part.Position
-                    local waypoints = GetPathWaypoints(exitPos)
-                    if waypoints and #waypoints > 0 then
-                        FollowPathWaypoints(waypoints, nil, myGen)
-                    end
-                    task.wait(0.4)
+                    local exitPos = exit.Part.Position + Vector3.new(0, 3.0, 0)
+                    GlideToPosition(exitPos, 42, myGen, nil)
+                    task.wait(0.5)
                     continue
                 end
             end
@@ -2258,21 +2321,32 @@ local function StartAutoFarmLoop()
                 continue
             end
 
-            -- 4. Navigate normal path to item
-            local targetPos = GetItemStandPosition(bestData.Part) or bestData.Part.Position
-            local waypoints = GetPathWaypoints(targetPos)
-            if waypoints and #waypoints > 0 then
-                FollowPathWaypoints(waypoints, bestPrompt, myGen)
+            -- 4. Glide with Noclip to elevated item landing (lands smoothly on tables/desks/floor)
+            local targetPos = bestData.Part.Position + Vector3.new(0, 2.5, 0)
+            local function abortCondition()
+                if not bestPrompt or not bestPrompt.Parent or not bestData.Part or not bestData.Part.Parent then
+                    return true
+                end
+                for _, mData in pairs(ActiveMonsters) do
+                    if mData.Root and mData.Root.Parent then
+                        if (mData.Root.Position - root.Position).Magnitude <= dangerDist then
+                            return true
+                        end
+                    end
+                end
+                return false
             end
 
+            local reached = GlideToPosition(targetPos, tonumber(Settings.SODFarmSpeed) or 40, myGen, abortCondition)
+
             -- 5. Trigger prompt if in range
-            if bestPrompt and bestPrompt.Parent and bestData.Part and bestData.Part.Parent then
-                local pDist = (bestData.Part.Position - root.Position).Magnitude
-                if pDist <= (bestPrompt.MaxActivationDistance or 8) + 2.0 then
+            if reached and bestPrompt and bestPrompt.Parent and bestData.Part and bestData.Part.Parent then
+                local curDist = (bestData.Part.Position - root.Position).Magnitude
+                if curDist <= (bestPrompt.MaxActivationDistance or 8) + 2.5 then
                     root.AssemblyLinearVelocity = Vector3.zero
-                    hum:Move(Vector3.zero, false)
+                    root.AssemblyAngularVelocity = Vector3.zero
                     TriggerPrompt(bestPrompt)
-                    task.wait(0.2)
+                    task.wait(0.18)
                 end
             end
         end
@@ -2374,101 +2448,69 @@ local function StartEntityKillLoop()
     end)
 end
 
-local function ClickGuiElement(btn)
-    if not btn then return end
-    pcall(function()
-        if firesignal then
-            firesignal(btn.MouseButton1Click)
-            firesignal(btn.Activated)
-        end
-        if getconnections then
-            for _, c in ipairs(getconnections(btn.MouseButton1Click)) do
-                pcall(function() c:Fire() end)
-            end
-            for _, c in ipairs(getconnections(btn.Activated)) do
-                pcall(function() c:Fire() end)
-            end
-        end
-    end)
-end
-
 local function ProcessAutoVote()
     if not Settings.SODAutoVote then return end
     local now = os.clock()
-    if now - LastVoteCheck < 1.2 then return end
+    if now - LastVoteCheck < 1.5 then return end
     LastVoteCheck = now
 
     local monsterPref = string.lower(Settings.SODVoteMonster or "Player")
-    local mapPref = Settings.SODVoteMap or "Map 1"
+    local c1 = Settings.SODVoteMapChoice1 or Settings.SODVoteMap or "Map 1"
+    local c2 = Settings.SODVoteMapChoice2 or "Map 2"
+    local c3 = Settings.SODVoteMapChoice3 or "Map 3"
 
-    local mapPriority = { 1, 2, 3 }
-    if mapPref == "Map 2" then
-        mapPriority = { 2, 1, 3 }
-    elseif mapPref == "Map 3" then
-        mapPriority = { 3, 2, 1 }
-    elseif mapPref == "Random" then
-        mapPriority = { math.random(1, 3), 1, 2, 3 }
+    local mapPriority = {}
+    for _, choice in ipairs({ c1, c2, c3 }) do
+        if choice == "Map 1" then table.insert(mapPriority, 1)
+        elseif choice == "Map 2" then table.insert(mapPriority, 2)
+        elseif choice == "Map 3" then table.insert(mapPriority, 3)
+        elseif choice == "Random" then table.insert(mapPriority, math.random(1, 3)) end
     end
+    if #mapPriority == 0 then mapPriority = { 1, 2, 3 } end
 
-    -- 1. Click PlayerGui voting buttons
-    pcall(function()
-        local pGui = Player:FindFirstChild("PlayerGui")
-        if not pGui then return end
-        for _, gui in ipairs(pGui:GetChildren()) do
-            if gui:IsA("ScreenGui") and gui.Enabled then
-                for _, desc in ipairs(gui:GetDescendants()) do
-                    if (desc:IsA("TextButton") or desc:IsA("ImageButton")) and desc.Visible then
-                        local bName = string.lower(desc.Name)
-                        local bText = desc:IsA("TextButton") and string.lower(desc.Text) or ""
-
-                        -- Monster vote
-                        if monsterPref == "player" and (string.find(bName, "player") or string.find(bText, "player") or string.find(bName, "survivor")) then
-                            ClickGuiElement(desc)
-                        elseif monsterPref == "bot" and (string.find(bName, "bot") or string.find(bText, "bot") or string.find(bName, "ai")) then
-                            ClickGuiElement(desc)
-                        end
-
-                        -- Map vote
-                        for _, p in ipairs(mapPriority) do
-                            if string.find(bName, "map" .. p) or string.find(bText, "map " .. p) or string.find(bName, "map_" .. p) or string.find(bText, "map" .. p) or string.find(bText, tostring(p)) then
-                                ClickGuiElement(desc)
-                                break
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end)
-
-    -- 2. ReplicatedStorage voting remotes
+    -- 1. ReplicatedStorage voting remotes (100% silent background server invocation, zero mouse clicks)
     pcall(function()
         for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
             if rem:IsA("RemoteEvent") or rem:IsA("RemoteFunction") then
                 local rLower = string.lower(rem.Name)
-                if string.find(rLower, "vote") or string.find(rLower, "intermission") then
+                if string.find(rLower, "vote") or string.find(rLower, "gamemode") or string.find(rLower, "map") or string.find(rLower, "intermission") or string.find(rLower, "lobby") then
                     pcall(function()
-                        if string.find(rLower, "monster") or string.find(rLower, "gamemode") or string.find(rLower, "mode") then
+                        if string.find(rLower, "monster") or string.find(rLower, "mode") or string.find(rLower, "entity") then
                             if monsterPref == "player" then
-                                rem:FireServer("Player")
-                                rem:FireServer("PlayerMonster")
-                                rem:FireServer(1)
+                                if rem:IsA("RemoteEvent") then
+                                    rem:FireServer("Player")
+                                    rem:FireServer(1)
+                                    rem:FireServer("PlayerMonster")
+                                else
+                                    rem:InvokeServer("Player")
+                                end
+                            elseif monsterPref == "bot" then
+                                if rem:IsA("RemoteEvent") then
+                                    rem:FireServer("Bot")
+                                    rem:FireServer(2)
+                                    rem:FireServer("BotMonster")
+                                else
+                                    rem:InvokeServer("Bot")
+                                end
                             else
-                                rem:FireServer("Bot")
-                                rem:FireServer("BotMonster")
-                                rem:FireServer(2)
+                                local rnd = math.random(1, 2) == 1 and "Player" or "Bot"
+                                if rem:IsA("RemoteEvent") then rem:FireServer(rnd) else rem:InvokeServer(rnd) end
                             end
                         else
                             for _, p in ipairs(mapPriority) do
-                                rem:FireServer(p)
-                                rem:FireServer(tostring(p))
-                                rem:FireServer("Map", p)
-                                rem:FireServer("Map" .. p)
+                                if rem:IsA("RemoteEvent") then
+                                    rem:FireServer(p)
+                                    rem:FireServer(tostring(p))
+                                    rem:FireServer("Map" .. p)
+                                    rem:FireServer("Map", p)
+                                else
+                                    rem:InvokeServer(p)
+                                end
                             end
                             if monsterPref == "player" then
-                                rem:FireServer("Player")
-                            else
-                                rem:FireServer("Bot")
+                                if rem:IsA("RemoteEvent") then rem:FireServer("Player") else rem:InvokeServer("Player") end
+                            elseif monsterPref == "bot" then
+                                if rem:IsA("RemoteEvent") then rem:FireServer("Bot") else rem:InvokeServer("Bot") end
                             end
                         end
                     end)
@@ -2477,23 +2519,32 @@ local function ProcessAutoVote()
         end
     end)
 
-    -- 3. Workspace vote pads
+    -- 2. Physical lobby voting pads (silent server touch interest without moving character)
     pcall(function()
         local _, _, root = GetCharacterState()
-        if not root then return end
-        for _, pad in ipairs(Workspace:GetDescendants()) do
-            if pad:IsA("BasePart") then
-                local pLower = string.lower(pad.Name)
-                local pParent = pad.Parent and string.lower(pad.Parent.Name) or ""
-                if string.find(pLower, "vote") or string.find(pParent, "vote") or string.find(pLower, "map") or string.find(pLower, "pad") then
-                    local prompt = pad:FindFirstChildOfClass("ProximityPrompt")
-                    if prompt then
-                        TriggerPrompt(prompt)
+        if not root or not firetouchinterest then return end
+
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                local oName = string.lower(obj.Name)
+                if string.find(oName, "vote") or string.find(oName, "pad") or string.find(oName, "plate") then
+                    local matched = false
+                    if monsterPref == "player" and string.find(oName, "player") then matched = true
+                    elseif monsterPref == "bot" and (string.find(oName, "bot") or string.find(oName, "ai")) then matched = true end
+
+                    for _, p in ipairs(mapPriority) do
+                        if string.find(oName, "map" .. p) or string.find(oName, "map_" .. p) then
+                            matched = true
+                            break
+                        end
                     end
-                    if firetouchinterest then
-                        firetouchinterest(root, pad, 0)
-                        task.wait(0.02)
-                        firetouchinterest(root, pad, 1)
+
+                    if matched then
+                        pcall(function()
+                            firetouchinterest(root, obj, 0)
+                            task.wait(0.02)
+                            firetouchinterest(root, obj, 1)
+                        end)
                     end
                 end
             end
@@ -2742,6 +2793,17 @@ SODCreateToggle(
     "SODItemESP"
 )
 
+SODCreateDropdown(
+    "Item ESP Style",
+    { "Name + Value", "Value Only", "Chams Only" },
+    GamePage,
+    Settings.SODItemESPStyle or "Name + Value",
+    function(choice)
+        Settings.SODItemESPStyle = tostring(choice)
+        AutoSaveConfiguration()
+    end
+)
+
 SODCreateToggle(
     "Exit ESP",
     GamePage,
@@ -2887,6 +2949,19 @@ SODCreateToggle(
         AutoSaveConfiguration()
     end,
     "SODAutoFarm"
+)
+
+SODCreateToggleWithValue(
+    "Farm Speed",
+    GamePage,
+    true,
+    Settings.SODFarmSpeed or 40,
+    function() end,
+    function(val)
+        Settings.SODFarmSpeed = math.clamp(tonumber(val) or 40, 25, 55)
+        AutoSaveConfiguration()
+    end,
+    "SODFarmSpeed"
 )
 
 SODCreateToggle(
@@ -3145,12 +3220,34 @@ SODCreateDropdown(
 )
 
 SODCreateDropdown(
-    "Vote Map",
+    "Map 1st Choice",
     { "Map 1", "Map 2", "Map 3", "Random" },
     GamePage,
-    Settings.SODVoteMap or "Map 1",
+    Settings.SODVoteMapChoice1 or Settings.SODVoteMap or "Map 1",
     function(choice)
-        Settings.SODVoteMap = tostring(choice)
+        Settings.SODVoteMapChoice1 = tostring(choice)
+        AutoSaveConfiguration()
+    end
+)
+
+SODCreateDropdown(
+    "Map 2nd Choice",
+    { "Map 2", "Map 1", "Map 3" },
+    GamePage,
+    Settings.SODVoteMapChoice2 or "Map 2",
+    function(choice)
+        Settings.SODVoteMapChoice2 = tostring(choice)
+        AutoSaveConfiguration()
+    end
+)
+
+SODCreateDropdown(
+    "Map 3rd Choice",
+    { "Map 3", "Map 2", "Map 1" },
+    GamePage,
+    Settings.SODVoteMapChoice3 or "Map 3",
+    function(choice)
+        Settings.SODVoteMapChoice3 = tostring(choice)
         AutoSaveConfiguration()
     end
 )
@@ -3174,7 +3271,8 @@ SODCreateToggle(
 getgenv().ToxSODCleanup = function()
     getgenv().ToxSODGeneration = (tonumber(getgenv().ToxSODGeneration) or 0) + 1
 
-    CancelFarmTween()
+    StopAutoFarm()
+    SetFarmNoclip(false)
     ApplyRemoveDoors(false)
     SetupAntiAFK(false)
 
