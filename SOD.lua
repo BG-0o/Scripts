@@ -749,18 +749,21 @@ end
 
 local function GetItemModel(inst)
     if not inst then return nil end
-    local curr = inst
-    local bestModel = nil
+    local curr = inst:IsA("ProximityPrompt") and inst.Parent or inst
     while curr and curr ~= Workspace and curr ~= game do
         if curr:IsA("Model") then
             local mLower = string.lower(curr.Name)
-            if mLower ~= "workspace" and mLower ~= "items" and mLower ~= "map" and mLower ~= "props" and mLower ~= "decor" and mLower ~= "loot" and mLower ~= "spawns" and mLower ~= "rooms" and mLower ~= "folder" and mLower ~= "environment" and mLower ~= "geometry" and mLower ~= "camera" then
-                bestModel = curr
+            if not curr:FindFirstChildOfClass("Humanoid")
+               and mLower ~= "workspace" and mLower ~= "map" and mLower ~= "rooms" 
+               and mLower ~= "props" and mLower ~= "items" and mLower ~= "loot" 
+               and mLower ~= "folder" and mLower ~= "geometry" and mLower ~= "decor" 
+               and mLower ~= "spawns" and mLower ~= "environment" and mLower ~= "camera" then
+                return curr
             end
         end
         curr = curr.Parent
     end
-    return bestModel
+    return nil
 end
 
 local function ResolveBasePart(inst)
@@ -2560,121 +2563,212 @@ local function StartEntityKillLoop()
 end
 
 local HasVotedThisIntermission = false
+local AutoVoteAttempts = 0
 local SODAvailableMaps = { "Office", "Supermarket", "Liminal Lucidity", "Facility", "American Dorm", "Random" }
+
+local function IsGuiTrulyVisible(obj)
+    if not obj or not obj:IsA("GuiObject") then return false end
+    if not obj.Visible then return false end
+    
+    local size = obj.AbsoluteSize
+    if size.X <= 4 or size.Y <= 4 then return false end
+    
+    -- Check screen viewport bounds
+    local pos = obj.AbsolutePosition
+    local cam = Workspace.CurrentCamera
+    local vp = cam and cam.ViewportSize or Vector2.new(1920, 1080)
+    if (pos.X + size.X) < 0 or (pos.Y + size.Y) < 0 then return false end
+    if pos.X > vp.X or pos.Y > vp.Y then return false end
+    
+    -- Walk ancestors to ensure ScreenGui is enabled and all parent frames are visible
+    local curr = obj.Parent
+    while curr and curr ~= game do
+        if curr:IsA("ScreenGui") then
+            if not curr.Enabled then return false end
+            break
+        elseif curr:IsA("GuiObject") then
+            if not curr.Visible then return false end
+            if curr.GroupTransparency and curr.GroupTransparency > 0.95 then return false end
+        end
+        curr = curr.Parent
+    end
+    return true
+end
 
 local function FindVotingCards()
     local pGui = Player:FindFirstChild("PlayerGui")
-    if not pGui then return nil, nil, nil end
+    if not pGui then return false, {}, {} end
 
-    local modalContainer = nil
     local mapCards = {}
     local entityCards = {}
+    local hasVotingHeader = false
 
-    -- Find the active voting modal
+    -- Search all active ScreenGuis in PlayerGui
     for _, gui in ipairs(pGui:GetChildren()) do
         if gui:IsA("ScreenGui") and gui.Enabled then
             for _, desc in ipairs(gui:GetDescendants()) do
-                if desc:IsA("TextLabel") and desc.Visible and desc.Text then
-                    local txt = string.lower(desc.Text)
-                    if string.find(txt, "pick the map") or (desc.Text == "VOTE" and desc.TextSize and desc.TextSize >= 16) then
-                        local curr = desc.Parent
-                        while curr and curr.Parent and curr.Parent:IsA("GuiObject") and not curr.Parent:IsA("ScreenGui") do
-                            curr = curr.Parent
+                if (desc:IsA("TextLabel") or desc:IsA("TextButton")) and desc.Text and desc.Text ~= "" and IsGuiTrulyVisible(desc) then
+                    local rawText = desc.Text
+                    local tUpper = string.upper(rawText)
+
+                    -- Check if voting window title/subtitle is visible
+                    if string.find(tUpper, "PICK THE MAP") or (tUpper == "VOTE" and desc.TextSize and desc.TextSize >= 14) then
+                        hasVotingHeader = true
+                    end
+
+                    -- Helper to find the card container frame
+                    local function ResolveCard(lbl)
+                        local c = lbl
+                        for _ = 1, 3 do
+                            if c.Parent and c.Parent:IsA("GuiObject") then
+                                local p = c.Parent
+                                local pUpper = string.upper(p.Name)
+                                if string.find(pUpper, "GRID") or string.find(pUpper, "LIST") or string.find(pUpper, "CONTAINER") or string.find(pUpper, "VOTE") or p.AbsoluteSize.X > 550 then
+                                    break
+                                end
+                                c = p
+                            else
+                                break
+                            end
                         end
-                        modalContainer = curr or desc.Parent
-                        break
+                        return c
+                    end
+
+                    -- Map Cards:
+                    if string.find(tUpper, "OFFICE") and not string.find(tUpper, "SKYSCRAPER") then
+                        mapCards["office"] = { Label = desc, Card = ResolveCard(desc) }
+                    elseif (string.find(tUpper, "SUPERMARKET") or string.find(tUpper, "DAYLIGHT FOODS")) and not string.find(tUpper, "LONG AISLES") then
+                        mapCards["supermarket"] = { Label = desc, Card = ResolveCard(desc) }
+                    elseif (string.find(tUpper, "LIMINAL") or string.find(tUpper, "LUCIDITY")) and not string.find(tUpper, "REMEMBER THEM") then
+                        mapCards["liminal lucidity"] = { Label = desc, Card = ResolveCard(desc) }
+                    elseif string.find(tUpper, "FACILITY") then
+                        mapCards["facility"] = { Label = desc, Card = ResolveCard(desc) }
+                    elseif string.find(tUpper, "AMERICAN DORM") or (string.find(tUpper, "DORM") and not string.find(tUpper, "BEDROOM")) then
+                        mapCards["american dorm"] = { Label = desc, Card = ResolveCard(desc) }
+                    end
+
+                    -- Entity Cards:
+                    if string.find(tUpper, "ENTITY:%s*AI") or tUpper == "ENTITY: AI" or (string.find(tUpper, "AI") and string.find(tUpper, "CONTROLLED")) then
+                        entityCards["ai"] = { Label = desc, Card = ResolveCard(desc) }
+                    elseif string.find(tUpper, "ENTITY:%s*PLAYER") or tUpper == "ENTITY: PLAYER" or (string.find(tUpper, "PLAYER") and string.find(tUpper, "BECOMES")) then
+                        entityCards["player"] = { Label = desc, Card = ResolveCard(desc) }
                     end
                 end
             end
-            if modalContainer then break end
         end
     end
 
-    if not modalContainer then
-        return nil, nil, nil
+    -- The voting window is genuinely active on screen if header is visible OR any map card is visible
+    local isWindowOpen = hasVotingHeader or (next(mapCards) ~= nil)
+    if not isWindowOpen then
+        return false, {}, {}
     end
 
-    -- Identify map and entity cards inside the modal container
-    for _, desc in ipairs(modalContainer:GetDescendants()) do
-        if desc:IsA("TextLabel") and desc.Visible and desc.Text and desc.Text ~= "" then
-            local t = string.upper(string.gsub(desc.Text, "^%s*(.-)%s*$", "%1"))
-            local card = desc.Parent
-
-            -- Map cards
-            if string.find(t, "OFFICE") then
-                mapCards["office"] = card or desc
-            elseif string.find(t, "SUPERMARKET") or string.find(t, "MARKET") then
-                mapCards["supermarket"] = card or desc
-            elseif string.find(t, "LIMINAL") or string.find(t, "LUCIDITY") then
-                mapCards["liminal lucidity"] = card or desc
-            elseif string.find(t, "FACILITY") then
-                mapCards["facility"] = card or desc
-            elseif string.find(t, "DORM") then
-                mapCards["american dorm"] = card or desc
-            end
-
-            -- Entity cards
-            if string.find(t, "AI") or string.find(t, "CONTROLLED BY THE GAME") then
-                entityCards["ai"] = card or desc
-            elseif string.find(t, "PLAYER") or string.find(t, "BECOMES THE ENTITY") then
-                entityCards["player"] = card or desc
-            end
-        end
-    end
-
-    return modalContainer, mapCards, entityCards
+    return true, mapCards, entityCards
 end
 
-local function ClickCard(card)
-    if not card or not card:IsA("GuiObject") then return false end
-    local absPos = card.AbsolutePosition
-    local absSize = card.AbsoluteSize
-    if absSize.X <= 0 or absSize.Y <= 0 then return false end
+local function ClickTargetCard(entry)
+    if not entry then return false end
+    local label = entry.Label
+    local card = entry.Card or label
 
-    local cx = absPos.X + (absSize.X / 2)
-    local cy = absPos.Y + (absSize.Y / 2)
-
-    pcall(function()
-        VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 0)
-        task.wait(0.04)
-        VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, false, game, 0)
-    end)
-
-    if card:IsA("GuiButton") then
-        pcall(function()
-            if firesignal then
-                firesignal(card.MouseButton1Click)
-                firesignal(card.Activated)
-            end
-        end)
-    else
-        for _, child in ipairs(card:GetDescendants()) do
-            if child:IsA("GuiButton") then
-                pcall(function()
-                    if firesignal then
-                        firesignal(child.MouseButton1Click)
-                        firesignal(child.Activated)
-                    end
-                end)
+    -- Collect all interactive objects in this card
+    local clickables = {}
+    if card and card:IsA("GuiObject") then
+        table.insert(clickables, card)
+        for _, desc in ipairs(card:GetDescendants()) do
+            if desc:IsA("GuiButton") or desc:IsA("ImageLabel") or desc:IsA("TextLabel") or desc:IsA("Frame") then
+                table.insert(clickables, desc)
             end
         end
     end
+    if label and not table.find(clickables, label) then
+        table.insert(clickables, label)
+    end
+
+    -- 1. Hardware mouse clicks via VirtualInputManager & VirtualUser at Card center and Label center
+    local clickPoints = {}
+    if card and card:IsA("GuiObject") and card.AbsoluteSize.X > 0 and card.AbsoluteSize.Y > 0 then
+        table.insert(clickPoints, Vector2.new(
+            card.AbsolutePosition.X + (card.AbsoluteSize.X / 2),
+            card.AbsolutePosition.Y + (card.AbsoluteSize.Y / 2)
+        ))
+    end
+    if label and label:IsA("GuiObject") and label.AbsoluteSize.X > 0 and label.AbsoluteSize.Y > 0 then
+        table.insert(clickPoints, Vector2.new(
+            label.AbsolutePosition.X + (label.AbsoluteSize.X / 2),
+            label.AbsolutePosition.Y + (label.AbsoluteSize.Y / 2)
+        ))
+    end
+
+    for _, pt in ipairs(clickPoints) do
+        pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(pt.X, pt.Y, 0, true, game, 0)
+            task.wait(0.03)
+            VirtualInputManager:SendMouseButtonEvent(pt.X, pt.Y, 0, false, game, 0)
+        end)
+        pcall(function()
+            local vu = game:GetService("VirtualUser")
+            vu:CaptureController()
+            vu:Button1Down(pt)
+            task.wait(0.03)
+            vu:Button1Up(pt)
+        end)
+    end
+
+    -- 2. Fire signals and getconnections on all clickable candidates
+    for _, obj in ipairs(clickables) do
+        if obj:IsA("GuiButton") then
+            pcall(function()
+                if firesignal then
+                    firesignal(obj.MouseButton1Click)
+                    firesignal(obj.Activated)
+                    firesignal(obj.MouseButton1Down)
+                    firesignal(obj.MouseButton1Up)
+                end
+                if getconnections then
+                    for _, c in ipairs(getconnections(obj.MouseButton1Click)) do pcall(function() c:Fire() end) end
+                    for _, c in ipairs(getconnections(obj.Activated)) do pcall(function() c:Fire() end) end
+                    for _, c in ipairs(getconnections(obj.MouseButton1Down)) do pcall(function() c:Fire() end) end
+                end
+            end)
+        elseif obj:IsA("GuiObject") then
+            pcall(function()
+                if getconnections then
+                    for _, c in ipairs(getconnections(obj.InputBegan)) do
+                        pcall(function()
+                            c:Fire({
+                                UserInputType = Enum.UserInputType.MouseButton1,
+                                UserInputState = Enum.UserInputState.Begin,
+                                Position = Vector3.new(clickPoints[1] and clickPoints[1].X or 0, clickPoints[1] and clickPoints[1].Y or 0, 0)
+                            })
+                        end)
+                    end
+                end
+            end)
+        end
+    end
+
     return true
 end
 
 local function ProcessAutoVote()
     if not Settings.SODAutoVote then
         HasVotedThisIntermission = false
+        AutoVoteAttempts = 0
         return
     end
 
-    local modal, mapCards, entityCards = FindVotingCards()
-    if not modal then
+    local isOpen, mapCards, entityCards = FindVotingCards()
+    if not isOpen then
+        -- Voting window is NOT visible on screen: reset state so next intermission triggers cleanly
         HasVotedThisIntermission = false
+        AutoVoteAttempts = 0
         return
     end
 
-    if HasVotedThisIntermission then
+    -- Window IS OPEN! Retry up to 3 times spaced 0.8s apart during the active intermission
+    if AutoVoteAttempts >= 3 then
         return
     end
 
@@ -2684,37 +2778,36 @@ local function ProcessAutoVote()
     local userEntity = string.lower(Settings.SODVoteMonster or "AI")
 
     -- 1. Click Map Card by priority order
-    local chosenCard = nil
+    local chosenEntry = nil
     local chosenMapName = nil
 
     for _, choice in ipairs({ c1, c2, c3 }) do
         if choice == "random" then
-            for mName, card in pairs(mapCards) do
-                chosenCard = card
+            for mName, entry in pairs(mapCards) do
+                chosenEntry = entry
                 chosenMapName = mName
                 break
             end
         elseif mapCards[choice] then
-            chosenCard = mapCards[choice]
+            chosenEntry = mapCards[choice]
             chosenMapName = choice
             break
         end
     end
 
-    if not chosenCard then
-        for mName, card in pairs(mapCards) do
-            chosenCard = card
+    if not chosenEntry then
+        for mName, entry in pairs(mapCards) do
+            chosenEntry = entry
             chosenMapName = mName
             break
         end
     end
 
-    if chosenCard then
-        ClickCard(chosenCard)
-        CustomNotify("Voted Map: " .. string.upper(chosenMapName), Color3.fromRGB(0, 255, 140), 2.5)
+    if chosenEntry then
+        ClickTargetCard(chosenEntry)
     end
 
-    task.wait(0.08)
+    task.wait(0.1)
 
     -- 2. Click Entity Card (AI or PLAYER)
     local targetEntity = "ai"
@@ -2726,27 +2819,47 @@ local function ProcessAutoVote()
         targetEntity = "ai"
     end
 
-    local entityCard = entityCards[targetEntity] or entityCards["ai"] or entityCards["player"]
-    if entityCard then
-        ClickCard(entityCard)
-        CustomNotify("Voted Entity: " .. (targetEntity == "ai" and "AI" or "PLAYER"), Color3.fromRGB(255, 180, 50), 2.5)
+    local entityEntry = entityCards[targetEntity] or entityCards["ai"] or entityCards["player"]
+    if entityEntry then
+        ClickTargetCard(entityEntry)
     end
 
-    HasVotedThisIntermission = true
+    -- 3. Also invoke voting RemoteEvents in ReplicatedStorage with exact Map & Entity strings
+    pcall(function()
+        for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
+            if rem:IsA("RemoteEvent") then
+                local rLower = string.lower(rem.Name)
+                if string.find(rLower, "vote") or string.find(rLower, "map") or string.find(rLower, "entity") then
+                    if chosenMapName then rem:FireServer(chosenMapName) end
+                    rem:FireServer(targetEntity == "ai" and "AI" or "Player")
+                end
+            end
+        end
+    end)
+
+    AutoVoteAttempts = AutoVoteAttempts + 1
+
+    -- Notify only once on the first successful vote of the active intermission
+    if not HasVotedThisIntermission then
+        HasVotedThisIntermission = true
+        local mapLabel = chosenMapName and string.upper(chosenMapName) or "MAP"
+        local entLabel = targetEntity == "ai" and "AI" or "PLAYER"
+        CustomNotify("Auto Voted: " .. mapLabel .. " | " .. entLabel, Color3.fromRGB(0, 255, 140), 3)
+    end
 end
 
 local AutoVoteThread = nil
 local function StartAutoVoteLoop()
     if AutoVoteThread then return end
     AutoVoteThread = task.spawn(function()
-        local myGen = getgenv().ToxSODGeneration
-        while getgenv().ToxSODGeneration == myGen do
-            task.wait(0.7)
-            if Settings.SODAutoVote then
-                pcall(ProcessAutoVote)
-            else
+        while true do
+            task.wait(0.5)
+            if not Settings.SODAutoVote then
                 HasVotedThisIntermission = false
+                AutoVoteAttempts = 0
+                break
             end
+            pcall(ProcessAutoVote)
         end
         AutoVoteThread = nil
     end)
@@ -3358,6 +3471,12 @@ SODCreateToggle(
     Settings.SODAutoVote,
     function(v)
         Settings.SODAutoVote = v == true
+        if v then
+            StartAutoVoteLoop()
+        else
+            HasVotedThisIntermission = false
+            AutoVoteAttempts = 0
+        end
         AutoSaveConfiguration()
     end,
     "SODAutoVote"
