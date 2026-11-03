@@ -148,6 +148,7 @@ local AutoFarmRunning = false
 local EntityKillRunning = false
 local AntiAFKConnection = nil
 local LastVoteCheck = 0
+getgenv().ToxSODFarmGen = tonumber(getgenv().ToxSODFarmGen) or 0
 
 local OrigHoldDurations = setmetatable({}, { __mode = "k" })
 local OrigLightingProps = {
@@ -2028,7 +2029,7 @@ local function GetBestExit()
     return best
 end
 
-local function CancelFarmTween()
+local function StopAutoFarm()
     if CurrentFarmTween then
         pcall(function()
             CurrentFarmTween:Cancel()
@@ -2038,17 +2039,38 @@ local function CancelFarmTween()
 end
 
 local SODPath = PathfindingService:CreatePath({
-    AgentRadius = 2.0,
-    AgentHeight = 5.0,
+    AgentRadius = 1.0, -- Narrow radius to fit easily through all doors, vents and corridors
+    AgentHeight = 4.5,
     AgentCanJump = true,
     AgentCanClimb = false,
-    WaypointSpacing = 3.5,
+    WaypointSpacing = 3.0,
     Costs = {
         Door = 1.0
     }
 })
 
-local function GetWalkableFloorTarget(itemPart, rootPos)
+local function MoveCharacterTowards(targetPos, speed)
+    local char, hum, root = GetCharacterState()
+    if not char or not hum or hum.Health <= 0 or not root then return false end
+
+    local dir = (targetPos - root.Position)
+    local flatDir = Vector3.new(dir.X, 0, dir.Z)
+    local dist = flatDir.Magnitude
+
+    if dist > 0.4 then
+        local unit = flatDir.Unit
+        -- Face forward towards the corridor direction
+        root.CFrame = CFrame.new(root.Position, root.Position + unit)
+        -- Send walking signal to Humanoid
+        hum:Move(unit, false)
+        -- Apply physics velocity along corridor direction (prevents ControlModule input-zeroing)
+        local moveSpeed = speed or math.clamp(tonumber(Settings.SODSpeedValue) or 22, 16, 35)
+        root.AssemblyLinearVelocity = Vector3.new(unit.X * moveSpeed, root.AssemblyLinearVelocity.Y, unit.Z * moveSpeed)
+    end
+    return dist <= 2.0
+end
+
+local function GetItemStandPosition(itemPart)
     if not itemPart or not itemPart.Parent then return nil end
     local itemPos = itemPart.Position
     local params = RaycastParams.new()
@@ -2058,146 +2080,88 @@ local function GetWalkableFloorTarget(itemPart, rootPos)
     if SafePlatformModel then table.insert(exclude, SafePlatformModel) end
     params.FilterDescendantsInstances = exclude
 
-    -- Raycast down to find floor level beneath table/counter
-    local rayDown = Workspace:Raycast(itemPos + Vector3.new(0, 2, 0), Vector3.new(0, -35, 0), params)
-    local floorY = rayDown and rayDown.Position.Y or (itemPos.Y - 2.5)
+    local ray = Workspace:Raycast(itemPos + Vector3.new(0, 1, 0), Vector3.new(0, -30, 0), params)
+    local floorY = ray and ray.Position.Y or (itemPos.Y - 2.5)
 
-    -- Stand position: 2.5 studs back from the item on the floor
-    local dir = rootPos and (rootPos - itemPos) or Vector3.new(0, 0, 1)
-    local flatDir = Vector3.new(dir.X, 0, dir.Z)
-    if flatDir.Magnitude > 0.1 then
-        flatDir = flatDir.Unit
-    else
-        flatDir = Vector3.new(0, 0, 1)
-    end
-
-    local standPos = Vector3.new(itemPos.X, floorY + 0.5, itemPos.Z) + (flatDir * 2.5)
-
-    local floorCheck = Workspace:Raycast(standPos + Vector3.new(0, 3, 0), Vector3.new(0, -10, 0), params)
-    if floorCheck and floorCheck.Position then
-        return floorCheck.Position + Vector3.new(0, 0.5, 0)
-    end
-
-    return standPos
+    return Vector3.new(itemPos.X, floorY + 1.0, itemPos.Z)
 end
 
-local function NavigatePathTo(targetFloorPos, prompt, myGen)
-    local char, hum, root = GetCharacterState()
-    if not char or not hum or hum.Health <= 0 or not root then return false end
+local function GetPathWaypoints(targetPos)
+    local _, _, root = GetCharacterState()
+    if not root then return nil end
 
-    -- Check if already close enough to target prompt
-    if prompt and prompt.Parent then
-        local pPart = ResolveBasePart(prompt) or ResolveBasePart(prompt.Parent)
-        if pPart and (pPart.Position - root.Position).Magnitude <= (prompt.MaxActivationDistance or 8) - 1.5 then
-            return true
-        end
-    end
-
-    -- Compute path to the floor target in front of the item
     local success, _ = pcall(function()
-        SODPath:ComputeAsync(root.Position, targetFloorPos)
+        SODPath:ComputeAsync(root.Position, targetPos)
     end)
 
-    local waypoints = (success and SODPath.Status == Enum.PathStatus.Success) and SODPath:GetWaypoints() or nil
-
-    -- If PathfindingService fails to find a path, fallback to direct walk
-    if not waypoints or #waypoints == 0 then
-        hum:MoveTo(targetFloorPos)
-        local t0 = os.clock()
-        while (targetFloorPos - root.Position).Magnitude > 4.0 and (os.clock() - t0) < 3.0 do
-            task.wait(0.05)
-            if not Settings.SODAutoFarm or getgenv().ToxSODGeneration ~= myGen then return false end
-            if prompt and prompt.Parent then
-                local pPart = ResolveBasePart(prompt) or ResolveBasePart(prompt.Parent)
-                if pPart and (pPart.Position - root.Position).Magnitude <= (prompt.MaxActivationDistance or 8) - 1.5 then
-                    return true
-                end
-            end
+    if success and SODPath.Status == Enum.PathStatus.Success then
+        local wps = SODPath:GetWaypoints()
+        if #wps > 0 then
+            return wps
         end
-        return (targetFloorPos - root.Position).Magnitude <= 5.0
     end
 
-    local isTween = Settings.SODFarmMethod == "Tween"
+    -- Fallback: generate smooth intermediate 3.5-stud waypoints along the route
+    local startPos = root.Position
+    local dist = (targetPos - startPos).Magnitude
+    local steps = math.max(1, math.ceil(dist / 3.5))
+    local wps = {}
+    for i = 1, steps do
+        local alpha = i / steps
+        local p = startPos:Lerp(targetPos, alpha)
+        table.insert(wps, { Position = p, Action = Enum.PathWaypointAction.Walk })
+    end
+    return wps
+end
+
+local function FollowPathWaypoints(waypoints, prompt, myGen)
+    local char, hum, root = GetCharacterState()
+    if not char or not hum or not root then return false end
 
     for i = 1, #waypoints do
-        if not Settings.SODAutoFarm or getgenv().ToxSODGeneration ~= myGen then
-            CancelFarmTween()
-            return false
-        end
+        if not Settings.SODAutoFarm or getgenv().ToxSODFarmGen ~= myGen then return false end
 
         local wp = waypoints[i]
         local wpPos = wp.Position
 
         -- Danger check
         if Settings.SODFarmPauseDanger then
-            local dangerDist = tonumber(Settings.SODFarmDangerDist) or 55
-            local isDanger = false
+            local dangerDist = tonumber(Settings.SODFarmDangerDist) or 50
             for _, mData in pairs(ActiveMonsters) do
                 if mData.Root and (mData.Root.Position - root.Position).Magnitude <= dangerDist then
-                    isDanger = true
-                    break
+                    root.AssemblyLinearVelocity = Vector3.zero
+                    hum:Move(Vector3.zero, false)
+                    task.wait(0.5)
+                    return false
                 end
-            end
-            if isDanger then
-                CancelFarmTween()
-                hum:MoveTo(root.Position)
-                return false
             end
         end
 
-        -- Check if close enough to prompt already
+        -- Check if close enough to prompt to interact
         if prompt and prompt.Parent then
             local pPart = ResolveBasePart(prompt) or ResolveBasePart(prompt.Parent)
-            if pPart and (pPart.Position - root.Position).Magnitude <= (prompt.MaxActivationDistance or 8) - 1.5 then
-                CancelFarmTween()
+            if pPart and (pPart.Position - root.Position).Magnitude <= (prompt.MaxActivationDistance or 8) - 1.0 then
                 return true
             end
         end
 
-        if isTween then
-            -- Corridor Waypoint Tween (follows the hallways without clipping through walls)
-            local dist = (wpPos - root.Position).Magnitude
-            if dist > 1.5 then
-                local speed = math.clamp(tonumber(Settings.SODFarmSpeed) or 40, 15, 80)
-                local dur = math.max(0.05, dist / speed)
-                CancelFarmTween()
-                CurrentFarmTween = TweenService:Create(root, TweenInfo.new(dur, Enum.EasingStyle.Linear), {
-                    CFrame = CFrame.new(wpPos + Vector3.new(0, 1.0, 0))
-                })
-                CurrentFarmTween:Play()
-                local reached = false
-                local conn = CurrentFarmTween.Completed:Connect(function() reached = true end)
-                local t0 = os.clock()
-                while not reached and os.clock() - t0 < dur + 0.3 do
-                    task.wait(0.03)
-                    if not Settings.SODAutoFarm or getgenv().ToxSODGeneration ~= myGen then
-                        CancelFarmTween()
-                        pcall(function() conn:Disconnect() end)
-                        return false
-                    end
-                end
-                pcall(function() conn:Disconnect() end)
-            end
-        else
-            -- Walk the waypoints along the normal map path
-            if wp.Action == Enum.PathWaypointAction.Jump then
-                hum.Jump = true
-            end
+        if wp.Action == Enum.PathWaypointAction.Jump then
+            hum.Jump = true
+        end
 
-            hum:MoveTo(wpPos)
+        local t0 = os.clock()
+        local distToWp = (Vector3.new(wpPos.X, root.Position.Y, wpPos.Z) - root.Position).Magnitude
+        local maxWait = math.clamp(distToWp / 16, 0.2, 1.5)
 
-            local dist = (wpPos - root.Position).Magnitude
-            local maxWait = math.clamp(dist / math.max(14, hum.WalkSpeed), 0.25, 2.0)
-            local t0 = os.clock()
+        while (Vector3.new(wpPos.X, root.Position.Y, wpPos.Z) - root.Position).Magnitude > 2.2 and (os.clock() - t0) < maxWait do
+            RunService.Heartbeat:Wait()
+            if not Settings.SODAutoFarm or getgenv().ToxSODFarmGen ~= myGen then return false end
+            MoveCharacterTowards(wpPos)
 
-            while (wpPos - root.Position).Magnitude > 3.0 and os.clock() - t0 < maxWait do
-                task.wait(0.03)
-                if not Settings.SODAutoFarm or getgenv().ToxSODGeneration ~= myGen then return false end
-                if prompt and prompt.Parent then
-                    local pPart = ResolveBasePart(prompt) or ResolveBasePart(prompt.Parent)
-                    if pPart and (pPart.Position - root.Position).Magnitude <= (prompt.MaxActivationDistance or 8) - 1.5 then
-                        return true
-                    end
+            if prompt and prompt.Parent then
+                local pPart = ResolveBasePart(prompt) or ResolveBasePart(prompt.Parent)
+                if pPart and (pPart.Position - root.Position).Magnitude <= (prompt.MaxActivationDistance or 8) - 1.0 then
+                    return true
                 end
             end
         end
@@ -2206,14 +2170,27 @@ local function NavigatePathTo(targetFloorPos, prompt, myGen)
     return true
 end
 
+local function StopAutoFarm()
+    Settings.SODAutoFarm = false
+    CancelFarmTween()
+    local _, hum, root = GetCharacterState()
+    if root then
+        root.AssemblyLinearVelocity = Vector3.zero
+    end
+    if hum then
+        hum:Move(Vector3.zero, false)
+    end
+    AutoFarmRunning = false
+end
+
 local function StartAutoFarmLoop()
-    if AutoFarmRunning then return end
     AutoFarmRunning = true
+    getgenv().ToxSODFarmGen = (tonumber(getgenv().ToxSODFarmGen) or 0) + 1
+    local myGen = getgenv().ToxSODFarmGen
 
     task.spawn(function()
-        local myGen = getgenv().ToxSODGeneration
-        while Settings.SODAutoFarm and getgenv().ToxSODGeneration == myGen do
-            task.wait(0.1)
+        while Settings.SODAutoFarm and getgenv().ToxSODFarmGen == myGen do
+            task.wait(0.08)
             if not Settings.SODAutoFarm then break end
 
             local char, hum, root = GetCharacterState()
@@ -2225,7 +2202,7 @@ local function StartAutoFarmLoop()
 
             -- 1. Pause on Danger
             if Settings.SODFarmPauseDanger then
-                local dangerDist = tonumber(Settings.SODFarmDangerDist) or 55
+                local dangerDist = tonumber(Settings.SODFarmDangerDist) or 50
                 local isDanger = false
                 for _, mData in pairs(ActiveMonsters) do
                     if mData.Root and mData.Root.Parent then
@@ -2238,7 +2215,8 @@ local function StartAutoFarmLoop()
                 end
                 if isDanger then
                     CancelFarmTween()
-                    hum:MoveTo(root.Position)
+                    root.AssemblyLinearVelocity = Vector3.zero
+                    hum:Move(Vector3.zero, false)
                     task.wait(0.5)
                     continue
                 end
@@ -2248,13 +2226,12 @@ local function StartAutoFarmLoop()
             if Settings.SODAutoEscape and IsPlayerBagFull() then
                 local exit = GetBestExit()
                 if exit and exit.Part and exit.Part.Parent then
-                    local exitFloor = GetWalkableFloorTarget(exit.Part, root.Position) or (exit.Part.Position + Vector3.new(0, 1, 0))
-                    local distToExit = (exitFloor - root.Position).Magnitude
-                    if distToExit > 6 then
-                        NavigatePathTo(exitFloor, nil, myGen)
-                    else
-                        task.wait(0.5)
+                    local exitPos = exit.Part.Position
+                    local waypoints = GetPathWaypoints(exitPos)
+                    if waypoints and #waypoints > 0 then
+                        FollowPathWaypoints(waypoints, nil, myGen)
                     end
+                    task.wait(0.4)
                     continue
                 end
             end
@@ -2277,28 +2254,30 @@ local function StartAutoFarmLoop()
             end
 
             if not bestData or not bestPrompt or not bestPrompt.Parent then
-                task.wait(0.5)
+                task.wait(0.4)
                 continue
             end
 
             -- 4. Navigate normal path to item
-            local floorTarget = GetWalkableFloorTarget(bestData.Part, root.Position)
-            if floorTarget then
-                NavigatePathTo(floorTarget, bestPrompt, myGen)
+            local targetPos = GetItemStandPosition(bestData.Part) or bestData.Part.Position
+            local waypoints = GetPathWaypoints(targetPos)
+            if waypoints and #waypoints > 0 then
+                FollowPathWaypoints(waypoints, bestPrompt, myGen)
             end
 
             -- 5. Trigger prompt if in range
             if bestPrompt and bestPrompt.Parent and bestData.Part and bestData.Part.Parent then
                 local pDist = (bestData.Part.Position - root.Position).Magnitude
-                if pDist <= (bestPrompt.MaxActivationDistance or 8) + 1.5 then
+                if pDist <= (bestPrompt.MaxActivationDistance or 8) + 2.0 then
+                    root.AssemblyLinearVelocity = Vector3.zero
+                    hum:Move(Vector3.zero, false)
                     TriggerPrompt(bestPrompt)
                     task.wait(0.2)
                 end
             end
         end
 
-        CancelFarmTween()
-        AutoFarmRunning = false
+        StopAutoFarm()
     end)
 end
 
@@ -2395,48 +2374,110 @@ local function StartEntityKillLoop()
     end)
 end
 
+local function ClickGuiElement(btn)
+    if not btn then return end
+    pcall(function()
+        if firesignal then
+            firesignal(btn.MouseButton1Click)
+            firesignal(btn.Activated)
+        end
+        if getconnections then
+            for _, c in ipairs(getconnections(btn.MouseButton1Click)) do
+                pcall(function() c:Fire() end)
+            end
+            for _, c in ipairs(getconnections(btn.Activated)) do
+                pcall(function() c:Fire() end)
+            end
+        end
+    end)
+end
+
 local function ProcessAutoVote()
     if not Settings.SODAutoVote then return end
     local now = os.clock()
-    if now - LastVoteCheck < 2.0 then return end
+    if now - LastVoteCheck < 1.2 then return end
     LastVoteCheck = now
 
-    local monsterPref = Settings.SODVoteMonster or "Player"
+    local monsterPref = string.lower(Settings.SODVoteMonster or "Player")
     local mapPref = Settings.SODVoteMap or "Map 1"
 
-    local mapPriorities = { 1, 2, 3 }
+    local mapPriority = { 1, 2, 3 }
     if mapPref == "Map 2" then
-        mapPriorities = { 2, 1, 3 }
+        mapPriority = { 2, 1, 3 }
     elseif mapPref == "Map 3" then
-        mapPriorities = { 3, 2, 1 }
+        mapPriority = { 3, 2, 1 }
     elseif mapPref == "Random" then
-        mapPriorities = { math.random(1, 3), 1, 2, 3 }
+        mapPriority = { math.random(1, 3), 1, 2, 3 }
     end
 
+    -- 1. Click PlayerGui voting buttons
     pcall(function()
-        for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
-            if rem:IsA("RemoteEvent") then
-                local rLower = string.lower(rem.Name)
-                if string.find(rLower, "votemonster") or string.find(rLower, "monster") then
-                    if monsterPref == "Player" then
-                        rem:FireServer("Player")
-                        rem:FireServer(1)
-                    elseif monsterPref == "Bot" then
-                        rem:FireServer("Bot")
-                        rem:FireServer(2)
-                    else
-                        rem:FireServer(math.random(1, 2))
-                    end
-                elseif string.find(rLower, "votemap") or string.find(rLower, "map") or string.find(rLower, "vote") then
-                    for _, p in ipairs(mapPriorities) do
-                        rem:FireServer(p)
-                        rem:FireServer(tostring(p))
+        local pGui = Player:FindFirstChild("PlayerGui")
+        if not pGui then return end
+        for _, gui in ipairs(pGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Enabled then
+                for _, desc in ipairs(gui:GetDescendants()) do
+                    if (desc:IsA("TextButton") or desc:IsA("ImageButton")) and desc.Visible then
+                        local bName = string.lower(desc.Name)
+                        local bText = desc:IsA("TextButton") and string.lower(desc.Text) or ""
+
+                        -- Monster vote
+                        if monsterPref == "player" and (string.find(bName, "player") or string.find(bText, "player") or string.find(bName, "survivor")) then
+                            ClickGuiElement(desc)
+                        elseif monsterPref == "bot" and (string.find(bName, "bot") or string.find(bText, "bot") or string.find(bName, "ai")) then
+                            ClickGuiElement(desc)
+                        end
+
+                        -- Map vote
+                        for _, p in ipairs(mapPriority) do
+                            if string.find(bName, "map" .. p) or string.find(bText, "map " .. p) or string.find(bName, "map_" .. p) or string.find(bText, "map" .. p) or string.find(bText, tostring(p)) then
+                                ClickGuiElement(desc)
+                                break
+                            end
+                        end
                     end
                 end
             end
         end
     end)
 
+    -- 2. ReplicatedStorage voting remotes
+    pcall(function()
+        for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
+            if rem:IsA("RemoteEvent") or rem:IsA("RemoteFunction") then
+                local rLower = string.lower(rem.Name)
+                if string.find(rLower, "vote") or string.find(rLower, "intermission") then
+                    pcall(function()
+                        if string.find(rLower, "monster") or string.find(rLower, "gamemode") or string.find(rLower, "mode") then
+                            if monsterPref == "player" then
+                                rem:FireServer("Player")
+                                rem:FireServer("PlayerMonster")
+                                rem:FireServer(1)
+                            else
+                                rem:FireServer("Bot")
+                                rem:FireServer("BotMonster")
+                                rem:FireServer(2)
+                            end
+                        else
+                            for _, p in ipairs(mapPriority) do
+                                rem:FireServer(p)
+                                rem:FireServer(tostring(p))
+                                rem:FireServer("Map", p)
+                                rem:FireServer("Map" .. p)
+                            end
+                            if monsterPref == "player" then
+                                rem:FireServer("Player")
+                            else
+                                rem:FireServer("Bot")
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+    end)
+
+    -- 3. Workspace vote pads
     pcall(function()
         local _, _, root = GetCharacterState()
         if not root then return end
@@ -2444,10 +2485,14 @@ local function ProcessAutoVote()
             if pad:IsA("BasePart") then
                 local pLower = string.lower(pad.Name)
                 local pParent = pad.Parent and string.lower(pad.Parent.Name) or ""
-                if string.find(pLower, "votepad") or string.find(pLower, "mapvote") or string.find(pParent, "vote") then
+                if string.find(pLower, "vote") or string.find(pParent, "vote") or string.find(pLower, "map") or string.find(pLower, "pad") then
+                    local prompt = pad:FindFirstChildOfClass("ProximityPrompt")
+                    if prompt then
+                        TriggerPrompt(prompt)
+                    end
                     if firetouchinterest then
                         firetouchinterest(root, pad, 0)
-                        task.wait(0.05)
+                        task.wait(0.02)
                         firetouchinterest(root, pad, 1)
                     end
                 end
@@ -2837,7 +2882,7 @@ SODCreateToggle(
         if v then
             StartAutoFarmLoop()
         else
-            CancelFarmTween()
+            StopAutoFarm()
         end
         AutoSaveConfiguration()
     end,
