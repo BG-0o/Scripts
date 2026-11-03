@@ -104,8 +104,6 @@ Settings.SODInstantVent = Settings.SODInstantVent == true
 -- Survival & Combat (All disabled by default)
 Settings.SODEntityKill = Settings.SODEntityKill == true
 Settings.SODInfiniteStamina = Settings.SODInfiniteStamina == true
-Settings.SODAutoEvacuate = Settings.SODAutoEvacuate == true
-Settings.SODAutoEvacuateDistance = tonumber(Settings.SODAutoEvacuateDistance) or 28
 
 -- Teleports & Utilities (All disabled by default)
 Settings.SODClickTP = Settings.SODClickTP == true
@@ -847,49 +845,37 @@ local function AllowToxTeleport(seconds, reason)
     end
 end
 
-local function TeleportTo(cframe, label)
+local function TeleportTo(targetCF, label)
     local character, humanoid, root = GetCharacterState()
     if not humanoid or humanoid.Health <= 0 or not root then
         CustomNotify("Character unavailable", Color3.fromRGB(255, 100, 100), 2)
         return false
     end
 
+    if typeof(targetCF) == "Vector3" then
+        targetCF = CFrame.new(targetCF)
+    end
+    if typeof(targetCF) ~= "CFrame" then return false end
+
     AllowToxTeleport(2.5, "SOD " .. tostring(label or "Teleport"))
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
-    local targetPos = cframe.Position
-    local startPos = root.Position
-    local dist = (targetPos - startPos).Magnitude
-
-    if dist <= 12 then
-        if character then
-            character:PivotTo(cframe)
-        else
-            root.CFrame = cframe
-        end
+    local destCF = targetCF + Vector3.new(0, 2.5, 0)
+    if character then
+        character:PivotTo(destCF)
     else
-        -- Anti-kick segmented travel: steps of <= 10 studs per tick
-        -- Bypasses server displacement delta checks without getting kicked
-        local stepDist = 10
-        local steps = math.ceil(dist / stepDist)
-        for i = 1, steps do
-            if not character or not character.Parent or not root or not root.Parent or humanoid.Health <= 0 then
-                break
-            end
-            local alpha = i / steps
-            local currentPos = startPos:Lerp(targetPos, alpha)
-            root.AssemblyLinearVelocity = Vector3.zero
-            character:PivotTo(CFrame.new(currentPos, targetPos))
-            task.wait(0.015)
-        end
-        if character and character.Parent and root and root.Parent then
-            root.AssemblyLinearVelocity = Vector3.zero
-            character:PivotTo(cframe)
-        end
+        root.CFrame = destCF
     end
 
-    CustomNotify("Arrived at " .. tostring(label or "Target"), Color3.fromRGB(100, 255, 100), 2)
+    task.defer(function()
+        if root and root.Parent then
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+        end
+    end)
+
+    CustomNotify("Teleported to " .. tostring(label or "Target"), Color3.fromRGB(100, 255, 100), 2)
     return true
 end
 
@@ -1766,8 +1752,21 @@ local function MatchesRarityFilter(rarity, value)
     return true
 end
 
+local function IsPartOfLocalPlayer(inst)
+    if not inst then return false end
+    local char = Player.Character
+    if not char then return false end
+    if inst == char or inst:IsDescendantOf(char) then return true end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if inst:IsA("BasePart") and root and inst.AssemblyRootPart == root.AssemblyRootPart then
+        return true
+    end
+    return false
+end
+
 local function CreateOrUpdateHighlight(instance, color, name)
     if not instance or not instance.Parent then return nil end
+    if IsPartOfLocalPlayer(instance) then return nil end
     local hlName = name or "ToxSOD_HL"
     local hl = instance:FindFirstChild(hlName)
     if not hl or not hl:IsA("Highlight") then
@@ -1794,7 +1793,7 @@ local function CreateOrUpdateHighlight(instance, color, name)
 end
 
 local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
-    if not adornee or not adornee.Parent then return nil end
+    if not adornee or not adornee.Parent or IsPartOfLocalPlayer(adornee) then return nil end
     local bb = adornee:FindFirstChild(name)
     local label = nil
     local textSize = tonumber(Settings.SODESPTextSize) or 10
@@ -2185,33 +2184,7 @@ local function AutoStealAura(charRoot)
     end
 end
 
-local function CheckAutoEvacuate(closestDist)
-    if not Settings.SODAutoEvacuate or not closestDist then return end
-    if closestDist <= Settings.SODAutoEvacuateDistance then
-        local _, _, root = GetCharacterState()
-        if not root then return end
 
-        local nearestCloset = nil
-        local nearestClosetDist = 9999
-
-        for _, cData in pairs(ClosetObjects) do
-            if cData.Part and cData.Part.Parent then
-                local cDist = (cData.Part.Position - root.Position).Magnitude
-                if cDist < nearestClosetDist then
-                    nearestClosetDist = cDist
-                    nearestCloset = cData
-                end
-            end
-        end
-
-        if nearestCloset and nearestClosetDist <= 75 then
-            TeleportTo(nearestCloset.Part.CFrame + Vector3.new(0, 3, 0), "Emergency Closet")
-        else
-            TeleportTo(root.CFrame + Vector3.new(0, 45, 0), "Emergency Evacuation")
-        end
-        CustomNotify("Auto Evacuated from Monster (" .. math.floor(closestDist) .. "m)", Color3.fromRGB(255, 75, 75), 2)
-    end
-end
 
 local function IsPlayerBagFull()
     local char = Player.Character
@@ -2569,6 +2542,25 @@ local function IsLocalPlayerMonster()
     return false
 end
 
+local AttackRemotesCache = nil
+local function GetAttackRemotes()
+    if AttackRemotesCache then return AttackRemotesCache end
+    AttackRemotesCache = {}
+    pcall(function()
+        for _, inst in ipairs(ReplicatedStorage:GetDescendants()) do
+            if inst:IsA("RemoteEvent") then
+                local rLower = string.lower(inst.Name)
+                if string.find(rLower, "attack") or string.find(rLower, "hit") or string.find(rLower, "damage") 
+                   or string.find(rLower, "slash") or string.find(rLower, "kill") or string.find(rLower, "swing")
+                   or string.find(rLower, "weapon") or string.find(rLower, "claw") then
+                    table.insert(AttackRemotesCache, inst)
+                end
+            end
+        end
+    end)
+    return AttackRemotesCache
+end
+
 local function StartEntityKillLoop()
     if EntityKillRunning then return end
     EntityKillRunning = true
@@ -2576,12 +2568,12 @@ local function StartEntityKillLoop()
     task.spawn(function()
         local myGen = getgenv().ToxSODGeneration
         while Settings.SODEntityKill and getgenv().ToxSODGeneration == myGen do
-            task.wait(0.15)
+            task.wait(0.1)
             if not Settings.SODEntityKill then break end
 
             local char, hum, root = GetCharacterState()
             if not char or not hum or hum.Health <= 0 or not root then
-                task.wait(1)
+                task.wait(0.5)
                 continue
             end
 
@@ -2590,7 +2582,7 @@ local function StartEntityKillLoop()
             local bestDist = 99999
 
             if isMon then
-                -- Player is monster: target survivors
+                -- Player is monster: target nearest survivor player
                 for _, plr in ipairs(Players:GetPlayers()) do
                     if plr ~= Player then
                         local pChar = plr.Character
@@ -2606,7 +2598,7 @@ local function StartEntityKillLoop()
                     end
                 end
             else
-                -- Player is survivor: target monsters/entities
+                -- Player is survivor: target monster/entity
                 for model, mData in pairs(ActiveMonsters) do
                     if model.Parent and mData.Root and mData.Root.Parent then
                         local mHum = model:FindFirstChildOfClass("Humanoid")
@@ -2619,10 +2611,29 @@ local function StartEntityKillLoop()
                         end
                     end
                 end
+                -- Fallback: scan workspace for entity/monster models if not in ActiveMonsters
+                if not bestTarget then
+                    for _, m in ipairs(Workspace:GetChildren()) do
+                        if m:IsA("Model") and m ~= char and not Players:GetPlayerFromCharacter(m) then
+                            local mName = string.lower(m.Name)
+                            if string.find(mName, "monster") or string.find(mName, "entity") or string.find(mName, "wendell") then
+                                local mRoot = m:FindFirstChild("HumanoidRootPart") or m.PrimaryPart or m:FindFirstChildWhichIsA("BasePart")
+                                local mHum = m:FindFirstChildOfClass("Humanoid")
+                                if mRoot and (not mHum or mHum.Health > 0) then
+                                    local d = (mRoot.Position - root.Position).Magnitude
+                                    if d < bestDist then
+                                        bestDist = d
+                                        bestTarget = { Character = m, Humanoid = mHum, Root = mRoot, Name = m.Name }
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
             end
 
             if not bestTarget then
-                task.wait(0.5)
+                task.wait(0.4)
                 continue
             end
 
@@ -2632,53 +2643,71 @@ local function StartEntityKillLoop()
             if tRoot and tRoot.Parent then
                 local dist = (tRoot.Position - root.Position).Magnitude
 
-                -- Move towards target along corridors
-                if dist > 7 then
-                    local dir = (tRoot.Position - root.Position)
-                    local flat = Vector3.new(dir.X, 0, dir.Z)
-                    if flat.Magnitude > 0.4 then
-                        hum:Move(flat.Unit, false)
-                        hum:MoveTo(tRoot.Position)
-                    end
+                -- Position smoothly behind/at target to guarantee hit
+                if dist > 4 then
+                    local lookDir = tRoot.CFrame.LookVector
+                    local attackPos = tRoot.Position - (lookDir * 3.2) + Vector3.new(0, 0.5, 0)
+                    root.CFrame = CFrame.new(attackPos, tRoot.Position)
+                    root.AssemblyLinearVelocity = Vector3.zero
+                    root.AssemblyAngularVelocity = Vector3.zero
+                else
+                    root.CFrame = CFrame.new(root.Position, Vector3.new(tRoot.Position.X, root.Position.Y, tRoot.Position.Z))
                 end
 
-                -- Attack when in range (<= 14 studs)
-                if dist <= 14 then
-                    root.CFrame = CFrame.new(root.Position, Vector3.new(tRoot.Position.X, root.Position.Y, tRoot.Position.Z))
-
-                    pcall(function()
-                        local backpack = Player:FindFirstChild("Backpack")
-                        if backpack then
-                            for _, tool in ipairs(backpack:GetChildren()) do
-                                if tool:IsA("Tool") then
-                                    tool.Parent = char
-                                end
+                -- Equip tools from backpack
+                pcall(function()
+                    local backpack = Player:FindFirstChild("Backpack")
+                    if backpack then
+                        for _, tool in ipairs(backpack:GetChildren()) do
+                            if tool:IsA("Tool") then
+                                tool.Parent = char
                             end
                         end
-                        local tool = char:FindFirstChildOfClass("Tool")
-                        if tool then
+                    end
+                end)
+
+                -- Activate weapon/tool
+                pcall(function()
+                    for _, tool in ipairs(char:GetChildren()) do
+                        if tool:IsA("Tool") then
                             tool:Activate()
                         end
-                        if mouse1click then
-                            mouse1click()
+                    end
+                end)
+
+                -- Simulate physical mouse clicks via VirtualInputManager and VirtualUser
+                pcall(function()
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                    task.wait(0.02)
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                end)
+                pcall(function()
+                    local vu = game:GetService("VirtualUser")
+                    vu:CaptureController()
+                    vu:Button1Down(Vector2.zero)
+                    task.wait(0.02)
+                    vu:Button1Up(Vector2.zero)
+                end)
+
+                -- Fire attack remotes
+                pcall(function()
+                    for _, rem in ipairs(GetAttackRemotes()) do
+                        pcall(function()
+                            rem:FireServer(bestTarget.Character)
+                            if tHum then rem:FireServer(tHum) end
+                            rem:FireServer(tRoot)
+                        end)
+                    end
+                end)
+
+                -- Trigger any attack/damage prompts
+                pcall(function()
+                    for _, prompt in ipairs(bestTarget.Character:GetDescendants()) do
+                        if prompt:IsA("ProximityPrompt") then
+                            TriggerPrompt(prompt)
                         end
-                        for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
-                            if rem:IsA("RemoteEvent") then
-                                local rLower = string.lower(rem.Name)
-                                if string.find(rLower, "attack") or string.find(rLower, "hit") or string.find(rLower, "damage") or string.find(rLower, "slash") or string.find(rLower, "kill") or string.find(rLower, "swing") then
-                                    rem:FireServer(bestTarget.Character)
-                                    rem:FireServer(tHum)
-                                    rem:FireServer(tRoot)
-                                end
-                            end
-                        end
-                        for _, prompt in ipairs(bestTarget.Character:GetDescendants()) do
-                            if prompt:IsA("ProximityPrompt") then
-                                TriggerPrompt(prompt)
-                            end
-                        end
-                    end)
-                end
+                    end
+                end)
             end
         end
         EntityKillRunning = false
@@ -2709,9 +2738,10 @@ local function IsGuiTrulyVisible(obj)
         if curr:IsA("ScreenGui") then
             if not curr.Enabled then return false end
             break
+        elseif curr:IsA("CanvasGroup") then
+            if not curr.Visible or curr.GroupTransparency > 0.95 then return false end
         elseif curr:IsA("GuiObject") then
             if not curr.Visible then return false end
-            if curr.GroupTransparency and curr.GroupTransparency > 0.95 then return false end
         end
         curr = curr.Parent
     end
@@ -3182,9 +3212,7 @@ TrackConnection(RunService.Heartbeat:Connect(function(dt)
 
 -- AutoVote handled in dedicated background loop (0 lag)
 
-        if root and closestDist then
-            CheckAutoEvacuate(closestDist)
-        end
+
     end
 end))
 
@@ -3527,21 +3555,7 @@ SODCreateToggle(
     "SODInfiniteStamina"
 )
 
-SODCreateToggleWithValue(
-    "Auto Evacuate",
-    GamePage,
-    Settings.SODAutoEvacuate,
-    Settings.SODAutoEvacuateDistance or 28,
-    function(v)
-        Settings.SODAutoEvacuate = v == true
-        AutoSaveConfiguration()
-    end,
-    function(val)
-        Settings.SODAutoEvacuateDistance = math.clamp(tonumber(val) or 28, 15, 60)
-        AutoSaveConfiguration()
-    end,
-    "SODAutoEvacuate"
-)
+
 
 -- ==============================================================================
 -- UI BUILDER - SECTION 4: TELEPORTS & UTILITIES
