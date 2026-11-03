@@ -102,12 +102,8 @@ Settings.SODAutoStealRange = tonumber(Settings.SODAutoStealRange) or 15
 Settings.SODInstantVent = Settings.SODInstantVent == true
 
 -- Survival & Combat (All disabled by default)
-Settings.SODRemoveDoors = Settings.SODRemoveDoors == true
 Settings.SODEntityKill = Settings.SODEntityKill == true
 Settings.SODInfiniteStamina = Settings.SODInfiniteStamina == true
-Settings.SODSpeedBoost = Settings.SODSpeedBoost == true
-Settings.SODSpeedValue = tonumber(Settings.SODSpeedValue) or 22
-Settings.SODDamageShield = Settings.SODDamageShield == true
 Settings.SODAutoEvacuate = Settings.SODAutoEvacuate == true
 Settings.SODAutoEvacuateDistance = tonumber(Settings.SODAutoEvacuateDistance) or 28
 
@@ -115,9 +111,9 @@ Settings.SODAutoEvacuateDistance = tonumber(Settings.SODAutoEvacuateDistance) or
 Settings.SODClickTP = Settings.SODClickTP == true
 Settings.SODAutoVote = Settings.SODAutoVote == true
 Settings.SODVoteMonster = tostring(Settings.SODVoteMonster or "Player")
-Settings.SODVoteMapChoice1 = tostring(Settings.SODVoteMapChoice1 or Settings.SODVoteMap or "Map 1")
-Settings.SODVoteMapChoice2 = tostring(Settings.SODVoteMapChoice2 or "Map 2")
-Settings.SODVoteMapChoice3 = tostring(Settings.SODVoteMapChoice3 or "Map 3")
+Settings.SODVoteMapChoice1 = tostring(Settings.SODVoteMapChoice1 or "Facility")
+Settings.SODVoteMapChoice2 = tostring(Settings.SODVoteMapChoice2 or "Office")
+Settings.SODVoteMapChoice3 = tostring(Settings.SODVoteMapChoice3 or "American Dorm")
 Settings.SODAntiAFK = Settings.SODAntiAFK == true
 
 -- ==============================================================================
@@ -748,6 +744,22 @@ local function FormatWeight(w)
         s = s:sub(1, -3)
     end
     return " | " .. s .. "kg"
+end
+
+local function GetItemModel(inst)
+    if not inst then return nil end
+    local curr = inst
+    local bestModel = nil
+    while curr and curr ~= Workspace and curr ~= game do
+        if curr:IsA("Model") then
+            local mLower = string.lower(curr.Name)
+            if mLower ~= "workspace" and mLower ~= "items" and mLower ~= "map" and mLower ~= "props" and mLower ~= "decor" and mLower ~= "loot" and mLower ~= "spawns" and mLower ~= "rooms" and mLower ~= "folder" and mLower ~= "environment" and mLower ~= "geometry" and mLower ~= "camera" then
+                bestModel = curr
+            end
+        end
+        curr = curr.Parent
+    end
+    return bestModel
 end
 
 local function ResolveBasePart(inst)
@@ -1385,9 +1397,11 @@ local function RegisterPrompt(prompt)
     -- Loot
     if IsLootObject(prompt, instance, nameLower) then
         local rarity, val, weight = ResolveItemData(prompt, instance, nameLower)
+        local itemModel = GetItemModel(prompt) or GetItemModel(instance) or (instance:IsA("Model") and instance or nil)
 
         ItemPrompts[prompt] = {
             Object = instance,
+            Model = itemModel,
             Part = part,
             Name = name,
             NameLower = nameLower,
@@ -1664,6 +1678,10 @@ local function CreateOrUpdateHighlight(instance, color, name)
         hl.OutlineTransparency = 0.08
         hl.Adornee = instance
         hl.Parent = instance
+    else
+        if hl.Adornee ~= instance then
+            hl.Adornee = instance
+        end
     end
     if hl.FillColor ~= color then
         hl.FillColor = color
@@ -1737,13 +1755,14 @@ local function UpdateItemESP(charRoot)
 
     for prompt, data in pairs(ItemPrompts) do
         local part = data.Part
-        local targetInst = data.Object and data.Object:IsA("Model") and data.Object or part
+        local itemModel = data.Model or GetItemModel(prompt) or GetItemModel(part)
+        local targetInst = itemModel or part
 
         if not prompt.Parent or not part or not part.Parent then
             if ItemESPObjects[prompt] then
                 pcall(function()
                     if ItemESPObjects[prompt].Highlight then ItemESPObjects[prompt].Highlight:Destroy() end
-                    if ItemESPObjects[prompt].Billboard then ItemESPObjects[prompt].Billboard:Destroy() end
+                    if ItemESPObjects[prompt].Billboard then ItemESPObjects[prompt].Billboard.Enabled = false end
                 end)
                 ItemESPObjects[prompt] = nil
             end
@@ -1767,7 +1786,7 @@ local function UpdateItemESP(charRoot)
             if show and dist <= maxDist then
                 local rColor = RarityColors[data.Rarity] or Color3.fromRGB(220, 220, 220)
 
-                -- 3D Chams (always enabled when Item ESP is on)
+                -- 3D Chams on entire Model (all sub-parts of the item glow with chams)
                 local hl = CreateOrUpdateHighlight(targetInst, rColor, "ToxSOD_ItemHL")
 
                 local bb = nil
@@ -2128,54 +2147,148 @@ local function GetBestExit()
     return best
 end
 
-local FarmNoclipConn = nil
-local FarmGlideActive = false
+local SODNavPath = PathfindingService:CreatePath({
+    AgentRadius = 1.8,
+    AgentHeight = 5.0,
+    AgentCanJump = true,
+    WaypointSpacing = 3.5,
+    Costs = {
+        Door = 1.0,
+        Water = 100.0
+    }
+})
 
-local function SetFarmNoclip(enabled)
-    if FarmNoclipConn then
-        pcall(function() FarmNoclipConn:Disconnect() end)
-        FarmNoclipConn = nil
-    end
-    if enabled then
-        FarmNoclipConn = RunService.Stepped:Connect(function()
-            if not Settings.SODAutoFarm then
-                if FarmNoclipConn then
-                    pcall(function() FarmNoclipConn:Disconnect() end)
-                    FarmNoclipConn = nil
-                end
-                return
-            end
-            local char = Player.Character
-            if char then
-                for _, part in ipairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") and part.CanCollide then
-                        part.CanCollide = false
-                    end
-                end
-            end
-        end)
-    else
-        local char = Player.Character
-        if char then
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    if part.Name == "HumanoidRootPart" then
-                        part.CanCollide = false
-                    else
-                        part.CanCollide = true
-                    end
-                end
-            end
-        end
-    end
+local function GetItemStandPosition(part)
+    if not part or not part.Parent then return nil end
+    local itemPos = part.Position
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    local exclude = {}
+    if Player.Character then table.insert(exclude, Player.Character) end
+    if SafePlatformModel then table.insert(exclude, SafePlatformModel) end
+    rayParams.FilterDescendantsInstances = exclude
+
+    local ray = Workspace:Raycast(itemPos + Vector3.new(0, 2, 0), Vector3.new(0, -35, 0), rayParams)
+    local floorY = ray and ray.Position.Y or (itemPos.Y - 2.5)
+
+    return Vector3.new(itemPos.X, floorY + 1.2, itemPos.Z)
 end
 
-local function CancelFarmTween()
-    FarmGlideActive = false
-    if CurrentFarmTween then
-        pcall(function() CurrentFarmTween:Cancel() end)
-        CurrentFarmTween = nil
+local function NavigateAlongFloor(targetPos, myGen, checkAbort)
+    local char, hum, root = GetCharacterState()
+    if not char or not hum or hum.Health <= 0 or not root then return false end
+
+    local startPos = root.Position
+    local directDist = (Vector3.new(targetPos.X, startPos.Y, targetPos.Z) - startPos).Magnitude
+    if directDist <= 4.0 then
+        return true
     end
+
+    -- 1. Standard Pathfinding (uses game navmesh, strictly respects all walls)
+    local ok, _ = pcall(function()
+        SODNavPath:ComputeAsync(startPos, targetPos)
+    end)
+
+    local waypoints = {}
+    if ok and SODNavPath.Status == Enum.PathStatus.Success then
+        waypoints = SODNavPath:GetWaypoints()
+    end
+
+    if #waypoints > 1 then
+        for i = 2, #waypoints do
+            if not Settings.SODAutoFarm and not Settings.SODAutoEscape then return false end
+            if checkAbort and checkAbort() then return false end
+
+            local wp = waypoints[i]
+            local wpPos = wp.Position
+            local charCur, humCur, rootCur = GetCharacterState()
+            if not charCur or not humCur or humCur.Health <= 0 or not rootCur then return false end
+
+            if wp.Action == Enum.PathWaypointAction.Jump then
+                humCur.Jump = true
+            end
+
+            local wpDist = (Vector3.new(wpPos.X, rootCur.Position.Y, wpPos.Z) - rootCur.Position).Magnitude
+            local maxWait = math.clamp(wpDist / 12, 0.3, 2.5)
+            local t0 = os.clock()
+
+            while (os.clock() - t0) < maxWait do
+                local c, h, r = GetCharacterState()
+                if not c or not h or h.Health <= 0 or not r then return false end
+                if not Settings.SODAutoFarm and not Settings.SODAutoEscape then return false end
+                if checkAbort and checkAbort() then return false end
+
+                local flatDiff = (Vector3.new(wpPos.X, r.Position.Y, wpPos.Z) - r.Position)
+                if flatDiff.Magnitude <= 2.2 then break end
+
+                -- Physical walking with collision ON (NO noclip)
+                h:MoveTo(wpPos)
+                h:Move(flatDiff.Unit, false)
+
+                RunService.Heartbeat:Wait()
+            end
+        end
+        return true
+    end
+
+    -- 2. Fallback: Raycast-guided collision corridor walking (never penetrates walls)
+    local t0 = os.clock()
+    local maxWait = math.clamp(directDist / 10, 1.0, 5.0)
+
+    while (os.clock() - t0) < maxWait do
+        local c, h, r = GetCharacterState()
+        if not c or not h or h.Health <= 0 or not r then return false end
+        if not Settings.SODAutoFarm and not Settings.SODAutoEscape then return false end
+        if checkAbort and checkAbort() then return false end
+
+        local toTarget = (targetPos - r.Position)
+        local flatTarget = Vector3.new(toTarget.X, 0, toTarget.Z)
+        if flatTarget.Magnitude <= 4.0 then return true end
+
+        local fwdUnit = flatTarget.Unit
+        local rayParams = RaycastParams.new()
+        rayParams.FilterType = Enum.RaycastFilterType.Exclude
+        rayParams.FilterDescendantsInstances = { c }
+
+        local forwardRay = Workspace:Raycast(r.Position, fwdUnit * 4.0, rayParams)
+        local steerUnit = fwdUnit
+
+        if forwardRay then
+            local angles = { 45, -45, 90, -90 }
+            local bestScore = -999
+
+            for _, ang in ipairs(angles) do
+                local rad = math.rad(ang)
+                local rotDir = Vector3.new(
+                    fwdUnit.X * math.cos(rad) - fwdUnit.Z * math.sin(rad),
+                    0,
+                    fwdUnit.X * math.sin(rad) + fwdUnit.Z * math.cos(rad)
+                ).Unit
+                local sideRay = Workspace:Raycast(r.Position, rotDir * 4.0, rayParams)
+                if not sideRay then
+                    local score = rotDir:Dot(fwdUnit)
+                    if score > bestScore then
+                        bestScore = score
+                        steerUnit = rotDir
+                    end
+                end
+            end
+            if forwardRay.Instance and forwardRay.Instance.CanCollide and math.random(1, 25) == 1 then
+                h.Jump = true
+            end
+        end
+
+        h:MoveTo(r.Position + steerUnit * 4.0)
+        h:Move(steerUnit, false)
+
+        RunService.Heartbeat:Wait()
+    end
+
+    return false
+end
+
+local function StopAutoFarm()
+    Settings.SODAutoFarm = false
     local _, hum, root = GetCharacterState()
     if root then
         root.AssemblyLinearVelocity = Vector3.zero
@@ -2184,70 +2297,7 @@ local function CancelFarmTween()
     if hum then
         hum:Move(Vector3.zero, false)
     end
-end
-
-local function StopAutoFarm()
-    Settings.SODAutoFarm = false
-    CancelFarmTween()
-    SetFarmNoclip(false)
     AutoFarmRunning = false
-end
-
-local function GlideToPosition(targetPos, speed, myGen, checkAbort)
-    local char, hum, root = GetCharacterState()
-    if not char or not hum or hum.Health <= 0 or not root then return false end
-
-    speed = tonumber(speed) or tonumber(Settings.SODFarmSpeed) or 40
-    speed = math.clamp(speed, 25, 55)
-
-    local startPos = root.Position
-    local dist = (targetPos - startPos).Magnitude
-    if dist <= 3.5 then
-        return true
-    end
-
-    local duration = dist / speed
-    local startTime = os.clock()
-    FarmGlideActive = true
-
-    while (os.clock() - startTime) < duration do
-        if not Settings.SODAutoFarm or getgenv().ToxSODFarmGen ~= myGen or not FarmGlideActive then
-            return false
-        end
-        if checkAbort and checkAbort() then
-            return false
-        end
-
-        local charCurr, humCurr, rootCurr = GetCharacterState()
-        if not charCurr or not humCurr or humCurr.Health <= 0 or not rootCurr then
-            return false
-        end
-
-        local elapsed = os.clock() - startTime
-        local alpha = math.clamp(elapsed / duration, 0, 1)
-        local curPos = startPos:Lerp(targetPos, alpha)
-
-        rootCurr.AssemblyLinearVelocity = Vector3.zero
-        rootCurr.AssemblyAngularVelocity = Vector3.zero
-
-        local lookTarget = Vector3.new(targetPos.X, curPos.Y, targetPos.Z)
-        if (lookTarget - curPos).Magnitude > 0.1 then
-            charCurr:PivotTo(CFrame.new(curPos, lookTarget))
-        else
-            charCurr:PivotTo(CFrame.new(curPos))
-        end
-
-        RunService.Heartbeat:Wait()
-    end
-
-    local charEnd, _, rootEnd = GetCharacterState()
-    if rootEnd and charEnd then
-        rootEnd.AssemblyLinearVelocity = Vector3.zero
-        rootEnd.AssemblyAngularVelocity = Vector3.zero
-        charEnd:PivotTo(CFrame.new(targetPos))
-    end
-    FarmGlideActive = false
-    return true
 end
 
 local function StartAutoFarmLoop()
@@ -2256,8 +2306,6 @@ local function StartAutoFarmLoop()
     getgenv().ToxSODFarmGen = (tonumber(getgenv().ToxSODFarmGen) or 0) + 1
     local myGen = getgenv().ToxSODFarmGen
 
-    SetFarmNoclip(true)
-
     task.spawn(function()
         while Settings.SODAutoFarm and getgenv().ToxSODFarmGen == myGen do
             task.wait(0.05)
@@ -2265,7 +2313,6 @@ local function StartAutoFarmLoop()
 
             local char, hum, root = GetCharacterState()
             if not char or not hum or hum.Health <= 0 or not root then
-                CancelFarmTween()
                 task.wait(1)
                 continue
             end
@@ -2283,23 +2330,12 @@ local function StartAutoFarmLoop()
                 end
             end
             if isDanger then
-                CancelFarmTween()
+                hum:Move(Vector3.zero, false)
                 task.wait(0.5)
                 continue
             end
 
-            -- 2. Auto Escape if bag is full
-            if Settings.SODAutoEscape and IsPlayerBagFull() then
-                local exit = GetBestExit()
-                if exit and exit.Part and exit.Part.Parent then
-                    local exitPos = exit.Part.Position + Vector3.new(0, 3.0, 0)
-                    GlideToPosition(exitPos, 42, myGen, nil)
-                    task.wait(0.5)
-                    continue
-                end
-            end
-
-            -- 3. Select Best Loot Target
+            -- 2. Select Best Loot Target
             local bestPrompt, bestData, bestScore = nil, nil, -999999
             for prompt, data in pairs(ItemPrompts) do
                 if prompt.Parent and data.Part and data.Part.Parent then
@@ -2321,8 +2357,8 @@ local function StartAutoFarmLoop()
                 continue
             end
 
-            -- 4. Glide with Noclip to elevated item landing (lands smoothly on tables/desks/floor)
-            local targetPos = bestData.Part.Position + Vector3.new(0, 2.5, 0)
+            -- 3. Walk along floor and corridors (NO noclip, follows walls and doorways)
+            local targetFloor = GetItemStandPosition(bestData.Part) or bestData.Part.Position
             local function abortCondition()
                 if not bestPrompt or not bestPrompt.Parent or not bestData.Part or not bestData.Part.Parent then
                     return true
@@ -2337,14 +2373,13 @@ local function StartAutoFarmLoop()
                 return false
             end
 
-            local reached = GlideToPosition(targetPos, tonumber(Settings.SODFarmSpeed) or 40, myGen, abortCondition)
+            NavigateAlongFloor(targetFloor, myGen, abortCondition)
 
-            -- 5. Trigger prompt if in range
-            if reached and bestPrompt and bestPrompt.Parent and bestData.Part and bestData.Part.Parent then
+            -- 4. Trigger prompt if in range
+            if bestPrompt and bestPrompt.Parent and bestData.Part and bestData.Part.Parent then
                 local curDist = (bestData.Part.Position - root.Position).Magnitude
                 if curDist <= (bestPrompt.MaxActivationDistance or 8) + 2.5 then
-                    root.AssemblyLinearVelocity = Vector3.zero
-                    root.AssemblyAngularVelocity = Vector3.zero
+                    hum:Move(Vector3.zero, false)
                     TriggerPrompt(bestPrompt)
                     task.wait(0.18)
                 end
@@ -2352,6 +2387,38 @@ local function StartAutoFarmLoop()
         end
 
         StopAutoFarm()
+    end)
+end
+
+-- Dedicated Auto Escape Loop
+local AutoEscapeRunning = false
+local function StartAutoEscapeLoop()
+    if AutoEscapeRunning then return end
+    AutoEscapeRunning = true
+
+    task.spawn(function()
+        local myGen = getgenv().ToxSODGeneration
+        while Settings.SODAutoEscape and getgenv().ToxSODGeneration == myGen do
+            task.wait(0.3)
+            if not Settings.SODAutoEscape then break end
+
+            local char, hum, root = GetCharacterState()
+            if not char or not hum or hum.Health <= 0 or not root then
+                task.wait(1)
+                continue
+            end
+
+            if IsPlayerBagFull() then
+                local exit = GetBestExit()
+                if exit and exit.Part and exit.Part.Parent then
+                    local exitFloor = GetItemStandPosition(exit.Part) or exit.Part.Position
+                    CustomNotify("Auto Escape: Walking to Extraction!", Color3.fromRGB(0, 255, 140), 2)
+                    NavigateAlongFloor(exitFloor, myGen, nil)
+                    task.wait(1)
+                end
+            end
+        end
+        AutoEscapeRunning = false
     end)
 end
 
@@ -2382,7 +2449,7 @@ local function StartEntityKillLoop()
     task.spawn(function()
         local myGen = getgenv().ToxSODGeneration
         while Settings.SODEntityKill and getgenv().ToxSODGeneration == myGen do
-            task.wait(0.1)
+            task.wait(0.15)
             if not Settings.SODEntityKill then break end
 
             local char, hum, root = GetCharacterState()
@@ -2391,24 +2458,37 @@ local function StartEntityKillLoop()
                 continue
             end
 
-            if not IsLocalPlayerMonster() then
-                task.wait(1)
-                continue
-            end
-
-            -- Find closest alive survivor
+            local isMon = IsLocalPlayerMonster()
             local bestTarget = nil
             local bestDist = 99999
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= Player then
-                    local pChar = plr.Character
-                    local pHum = pChar and pChar:FindFirstChildOfClass("Humanoid")
-                    local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
-                    if pChar and pHum and pHum.Health > 0 and pRoot and not ActiveMonsters[pChar] then
-                        local d = (pRoot.Position - root.Position).Magnitude
-                        if d < bestDist then
-                            bestDist = d
-                            bestTarget = { Player = plr, Character = pChar, Humanoid = pHum, Root = pRoot }
+
+            if isMon then
+                -- Player is monster: target survivors
+                for _, plr in ipairs(Players:GetPlayers()) do
+                    if plr ~= Player then
+                        local pChar = plr.Character
+                        local pHum = pChar and pChar:FindFirstChildOfClass("Humanoid")
+                        local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
+                        if pChar and pHum and pHum.Health > 0 and pRoot and not ActiveMonsters[pChar] then
+                            local d = (pRoot.Position - root.Position).Magnitude
+                            if d < bestDist then
+                                bestDist = d
+                                bestTarget = { Character = pChar, Humanoid = pHum, Root = pRoot, Name = plr.DisplayName or plr.Name }
+                            end
+                        end
+                    end
+                end
+            else
+                -- Player is survivor: target monsters/entities
+                for model, mData in pairs(ActiveMonsters) do
+                    if model.Parent and mData.Root and mData.Root.Parent then
+                        local mHum = model:FindFirstChildOfClass("Humanoid")
+                        if not mHum or mHum.Health > 0 then
+                            local d = (mData.Root.Position - root.Position).Magnitude
+                            if d < bestDist then
+                                bestDist = d
+                                bestTarget = { Character = model, Humanoid = mHum, Root = mData.Root, Name = mData.Name or "Entity" }
+                            end
                         end
                     end
                 end
@@ -2421,54 +2501,289 @@ local function StartEntityKillLoop()
 
             local tRoot = bestTarget.Root
             local tHum = bestTarget.Humanoid
-            if tRoot and tRoot.Parent and tHum and tHum.Health > 0 then
-                root.AssemblyLinearVelocity = Vector3.zero
-                char:PivotTo(tRoot.CFrame * CFrame.new(0, 0, 1.2))
 
-                pcall(function()
-                    local backpack = Player:FindFirstChild("Backpack")
-                    if backpack then
-                        for _, tool in ipairs(backpack:GetChildren()) do
-                            if tool:IsA("Tool") then
-                                tool.Parent = char
+            if tRoot and tRoot.Parent then
+                local dist = (tRoot.Position - root.Position).Magnitude
+
+                -- Move towards target along corridors
+                if dist > 7 then
+                    local dir = (tRoot.Position - root.Position)
+                    local flat = Vector3.new(dir.X, 0, dir.Z)
+                    if flat.Magnitude > 0.4 then
+                        hum:Move(flat.Unit, false)
+                        hum:MoveTo(tRoot.Position)
+                    end
+                end
+
+                -- Attack when in range (<= 14 studs)
+                if dist <= 14 then
+                    root.CFrame = CFrame.new(root.Position, Vector3.new(tRoot.Position.X, root.Position.Y, tRoot.Position.Z))
+
+                    pcall(function()
+                        local backpack = Player:FindFirstChild("Backpack")
+                        if backpack then
+                            for _, tool in ipairs(backpack:GetChildren()) do
+                                if tool:IsA("Tool") then
+                                    tool.Parent = char
+                                end
                             end
                         end
-                    end
-                    local tool = char:FindFirstChildOfClass("Tool")
-                    if tool then
-                        tool:Activate()
-                    end
-                    if mouse1click then
-                        mouse1click()
-                    end
-                end)
+                        local tool = char:FindFirstChildOfClass("Tool")
+                        if tool then
+                            tool:Activate()
+                        end
+                        if mouse1click then
+                            mouse1click()
+                        end
+                        for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
+                            if rem:IsA("RemoteEvent") then
+                                local rLower = string.lower(rem.Name)
+                                if string.find(rLower, "attack") or string.find(rLower, "hit") or string.find(rLower, "damage") or string.find(rLower, "slash") or string.find(rLower, "kill") or string.find(rLower, "swing") then
+                                    rem:FireServer(bestTarget.Character)
+                                    rem:FireServer(tHum)
+                                    rem:FireServer(tRoot)
+                                end
+                            end
+                        end
+                        for _, prompt in ipairs(bestTarget.Character:GetDescendants()) do
+                            if prompt:IsA("ProximityPrompt") then
+                                TriggerPrompt(prompt)
+                            end
+                        end
+                    end)
+                end
             end
         end
         EntityKillRunning = false
     end)
 end
 
+local HasVotedMapThisIntermission = false
+local HasVotedMonsterThisIntermission = false
+local LastVoteCheck = 0
+
+local SODAvailableMaps = { "Facility", "Office", "American Dorm", "Supermarket", "Random" }
+
+local function ButtonMatchesMap(btn, mapName)
+    if not btn or not mapName then return false end
+    mapName = string.lower(mapName)
+
+    local texts = {}
+    if btn.Name then table.insert(texts, string.lower(btn.Name)) end
+    if btn:IsA("TextButton") and btn.Text then
+        table.insert(texts, string.lower(btn.Text))
+    end
+    for _, child in ipairs(btn:GetChildren()) do
+        if child:IsA("TextLabel") and child.Text then
+            table.insert(texts, string.lower(child.Text))
+        end
+    end
+    if btn.Parent then
+        table.insert(texts, string.lower(btn.Parent.Name))
+        for _, sib in ipairs(btn.Parent:GetChildren()) do
+            if sib:IsA("TextLabel") and sib.Text then
+                table.insert(texts, string.lower(sib.Text))
+            end
+        end
+    end
+
+    local keywords = { mapName }
+    if mapName == "facility" then
+        table.insert(keywords, "facility")
+    elseif mapName == "office" then
+        table.insert(keywords, "office")
+    elseif mapName == "american dorm" or string.find(mapName, "dorm") then
+        table.insert(keywords, "american dorm")
+        table.insert(keywords, "dorm")
+        table.insert(keywords, "dorms")
+    elseif mapName == "supermarket" or string.find(mapName, "market") then
+        table.insert(keywords, "supermarket")
+        table.insert(keywords, "market")
+        table.insert(keywords, "store")
+    end
+
+    for _, t in ipairs(texts) do
+        for _, kw in ipairs(keywords) do
+            if string.find(t, kw, 1, true) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function ButtonMatchesMonster(btn, monsterPref)
+    if not btn or not monsterPref then return false end
+    monsterPref = string.lower(monsterPref)
+
+    local texts = {}
+    if btn.Name then table.insert(texts, string.lower(btn.Name)) end
+    if btn:IsA("TextButton") and btn.Text then
+        table.insert(texts, string.lower(btn.Text))
+    end
+    for _, child in ipairs(btn:GetChildren()) do
+        if child:IsA("TextLabel") and child.Text then
+            table.insert(texts, string.lower(child.Text))
+        end
+    end
+    if btn.Parent then
+        table.insert(texts, string.lower(btn.Parent.Name))
+        for _, sib in ipairs(btn.Parent:GetChildren()) do
+            if sib:IsA("TextLabel") and sib.Text then
+                table.insert(texts, string.lower(sib.Text))
+            end
+        end
+    end
+
+    local keywords = {}
+    if monsterPref == "player" then
+        keywords = { "player", "player monster", "player_monster", "survivor" }
+    elseif monsterPref == "bot" then
+        keywords = { "bot", "bot monster", "bot_monster", "ai", "entity" }
+    else
+        keywords = { "player", "bot" }
+    end
+
+    for _, t in ipairs(texts) do
+        for _, kw in ipairs(keywords) do
+            if string.find(t, kw, 1, true) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function TriggerVoteButton(btn)
+    if not btn then return end
+    pcall(function()
+        local rem = btn:FindFirstChildWhichIsA("RemoteEvent") or btn:FindFirstChildWhichIsA("RemoteFunction")
+        if rem then
+            if rem:IsA("RemoteEvent") then rem:FireServer() else rem:InvokeServer() end
+        end
+        if firesignal then
+            firesignal(btn.MouseButton1Click)
+            firesignal(btn.Activated)
+        end
+        if getconnections then
+            for _, c in ipairs(getconnections(btn.MouseButton1Click)) do
+                pcall(function() c:Fire() end)
+            end
+            for _, c in ipairs(getconnections(btn.Activated)) do
+                pcall(function() c:Fire() end)
+            end
+        end
+    end)
+end
+
 local function ProcessAutoVote()
     if not Settings.SODAutoVote then return end
+
     local now = os.clock()
-    if now - LastVoteCheck < 1.5 then return end
+    if now - LastVoteCheck < 0.6 then return end
     LastVoteCheck = now
 
     local monsterPref = string.lower(Settings.SODVoteMonster or "Player")
-    local c1 = Settings.SODVoteMapChoice1 or Settings.SODVoteMap or "Map 1"
-    local c2 = Settings.SODVoteMapChoice2 or "Map 2"
-    local c3 = Settings.SODVoteMapChoice3 or "Map 3"
+    local c1 = Settings.SODVoteMapChoice1 or "Facility"
+    local c2 = Settings.SODVoteMapChoice2 or "Office"
+    local c3 = Settings.SODVoteMapChoice3 or "American Dorm"
 
     local mapPriority = {}
     for _, choice in ipairs({ c1, c2, c3 }) do
-        if choice == "Map 1" then table.insert(mapPriority, 1)
-        elseif choice == "Map 2" then table.insert(mapPriority, 2)
-        elseif choice == "Map 3" then table.insert(mapPriority, 3)
-        elseif choice == "Random" then table.insert(mapPriority, math.random(1, 3)) end
+        if choice == "Random" then
+            local nonRandom = { "Facility", "Office", "American Dorm", "Supermarket" }
+            table.insert(mapPriority, nonRandom[math.random(1, #nonRandom)])
+        elseif choice and choice ~= "" then
+            table.insert(mapPriority, choice)
+        end
     end
-    if #mapPriority == 0 then mapPriority = { 1, 2, 3 } end
+    if #mapPriority == 0 then
+        mapPriority = { "Facility", "Office", "American Dorm", "Supermarket" }
+    end
 
-    -- 1. ReplicatedStorage voting remotes (100% silent background server invocation, zero mouse clicks)
+    -- Check if voting UI is currently active in PlayerGui
+    local pGui = Player:FindFirstChild("PlayerGui")
+    local votingGuiVisible = false
+    local candidateButtons = {}
+
+    if pGui then
+        for _, gui in ipairs(pGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Enabled then
+                for _, desc in ipairs(gui:GetDescendants()) do
+                    if desc:IsA("TextButton") or desc:IsA("ImageButton") then
+                        if desc.Visible then
+                            table.insert(candidateButtons, desc)
+                        end
+                    end
+                    if not votingGuiVisible and desc:IsA("TextLabel") and desc.Visible and desc.Text then
+                        local t = string.lower(desc.Text)
+                        if string.find(t, "vote") or string.find(t, "intermission") or string.find(t, "map") then
+                            votingGuiVisible = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- If voting screen is NOT visible, reset state for next round
+    if not votingGuiVisible and #candidateButtons < 3 then
+        HasVotedMapThisIntermission = false
+        HasVotedMonsterThisIntermission = false
+        return
+    end
+
+    -- 1. Targeted Map Vote: Click the exact map button in PlayerGui ONCE
+    if not HasVotedMapThisIntermission and #candidateButtons > 0 then
+        local votedMapName = nil
+
+        -- Priority 1, 2, 3 check
+        for _, prefMap in ipairs(mapPriority) do
+            for _, btn in ipairs(candidateButtons) do
+                if ButtonMatchesMap(btn, prefMap) then
+                    TriggerVoteButton(btn)
+                    votedMapName = prefMap
+                    HasVotedMapThisIntermission = true
+                    break
+                end
+            end
+            if HasVotedMapThisIntermission then break end
+        end
+
+        -- Fallback: check any available map button
+        if not HasVotedMapThisIntermission then
+            for _, anyMap in ipairs({ "Facility", "Office", "American Dorm", "Supermarket" }) do
+                for _, btn in ipairs(candidateButtons) do
+                    if ButtonMatchesMap(btn, anyMap) then
+                        TriggerVoteButton(btn)
+                        votedMapName = anyMap
+                        HasVotedMapThisIntermission = true
+                        break
+                    end
+                end
+                if HasVotedMapThisIntermission then break end
+            end
+        end
+
+        if votedMapName then
+            CustomNotify("Auto Vote: " .. votedMapName, Color3.fromRGB(0, 255, 140), 2)
+        end
+    end
+
+    -- 2. Targeted Monster Vote: Click the exact monster button in PlayerGui ONCE
+    if not HasVotedMonsterThisIntermission and #candidateButtons > 0 then
+        local targetPref = monsterPref == "random" and (math.random(1, 2) == 1 and "player" or "bot") or monsterPref
+        for _, btn in ipairs(candidateButtons) do
+            if ButtonMatchesMonster(btn, targetPref) then
+                TriggerVoteButton(btn)
+                HasVotedMonsterThisIntermission = true
+                CustomNotify("Auto Vote Monster: " .. (targetPref:sub(1,1):upper() .. targetPref:sub(2)), Color3.fromRGB(255, 180, 50), 2)
+                break
+            end
+        end
+    end
+
+    -- 3. Parallel Silent Remote Invocation in ReplicatedStorage with exact Map Names
     pcall(function()
         for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
             if rem:IsA("RemoteEvent") or rem:IsA("RemoteFunction") then
@@ -2476,41 +2791,24 @@ local function ProcessAutoVote()
                 if string.find(rLower, "vote") or string.find(rLower, "gamemode") or string.find(rLower, "map") or string.find(rLower, "intermission") or string.find(rLower, "lobby") then
                     pcall(function()
                         if string.find(rLower, "monster") or string.find(rLower, "mode") or string.find(rLower, "entity") then
-                            if monsterPref == "player" then
-                                if rem:IsA("RemoteEvent") then
-                                    rem:FireServer("Player")
-                                    rem:FireServer(1)
-                                    rem:FireServer("PlayerMonster")
-                                else
-                                    rem:InvokeServer("Player")
-                                end
-                            elseif monsterPref == "bot" then
-                                if rem:IsA("RemoteEvent") then
-                                    rem:FireServer("Bot")
-                                    rem:FireServer(2)
-                                    rem:FireServer("BotMonster")
-                                else
-                                    rem:InvokeServer("Bot")
-                                end
+                            local mArg = monsterPref == "bot" and "Bot" or (monsterPref == "player" and "Player" or (math.random(1, 2) == 1 and "Player" or "Bot"))
+                            if rem:IsA("RemoteEvent") then
+                                rem:FireServer(mArg)
+                                rem:FireServer(mArg .. "Monster")
+                                rem:FireServer(mArg == "Player" and 1 or 2)
                             else
-                                local rnd = math.random(1, 2) == 1 and "Player" or "Bot"
-                                if rem:IsA("RemoteEvent") then rem:FireServer(rnd) else rem:InvokeServer(rnd) end
+                                rem:InvokeServer(mArg)
                             end
                         else
-                            for _, p in ipairs(mapPriority) do
+                            for idx, mapName in ipairs(mapPriority) do
                                 if rem:IsA("RemoteEvent") then
-                                    rem:FireServer(p)
-                                    rem:FireServer(tostring(p))
-                                    rem:FireServer("Map" .. p)
-                                    rem:FireServer("Map", p)
+                                    rem:FireServer(mapName)
+                                    rem:FireServer(idx)
+                                    rem:FireServer("Map", mapName)
+                                    rem:FireServer("Map" .. idx)
                                 else
-                                    rem:InvokeServer(p)
+                                    rem:InvokeServer(mapName)
                                 end
-                            end
-                            if monsterPref == "player" then
-                                if rem:IsA("RemoteEvent") then rem:FireServer("Player") else rem:InvokeServer("Player") end
-                            elseif monsterPref == "bot" then
-                                if rem:IsA("RemoteEvent") then rem:FireServer("Bot") else rem:InvokeServer("Bot") end
                             end
                         end
                     end)
@@ -2519,7 +2817,7 @@ local function ProcessAutoVote()
         end
     end)
 
-    -- 2. Physical lobby voting pads (silent server touch interest without moving character)
+    -- 4. Workspace lobby pads (touch interest)
     pcall(function()
         local _, _, root = GetCharacterState()
         if not root or not firetouchinterest then return end
@@ -2527,24 +2825,12 @@ local function ProcessAutoVote()
         for _, obj in ipairs(Workspace:GetDescendants()) do
             if obj:IsA("BasePart") then
                 local oName = string.lower(obj.Name)
-                if string.find(oName, "vote") or string.find(oName, "pad") or string.find(oName, "plate") then
-                    local matched = false
-                    if monsterPref == "player" and string.find(oName, "player") then matched = true
-                    elseif monsterPref == "bot" and (string.find(oName, "bot") or string.find(oName, "ai")) then matched = true end
-
-                    for _, p in ipairs(mapPriority) do
-                        if string.find(oName, "map" .. p) or string.find(oName, "map_" .. p) then
-                            matched = true
-                            break
-                        end
-                    end
-
-                    if matched then
-                        pcall(function()
-                            firetouchinterest(root, obj, 0)
-                            task.wait(0.02)
-                            firetouchinterest(root, obj, 1)
-                        end)
+                for _, mapName in ipairs(mapPriority) do
+                    if string.find(oName, string.lower(mapName), 1, true) then
+                        firetouchinterest(root, obj, 0)
+                        task.wait(0.02)
+                        firetouchinterest(root, obj, 1)
+                        break
                     end
                 end
             end
@@ -2970,6 +3256,9 @@ SODCreateToggle(
     Settings.SODAutoEscape,
     function(v)
         Settings.SODAutoEscape = v == true
+        if v then
+            StartAutoEscapeLoop()
+        end
         AutoSaveConfiguration()
     end,
     "SODAutoEscape"
@@ -3050,19 +3339,7 @@ end)
 CreateSODSection("SURVIVAL")
 
 SODCreateToggle(
-    "Remove Doors",
-    GamePage,
-    Settings.SODRemoveDoors,
-    function(v)
-        Settings.SODRemoveDoors = v == true
-        ApplyRemoveDoors(v == true)
-        AutoSaveConfiguration()
-    end,
-    "SODRemoveDoors"
-)
-
-SODCreateToggle(
-    "Auto Entity Kill",
+    "Auto Kill",
     GamePage,
     Settings.SODEntityKill,
     function(v)
@@ -3085,41 +3362,6 @@ SODCreateToggle(
         AutoSaveConfiguration()
     end,
     "SODInfiniteStamina"
-)
-
-SODCreateToggleWithValue(
-    "Speed Boost",
-    GamePage,
-    Settings.SODSpeedBoost,
-    Settings.SODSpeedValue or 22,
-    function(v)
-        Settings.SODSpeedBoost = v == true
-        if v then EnforceSpeed() end
-        AutoSaveConfiguration()
-    end,
-    function(val)
-        Settings.SODSpeedValue = math.clamp(tonumber(val) or 22, 16, 40)
-        EnforceSpeed()
-        AutoSaveConfiguration()
-    end,
-    "SODSpeedBoost"
-)
-
-SODCreateToggle(
-    "Damage Shield",
-    GamePage,
-    Settings.SODDamageShield,
-    function(v)
-        Settings.SODDamageShield = v == true
-        local _, hum = GetCharacterState()
-        if hum then
-            pcall(function()
-                hum:SetStateEnabled(Enum.HumanoidStateType.Dead, not v)
-            end)
-        end
-        AutoSaveConfiguration()
-    end,
-    "SODDamageShield"
 )
 
 SODCreateToggleWithValue(
@@ -3219,11 +3461,13 @@ SODCreateDropdown(
     end
 )
 
+local MapChoicesList = { "Facility", "Office", "American Dorm", "Supermarket", "Random" }
+
 SODCreateDropdown(
     "Map 1st Choice",
-    { "Map 1", "Map 2", "Map 3", "Random" },
+    MapChoicesList,
     GamePage,
-    Settings.SODVoteMapChoice1 or Settings.SODVoteMap or "Map 1",
+    Settings.SODVoteMapChoice1 or "Facility",
     function(choice)
         Settings.SODVoteMapChoice1 = tostring(choice)
         AutoSaveConfiguration()
@@ -3232,9 +3476,9 @@ SODCreateDropdown(
 
 SODCreateDropdown(
     "Map 2nd Choice",
-    { "Map 2", "Map 1", "Map 3" },
+    MapChoicesList,
     GamePage,
-    Settings.SODVoteMapChoice2 or "Map 2",
+    Settings.SODVoteMapChoice2 or "Office",
     function(choice)
         Settings.SODVoteMapChoice2 = tostring(choice)
         AutoSaveConfiguration()
@@ -3243,9 +3487,9 @@ SODCreateDropdown(
 
 SODCreateDropdown(
     "Map 3rd Choice",
-    { "Map 3", "Map 2", "Map 1" },
+    MapChoicesList,
     GamePage,
-    Settings.SODVoteMapChoice3 or "Map 3",
+    Settings.SODVoteMapChoice3 or "American Dorm",
     function(choice)
         Settings.SODVoteMapChoice3 = tostring(choice)
         AutoSaveConfiguration()
@@ -3272,8 +3516,6 @@ getgenv().ToxSODCleanup = function()
     getgenv().ToxSODGeneration = (tonumber(getgenv().ToxSODGeneration) or 0) + 1
 
     StopAutoFarm()
-    SetFarmNoclip(false)
-    ApplyRemoveDoors(false)
     SetupAntiAFK(false)
 
     for _, conn in ipairs(SODConnections) do
