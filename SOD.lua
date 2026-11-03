@@ -429,7 +429,9 @@ local GenericNames = {
 local NonLootKeywords = {
     "door", "gate", "vent", "locker", "closet", "wardrobe", "hidespot",
     "exit", "escape", "extract", "evac", "button", "switch",
-    "breaker", "fuse", "elevator", "barrier", "barricade"
+    "breaker", "fuse", "elevator", "barrier", "barricade",
+    "sign", "plaque", "placa", "light", "lamp", "poster", "decal",
+    "board", "frame", "billboard", "texture"
 }
 
 local NonMonsterKeywords = {
@@ -1348,16 +1350,50 @@ local function IsLootObject(prompt, instance, nameLower)
     return false
 end
 
+local function IsDescendantOfAnyPlayer(inst)
+    if not inst then return false end
+    if Player.Character and inst:IsDescendantOf(Player.Character) then
+        return true
+    end
+    local bp = Player:FindFirstChild("Backpack")
+    if bp and inst:IsDescendantOf(bp) then
+        return true
+    end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= Player then
+            if plr.Character and inst:IsDescendantOf(plr.Character) then
+                return true
+            end
+            local pbp = plr:FindFirstChild("Backpack")
+            if pbp and inst:IsDescendantOf(pbp) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 local function RegisterPrompt(prompt)
     if not prompt or not prompt.Parent then return end
     if ItemPrompts[prompt] or VentObjects[prompt] then return end
 
+    -- NEVER register prompts that are on or inside any player character or backpack
+    if IsDescendantOfAnyPlayer(prompt) or IsDescendantOfAnyPlayer(prompt.Parent) then
+        return
+    end
+
     local instance = prompt.Parent
     local part = ResolveBasePart(prompt) or ResolveBasePart(instance)
-    if not part then return end
+    if not part or IsDescendantOfAnyPlayer(part) then return end
 
     local name = ResolveItemName(prompt, instance)
     local nameLower = string.lower(name)
+
+    -- Detect decorative signs/lights/plaques so they are never classified as exits or loot
+    local isSignOrProp = string.find(nameLower, "sign") or string.find(nameLower, "plaque") or string.find(nameLower, "placa")
+                      or string.find(nameLower, "light") or string.find(nameLower, "lamp") or string.find(nameLower, "poster")
+                      or string.find(nameLower, "decal") or string.find(nameLower, "board") or string.find(nameLower, "frame")
+                      or string.find(nameLower, "billboard") or string.find(nameLower, "texture")
 
     -- Vent
     if string.find(nameLower, "vent") or (prompt.ActionText and string.find(string.lower(prompt.ActionText), "unscrew")) then
@@ -1388,8 +1424,12 @@ local function RegisterPrompt(prompt)
         return
     end
 
-    -- Exit
-    if string.find(nameLower, "exit") or string.find(nameLower, "escape") or string.find(nameLower, "extract") or string.find(nameLower, "evac") or string.find(nameLower, "van") or string.find(nameLower, "truck") then
+    -- Exit (Must NOT be a wall sign or light plaque)
+    if not isSignOrProp and (
+        (prompt.ActionText and (string.find(string.lower(prompt.ActionText), "escape") or string.find(string.lower(prompt.ActionText), "extract") or string.find(string.lower(prompt.ActionText), "leave") or string.find(string.lower(prompt.ActionText), "evac") or string.find(string.lower(prompt.ActionText), "drive")))
+        or string.find(nameLower, "van") or string.find(nameLower, "truck")
+        or (string.find(nameLower, "exit") and not string.find(nameLower, "sign"))
+    ) then
         ExitObjects[instance] = {
             Part = part,
             Model = instance:IsA("Model") and instance or (instance.Parent:IsA("Model") and instance.Parent or part),
@@ -1607,18 +1647,41 @@ local function HandleDescendant(obj)
             RegisterMonster(obj)
         end
         local mName = string.lower(obj.Name)
+
+        -- Exclude decorative signs, lights, plaques, posters, decals, frames, walls, and ceilings
+        local isSignOrProp = string.find(mName, "sign") or string.find(mName, "plaque") or string.find(mName, "placa")
+                          or string.find(mName, "light") or string.find(mName, "lamp") or string.find(mName, "poster")
+                          or string.find(mName, "decal") or string.find(mName, "arrow") or string.find(mName, "board")
+                          or string.find(mName, "frame") or string.find(mName, "billboard") or string.find(mName, "texture")
+                          or string.find(mName, "mesh") or string.find(mName, "glass") or string.find(mName, "wall")
+                          or string.find(mName, "ceiling")
+
         if string.find(mName, "closet") or string.find(mName, "locker") or string.find(mName, "wardrobe") or string.find(mName, "hidespot") then
             ClosetObjects[obj] = {
                 Part = ResolveBasePart(obj),
                 Model = obj,
                 Name = obj.Name
             }
-        elseif string.find(mName, "exit") or string.find(mName, "escape") or string.find(mName, "extract") or string.find(mName, "evac") or string.find(mName, "van") or string.find(mName, "truck") then
-            ExitObjects[obj] = {
-                Part = ResolveBasePart(obj),
-                Model = obj,
-                Label = obj.Name
-            }
+        elseif not isSignOrProp and (
+            string.find(mName, "van") or string.find(mName, "truck")
+            or string.find(mName, "escape") or string.find(mName, "extract") or string.find(mName, "evac")
+            or (string.find(mName, "exit") and not isSignOrProp)
+        ) then
+            local p = ResolveBasePart(obj)
+            local isRealExit = true
+            -- A true exit zone or exit door/van has substantial size, not a thin plate
+            if p and string.find(mName, "exit") and not (string.find(mName, "van") or string.find(mName, "truck") or string.find(mName, "zone")) then
+                if (p.Size.X < 3 and p.Size.Z < 3) or (p.Size.Y < 1 and (p.Size.X < 3 or p.Size.Z < 3)) then
+                    isRealExit = false
+                end
+            end
+            if isRealExit then
+                ExitObjects[obj] = {
+                    Part = p,
+                    Model = obj,
+                    Label = obj.Name
+                }
+            end
         end
     end
 end
@@ -1757,19 +1820,38 @@ local function UpdateItemESP(charRoot)
     local handledTargets = {}
     local style = Settings.SODItemESPStyle or "Name + Value"
 
+    -- Active purge: Remove ANY Item Highlight or Item Billboard accidentally attached to the local player's character
+    if Player.Character then
+        for _, child in ipairs(Player.Character:GetDescendants()) do
+            if child:IsA("Highlight") and child.Name == "ToxSOD_ItemHL" then
+                pcall(function() child:Destroy() end)
+            end
+            if child:IsA("BillboardGui") and child.Name == "ToxSOD_ItemBB" then
+                pcall(function() child:Destroy() end)
+            end
+        end
+    end
+
     for prompt, data in pairs(ItemPrompts) do
         local part = data.Part
         local itemModel = data.Model or GetItemModel(prompt) or GetItemModel(part)
         local targetInst = itemModel or part
 
-        if not prompt.Parent or not part or not part.Parent then
+        local isInvalid = not prompt.Parent or not part or not part.Parent or not prompt.Enabled
+            or IsDescendantOfAnyPlayer(prompt)
+            or IsDescendantOfAnyPlayer(part)
+            or (targetInst and IsDescendantOfAnyPlayer(targetInst))
+            or (targetInst and targetInst:IsA("Model") and targetInst:FindFirstChildOfClass("Humanoid") ~= nil)
+
+        if isInvalid then
             if ItemESPObjects[prompt] then
                 pcall(function()
                     if ItemESPObjects[prompt].Highlight then ItemESPObjects[prompt].Highlight:Destroy() end
-                    if ItemESPObjects[prompt].Billboard then ItemESPObjects[prompt].Billboard.Enabled = false end
+                    if ItemESPObjects[prompt].Billboard then ItemESPObjects[prompt].Billboard:Destroy() end
                 end)
                 ItemESPObjects[prompt] = nil
             end
+            ItemPrompts[prompt] = nil
         else
             -- Prevent multiple ESP objects on the exact same item model/part
             if targetInst and handledTargets[targetInst] then
@@ -1914,13 +1996,21 @@ end
 local function UpdateExitESP(charRoot)
     for inst, data in pairs(ExitObjects) do
         local part = data.Part
-        if not inst.Parent or not part or not part.Parent then
+        local labelLower = string.lower(data.Label or inst.Name or "")
+        local isSign = string.find(labelLower, "sign") or string.find(labelLower, "plaque") or string.find(labelLower, "placa")
+                    or string.find(labelLower, "light") or string.find(labelLower, "lamp") or string.find(labelLower, "poster")
+                    or string.find(labelLower, "decal") or string.find(labelLower, "arrow")
+
+        if not inst.Parent or not part or not part.Parent or isSign then
             if ExitESPObjects[inst] then
                 pcall(function()
                     if ExitESPObjects[inst].Highlight then ExitESPObjects[inst].Highlight:Destroy() end
                     if ExitESPObjects[inst].Billboard then ExitESPObjects[inst].Billboard:Destroy() end
                 end)
                 ExitESPObjects[inst] = nil
+            end
+            if isSign then
+                ExitObjects[inst] = nil
             end
         else
             if Settings.SODExitESP then
