@@ -47,7 +47,7 @@ end
 getgenv().ToxSODGeneration = (tonumber(getgenv().ToxSODGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxSODGeneration
 
-local SODModuleVersion = "2026-11-02-sod-v5"
+local SODModuleVersion = "2026-11-02-sod-v6"
 
 if getgenv().ToxSODModuleLoadedJobId == game.JobId
 and getgenv().ToxSODModuleVersion == SODModuleVersion
@@ -76,6 +76,7 @@ Settings.SODCollapsedSections = typeof(Settings.SODCollapsedSections) == "table"
 
 -- Visuals (All disabled by default)
 Settings.SODItemESP = Settings.SODItemESP == true
+Settings.SODItemChams = Settings.SODItemChams == true
 Settings.SODShowItemValue = Settings.SODShowItemValue == true
 Settings.SODShowItemRarity = Settings.SODShowItemRarity == true
 Settings.SODRarityFilter = tostring(Settings.SODRarityFilter or "All")
@@ -90,13 +91,21 @@ Settings.SODVentESP = Settings.SODVentESP == true
 Settings.SODClosetESP = Settings.SODClosetESP == true
 Settings.SODFullBright = Settings.SODFullBright == true
 
--- Looting
+-- Looting & Autofarm (All disabled by default)
+Settings.SODAutoFarm = Settings.SODAutoFarm == true
+Settings.SODFarmMethod = tostring(Settings.SODFarmMethod or "Tween")
+Settings.SODFarmSpeed = tonumber(Settings.SODFarmSpeed) or 40
+Settings.SODFarmPauseDanger = Settings.SODFarmPauseDanger == true
+Settings.SODFarmDangerDist = tonumber(Settings.SODFarmDangerDist) or 55
+Settings.SODAutoEscape = Settings.SODAutoEscape == true
 Settings.SODInstantSteal = Settings.SODInstantSteal == true
 Settings.SODAutoSteal = Settings.SODAutoSteal == true
 Settings.SODAutoStealRange = tonumber(Settings.SODAutoStealRange) or 15
 Settings.SODInstantVent = Settings.SODInstantVent == true
 
--- Survival
+-- Survival & Combat (All disabled by default)
+Settings.SODRemoveDoors = Settings.SODRemoveDoors == true
+Settings.SODEntityKill = Settings.SODEntityKill == true
 Settings.SODInfiniteStamina = Settings.SODInfiniteStamina == true
 Settings.SODAntiEncumbrance = Settings.SODAntiEncumbrance == true
 Settings.SODCustomSpeed = tonumber(Settings.SODCustomSpeed) or 22
@@ -105,7 +114,11 @@ Settings.SODAutoEvacuateDistance = tonumber(Settings.SODAutoEvacuateDistance) or
 Settings.SODDamageShield = Settings.SODDamageShield == true
 Settings.SODSafePlatform = Settings.SODSafePlatform == true
 Settings.SODPlatformHeight = tonumber(Settings.SODPlatformHeight) or 350
+
+-- Teleports & Utilities (All disabled by default)
 Settings.SODClickTP = Settings.SODClickTP == true
+Settings.SODAutoVote = Settings.SODAutoVote == true
+Settings.SODAntiAFK = Settings.SODAntiAFK == true
 
 -- ==============================================================================
 -- STATE VARIABLES
@@ -122,11 +135,19 @@ local VentObjects = {}        -- [instance] = { Part, Prompt }
 local ClosetObjects = {}      -- [instance] = { Part, Model }
 
 local ItemESPObjects = {}     -- [prompt] = { Billboard, Label }
+local ItemChamsObjects = {}   -- [prompt] = Highlight
 local MonsterESPObjects = {}  -- [model] = { Highlight, Billboard, Label }
 local PlayerESPObjects = {}   -- [player] = { Highlight, Billboard, Label }
 local ExitESPObjects = {}     -- [instance] = { Billboard, Label }
 local VentESPObjects = {}     -- [instance] = { Billboard, Label }
 local ClosetESPObjects = {}   -- [instance] = { Billboard, Label }
+local DoorObjects = {}        -- [doorPart] = { CanCollide = bool, Transparency = number }
+
+local CurrentFarmTween = nil
+local AutoFarmRunning = false
+local EntityKillRunning = false
+local AntiAFKConnection = nil
+local LastVoteCheck = 0
 
 local SafePlatformModel = nil
 local WarnScreenGui = nil
@@ -164,79 +185,186 @@ local RarityRank = {
     ["Secret"] = 6
 }
 
-local KnownItemRarities = {
+local KnownItemRaritiesSorted = {
     -- Mythic
-    ["cursed idol"] = "Mythic",
-    ["idol"] = "Mythic",
-    ["secret core"] = "Mythic",
-    ["alien artifact"] = "Mythic",
-    ["golden skull"] = "Mythic",
-    ["mythic"] = "Mythic",
-    ["secret"] = "Mythic",
-    ["cursed"] = "Mythic",
+    { "cursed idol", "Mythic" },
+    { "alien artifact", "Mythic" },
+    { "golden skull", "Mythic" },
+    { "secret core", "Mythic" },
+    { "dark matter", "Mythic" },
+    { "pandora", "Mythic" },
+    { "mythic", "Mythic" },
+    { "secret", "Mythic" },
+    { "cursed", "Mythic" },
 
     -- Legendary
-    ["gold bar"] = "Legendary",
-    ["gold"] = "Legendary",
-    ["vault"] = "Legendary",
-    ["diamond case"] = "Legendary",
-    ["relic"] = "Legendary",
-    ["prototype"] = "Legendary",
-    ["laser"] = "Legendary",
-    ["ancient vase"] = "Legendary",
-    ["legendary"] = "Legendary",
+    { "diamond case", "Legendary" },
+    { "gold bullion", "Legendary" },
+    { "briefcase of cash", "Legendary" },
+    { "golden idol", "Legendary" },
+    { "crown jewels", "Legendary" },
+    { "holy relic", "Legendary" },
+    { "ancient vase", "Legendary" },
+    { "ancient relic", "Legendary" },
+    { "secret prototype", "Legendary" },
+    { "quantum laser", "Legendary" },
+    { "plasma rifle", "Legendary" },
+    { "gold bar", "Legendary" },
+    { "gold ingot", "Legendary" },
+    { "meteorite", "Legendary" },
+    { "safe vault", "Legendary" },
+    { "prototype", "Legendary" },
+    { "bullion", "Legendary" },
+    { "vault", "Legendary" },
+    { "laser", "Legendary" },
+    { "relic", "Legendary" },
+    { "ingot", "Legendary" },
+    { "gold", "Legendary" },
+    { "legendary", "Legendary" },
 
-    -- Epic (including Projector!)
-    ["projector"] = "Epic",
-    ["safe"] = "Epic",
-    ["diamond"] = "Epic",
-    ["statue"] = "Epic",
-    ["crown"] = "Epic",
-    ["chalice"] = "Epic",
-    ["server"] = "Epic",
-    ["trophy"] = "Epic",
-    ["generator"] = "Epic",
-    ["microscope"] = "Epic",
-    ["telescope"] = "Epic",
-    ["plasma"] = "Epic",
-    ["epic"] = "Epic",
+    -- Epic (Pure Item Identity - regardless of random price!)
+    { "plasma cutter", "Epic" },
+    { "crystal skull", "Epic" },
+    { "crystal ball", "Epic" },
+    { "laser drill", "Epic" },
+    { "golden statue", "Epic" },
+    { "golden trophy", "Epic" },
+    { "blue diamond", "Epic" },
+    { "red diamond", "Epic" },
+    { "server blade", "Epic" },
+    { "ancient scepter", "Epic" },
+    { "projector", "Epic" },
+    { "microscope", "Epic" },
+    { "telescope", "Epic" },
+    { "generator", "Epic" },
+    { "strongbox", "Epic" },
+    { "briefcase", "Epic" },
+    { "sapphire", "Epic" },
+    { "emerald", "Epic" },
+    { "diamond", "Epic" },
+    { "chalice", "Epic" },
+    { "scepter", "Epic" },
+    { "crystal", "Epic" },
+    { "server", "Epic" },
+    { "statue", "Epic" },
+    { "trophy", "Epic" },
+    { "plasma", "Epic" },
+    { "goblet", "Epic" },
+    { "tiara", "Epic" },
+    { "crown", "Epic" },
+    { "safe", "Epic" },
+    { "ruby", "Epic" },
+    { "vase", "Epic" },
+    { "urn", "Epic" },
+    { "epic", "Epic" },
 
     -- Rare
-    ["laptop"] = "Rare",
-    ["painting"] = "Rare",
-    ["gpu"] = "Rare",
-    ["console"] = "Rare",
-    ["microwave"] = "Rare",
-    ["monitor"] = "Rare",
-    ["pc"] = "Rare",
-    ["drone"] = "Rare",
-    ["camera"] = "Rare",
-    ["art"] = "Rare",
-    ["rare"] = "Rare",
+    { "graphics card", "Rare" },
+    { "gaming laptop", "Rare" },
+    { "gaming pc", "Rare" },
+    { "curved monitor", "Rare" },
+    { "dslr camera", "Rare" },
+    { "sound amplifier", "Rare" },
+    { "vr headset", "Rare" },
+    { "video card", "Rare" },
+    { "playstation", "Rare" },
+    { "nintendo", "Rare" },
+    { "safe key", "Rare" },
+    { "microwave", "Rare" },
+    { "amplifier", "Rare" },
+    { "computer", "Rare" },
+    { "painting", "Rare" },
+    { "notebook", "Rare" },
+    { "monitor", "Rare" },
+    { "console", "Rare" },
+    { "artwork", "Rare" },
+    { "macbook", "Rare" },
+    { "desktop", "Rare" },
+    { "laptop", "Rare" },
+    { "camera", "Rare" },
+    { "drone", "Rare" },
+    { "art", "Rare" },
+    { "gpu", "Rare" },
+    { "rtx", "Rare" },
+    { "ps5", "Rare" },
+    { "xbox", "Rare" },
+    { "pc", "Rare" },
+    { "vr", "Rare" },
+    { "rare", "Rare" },
 
     -- Uncommon
-    ["tablet"] = "Uncommon",
-    ["watch"] = "Uncommon",
-    ["headphones"] = "Uncommon",
-    ["router"] = "Uncommon",
-    ["iron"] = "Uncommon",
-    ["blender"] = "Uncommon",
-    ["radio"] = "Uncommon",
-    ["drill"] = "Uncommon",
-    ["uncommon"] = "Uncommon",
+    { "gaming headset", "Uncommon" },
+    { "wireless mouse", "Uncommon" },
+    { "smartwatch", "Uncommon" },
+    { "walkie talkie", "Uncommon" },
+    { "electric kettle", "Uncommon" },
+    { "coffee maker", "Uncommon" },
+    { "headphones", "Uncommon" },
+    { "power drill", "Uncommon" },
+    { "thermostat", "Uncommon" },
+    { "calculator", "Uncommon" },
+    { "flashlight", "Uncommon" },
+    { "hand drill", "Uncommon" },
+    { "keyboard", "Uncommon" },
+    { "earphones", "Uncommon" },
+    { "speaker", "Uncommon" },
+    { "earbuds", "Uncommon" },
+    { "blender", "Uncommon" },
+    { "charger", "Uncommon" },
+    { "router", "Uncommon" },
+    { "tablet", "Uncommon" },
+    { "radio", "Uncommon" },
+    { "watch", "Uncommon" },
+    { "drill", "Uncommon" },
+    { "rolex", "Uncommon" },
+    { "modem", "Uncommon" },
+    { "mouse", "Uncommon" },
+    { "iron", "Uncommon" },
+    { "ipad", "Uncommon" },
+    { "uncommon", "Uncommon" },
 
     -- Common
-    ["phone"] = "Common",
-    ["wallet"] = "Common",
-    ["cash"] = "Common",
-    ["money"] = "Common",
-    ["coins"] = "Common",
-    ["coin"] = "Common",
-    ["key"] = "Common",
-    ["cup"] = "Common",
-    ["clock"] = "Common",
-    ["toaster"] = "Common",
-    ["common"] = "Common",
+    { "stack of cash", "Common" },
+    { "loose change", "Common" },
+    { "smartphone", "Common" },
+    { "water bottle", "Common" },
+    { "energy drink", "Common" },
+    { "coffee mug", "Common" },
+    { "wall clock", "Common" },
+    { "desk clock", "Common" },
+    { "soda can", "Common" },
+    { "cellphone", "Common" },
+    { "duct tape", "Common" },
+    { "bandage", "Common" },
+    { "battery", "Common" },
+    { "toaster", "Common" },
+    { "keycard", "Common" },
+    { "wallet", "Common" },
+    { "bottle", "Common" },
+    { "plates", "Common" },
+    { "change", "Common" },
+    { "money", "Common" },
+    { "coins", "Common" },
+    { "plate", "Common" },
+    { "paper", "Common" },
+    { "phone", "Common" },
+    { "clock", "Common" },
+    { "bills", "Common" },
+    { "coins", "Common" },
+    { "coin", "Common" },
+    { "cash", "Common" },
+    { "bill", "Common" },
+    { "book", "Common" },
+    { "keys", "Common" },
+    { "tape", "Common" },
+    { "soap", "Common" },
+    { "soda", "Common" },
+    { "card", "Common" },
+    { "mug", "Common" },
+    { "cup", "Common" },
+    { "pen", "Common" },
+    { "key", "Common" },
+    { "common", "Common" }
 }
 
 local function DetectRarityFromColor(color)
@@ -435,26 +563,13 @@ local function ReadStringAttr(obj, keys)
     return nil
 end
 
-local function InferRarity(nameLower, value)
-    if nameLower then
-        for k, r in pairs(KnownItemRarities) do
-            if string.find(nameLower, k, 1, true) then
-                return r
-            end
-        end
-    end
+local function InferRarity(nameLower)
+    if not nameLower or nameLower == "" then return "Common" end
 
-    local v = value or 0
-    if v >= 1200 then
-        return "Mythic"
-    elseif v >= 600 then
-        return "Legendary"
-    elseif v >= 250 then
-        return "Epic"
-    elseif v >= 180 then
-        return "Rare"
-    elseif v >= 80 then
-        return "Uncommon"
+    for _, entry in ipairs(KnownItemRaritiesSorted) do
+        if string.find(nameLower, entry[1], 1, true) then
+            return entry[2]
+        end
     end
 
     return "Common"
@@ -566,17 +681,30 @@ local function ResolveItemData(prompt, instance, nameLower)
         end
     end
 
+    -- Live randomized price and weight from the game's displayed BillboardGui
     if guiPrice and guiPrice > 0 then
         rawValue = guiPrice
     end
 
+    -- Visual color from the game's GUI is the direct indicator of the item's tier
     if guiColorRarity then
         rawRarity = guiColorRarity
     end
 
+    -- If no attribute or GUI color found, identify what the item is by its name (NEVER by price!)
     if not rawRarity or rawRarity == "" then
-        rawRarity = InferRarity(nameLower, rawValue)
+        rawRarity = InferRarity(nameLower)
     end
+
+    -- Normalize capitalization
+    local norm = string.lower(tostring(rawRarity or "common"))
+    if norm == "common" then rawRarity = "Common"
+    elseif norm == "uncommon" then rawRarity = "Uncommon"
+    elseif norm == "rare" then rawRarity = "Rare"
+    elseif norm == "epic" then rawRarity = "Epic"
+    elseif norm == "legendary" then rawRarity = "Legendary"
+    elseif norm == "mythic" or norm == "secret" then rawRarity = "Mythic"
+    else rawRarity = "Common" end
 
     if not rawValue or rawValue == 0 then
         rawValue = InferValue(nameLower)
@@ -1215,6 +1343,10 @@ local function UnregisterPrompt(prompt)
         pcall(function() ItemESPObjects[prompt].Billboard:Destroy() end)
         ItemESPObjects[prompt] = nil
     end
+    if ItemChamsObjects[prompt] then
+        pcall(function() ItemChamsObjects[prompt]:Destroy() end)
+        ItemChamsObjects[prompt] = nil
+    end
     if VentESPObjects[prompt] then
         pcall(function() VentESPObjects[prompt].Billboard:Destroy() end)
         VentESPObjects[prompt] = nil
@@ -1308,9 +1440,76 @@ end
 -- WORKSPACE DISCOVERY & SCANNING
 -- ==============================================================================
 
+local function IsDoorPart(inst)
+    if not inst or not inst:IsA("BasePart") then return false end
+    local name = string.lower(inst.Name)
+    local parentName = inst.Parent and string.lower(inst.Parent.Name) or ""
+
+    if Player and Player.Character and inst:IsDescendantOf(Player.Character) then
+        return false
+    end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr.Character and inst:IsDescendantOf(plr.Character) then
+            return false
+        end
+    end
+
+    if string.find(name, "door") or string.find(name, "gate") or string.find(name, "barricade")
+    or string.find(parentName, "door") or string.find(parentName, "gate") or string.find(parentName, "barricade") then
+        return true
+    end
+    return false
+end
+
+local function ApplyRemoveDoors(enable)
+    if enable then
+        for _, inst in ipairs(Workspace:GetDescendants()) do
+            if IsDoorPart(inst) then
+                if DoorObjects[inst] == nil then
+                    DoorObjects[inst] = {
+                        CanCollide = inst.CanCollide,
+                        Transparency = inst.Transparency
+                    }
+                end
+                pcall(function()
+                    inst.CanCollide = false
+                    if inst.Transparency < 0.45 then
+                        inst.Transparency = 0.5
+                    end
+                end)
+            end
+        end
+    else
+        for inst, orig in pairs(DoorObjects) do
+            if inst and inst.Parent then
+                pcall(function()
+                    inst.CanCollide = orig.CanCollide
+                    inst.Transparency = orig.Transparency
+                end)
+            end
+        end
+        table.clear(DoorObjects)
+    end
+end
+
 local function HandleDescendant(obj)
     if obj:IsA("ProximityPrompt") then
         RegisterPrompt(obj)
+    elseif obj:IsA("BasePart") then
+        if Settings.SODRemoveDoors and IsDoorPart(obj) then
+            if DoorObjects[obj] == nil then
+                DoorObjects[obj] = {
+                    CanCollide = obj.CanCollide,
+                    Transparency = obj.Transparency
+                }
+            end
+            pcall(function()
+                obj.CanCollide = false
+                if obj.Transparency < 0.45 then
+                    obj.Transparency = 0.5
+                end
+            end)
+        end
     elseif obj:IsA("Model") then
         if IsMonsterEntity(obj) then
             RegisterMonster(obj)
@@ -1464,6 +1663,64 @@ local function UpdateItemESP(charRoot)
             else
                 if ItemESPObjects[prompt] and ItemESPObjects[prompt].Billboard and ItemESPObjects[prompt].Billboard.Enabled then
                     ItemESPObjects[prompt].Billboard.Enabled = false
+                end
+            end
+        end
+    end
+end
+
+local function UpdateItemChams(charRoot)
+    if not Settings.SODItemChams then
+        for prompt, hl in pairs(ItemChamsObjects) do
+            if hl then
+                pcall(function() hl:Destroy() end)
+            end
+        end
+        table.clear(ItemChamsObjects)
+        return
+    end
+
+    for prompt, data in pairs(ItemPrompts) do
+        local part = data.Part
+        if not prompt.Parent or not part or not part.Parent then
+            if ItemChamsObjects[prompt] then
+                pcall(function() ItemChamsObjects[prompt]:Destroy() end)
+                ItemChamsObjects[prompt] = nil
+            end
+        else
+            local show = MatchesRarityFilter(data.Rarity, data.Value)
+            local dist = charRoot and (part.Position - charRoot.Position).Magnitude or 0
+
+            if show and dist <= 1200 then
+                local hl = ItemChamsObjects[prompt]
+                local targetInst = data.Object and data.Object:IsA("Model") and data.Object or part
+
+                if not hl or not hl.Parent or hl.Adornee ~= targetInst then
+                    if hl then
+                        pcall(function() hl:Destroy() end)
+                    end
+
+                    hl = Instance.new("Highlight")
+                    hl.Name = "ToxSODItemCham"
+                    hl.Adornee = targetInst
+                    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    hl.FillTransparency = 0.45
+                    hl.OutlineTransparency = 0.1
+                    hl.Parent = targetInst
+                    ItemChamsObjects[prompt] = hl
+                end
+
+                local rColor = RarityColors[data.Rarity] or Color3.fromRGB(220, 220, 220)
+                if hl.FillColor ~= rColor then
+                    hl.FillColor = rColor
+                    hl.OutlineColor = rColor
+                end
+                if not hl.Enabled then
+                    hl.Enabled = true
+                end
+            else
+                if ItemChamsObjects[prompt] and ItemChamsObjects[prompt].Enabled then
+                    ItemChamsObjects[prompt].Enabled = false
                 end
             end
         end
@@ -1845,6 +2102,374 @@ local function CheckAutoEvacuate(closestDist)
     end
 end
 
+local function IsPlayerBagFull()
+    local char = Player.Character
+    local targets = { Player }
+    if char then table.insert(targets, char) end
+    for _, t in ipairs(targets) do
+        local isFull = t:GetAttribute("BagFull") or t:GetAttribute("IsFull") or t:GetAttribute("InventoryFull")
+        if isFull == true then return true end
+        local currWeight = t:GetAttribute("Weight") or t:GetAttribute("CurrentWeight") or t:GetAttribute("CarryWeight")
+        local maxWeight = t:GetAttribute("MaxWeight") or t:GetAttribute("BagCapacity") or t:GetAttribute("MaxCapacity")
+        if currWeight and maxWeight and maxWeight > 0 and currWeight >= maxWeight then
+            return true
+        end
+    end
+
+    local pGui = Player:FindFirstChild("PlayerGui")
+    if pGui then
+        for _, gui in ipairs(pGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Enabled then
+                for _, desc in ipairs(gui:GetDescendants()) do
+                    if desc:IsA("TextLabel") and desc.Visible then
+                        local txt = string.lower(desc.Text)
+                        if string.find(txt, "bag full") or string.find(txt, "inventory full") or string.find(txt, "max capacity") then
+                            return true
+                        end
+                        local curW, maxW = string.match(txt, "([%d%.]+)%s*/%s*([%d%.]+)")
+                        if curW and maxW then
+                            local cNum = tonumber(curW)
+                            local mNum = tonumber(maxW)
+                            if cNum and mNum and mNum > 0 and cNum >= mNum then
+                                return true
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function GetBestExit()
+    local _, _, root = GetCharacterState()
+    local best = nil
+    local minDist = 99999
+    for _, data in pairs(ExitObjects) do
+        if data.Part and data.Part.Parent then
+            if root then
+                local dist = (data.Part.Position - root.Position).Magnitude
+                if dist < minDist then
+                    minDist = dist
+                    best = data
+                end
+            else
+                best = data
+                break
+            end
+        end
+    end
+    return best
+end
+
+local function CancelFarmTween()
+    if CurrentFarmTween then
+        pcall(function()
+            CurrentFarmTween:Cancel()
+        end)
+        CurrentFarmTween = nil
+    end
+end
+
+local function StartAutoFarmLoop()
+    if AutoFarmRunning then return end
+    AutoFarmRunning = true
+
+    task.spawn(function()
+        local myGen = getgenv().ToxSODGeneration
+        while Settings.SODAutoFarm and getgenv().ToxSODGeneration == myGen do
+            task.wait(0.15)
+            if not Settings.SODAutoFarm then break end
+
+            local char, hum, root = GetCharacterState()
+            if not char or not hum or hum.Health <= 0 or not root then
+                CancelFarmTween()
+                task.wait(1)
+                continue
+            end
+
+            -- 1. Pause on Danger
+            if Settings.SODFarmPauseDanger then
+                local dangerDist = tonumber(Settings.SODFarmDangerDist) or 55
+                local isDanger = false
+                for _, mData in pairs(ActiveMonsters) do
+                    if mData.Root and mData.Root.Parent then
+                        local d = (mData.Root.Position - root.Position).Magnitude
+                        if d <= dangerDist then
+                            isDanger = true
+                            break
+                        end
+                    end
+                end
+                if isDanger then
+                    CancelFarmTween()
+                    root.AssemblyLinearVelocity = Vector3.zero
+                    task.wait(0.5)
+                    continue
+                end
+            end
+
+            -- 2. Auto Escape if bag is full
+            if Settings.SODAutoEscape and IsPlayerBagFull() then
+                local exit = GetBestExit()
+                if exit and exit.Part then
+                    local exitPos = exit.Part.Position + Vector3.new(0, 3, 0)
+                    local exitDist = (exitPos - root.Position).Magnitude
+                    if exitDist > 6 then
+                        if Settings.SODFarmMethod == "Teleport" then
+                            TeleportTo(CFrame.new(exitPos), "Exit")
+                            task.wait(0.2)
+                        elseif Settings.SODFarmMethod == "Walk" then
+                            hum:MoveTo(exitPos)
+                        else
+                            local speed = tonumber(Settings.SODFarmSpeed) or 40
+                            local dur = math.max(0.1, exitDist / speed)
+                            CancelFarmTween()
+                            CurrentFarmTween = TweenService:Create(root, TweenInfo.new(dur, Enum.EasingStyle.Linear), { CFrame = CFrame.new(exitPos) })
+                            CurrentFarmTween:Play()
+                            CurrentFarmTween.Completed:Wait()
+                        end
+                    else
+                        task.wait(0.5)
+                    end
+                    continue
+                end
+            end
+
+            -- 3. Select Best Loot Target
+            local bestPrompt, bestData, bestScore = nil, nil, -999999
+            for prompt, data in pairs(ItemPrompts) do
+                if prompt.Parent and data.Part and data.Part.Parent then
+                    if MatchesRarityFilter(data.Rarity, data.Value) then
+                        local dist = (data.Part.Position - root.Position).Magnitude
+                        local val = data.Value or 100
+                        local score = (val * 2) - dist
+                        if score > bestScore then
+                            bestScore = score
+                            bestPrompt = prompt
+                            bestData = data
+                        end
+                    end
+                end
+            end
+
+            if not bestData or not bestPrompt then
+                task.wait(0.5)
+                continue
+            end
+
+            -- Surface elevation compensation (+2.5 studs)
+            local targetPos = bestData.Part.Position + Vector3.new(0, 2.5, 0)
+            local dist = (targetPos - root.Position).Magnitude
+
+            if dist > 4.5 then
+                if Settings.SODFarmMethod == "Teleport" then
+                    TeleportTo(CFrame.new(targetPos), bestData.Name)
+                    task.wait(0.1)
+                elseif Settings.SODFarmMethod == "Walk" then
+                    hum:MoveTo(targetPos)
+                    local t0 = os.clock()
+                    while (targetPos - root.Position).Magnitude > 4.5 and os.clock() - t0 < 3.5 do
+                        task.wait(0.1)
+                        if not Settings.SODAutoFarm or getgenv().ToxSODGeneration ~= myGen then break end
+                    end
+                else -- Tween
+                    local speed = tonumber(Settings.SODFarmSpeed) or 40
+                    local dur = math.max(0.1, dist / speed)
+                    CancelFarmTween()
+                    CurrentFarmTween = TweenService:Create(root, TweenInfo.new(dur, Enum.EasingStyle.Linear), { CFrame = CFrame.new(targetPos) })
+                    CurrentFarmTween:Play()
+
+                    local reached = false
+                    local conn = CurrentFarmTween.Completed:Connect(function()
+                        reached = true
+                    end)
+                    local t0 = os.clock()
+                    while not reached and os.clock() - t0 < dur + 0.4 do
+                        task.wait(0.05)
+                        if not Settings.SODAutoFarm or getgenv().ToxSODGeneration ~= myGen then
+                            CancelFarmTween()
+                            break
+                        end
+                        if Settings.SODFarmPauseDanger then
+                            for _, mData in pairs(ActiveMonsters) do
+                                if mData.Root and (mData.Root.Position - root.Position).Magnitude <= (tonumber(Settings.SODFarmDangerDist) or 55) then
+                                    CancelFarmTween()
+                                    break
+                                end
+                            end
+                        end
+                    end
+                    pcall(function() conn:Disconnect() end)
+                end
+            end
+
+            -- Steal Prompt
+            if bestPrompt.Parent then
+                TriggerPrompt(bestPrompt)
+                task.wait(0.2)
+            end
+        end
+
+        CancelFarmTween()
+        AutoFarmRunning = false
+    end)
+end
+
+local function IsLocalPlayerMonster()
+    local char = Player.Character
+    if not char then return false end
+    if ActiveMonsters[char] ~= nil then return true end
+    local role = Player:GetAttribute("Role") or (char and char:GetAttribute("Role"))
+    if role and (string.find(string.lower(tostring(role)), "monster") or string.find(string.lower(tostring(role)), "entity")) then
+        return true
+    end
+    local cName = string.lower(char.Name)
+    if string.find(cName, "monster") or string.find(cName, "entity") then
+        return true
+    end
+    for _, t in ipairs(char:GetChildren()) do
+        if t:IsA("Tool") and (string.find(string.lower(t.Name), "claw") or string.find(string.lower(t.Name), "attack") or string.find(string.lower(t.Name), "kill") or string.find(string.lower(t.Name), "weapon")) then
+            return true
+        end
+    end
+    return false
+end
+
+local function StartEntityKillLoop()
+    if EntityKillRunning then return end
+    EntityKillRunning = true
+
+    task.spawn(function()
+        local myGen = getgenv().ToxSODGeneration
+        while Settings.SODEntityKill and getgenv().ToxSODGeneration == myGen do
+            task.wait(0.1)
+            if not Settings.SODEntityKill then break end
+
+            local char, hum, root = GetCharacterState()
+            if not char or not hum or hum.Health <= 0 or not root then
+                task.wait(1)
+                continue
+            end
+
+            if not IsLocalPlayerMonster() then
+                task.wait(1)
+                continue
+            end
+
+            -- Find closest alive survivor
+            local bestTarget = nil
+            local bestDist = 99999
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= Player then
+                    local pChar = plr.Character
+                    local pHum = pChar and pChar:FindFirstChildOfClass("Humanoid")
+                    local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
+                    if pChar and pHum and pHum.Health > 0 and pRoot and not ActiveMonsters[pChar] then
+                        local d = (pRoot.Position - root.Position).Magnitude
+                        if d < bestDist then
+                            bestDist = d
+                            bestTarget = { Player = plr, Character = pChar, Humanoid = pHum, Root = pRoot }
+                        end
+                    end
+                end
+            end
+
+            if not bestTarget then
+                task.wait(0.5)
+                continue
+            end
+
+            local tRoot = bestTarget.Root
+            local tHum = bestTarget.Humanoid
+            if tRoot and tRoot.Parent and tHum and tHum.Health > 0 then
+                root.AssemblyLinearVelocity = Vector3.zero
+                char:PivotTo(tRoot.CFrame * CFrame.new(0, 0, 1.2))
+
+                pcall(function()
+                    local backpack = Player:FindFirstChild("Backpack")
+                    if backpack then
+                        for _, tool in ipairs(backpack:GetChildren()) do
+                            if tool:IsA("Tool") then
+                                tool.Parent = char
+                            end
+                        end
+                    end
+                    local tool = char:FindFirstChildOfClass("Tool")
+                    if tool then
+                        tool:Activate()
+                    end
+                    if mouse1click then
+                        mouse1click()
+                    end
+                end)
+            end
+        end
+        EntityKillRunning = false
+    end)
+end
+
+local function ProcessAutoVote()
+    if not Settings.SODAutoVote then return end
+    local now = os.clock()
+    if now - LastVoteCheck < 2.0 then return end
+    LastVoteCheck = now
+
+    pcall(function()
+        for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
+            if rem:IsA("RemoteEvent") then
+                local rLower = string.lower(rem.Name)
+                if string.find(rLower, "vote") then
+                    rem:FireServer(1)
+                    rem:FireServer("1")
+                end
+            end
+        end
+    end)
+
+    pcall(function()
+        local _, _, root = GetCharacterState()
+        if not root then return end
+        for _, pad in ipairs(Workspace:GetDescendants()) do
+            if pad:IsA("BasePart") then
+                local pLower = string.lower(pad.Name)
+                local pParent = pad.Parent and string.lower(pad.Parent.Name) or ""
+                if (string.find(pLower, "votepad") or string.find(pLower, "mapvote") or string.find(pLower, "monstervote"))
+                or (string.find(pParent, "vote") and string.find(pLower, "pad")) then
+                    if firetouchinterest then
+                        firetouchinterest(root, pad, 0)
+                        task.wait(0.05)
+                        firetouchinterest(root, pad, 1)
+                    end
+                    break
+                end
+            end
+        end
+    end)
+end
+
+local function SetupAntiAFK(enable)
+    if enable then
+        if AntiAFKConnection then return end
+        local vu = game:GetService("VirtualUser")
+        AntiAFKConnection = Player.Idled:Connect(function()
+            if Settings.SODAntiAFK then
+                pcall(function()
+                    vu:CaptureController()
+                    vu:ClickButton2(Vector2.new(0, 0))
+                end)
+            end
+        end)
+        table.insert(SODConnections, AntiAFKConnection)
+    else
+        if AntiAFKConnection then
+            pcall(function() AntiAFKConnection:Disconnect() end)
+            AntiAFKConnection = nil
+        end
+    end
+end
+
 -- ==============================================================================
 -- SAFE PLATFORM & UTILITIES
 -- ==============================================================================
@@ -2012,10 +2637,15 @@ TrackConnection(RunService.Heartbeat:Connect(function(dt)
         LastESPInterval = now
         local closestDist = UpdateMonsterESP(root)
         UpdateItemESP(root)
+        UpdateItemChams(root)
         UpdatePlayerESP(root)
         UpdateExitESP(root)
         UpdateVentESP(root)
         UpdateClosetESP(root)
+
+        if Settings.SODAutoVote then
+            pcall(ProcessAutoVote)
+        end
 
         if root and closestDist then
             CheckAutoEvacuate(closestDist)
@@ -2025,6 +2655,18 @@ end))
 
 if Settings.SODFullBright then
     pcall(ApplyFullBright)
+end
+if Settings.SODRemoveDoors then
+    pcall(function() ApplyRemoveDoors(true) end)
+end
+if Settings.SODAutoFarm then
+    pcall(StartAutoFarmLoop)
+end
+if Settings.SODEntityKill then
+    pcall(StartEntityKillLoop)
+end
+if Settings.SODAntiAFK then
+    pcall(function() SetupAntiAFK(true) end)
 end
 
 -- ==============================================================================
@@ -2047,6 +2689,23 @@ SODCreateToggle(
         AutoSaveConfiguration()
     end,
     "SODItemESP"
+)
+
+SODCreateToggle(
+    "Item Chams",
+    GamePage,
+    Settings.SODItemChams,
+    function(v)
+        Settings.SODItemChams = v == true
+        if not v then
+            for _, hl in pairs(ItemChamsObjects) do
+                if hl then pcall(function() hl:Destroy() end) end
+            end
+            table.clear(ItemChamsObjects)
+        end
+        AutoSaveConfiguration()
+    end,
+    "SODItemChams"
 )
 
 SODCreateDropdown(
@@ -2217,6 +2876,60 @@ SODCreateToggle(
 CreateSODSection("LOOTING")
 
 SODCreateToggle(
+    "Auto Farm",
+    GamePage,
+    Settings.SODAutoFarm,
+    function(v)
+        Settings.SODAutoFarm = v == true
+        if v then
+            StartAutoFarmLoop()
+        else
+            CancelFarmTween()
+        end
+        AutoSaveConfiguration()
+    end,
+    "SODAutoFarm"
+)
+
+SODCreateDropdown(
+    "Farm Movement",
+    { "Tween", "Walk", "Teleport" },
+    GamePage,
+    Settings.SODFarmMethod or "Tween",
+    function(choice)
+        Settings.SODFarmMethod = tostring(choice)
+        AutoSaveConfiguration()
+    end
+)
+
+SODCreateToggleWithValue(
+    "Pause on Danger",
+    GamePage,
+    Settings.SODFarmPauseDanger,
+    Settings.SODFarmDangerDist or 55,
+    function(v)
+        Settings.SODFarmPauseDanger = v == true
+        AutoSaveConfiguration()
+    end,
+    function(val)
+        Settings.SODFarmDangerDist = math.clamp(tonumber(val) or 55, 20, 150)
+        AutoSaveConfiguration()
+    end,
+    "SODFarmPauseDanger"
+)
+
+SODCreateToggle(
+    "Auto Escape",
+    GamePage,
+    Settings.SODAutoEscape,
+    function(v)
+        Settings.SODAutoEscape = v == true
+        AutoSaveConfiguration()
+    end,
+    "SODAutoEscape"
+)
+
+SODCreateToggle(
     "Instant Steal",
     GamePage,
     Settings.SODInstantSteal,
@@ -2314,11 +3027,34 @@ SODCreateButton("TP to Nearest Loot", GamePage, function()
     end
 end)
 
--- ==============================================================================
--- UI BUILDER - SECTION 3: SURVIVAL
--- ==============================================================================
 
 CreateSODSection("SURVIVAL")
+
+SODCreateToggle(
+    "Remove Doors",
+    GamePage,
+    Settings.SODRemoveDoors,
+    function(v)
+        Settings.SODRemoveDoors = v == true
+        ApplyRemoveDoors(v == true)
+        AutoSaveConfiguration()
+    end,
+    "SODRemoveDoors"
+)
+
+SODCreateToggle(
+    "Auto Entity Kill",
+    GamePage,
+    Settings.SODEntityKill,
+    function(v)
+        Settings.SODEntityKill = v == true
+        if v then
+            StartEntityKillLoop()
+        end
+        AutoSaveConfiguration()
+    end,
+    "SODEntityKill"
+)
 
 SODCreateToggle(
     "Infinite Stamina",
@@ -2418,9 +3154,6 @@ SODCreateButton("TP to Platform", GamePage, function()
     end
 end)
 
--- ==============================================================================
--- UI BUILDER - SECTION 4: TELEPORTS
--- ==============================================================================
 
 CreateSODSection("TELEPORTS")
 
@@ -2522,17 +3255,46 @@ SODCreateToggle(
     "SODClickTP"
 )
 
--- ==============================================================================
--- CLEANUP HANDLER
--- ==============================================================================
+SODCreateToggle(
+    "Auto Vote",
+    GamePage,
+    Settings.SODAutoVote,
+    function(v)
+        Settings.SODAutoVote = v == true
+        AutoSaveConfiguration()
+    end,
+    "SODAutoVote"
+)
+
+SODCreateToggle(
+    "Anti AFK",
+    GamePage,
+    Settings.SODAntiAFK,
+    function(v)
+        Settings.SODAntiAFK = v == true
+        SetupAntiAFK(v == true)
+        AutoSaveConfiguration()
+    end,
+    "SODAntiAFK"
+)
+
 
 getgenv().ToxSODCleanup = function()
     getgenv().ToxSODGeneration = (tonumber(getgenv().ToxSODGeneration) or 0) + 1
+
+    CancelFarmTween()
+    ApplyRemoveDoors(false)
+    SetupAntiAFK(false)
 
     for _, conn in ipairs(SODConnections) do
         pcall(function() conn:Disconnect() end)
     end
     table.clear(SODConnections)
+
+    for _, hl in pairs(ItemChamsObjects) do
+        pcall(function() hl:Destroy() end)
+    end
+    table.clear(ItemChamsObjects)
 
     for _, esp in pairs(ItemESPObjects) do
         pcall(function() esp.Billboard:Destroy() end)
