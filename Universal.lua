@@ -1681,7 +1681,8 @@ local function CreateJoinInterface()
     end)
 
     if JoinGamesGui then
-        JoinGamesGui.Visible = false
+        pcall(function() JoinGamesGui:Destroy() end)
+        getgenv().JoinGamesGui = nil
     end
 
     JoinGamesButton = nil
@@ -1735,7 +1736,9 @@ local SupportedToxGames = {
     { Name = "Lucky Block Battleground", PlaceId = 662417684, Code = "LBB", Status = "online" },
     { Name = "Flee the Facility", PlaceId = 893973440, Code = "FTF", Status = "updating" },
     { Name = "Prison Life", PlaceId = 155615604, Code = "PL", Status = "online" },
-    { Name = "Steal Or Die", PlaceId = 119925538689885, Code = "SOD", Status = "online" }
+    { Name = "Steal Or Die", PlaceId = 119925538689885, Code = "SOD", Status = "online" },
+    { Name = "Bug Evolution", PlaceId = 70650894743738, Code = "BE", Status = "online" },
+    { Name = "When In Disgrace", PlaceId = 109440000000000 + 485612336, Code = "WID", Status = "online" }
 }
 
 local function RefreshQuickJoinGames()
@@ -1747,6 +1750,26 @@ local function RefreshQuickJoinGames()
     for _, child in ipairs(scroll:GetChildren()) do
         if child:IsA("Frame") then
             pcall(function() child:Destroy() end)
+        end
+    end
+
+    -- Dynamically ensure any registered game in GameModuleRegistry is present
+    local knownPlaceIds = {}
+    for _, g in ipairs(SupportedToxGames) do
+        knownPlaceIds[g.PlaceId] = true
+    end
+    if getgenv().GameModuleRegistry then
+        for pId, data in pairs(getgenv().GameModuleRegistry) do
+            local numId = tonumber(pId)
+            if numId and not knownPlaceIds[numId] then
+                table.insert(SupportedToxGames, {
+                    Name = ResolveGameName(numId),
+                    PlaceId = numId,
+                    Code = data.ShortName or "GAME",
+                    Status = "online"
+                })
+                knownPlaceIds[numId] = true
+            end
         end
     end
 
