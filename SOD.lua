@@ -85,7 +85,10 @@ Settings.SODVoteMapChoice3 = tostring(Settings.SODVoteMapChoice3 or "Liminal Luc
 Settings.SODAntiAFK = Settings.SODAntiAFK == true
 Settings.SODAutoOpenCase = Settings.SODAutoOpenCase == true
 Settings.SODCaseChoice = tostring(Settings.SODCaseChoice or "Basketball Case ($350)")
-Settings.SODCaseDelay = tostring(Settings.SODCaseDelay or "1.0s")
+Settings.SODCaseDelay = tostring(Settings.SODCaseDelay or "3.0s")
+if Settings.SODCaseDelay == "1.0s" or Settings.SODCaseDelay == "0.5s" then
+    Settings.SODCaseDelay = "3.0s"
+end
 local SODConnections = {}
 local SODCurrentSection = nil
 local SODSections = {}
@@ -2942,9 +2945,9 @@ local function StartAutoCaseLoop()
             pcall(function()
                 OpenCrate(Settings.SODCaseChoice)
             end)
-            local dStr = tostring(Settings.SODCaseDelay or "1.0s")
-            local delayNum = tonumber(string.match(dStr, "[%d%.]+")) or 1.0
-            task.wait(math.clamp(delayNum, 0.4, 5.0))
+            local dStr = tostring(Settings.SODCaseDelay or "3.0s")
+            local delayNum = tonumber(string.match(dStr, "[%d%.]+")) or 3.0
+            task.wait(math.clamp(delayNum, 1.0, 10.0))
         end
         AutoCaseThread = nil
     end)
@@ -3387,9 +3390,9 @@ SODCreateDropdown(
 )
 SODCreateDropdown(
     "Case Delay",
-    { "0.5s", "1.0s", "1.5s", "2.0s" },
+    { "1.5s", "2.0s", "2.5s", "3.0s", "4.0s", "5.0s" },
     GamePage,
-    Settings.SODCaseDelay or "1.0s",
+    Settings.SODCaseDelay or "3.0s",
     function(choice)
         Settings.SODCaseDelay = tostring(choice)
         AutoSaveConfiguration()
