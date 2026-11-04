@@ -1,16 +1,7 @@
--- ==============================================================================
--- TOXHUB - STEAL OR DIE MODULE (SOD.lua)
--- Game URL: https://www.roblox.com/games/119925538689885/Steal-Or-Die
--- PlaceId: 119925538689885
--- Raw URL: https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/SOD.lua
--- ==============================================================================
-
 local SODPlaceId = 119925538689885
-
 if game.PlaceId ~= SODPlaceId then
     return
 end
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -21,11 +12,9 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui = game:GetService("CoreGui")
 local PathfindingService = game:GetService("PathfindingService")
-
 local Player = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera or Workspace:FindFirstChildOfClass("Camera")
 local Mouse = Player and Player:GetMouse()
-
 local Settings = getgenv().Settings
 local GamePage = getgenv().GamePage
 local CreateToggle = getgenv().CreateToggle
@@ -37,45 +26,32 @@ local CustomNotify = getgenv().CustomNotify or function() end
 local AutoSaveConfiguration = getgenv().AutoSaveConfiguration or function() end
 local AddConnection = getgenv().AddConnection or function(c) return c end
 local SyncToggleVisuals = getgenv().SyncToggleVisuals
-
 if not Settings
 or not GamePage
 or not CreateToggle
 or not CreateButton then
     return
 end
-
 getgenv().ToxSODGeneration = (tonumber(getgenv().ToxSODGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxSODGeneration
-
 local SODModuleVersion = "2026-11-02-sod-v6"
-
 if getgenv().ToxSODModuleLoadedJobId == game.JobId
 and getgenv().ToxSODModuleVersion == SODModuleVersion
 and getgenv().ToxSODModulePage == GamePage
 and not getgenv().Destroyed then
     return
 end
-
 if getgenv().ToxSODCleanup then
     pcall(getgenv().ToxSODCleanup)
 end
-
 for _, child in ipairs(GamePage:GetChildren()) do
     if child:IsA("GuiObject") then
         child:Destroy()
     end
 end
-
--- ==============================================================================
--- SETTINGS & PERSISTENCE (ALL DISABLED BY DEFAULT)
--- ==============================================================================
-
 Settings.SODCollapsedSections = typeof(Settings.SODCollapsedSections) == "table"
     and Settings.SODCollapsedSections
     or {}
-
--- Visuals (All disabled by default)
 Settings.SODItemESP = Settings.SODItemESP == true
 Settings.SODItemESPStyle = tostring(Settings.SODItemESPStyle or "Name + Value")
 Settings.SODExitESP = Settings.SODExitESP == true
@@ -90,8 +66,6 @@ Settings.SODMinValue = tonumber(Settings.SODMinValue) or 250
 Settings.SODESPTextSize = math.clamp(tonumber(Settings.SODESPTextSize) or 10, 8, 18)
 Settings.SODESPMaxDistance = math.clamp(tonumber(Settings.SODESPMaxDistance) or 350, 100, 1000)
 Settings.SODFullBright = Settings.SODFullBright == true
-
--- Looting & Autofarm (All disabled by default)
 Settings.SODAutoFarm = Settings.SODAutoFarm == true
 Settings.SODFarmSpeed = math.clamp(tonumber(Settings.SODFarmSpeed) or 40, 25, 55)
 Settings.SODAutoEscape = Settings.SODAutoEscape == true
@@ -100,12 +74,8 @@ Settings.SODInstantSteal = Settings.SODInstantSteal == true
 Settings.SODAutoSteal = Settings.SODAutoSteal == true
 Settings.SODAutoStealRange = tonumber(Settings.SODAutoStealRange) or 15
 Settings.SODInstantVent = Settings.SODInstantVent == true
-
--- Survival & Combat (All disabled by default)
 Settings.SODEntityKill = Settings.SODEntityKill == true
 Settings.SODInfiniteStamina = Settings.SODInfiniteStamina == true
-
--- Teleports & Utilities (All disabled by default)
 Settings.SODClickTP = Settings.SODClickTP == true
 Settings.SODAutoVote = Settings.SODAutoVote == true
 Settings.SODVoteMonster = tostring(Settings.SODVoteMonster or "AI")
@@ -116,42 +86,32 @@ Settings.SODAntiAFK = Settings.SODAntiAFK == true
 Settings.SODAutoOpenCase = Settings.SODAutoOpenCase == true
 Settings.SODCaseChoice = tostring(Settings.SODCaseChoice or "Basketball Case ($350)")
 Settings.SODCaseDelay = tostring(Settings.SODCaseDelay or "1.0s")
-
--- ==============================================================================
--- STATE VARIABLES
--- ==============================================================================
-
 local SODConnections = {}
 local SODCurrentSection = nil
 local SODSections = {}
-
-local ItemPrompts = {}        -- [prompt] = { Object, Part, Name, NameLower, Rarity, Value, Weight }
-local ActiveMonsters = {}     -- [model] = { Model, Root, Name, Kind, IsPlayer }
-local ExitObjects = {}        -- [instance] = { Part, Model, Label }
-local VentObjects = {}        -- [instance] = { Part, Prompt }
-local ClosetObjects = {}      -- [instance] = { Part, Model }
-local DoorObjects = {}        -- [part] = { CanCollide, Transparency }
-
-local ItemESPObjects = {}     -- [prompt] = { Highlight, Billboard, Label }
-local ExitESPObjects = {}     -- [instance] = { Highlight, Billboard, Label }
-local MonsterESPObjects = {}  -- [model] = { Highlight, Billboard, Label }
-local PlayerESPObjects = {}   -- [player] = { Highlight, Billboard, Label }
-local VentESPObjects = {}     -- [instance] = { Highlight, Billboard, Label }
-local ClosetESPObjects = {}   -- [instance] = { Highlight, Billboard, Label }
-
+local ItemPrompts = {}        
+local ActiveMonsters = {}     
+local ExitObjects = {}        
+local VentObjects = {}        
+local ClosetObjects = {}      
+local DoorObjects = {}        
+local ItemESPObjects = {}     
+local ExitESPObjects = {}     
+local MonsterESPObjects = {}  
+local PlayerESPObjects = {}   
+local VentESPObjects = {}     
+local ClosetESPObjects = {}   
 local SafePlatformModel = nil
 local WarnScreenGui = nil
 local WarnFrame = nil
 local WarnStroke = nil
 local WarnText = nil
-
 local CurrentFarmTween = nil
 local AutoFarmRunning = false
 local EntityKillRunning = false
 local AntiAFKConnection = nil
 local LastVoteCheck = 0
 getgenv().ToxSODFarmGen = tonumber(getgenv().ToxSODFarmGen) or 0
-
 local OrigHoldDurations = setmetatable({}, { __mode = "k" })
 local OrigLightingProps = {
     Brightness = Lighting.Brightness,
@@ -161,18 +121,12 @@ local OrigLightingProps = {
     OutdoorAmbient = Lighting.OutdoorAmbient,
     Ambient = Lighting.Ambient
 }
-
 local LastAuraCheck = 0
 local LastESPInterval = 0
 local LastStaminaCheck = 0
 local LastDescendantSweep = 0
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
-
--- ==============================================================================
--- RARITIES & ITEM TAXONOMY
--- ==============================================================================
-
 local RarityRank = {
     ["Common"] = 1,
     ["Uncommon"] = 2,
@@ -182,9 +136,7 @@ local RarityRank = {
     ["Mythic"] = 6,
     ["Secret"] = 6
 }
-
 local KnownItemRaritiesSorted = {
-    -- Mythic
     { "cursed idol", "Mythic" },
     { "alien artifact", "Mythic" },
     { "golden skull", "Mythic" },
@@ -194,8 +146,6 @@ local KnownItemRaritiesSorted = {
     { "mythic", "Mythic" },
     { "secret", "Mythic" },
     { "cursed", "Mythic" },
-
-    -- Legendary
     { "diamond case", "Legendary" },
     { "gold bullion", "Legendary" },
     { "briefcase of cash", "Legendary" },
@@ -219,8 +169,6 @@ local KnownItemRaritiesSorted = {
     { "ingot", "Legendary" },
     { "gold", "Legendary" },
     { "legendary", "Legendary" },
-
-    -- Epic (Pure Item Identity - regardless of random price!)
     { "plasma cutter", "Epic" },
     { "crystal skull", "Epic" },
     { "crystal ball", "Epic" },
@@ -255,8 +203,6 @@ local KnownItemRaritiesSorted = {
     { "vase", "Epic" },
     { "urn", "Epic" },
     { "epic", "Epic" },
-
-    -- Rare
     { "graphics card", "Rare" },
     { "gaming laptop", "Rare" },
     { "gaming pc", "Rare" },
@@ -289,8 +235,6 @@ local KnownItemRaritiesSorted = {
     { "pc", "Rare" },
     { "vr", "Rare" },
     { "rare", "Rare" },
-
-    -- Uncommon
     { "gaming headset", "Uncommon" },
     { "wireless mouse", "Uncommon" },
     { "smartwatch", "Uncommon" },
@@ -320,8 +264,6 @@ local KnownItemRaritiesSorted = {
     { "iron", "Uncommon" },
     { "ipad", "Uncommon" },
     { "uncommon", "Uncommon" },
-
-    -- Common
     { "stack of cash", "Common" },
     { "loose change", "Common" },
     { "smartphone", "Common" },
@@ -364,34 +306,26 @@ local KnownItemRaritiesSorted = {
     { "key", "Common" },
     { "common", "Common" }
 }
-
 local function DetectRarityFromColor(color)
     if not color then return nil end
     local r, g, b = color.R * 255, color.G * 255, color.B * 255
-
-    -- Purple / Magenta -> Epic
     if (r > 110 and b > 160 and g < 160) or (r > 140 and b > 190 and g < 180) then
         return "Epic"
     end
-    -- Red -> Mythic
     if r > 190 and g < 90 and b < 90 then
         return "Mythic"
     end
-    -- Gold / Orange / Yellow -> Legendary
     if (r > 200 and g > 130 and b < 90) or (r > 230 and g > 180 and b < 60) then
         return "Legendary"
     end
-    -- Blue / Cyan -> Rare
     if (b > 170 and r < 130) or (b > 190 and g > 100 and r < 90) then
         return "Rare"
     end
-    -- Green -> Uncommon
     if g > 150 and r < 140 and b < 140 then
         return "Uncommon"
     end
     return nil
 end
-
 local FilterMinRank = {
     ["All"] = 1,
     ["Common+"] = 1,
@@ -401,7 +335,6 @@ local FilterMinRank = {
     ["Legendary+"] = 5,
     ["Mythic Only"] = 6
 }
-
 local RarityColors = {
     ["Common"] = Color3.fromRGB(220, 220, 230),
     ["Uncommon"] = Color3.fromRGB(70, 230, 110),
@@ -411,7 +344,6 @@ local RarityColors = {
     ["Mythic"] = Color3.fromRGB(255, 45, 85),
     ["Secret"] = Color3.fromRGB(255, 45, 85)
 }
-
 local GenericNames = {
     ["handle"] = true,
     ["part"] = true,
@@ -426,18 +358,15 @@ local GenericNames = {
     ["interact"] = true,
     ["proximityprompt"] = true,
 }
-
 local NonLootKeywords = {
     "door", "gate", "vent", "locker", "closet", "wardrobe", "hidespot",
     "exit", "escape", "extract", "evac", "button", "switch",
     "breaker", "fuse", "elevator", "barrier", "barricade"
 }
-
 local NonMonsterKeywords = {
     "door", "gate", "room", "spawn", "barrier", "zone", "prop", "wall", "floor",
     "vent", "closet", "locker", "wardrobe", "hidespot", "elevator", "box", "crate"
 }
-
 local LootKeywords = {
     "phone", "wallet", "gold", "laptop", "safe", "bar", "watch", "key",
     "tablet", "camera", "painting", "statue", "jewelry", "console",
@@ -445,7 +374,6 @@ local LootKeywords = {
     "loot", "item", "pickup", "diamond", "core", "relic", "skull", "idol",
     "gpu", "card", "coin", "money", "artifact", "trophy", "ingot"
 }
-
 local EstimatedValues = {
     ["mythic"] = 3500,
     ["secret"] = 5000,
@@ -479,7 +407,6 @@ local EstimatedValues = {
     ["coin"] = 80,
     ["key"] = 50,
 }
-
 local function InferValue(nameLower)
     if not nameLower or nameLower == "" then return 100 end
     for word, val in pairs(EstimatedValues) do
@@ -489,16 +416,10 @@ local function InferValue(nameLower)
     end
     return 100
 end
-
 local MonsterKeywords = {
     "entity", "monster", "locust", "hollow", "hunter", "creature",
     "killer", "beast", "wendell", "rictus", "the locust"
 }
-
--- ==============================================================================
--- HELPER UTILITIES
--- ==============================================================================
-
 local function TrackConnection(connection)
     if connection then
         table.insert(SODConnections, connection)
@@ -506,14 +427,12 @@ local function TrackConnection(connection)
     end
     return connection
 end
-
 local function GetCharacterState()
     local character = Player and Player.Character
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
     local root = character and character:FindFirstChild("HumanoidRootPart")
     return character, humanoid, root
 end
-
 local function HasSubstring(text, list)
     if not text then return false end
     local lower = string.lower(text)
@@ -524,7 +443,6 @@ local function HasSubstring(text, list)
     end
     return false
 end
-
 local function ReadNumberAttr(obj, keys)
     if not obj then return nil end
     for _, k in ipairs(keys) do
@@ -545,7 +463,6 @@ local function ReadNumberAttr(obj, keys)
     end
     return nil
 end
-
 local function ReadStringAttr(obj, keys)
     if not obj then return nil end
     for _, k in ipairs(keys) do
@@ -560,24 +477,19 @@ local function ReadStringAttr(obj, keys)
     end
     return nil
 end
-
 local function InferRarity(nameLower)
     if not nameLower or nameLower == "" then return "Common" end
-
     for _, entry in ipairs(KnownItemRaritiesSorted) do
         if string.find(nameLower, entry[1], 1, true) then
             return entry[2]
         end
     end
-
     return "Common"
 end
-
 local function GetItemHierarchy(prompt)
     local list = {}
     if not prompt then return list end
     table.insert(list, prompt)
-
     local curr = prompt.Parent
     while curr and curr ~= Workspace and curr ~= game do
         table.insert(list, curr)
@@ -585,18 +497,14 @@ local function GetItemHierarchy(prompt)
     end
     return list
 end
-
 local function ResolveItemData(prompt, instance, nameLower)
     local hierarchy = GetItemHierarchy(prompt)
-
     local rawRarity = nil
     local rawValue = nil
     local rawWeight = nil
     local guiColorRarity = nil
     local guiPrice = nil
-
     for _, obj in ipairs(hierarchy) do
-        -- Rarity string / number
         if not rawRarity then
             for _, k in ipairs({ "Rarity", "rarity", "Tier", "tier", "ItemRarity", "Grade", "Quality" }) do
                 local a = obj:GetAttribute(k)
@@ -617,8 +525,6 @@ local function ResolveItemData(prompt, instance, nameLower)
                 end
             end
         end
-
-        -- Value number
         if not rawValue then
             for _, k in ipairs({ "Value", "Price", "Worth", "Cash", "Amount", "CurrentValue" }) do
                 local a = obj:GetAttribute(k)
@@ -639,8 +545,6 @@ local function ResolveItemData(prompt, instance, nameLower)
                 end
             end
         end
-
-        -- Weight number
         if not rawWeight then
             for _, k in ipairs({ "Weight", "Mass", "Kg", "KG", "CarryWeight", "ItemWeight" }) do
                 local a = obj:GetAttribute(k)
@@ -656,14 +560,11 @@ local function ResolveItemData(prompt, instance, nameLower)
                 end
             end
         end
-
-        -- Inspect in-game BillboardGui / TextLabels for exact displayed rarity word, price, and weight!
         for _, child in ipairs(obj:GetChildren()) do
             if child:IsA("BillboardGui") and child.Name ~= "ToxSODItemTag" and child.Name ~= "ToxSOD_ItemBB" then
                 for _, desc in ipairs(child:GetDescendants()) do
                     if desc:IsA("TextLabel") and desc.Text and desc.Text ~= "" then
                         local tUpper = string.upper(desc.Text)
-                        -- 1. Exact Rarity Word directly from game UI text
                         if not guiColorRarity then
                             for _, rWord in ipairs({ "MYTHIC", "LEGENDARY", "EPIC", "RARE", "UNCOMMON", "COMMON" }) do
                                 if string.find(tUpper, rWord, 1, true) then
@@ -672,17 +573,14 @@ local function ResolveItemData(prompt, instance, nameLower)
                                 end
                             end
                         end
-                        -- 2. Exact Price from game UI text
                         if not guiPrice and string.find(desc.Text, "%$") then
                             local n = tonumber(string.match(desc.Text, "%$([%d%,%.]+)"))
                             if n and n > 0 then guiPrice = n end
                         end
-                        -- 3. Exact Weight from game UI text
                         if not rawWeight and (string.find(desc.Text, "kg") or string.find(desc.Text, "KG")) then
                             local w = tonumber(string.match(desc.Text, "([%d%.]+)%s*[kK][gG]"))
                             if w and w > 0 then rawWeight = w end
                         end
-                        -- 4. Color fallback
                         if not guiColorRarity and desc.TextColor3 then
                             local detected = DetectRarityFromColor(desc.TextColor3)
                             if detected then guiColorRarity = detected end
@@ -695,23 +593,15 @@ local function ResolveItemData(prompt, instance, nameLower)
             end
         end
     end
-
-    -- Live randomized price and weight from the game's displayed BillboardGui
     if guiPrice and guiPrice > 0 then
         rawValue = guiPrice
     end
-
-    -- Visual color from the game's GUI is the direct indicator of the item's tier
     if guiColorRarity then
         rawRarity = guiColorRarity
     end
-
-    -- If no attribute or GUI color found, identify what the item is by its name (NEVER by price!)
     if not rawRarity or rawRarity == "" then
         rawRarity = InferRarity(nameLower)
     end
-
-    -- Normalize capitalization
     local norm = string.lower(tostring(rawRarity or "common"))
     if norm == "common" then rawRarity = "Common"
     elseif norm == "uncommon" then rawRarity = "Uncommon"
@@ -720,14 +610,11 @@ local function ResolveItemData(prompt, instance, nameLower)
     elseif norm == "legendary" then rawRarity = "Legendary"
     elseif norm == "mythic" or norm == "secret" then rawRarity = "Mythic"
     else rawRarity = "Common" end
-
     if not rawValue or rawValue == 0 then
         rawValue = InferValue(nameLower)
     end
-
     return rawRarity, rawValue or 100, rawWeight or 0
 end
-
 local function FormatCurrency(num)
     if not num then return "$0" end
     local rounded = math.floor(tonumber(num) or 0)
@@ -735,7 +622,6 @@ local function FormatCurrency(num)
     local formatted = s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
     return "$" .. formatted
 end
-
 local function FormatWeight(w)
     if not w or w <= 0 then return "" end
     if w >= 10 then
@@ -747,7 +633,6 @@ local function FormatWeight(w)
     end
     return " | " .. s .. "kg"
 end
-
 local function GetItemModel(inst)
     if not inst then return nil end
     local curr = inst:IsA("ProximityPrompt") and inst.Parent or inst
@@ -766,7 +651,6 @@ local function GetItemModel(inst)
     end
     return nil
 end
-
 local function ResolveBasePart(inst)
     if not inst then return nil end
     if inst:IsA("BasePart") then return inst end
@@ -808,7 +692,6 @@ local function ResolveBasePart(inst)
     end
     return inst:FindFirstChildWhichIsA("BasePart", true)
 end
-
 local function ResolveItemName(prompt, instance)
     if prompt and prompt.ObjectText and prompt.ObjectText ~= "" then
         local clean = string.gsub(prompt.ObjectText, "^%s*(.-)%s*$", "%1")
@@ -816,93 +699,73 @@ local function ResolveItemName(prompt, instance)
             return clean
         end
     end
-
     local base = instance
     if base and base:IsA("Attachment") and base.Parent then
         base = base.Parent
     end
-
     if base and base:IsA("BasePart") and base.Parent and base.Parent ~= Workspace then
         local bNameLower = string.lower(base.Name)
         if GenericNames[bNameLower] or base.Parent:IsA("Model") then
             return base.Parent.Name
         end
     end
-
     if base then
         return base.Name
     end
-
     return "Item"
 end
-
 local function GetGuiParent()
     local ok, h = pcall(function() return gethui and gethui() end)
     if ok and h then return h end
     return CoreGui
 end
-
 local function AllowToxTeleport(seconds, reason)
     if getgenv().AllowToxTeleport then
         getgenv().AllowToxTeleport(seconds or 1.5, reason or "SOD")
     end
 end
-
 local function TeleportTo(targetCF, label)
     local character, humanoid, root = GetCharacterState()
     if not humanoid or humanoid.Health <= 0 or not root then
         CustomNotify("Character unavailable", Color3.fromRGB(255, 100, 100), 2)
         return false
     end
-
     if typeof(targetCF) == "Vector3" then
         targetCF = CFrame.new(targetCF)
     end
     if typeof(targetCF) ~= "CFrame" then return false end
-
     AllowToxTeleport(2.5, "SOD " .. tostring(label or "Teleport"))
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
-
     local destCF = targetCF + Vector3.new(0, 2.5, 0)
     if character then
         character:PivotTo(destCF)
     else
         root.CFrame = destCF
     end
-
     task.defer(function()
         if root and root.Parent then
             root.AssemblyLinearVelocity = Vector3.zero
             root.AssemblyAngularVelocity = Vector3.zero
         end
     end)
-
     CustomNotify("Teleported to " .. tostring(label or "Target"), Color3.fromRGB(100, 255, 100), 2)
     return true
 end
-
--- ==============================================================================
--- COLLAPSIBLE SECTIONS & CONTROLS UI
--- ==============================================================================
-
 local function ApplySectionState(section)
     if typeof(section) ~= "table" then return end
     local collapsed = Settings.SODCollapsedSections[section.Key] == true
-
     if section.Header and section.Header.Parent then
         section.Header.Text = collapsed
             and "  > " .. section.Name
             or "  v " .. section.Name
     end
-
     for _, object in ipairs(section.Controls) do
         if object and object.Parent and object:IsA("GuiObject") then
             object.Visible = not collapsed
         end
     end
 end
-
 local function TrackControl(object)
     if SODCurrentSection and object and object:IsA("GuiObject") then
         table.insert(SODCurrentSection.Controls, object)
@@ -910,33 +773,27 @@ local function TrackControl(object)
     end
     return object
 end
-
 local function SODCreateToggle(...)
     return TrackControl(CreateToggle(...))
 end
-
 local function SODCreateToggleWithValue(...)
     return TrackControl(CreateToggleWithValue(...))
 end
-
 local function SODCreateButton(...)
     return TrackControl(CreateButton(...))
 end
-
 local function SODCreateDropdown(...)
     if CreateDropdown then
         return TrackControl(CreateDropdown(...))
     end
     return nil
 end
-
 local function CreateToggleWithChoiceLocal(Name, Page, Options, DefaultToggle, DefaultChoice, CallbackToggle, CallbackChoice, SyncKey)
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, -5, 0, 39)
     Container.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
     Container.BorderSizePixel = 0
     Container.Parent = Page
-
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(1, -165, 1, 0)
     Label.Position = UDim2.new(0, 12, 0, 0)
@@ -947,7 +804,6 @@ local function CreateToggleWithChoiceLocal(Name, Page, Options, DefaultToggle, D
     Label.Font = Enum.Font.GothamMedium
     Label.TextXAlignment = Enum.TextXAlignment.Left
     Label.Parent = Container
-
     local ChoiceButton = Instance.new("TextButton")
     ChoiceButton.Size = UDim2.new(0, 95, 0, 25)
     ChoiceButton.Position = UDim2.new(1, -150, 0.5, -12)
@@ -959,7 +815,6 @@ local function CreateToggleWithChoiceLocal(Name, Page, Options, DefaultToggle, D
     ChoiceButton.Font = Enum.Font.GothamBold
     ChoiceButton.Parent = Container
     local ChoiceCorner = Instance.new("UICorner") ChoiceCorner.CornerRadius = UDim.new(0, 4) ChoiceCorner.Parent = ChoiceButton
-
     local CurrentIdx = 1
     for i, opt in ipairs(Options) do
         if opt == DefaultChoice then
@@ -967,7 +822,6 @@ local function CreateToggleWithChoiceLocal(Name, Page, Options, DefaultToggle, D
             break
         end
     end
-
     ChoiceButton.MouseButton1Click:Connect(function()
         if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
         CurrentIdx = CurrentIdx + 1
@@ -978,7 +832,6 @@ local function CreateToggleWithChoiceLocal(Name, Page, Options, DefaultToggle, D
         end
         AutoSaveConfiguration()
     end)
-
     local ToggleButton = Instance.new("TextButton")
     ToggleButton.Size = UDim2.new(0, 38, 0, 20)
     ToggleButton.Position = UDim2.new(1, -48, 0.5, -10)
@@ -988,7 +841,6 @@ local function CreateToggleWithChoiceLocal(Name, Page, Options, DefaultToggle, D
     ToggleButton.AutoButtonColor = false
     ToggleButton.Parent = Container
     local ToggleCorner = Instance.new("UICorner") ToggleCorner.CornerRadius = UDim.new(0, 4) ToggleCorner.Parent = ToggleButton
-
     local Indicator = Instance.new("Frame")
     Indicator.Size = UDim2.new(0, 14, 0, 14)
     Indicator.Position = UDim2.new(0, 3, 0.5, -7)
@@ -996,9 +848,7 @@ local function CreateToggleWithChoiceLocal(Name, Page, Options, DefaultToggle, D
     Indicator.BorderSizePixel = 0
     Indicator.Parent = ToggleButton
     local IndicatorCorner = Instance.new("UICorner") IndicatorCorner.CornerRadius = UDim.new(0, 3) IndicatorCorner.Parent = Indicator
-
     local Enabled = getgenv().ToxOptionsReady == false and false or (DefaultToggle == true)
-
     local function UpdateToggle()
         if Enabled then
             ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 180, 70)
@@ -1008,7 +858,6 @@ local function CreateToggleWithChoiceLocal(Name, Page, Options, DefaultToggle, D
             Indicator.Position = UDim2.new(0, 3, 0.5, -7)
         end
     end
-
     local Controller = {
         Button = Container,
         SetVisual = function(Value)
@@ -1025,14 +874,12 @@ local function CreateToggleWithChoiceLocal(Name, Page, Options, DefaultToggle, D
             end
         end
     }
-
     if getgenv().RegisterSharedToggle then
         getgenv().RegisterSharedToggle(SyncKey, Controller)
     end
     if getgenv().RegisterStartupToggleCallback then
         getgenv().RegisterStartupToggleCallback(SyncKey, CallbackToggle)
     end
-
     ToggleButton.MouseButton1Click:Connect(function()
         if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
         Enabled = not Enabled
@@ -1048,26 +895,20 @@ local function CreateToggleWithChoiceLocal(Name, Page, Options, DefaultToggle, D
         end
         AutoSaveConfiguration()
     end)
-
     UpdateToggle()
-
     if getgenv().RegisterToxSearchControl then
         getgenv().RegisterToxSearchControl(Name, Page, Container)
     end
-
     return Container
 end
-
 local function SODCreateToggleWithChoice(...)
     local fn = CreateToggleWithChoice or CreateToggleWithChoiceLocal
     return TrackControl(fn(...))
 end
-
 local function CreateSODSection(text)
     local name = tostring(text)
     local key = string.gsub(name, "%s+", "")
     local button = Instance.new("TextButton")
-
     button.Size = UDim2.new(1, -5, 0, 26)
     button.BackgroundColor3 = Color3.fromRGB(13, 13, 21)
     button.BorderSizePixel = 0
@@ -1077,61 +918,46 @@ local function CreateSODSection(text)
     button.TextXAlignment = Enum.TextXAlignment.Left
     button.AutoButtonColor = false
     button.Parent = GamePage
-
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 5)
     corner.Parent = button
-
     local section = {
         Name = name,
         Key = key,
         Header = button,
         Controls = {}
     }
-
     table.insert(SODSections, section)
     SODCurrentSection = section
-
     TrackConnection(button.MouseButton1Click:Connect(function()
         Settings.SODCollapsedSections[key] = not Settings.SODCollapsedSections[key]
         ApplySectionState(section)
         AutoSaveConfiguration()
     end))
-
     ApplySectionState(section)
     return button
 end
-
--- ==============================================================================
--- SCREEN WARNING RADAR (MONSTER PROXIMITY)
--- ==============================================================================
-
 local function EnsureWarningUI()
     if WarnScreenGui and WarnScreenGui.Parent then return end
-
     local gui = Instance.new("ScreenGui")
     gui.Name = "ToxSODWarnRadar"
     gui.ResetOnSpawn = false
     gui.IgnoreGuiInset = true
-
     if not pcall(function() gui.Parent = GetGuiParent() end) then
         gui.Parent = Player:WaitForChild("PlayerGui")
     end
-
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, 0, 1, 0)
     frame.BackgroundTransparency = 1
     frame.Visible = false
     frame.Active = false
     frame.Parent = gui
-
     local stroke = Instance.new("UIStroke")
     stroke.Color = Color3.fromRGB(255, 30, 45)
     stroke.Thickness = 10
     stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     stroke.Transparency = 0.7
     stroke.Parent = frame
-
     local text = Instance.new("TextLabel")
     text.Size = UDim2.new(0, 400, 0, 30)
     text.Position = UDim2.new(0.5, -200, 0, 45)
@@ -1142,22 +968,18 @@ local function EnsureWarningUI()
     text.TextSize = 16
     text.Text = ""
     text.Parent = frame
-
     WarnScreenGui = gui
     WarnFrame = frame
     WarnStroke = stroke
     WarnText = text
 end
-
 EnsureWarningUI()
-
 local function UpdateMonsterWarning(closestDist, monsterLabel)
     if not WarnFrame or not WarnFrame.Parent then return end
     if not Settings.SODMonsterWarn then
         WarnFrame.Visible = false
         return
     end
-
     if closestDist and closestDist <= Settings.SODMonsterWarnDistance then
         WarnFrame.Visible = true
         WarnText.Text = string.format("MONSTER [%s]: %dm", string.upper(tostring(monsterLabel or "ENTITY")), math.floor(closestDist))
@@ -1168,11 +990,6 @@ local function UpdateMonsterWarning(closestDist, monsterLabel)
         WarnFrame.Visible = false
     end
 end
-
--- ==============================================================================
--- LIGHTING & VISION MODIFIERS
--- ==============================================================================
-
 local function ApplyFullBright()
     Lighting.Brightness = 2
     Lighting.ClockTime = 14
@@ -1180,7 +997,6 @@ local function ApplyFullBright()
     Lighting.GlobalShadows = false
     Lighting.OutdoorAmbient = Color3.fromRGB(160, 160, 160)
     Lighting.Ambient = Color3.fromRGB(145, 145, 145)
-
     for _, child in ipairs(Lighting:GetChildren()) do
         if child:IsA("Atmosphere") or child:IsA("ColorCorrectionEffect") or child:IsA("BlurEffect") then
             if child:GetAttribute("ToxDisabled") == nil then
@@ -1190,7 +1006,6 @@ local function ApplyFullBright()
         end
     end
 end
-
 local function RestoreLighting()
     Lighting.Brightness = OrigLightingProps.Brightness or 1
     Lighting.ClockTime = OrigLightingProps.ClockTime or 12
@@ -1198,7 +1013,6 @@ local function RestoreLighting()
     Lighting.GlobalShadows = OrigLightingProps.GlobalShadows ~= false
     Lighting.OutdoorAmbient = OrigLightingProps.OutdoorAmbient or Color3.fromRGB(128, 128, 128)
     Lighting.Ambient = OrigLightingProps.Ambient or Color3.fromRGB(0, 0, 0)
-
     for _, child in ipairs(Lighting:GetChildren()) do
         if child:GetAttribute("ToxDisabled") ~= nil then
             pcall(function() child.Enabled = child:GetAttribute("ToxDisabled") end)
@@ -1206,11 +1020,6 @@ local function RestoreLighting()
         end
     end
 end
-
--- ==============================================================================
--- INTERACTION & PROXIMITY PROMPT ENGINE
--- ==============================================================================
-
 local function SetInstantPrompt(prompt, enable)
     if not prompt then return end
     pcall(function()
@@ -1228,7 +1037,6 @@ local function SetInstantPrompt(prompt, enable)
         end
     end)
 end
-
 local function TriggerPrompt(prompt)
     if not prompt or not prompt.Parent then return false end
     pcall(function()
@@ -1249,8 +1057,6 @@ local function TriggerPrompt(prompt)
     end
     return false
 end
-
--- Global ProximityPromptService hook for instant vent and steal
 pcall(function()
     TrackConnection(ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt, plr)
         if plr ~= Player then return end
@@ -1258,7 +1064,6 @@ pcall(function()
         local pName = prompt.Parent and string.lower(prompt.Parent.Name) or ""
         local isVent = VentObjects[prompt] or string.find(act, "unscrew") or string.find(pName, "vent")
         local isCloset = (prompt.Parent and ClosetObjects[prompt.Parent]) or string.find(act, "hide")
-
         if Settings.SODInstantVent and isVent then
             pcall(function()
                 prompt.HoldDuration = 0
@@ -1271,7 +1076,6 @@ pcall(function()
                 end
             end)
         elseif Settings.SODInstantSteal and not isCloset then
-            -- Triggers instant steal/collect on press
             pcall(function()
                 prompt.HoldDuration = 0
                 if fireproximityprompt then
@@ -1285,14 +1089,8 @@ pcall(function()
         end
     end))
 end)
-
--- ==============================================================================
--- LOOT & OBJECT REGISTRATION
--- ==============================================================================
-
 local function IsLootObject(prompt, instance, nameLower)
     if not prompt or not instance then return false end
-
     local action = prompt.ActionText and string.lower(prompt.ActionText) or ""
     if action ~= "" then
         if string.find(action, "door") or string.find(action, "unscrew") or string.find(action, "hide") then
@@ -1309,29 +1107,24 @@ local function IsLootObject(prompt, instance, nameLower)
             return true
         end
     end
-
     if nameLower and HasSubstring(nameLower, NonLootKeywords) then
         return false
     end
-
     if prompt.ObjectText and prompt.ObjectText ~= "" then
         local objLower = string.lower(prompt.ObjectText)
         if not HasSubstring(objLower, NonLootKeywords) then
             return true
         end
     end
-
     if instance:GetAttribute("Value") ~= nil
     or instance:GetAttribute("Price") ~= nil
     or instance:GetAttribute("Worth") ~= nil
     or instance:GetAttribute("Rarity") ~= nil then
         return true
     end
-
     if nameLower and HasSubstring(nameLower, LootKeywords) then
         return true
     end
-
     local parent = instance.Parent
     if parent and parent ~= Workspace then
         if parent:GetAttribute("Value") ~= nil or parent:GetAttribute("Rarity") ~= nil then
@@ -1342,24 +1135,17 @@ local function IsLootObject(prompt, instance, nameLower)
             return true
         end
     end
-
     if not HasSubstring(nameLower, NonLootKeywords) then
         return true
     end
-
     return false
 end
-
 local function IsPartOfLocalPlayer(inst)
     if not inst then return false end
-
-    -- 1. Check local player character and its descendants (limbs, tools, accessories)
     local char = Player.Character
     if char and (inst == char or inst:IsDescendantOf(char)) then
         return true
     end
-
-    -- 2. Check local player backpack and Player instance
     local bp = Player:FindFirstChild("Backpack")
     if bp and inst:IsDescendantOf(bp) then
         return true
@@ -1367,22 +1153,16 @@ local function IsPartOfLocalPlayer(inst)
     if inst == Player or inst:IsDescendantOf(Player) then
         return true
     end
-
-    -- 3. Check Workspace.CurrentCamera and its descendants (first-person viewmodels, arms, held items)
     local cam = Workspace.CurrentCamera or Camera
     if cam and (inst == cam or inst:IsDescendantOf(cam)) then
         return true
     end
-
-    -- 4. Check matching assembly root part
     if char then
         local root = char:FindFirstChild("HumanoidRootPart")
         if inst:IsA("BasePart") and root and inst.AssemblyRootPart == root.AssemblyRootPart then
             return true
         end
     end
-
-    -- 5. Hierarchy name check for FPS viewmodels, arms, first-person rigs
     local curr = inst
     while curr and curr ~= Workspace and curr ~= game do
         local cName = string.lower(curr.Name)
@@ -1391,18 +1171,14 @@ local function IsPartOfLocalPlayer(inst)
         end
         curr = curr.Parent
     end
-
-    -- 6. Lens proximity check: any object within 3.8 studs of camera is held in front of viewport
     if cam and (inst:IsA("BasePart") or (inst:IsA("Model") and inst.PrimaryPart)) then
         local p = inst:IsA("BasePart") and inst or inst.PrimaryPart
         if p and (p.Position - cam.CFrame.Position).Magnitude <= 3.8 then
             return true
         end
     end
-
     return false
 end
-
 local function IsDescendantOfAnyPlayer(inst)
     if not inst then return false end
     if IsPartOfLocalPlayer(inst) then
@@ -1422,30 +1198,21 @@ local function IsDescendantOfAnyPlayer(inst)
     end
     return false
 end
-
 local function RegisterPrompt(prompt)
     if not prompt or not prompt.Parent then return end
     if ItemPrompts[prompt] or VentObjects[prompt] then return end
-
-    -- NEVER register prompts that are on or inside any player character, camera, viewmodel, or backpack
     if IsDescendantOfAnyPlayer(prompt) or IsDescendantOfAnyPlayer(prompt.Parent) or IsPartOfLocalPlayer(prompt) or IsPartOfLocalPlayer(prompt.Parent) then
         return
     end
-
     local instance = prompt.Parent
     local part = ResolveBasePart(prompt) or ResolveBasePart(instance)
     if not part or IsDescendantOfAnyPlayer(part) or IsPartOfLocalPlayer(part) then return end
-
     local name = ResolveItemName(prompt, instance)
     local nameLower = string.lower(name)
-
-    -- Detect decorative signs/lights/plaques so they are never classified as exits or loot
     local isSignOrProp = string.find(nameLower, "sign") or string.find(nameLower, "plaque") or string.find(nameLower, "placa")
                       or string.find(nameLower, "light") or string.find(nameLower, "lamp") or string.find(nameLower, "poster")
                       or string.find(nameLower, "decal") or string.find(nameLower, "board") or string.find(nameLower, "frame")
                       or string.find(nameLower, "billboard") or string.find(nameLower, "texture")
-
-    -- Vent
     if string.find(nameLower, "vent") or (prompt.ActionText and string.find(string.lower(prompt.ActionText), "unscrew")) then
         VentObjects[prompt] = {
             Part = part,
@@ -1462,8 +1229,6 @@ local function RegisterPrompt(prompt)
         end))
         return
     end
-
-    -- Closet
     if string.find(nameLower, "closet") or string.find(nameLower, "locker") or string.find(nameLower, "wardrobe") or string.find(nameLower, "hidespot")
     or (prompt.ActionText and string.find(string.lower(prompt.ActionText), "hide")) then
         ClosetObjects[instance] = {
@@ -1473,8 +1238,6 @@ local function RegisterPrompt(prompt)
         }
         return
     end
-
-    -- Exit (Must NOT be a wall sign or light plaque)
     if not isSignOrProp and (
         (prompt.ActionText and (string.find(string.lower(prompt.ActionText), "escape") or string.find(string.lower(prompt.ActionText), "extract") or string.find(string.lower(prompt.ActionText), "leave") or string.find(string.lower(prompt.ActionText), "evac") or string.find(string.lower(prompt.ActionText), "drive")))
         or string.find(nameLower, "van") or string.find(nameLower, "truck")
@@ -1487,12 +1250,9 @@ local function RegisterPrompt(prompt)
         }
         return
     end
-
-    -- Loot
     if IsLootObject(prompt, instance, nameLower) then
         local rarity, val, weight = ResolveItemData(prompt, instance, nameLower)
         local itemModel = GetItemModel(prompt) or GetItemModel(instance) or (instance:IsA("Model") and instance or nil)
-
         ItemPrompts[prompt] = {
             Object = instance,
             Model = itemModel,
@@ -1503,11 +1263,9 @@ local function RegisterPrompt(prompt)
             Value = val,
             Weight = weight
         }
-
         if Settings.SODInstantSteal then
             SetInstantPrompt(prompt, true)
         end
-
         TrackConnection(prompt:GetPropertyChangedSignal("HoldDuration"):Connect(function()
             if Settings.SODInstantSteal and prompt.HoldDuration ~= 0 then
                 prompt.HoldDuration = 0
@@ -1515,12 +1273,10 @@ local function RegisterPrompt(prompt)
         end))
     end
 end
-
 local function UnregisterPrompt(prompt)
     SetInstantPrompt(prompt, false)
     ItemPrompts[prompt] = nil
     VentObjects[prompt] = nil
-
     if ItemESPObjects[prompt] then
         pcall(function() ItemESPObjects[prompt].Billboard:Destroy() end)
         ItemESPObjects[prompt] = nil
@@ -1534,22 +1290,13 @@ local function UnregisterPrompt(prompt)
         VentESPObjects[prompt] = nil
     end
 end
-
--- ==============================================================================
--- MONSTER & ENTITY REGISTRATION
--- ==============================================================================
-
 local function IsMonsterEntity(model)
     if not model or not model:IsA("Model") then return false end
     if model == Player.Character then return false end
-
     local nameLower = string.lower(model.Name)
-
-    -- CRITICAL FIX: Exclude doors, gates, rooms, spawns, props, barriers, etc.
     if HasSubstring(nameLower, NonMonsterKeywords) then
         return false
     end
-
     local plr = Players:GetPlayerFromCharacter(model)
     if plr then
         if plr:GetAttribute("IsEntity") == true then
@@ -1561,8 +1308,6 @@ local function IsMonsterEntity(model)
         end
         return false
     end
-
-    -- Real NPC monsters must have a Humanoid or AnimationController
     local hum = model:FindFirstChildOfClass("Humanoid")
     local anim = model:FindFirstChildOfClass("AnimationController")
     if not hum and not anim then
@@ -1570,34 +1315,26 @@ local function IsMonsterEntity(model)
             return false
         end
     end
-
     if model:GetAttribute("IsEntity") == true then
         return true, model.Name, model:GetAttribute("EntityKind") or "ENTITY"
     end
-
     local charKind = model:GetAttribute("EntityKind")
     if typeof(charKind) == "string" and charKind ~= "" then
         return true, model.Name, charKind
     end
-
     if HasSubstring(nameLower, MonsterKeywords) then
         return true, model.Name, "ENTITY"
     end
-
     return false
 end
-
 local function RegisterMonster(model)
     if ActiveMonsters[model] then return end
     local isMon, name, kind = IsMonsterEntity(model)
     if not isMon then return end
-
     local root = model:FindFirstChild("HumanoidRootPart")
         or model.PrimaryPart
         or model:FindFirstChildWhichIsA("BasePart")
-
     if not root then return end
-
     ActiveMonsters[model] = {
         Model = model,
         Root = root,
@@ -1606,7 +1343,6 @@ local function RegisterMonster(model)
         IsPlayer = Players:GetPlayerFromCharacter(model) ~= nil
     }
 end
-
 local function UnregisterMonster(model)
     ActiveMonsters[model] = nil
     if MonsterESPObjects[model] then
@@ -1617,16 +1353,10 @@ local function UnregisterMonster(model)
         MonsterESPObjects[model] = nil
     end
 end
-
--- ==============================================================================
--- WORKSPACE DISCOVERY & SCANNING
--- ==============================================================================
-
 local function IsDoorPart(inst)
     if not inst or not inst:IsA("BasePart") then return false end
     local name = string.lower(inst.Name)
     local parentName = inst.Parent and string.lower(inst.Parent.Name) or ""
-
     if Player and Player.Character and inst:IsDescendantOf(Player.Character) then
         return false
     end
@@ -1635,14 +1365,12 @@ local function IsDoorPart(inst)
             return false
         end
     end
-
     if string.find(name, "door") or string.find(name, "gate") or string.find(name, "barricade")
     or string.find(parentName, "door") or string.find(parentName, "gate") or string.find(parentName, "barricade") then
         return true
     end
     return false
 end
-
 local function ApplyRemoveDoors(enable)
     if enable then
         for _, inst in ipairs(Workspace:GetDescendants()) do
@@ -1673,7 +1401,6 @@ local function ApplyRemoveDoors(enable)
         table.clear(DoorObjects)
     end
 end
-
 local function HandleDescendant(obj)
     if obj:IsA("ProximityPrompt") then
         RegisterPrompt(obj)
@@ -1697,15 +1424,12 @@ local function HandleDescendant(obj)
             RegisterMonster(obj)
         end
         local mName = string.lower(obj.Name)
-
-        -- Exclude decorative signs, lights, plaques, posters, decals, frames, walls, and ceilings
         local isSignOrProp = string.find(mName, "sign") or string.find(mName, "plaque") or string.find(mName, "placa")
                           or string.find(mName, "light") or string.find(mName, "lamp") or string.find(mName, "poster")
                           or string.find(mName, "decal") or string.find(mName, "arrow") or string.find(mName, "board")
                           or string.find(mName, "frame") or string.find(mName, "billboard") or string.find(mName, "texture")
                           or string.find(mName, "mesh") or string.find(mName, "glass") or string.find(mName, "wall")
                           or string.find(mName, "ceiling")
-
         if string.find(mName, "closet") or string.find(mName, "locker") or string.find(mName, "wardrobe") or string.find(mName, "hidespot") then
             ClosetObjects[obj] = {
                 Part = ResolveBasePart(obj),
@@ -1719,7 +1443,6 @@ local function HandleDescendant(obj)
         ) then
             local p = ResolveBasePart(obj)
             local isRealExit = true
-            -- A true exit zone or exit door/van has substantial size, not a thin plate
             if p and string.find(mName, "exit") and not (string.find(mName, "van") or string.find(mName, "truck") or string.find(mName, "zone")) then
                 if (p.Size.X < 3 and p.Size.Z < 3) or (p.Size.Y < 1 and (p.Size.X < 3 or p.Size.Z < 3)) then
                     isRealExit = false
@@ -1735,11 +1458,9 @@ local function HandleDescendant(obj)
         end
     end
 end
-
 TrackConnection(Workspace.DescendantAdded:Connect(function(d)
     pcall(HandleDescendant, d)
 end))
-
 TrackConnection(ProximityPromptService.PromptShown:Connect(function(prompt)
     if prompt and not ItemPrompts[prompt] and not VentObjects[prompt] then
         pcall(RegisterPrompt, prompt)
@@ -1767,7 +1488,6 @@ TrackConnection(ProximityPromptService.PromptShown:Connect(function(prompt)
         end
     end
 end))
-
 TrackConnection(Workspace.DescendantRemoving:Connect(function(d)
     if d:IsA("ProximityPrompt") then
         UnregisterPrompt(d)
@@ -1777,34 +1497,24 @@ TrackConnection(Workspace.DescendantRemoving:Connect(function(d)
         ExitObjects[d] = nil
     end
 end))
-
 task.spawn(function()
     for _, d in ipairs(Workspace:GetDescendants()) do
         pcall(HandleDescendant, d)
     end
 end)
-
--- ==============================================================================
--- ESP RENDERING & VISUAL ENGINE
--- ==============================================================================
-
 local function MatchesRarityFilter(rarity, value)
     local rank = RarityRank[rarity] or 1
     local minRank = FilterMinRank[Settings.SODRarityFilter] or 1
-
     if rank < minRank then
         return false
     end
-
     if Settings.SODMinValueEnabled and value and value > 0 then
         if value < Settings.SODMinValue then
             return false
         end
     end
-
     return true
 end
-
 local function CreateOrUpdateHighlight(instance, color, name)
     if not instance or not instance.Parent then return nil end
     local hlName = name or "ToxSOD_HL"
@@ -1836,7 +1546,6 @@ local function CreateOrUpdateHighlight(instance, color, name)
     end
     return hl
 end
-
 local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
     if not adornee or not adornee.Parent then return nil end
     if IsPartOfLocalPlayer(adornee) then
@@ -1848,7 +1557,6 @@ local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
     local label = nil
     local textSize = tonumber(Settings.SODESPTextSize) or 10
     local maxDist = tonumber(Settings.SODESPMaxDistance) or 350
-
     if not bb or not bb:IsA("BillboardGui") then
         bb = Instance.new("BillboardGui")
         bb.Name = name
@@ -1857,7 +1565,6 @@ local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
         bb.AlwaysOnTop = true
         bb.MaxDistance = maxDist
         bb.Adornee = adornee
-
         label = Instance.new("TextLabel")
         label.Name = "Label"
         label.Size = UDim2.new(1, 0, 1, 0)
@@ -1871,7 +1578,6 @@ local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
     else
         label = bb:FindFirstChild("Label")
     end
-
     if bb then
         if offset and bb.StudsOffset ~= offset then
             bb.StudsOffset = offset
@@ -1880,7 +1586,6 @@ local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
             bb.MaxDistance = maxDist
         end
     end
-
     if label then
         if label.TextSize ~= textSize then
             label.TextSize = textSize
@@ -1897,7 +1602,6 @@ local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
     end
     return bb, label
 end
-
 local function GetItemParts(part, itemModel)
     local parts = {}
     local function addPart(p)
@@ -1910,22 +1614,16 @@ local function GetItemParts(part, itemModel)
             end
         end
     end
-
-    -- 1. All descendant BaseParts of itemModel if it's a Model
     if itemModel and itemModel:IsA("Model") then
         for _, desc in ipairs(itemModel:GetDescendants()) do
             addPart(desc)
         end
     end
-
-    -- 2. BasePart and all its child BaseParts
     if part and part:IsA("BasePart") then
         addPart(part)
         for _, desc in ipairs(part:GetDescendants()) do
             addPart(desc)
         end
-
-        -- 3. Siblings in parent container (if not workspace/map)
         local parent = part.Parent
         if parent and parent ~= Workspace and not parent:IsA("Terrain") then
             local pName = string.lower(parent.Name)
@@ -1940,8 +1638,6 @@ local function GetItemParts(part, itemModel)
                 end
             end
         end
-
-        -- 4. Connected parts via WeldConstraints (Part0 / Part1)
         pcall(function()
             local searchContainers = { part, part.Parent, itemModel }
             for _, container in ipairs(searchContainers) do
@@ -1958,23 +1654,17 @@ local function GetItemParts(part, itemModel)
                 end
             end
         end)
-
-        -- 5. Legacy JointInstance connected parts
         pcall(function()
             for _, connected in ipairs(part:GetConnectedParts()) do
                 addPart(connected)
             end
         end)
     end
-
     return parts, itemModel
 end
-
 local function UpdateItemESP(charRoot)
     local handledTargets = {}
     local style = Settings.SODItemESPStyle or "Name + Value"
-
-    -- Active purge: Remove ANY Highlight or Billboard attached to local player's character or camera
     if Player.Character then
         for _, child in ipairs(Player.Character:GetDescendants()) do
             if child:IsA("Highlight") or child:IsA("BillboardGui") then
@@ -1990,18 +1680,15 @@ local function UpdateItemESP(charRoot)
             end
         end
     end
-
     for prompt, data in pairs(ItemPrompts) do
         local part = data.Part
         local itemParts, itemModel = GetItemParts(part, data.Model or GetItemModel(prompt) or GetItemModel(part))
         local targetInst = itemModel or part
-
         local isInvalid = not prompt.Parent or not part or not part.Parent
             or IsDescendantOfAnyPlayer(prompt)
             or IsDescendantOfAnyPlayer(part)
             or (targetInst and IsDescendantOfAnyPlayer(targetInst))
             or (targetInst and targetInst:IsA("Model") and targetInst:FindFirstChildOfClass("Humanoid") ~= nil)
-
         if isInvalid then
             if ItemESPObjects[prompt] then
                 pcall(function()
@@ -2016,7 +1703,6 @@ local function UpdateItemESP(charRoot)
             end
             ItemPrompts[prompt] = nil
         else
-            -- Prevent multiple ESP objects on the exact same item model/part
             if targetInst and handledTargets[targetInst] then
                 if ItemESPObjects[prompt] then
                     if ItemESPObjects[prompt].Highlights then
@@ -2031,15 +1717,11 @@ local function UpdateItemESP(charRoot)
             if targetInst then
                 handledTargets[targetInst] = true
             end
-
             local show = Settings.SODItemESP and prompt.Enabled and MatchesRarityFilter(data.Rarity, data.Value)
             local dist = charRoot and (part.Position - charRoot.Position).Magnitude or 0
             local maxDist = tonumber(Settings.SODESPMaxDistance) or 350
-
             if show and dist <= maxDist then
                 local rColor = RarityColors[data.Rarity] or Color3.fromRGB(220, 220, 220)
-
-                -- 3D Chams on entire item (highlights all sub-parts, arm, shade, bulb, books together)
                 local hls = {}
                 if itemModel and itemModel:IsA("Model") and not IsPartOfLocalPlayer(itemModel) then
                     local hl = CreateOrUpdateHighlight(itemModel, rColor, "ToxSOD_ItemHL")
@@ -2058,27 +1740,21 @@ local function UpdateItemESP(charRoot)
                         end
                     end
                 end
-
                 local bb = nil
                 local label = nil
-
                 if style == "Chams Only" then
-                    -- User requested Chams Only: hide any billboard text for total visual cleanliness
                     if ItemESPObjects[prompt] and ItemESPObjects[prompt].Billboard then
                         ItemESPObjects[prompt].Billboard.Enabled = false
                     end
                 elseif style == "Value Only" then
-                    -- User requested Value Only: compact price tag
                     local tagText = string.format("%s (%dm)", FormatCurrency(data.Value), math.floor(dist))
                     local offset = dist < 7 and Vector3.new(0, 2.8, 0) or Vector3.new(0, 1.8, 0)
                     bb, label = CreateOrUpdateBillboard(part, "ToxSOD_ItemBB", tagText, rColor, offset)
                 else
-                    -- Name + Value: full informative label
                     local tagText = string.format("[%s] %s\n%s (%dm)", string.upper(data.Rarity or "COMMON"), data.Name, FormatCurrency(data.Value), math.floor(dist))
                     local offset = dist < 7 and Vector3.new(0, 3.0, 0) or Vector3.new(0, 1.8, 0)
                     bb, label = CreateOrUpdateBillboard(part, "ToxSOD_ItemBB", tagText, rColor, offset)
                 end
-
                 ItemESPObjects[prompt] = { Highlights = hls, Highlight = hls[1], Billboard = bb, Label = label }
             else
                 if ItemESPObjects[prompt] then
@@ -2093,7 +1769,6 @@ local function UpdateItemESP(charRoot)
         end
     end
 end
-
 local function IsPlayerMonster(plr, char)
     if not plr and not char then return false end
     if char and ActiveMonsters[char] ~= nil then return true end
@@ -2116,12 +1791,9 @@ local function IsPlayerMonster(plr, char)
     end
     return false
 end
-
 local function UpdateMonsterESP(charRoot)
     local closestDist = nil
     local closestMonsterName = "ENTITY"
-
-    -- Proactively register any player who became the monster
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= Player and plr.Character then
             if IsPlayerMonster(plr, plr.Character) and not ActiveMonsters[plr.Character] then
@@ -2129,8 +1801,6 @@ local function UpdateMonsterESP(charRoot)
             end
         end
     end
-
-    -- Proactively scan Workspace for newly spawned NPC monsters
     for _, m in ipairs(Workspace:GetChildren()) do
         if m:IsA("Model") and m ~= Player.Character and not ActiveMonsters[m] then
             if IsMonsterEntity(m) then
@@ -2138,7 +1808,6 @@ local function UpdateMonsterESP(charRoot)
             end
         end
     end
-
     for model, data in pairs(ActiveMonsters) do
         local root = data.Root or (model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart"))
         if not model.Parent or not root or not root.Parent then
@@ -2156,7 +1825,6 @@ local function UpdateMonsterESP(charRoot)
                 closestDist = dist
                 closestMonsterName = data.Kind or data.Name or "Monster"
             end
-
             if Settings.SODMonsterESP then
                 local red = Color3.fromRGB(255, 35, 45)
                 local hl = CreateOrUpdateHighlight(model, red, "ToxSOD_MonsterHL")
@@ -2171,7 +1839,6 @@ local function UpdateMonsterESP(charRoot)
             end
         end
     end
-
     if WarnFrame then
         local warnDist = tonumber(Settings.SODMonsterWarnDistance) or 60
         if Settings.SODMonsterWarn and closestDist and closestDist <= warnDist then
@@ -2181,30 +1848,24 @@ local function UpdateMonsterESP(charRoot)
             WarnFrame.Visible = false
         end
     end
-
     return closestDist
 end
-
 local function UpdatePlayerESP(charRoot)
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= Player then
             local char = plr.Character
             local root = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") or char:FindFirstChildWhichIsA("BasePart"))
             local isMonster = IsPlayerMonster(plr, char)
-
-            -- If player is a monster, Monster ESP handles them with red highlight and tag
             if char and char.Parent and root and not isMonster then
                 if Settings.SODPlayerESP then
                     local hum = char:FindFirstChildOfClass("Humanoid")
                     local isDowned = hum and hum.Health <= 0
                     local dist = charRoot and (root.Position - charRoot.Position).Magnitude or 0
                     local cyan = isDowned and Color3.fromRGB(255, 120, 0) or Color3.fromRGB(0, 195, 255)
-
                     local hl = CreateOrUpdateHighlight(char, cyan, "ToxSOD_PlayerHL")
                     local prefix = isDowned and "[DOWNED] " or ""
                     local tagText = string.format("%s%s (%dm)", prefix, plr.DisplayName or plr.Name, math.floor(dist))
                     local bb, label = CreateOrUpdateBillboard(root, "ToxSOD_PlayerBB", tagText, cyan, Vector3.new(0, 3.0, 0))
-
                     PlayerESPObjects[plr] = { Highlight = hl, Billboard = bb, Label = label }
                 else
                     if PlayerESPObjects[plr] then
@@ -2224,7 +1885,6 @@ local function UpdatePlayerESP(charRoot)
         end
     end
 end
-
 local function UpdateExitESP(charRoot)
     for inst, data in pairs(ExitObjects) do
         local part = data.Part
@@ -2232,7 +1892,6 @@ local function UpdateExitESP(charRoot)
         local isSign = string.find(labelLower, "sign") or string.find(labelLower, "plaque") or string.find(labelLower, "placa")
                     or string.find(labelLower, "light") or string.find(labelLower, "lamp") or string.find(labelLower, "poster")
                     or string.find(labelLower, "decal") or string.find(labelLower, "arrow")
-
         if not inst.Parent or not part or not part.Parent or isSign then
             if ExitESPObjects[inst] then
                 pcall(function()
@@ -2249,13 +1908,8 @@ local function UpdateExitESP(charRoot)
                 local dist = charRoot and (part.Position - charRoot.Position).Magnitude or 0
                 local targetModel = data.Model or (inst:IsA("Model") and inst or (part.Parent:IsA("Model") and part.Parent or part))
                 local neonGreen = Color3.fromRGB(0, 255, 140)
-
-                -- 3D Chams on the real exit model
                 local hl = CreateOrUpdateHighlight(targetModel, neonGreen, "ToxSOD_ExitHL")
-
-                -- Tag on the exit
                 local bb, label = CreateOrUpdateBillboard(part, "ToxSOD_ExitBB", string.format("[EXIT] %s (%dm)", data.Label or "Extraction", math.floor(dist)), neonGreen, Vector3.new(0, 3.2, 0))
-
                 ExitESPObjects[inst] = { Highlight = hl, Billboard = bb, Label = label }
             else
                 if ExitESPObjects[inst] then
@@ -2266,9 +1920,7 @@ local function UpdateExitESP(charRoot)
         end
     end
 end
-
 local function UpdateVentClosetESP(charRoot)
-    -- Vents
     for prompt, data in pairs(VentObjects) do
         local part = data.Part
         if not prompt.Parent or not part or not part.Parent then
@@ -2283,7 +1935,6 @@ local function UpdateVentClosetESP(charRoot)
             if Settings.SODVentClosetESP then
                 local dist = charRoot and (part.Position - charRoot.Position).Magnitude or 0
                 local orange = Color3.fromRGB(255, 170, 30)
-
                 local hl = CreateOrUpdateHighlight(part, orange, "ToxSOD_VentHL")
                 local bb, label = CreateOrUpdateBillboard(part, "ToxSOD_VentBB", string.format("[VENT] (%dm)", math.floor(dist)), orange, Vector3.new(0, 1.8, 0))
                 VentESPObjects[prompt] = { Highlight = hl, Billboard = bb, Label = label }
@@ -2295,8 +1946,6 @@ local function UpdateVentClosetESP(charRoot)
             end
         end
     end
-
-    -- Closets
     for inst, data in pairs(ClosetObjects) do
         local part = data.Part
         if not inst.Parent or not part or not part.Parent then
@@ -2312,7 +1961,6 @@ local function UpdateVentClosetESP(charRoot)
                 local dist = charRoot and (part.Position - charRoot.Position).Magnitude or 0
                 local purple = Color3.fromRGB(180, 70, 255)
                 local targetModel = data.Model or part
-
                 local hl = CreateOrUpdateHighlight(targetModel, purple, "ToxSOD_ClosetHL")
                 local bb, label = CreateOrUpdateBillboard(part, "ToxSOD_ClosetBB", string.format("[CLOSET] (%dm)", math.floor(dist)), purple, Vector3.new(0, 2.5, 0))
                 ClosetESPObjects[inst] = { Highlight = hl, Billboard = bb, Label = label }
@@ -2325,13 +1973,11 @@ local function UpdateVentClosetESP(charRoot)
         end
     end
 end
-
 local function RefillStamina()
     local char, hum = GetCharacterState()
     local targets = { Player }
     if char then table.insert(targets, char) end
     if hum then table.insert(targets, hum) end
-
     for _, target in ipairs(targets) do
         for k, v in pairs(target:GetAttributes()) do
             local kLower = string.lower(k)
@@ -2356,7 +2002,6 @@ local function RefillStamina()
         end
     end
 end
-
 local function EnforceSpeed()
     if not Settings.SODSpeedBoost then return end
     local _, hum = GetCharacterState()
@@ -2367,11 +2012,9 @@ local function EnforceSpeed()
         end
     end
 end
-
 local function AutoStealAura(charRoot)
     if not Settings.SODAutoSteal or not charRoot then return end
     local maxRange = tonumber(Settings.SODAutoStealRange) or 15
-
     for prompt, data in pairs(ItemPrompts) do
         if prompt.Parent and data.Part and data.Part.Parent then
             if MatchesRarityFilter(data.Rarity, data.Value) then
@@ -2383,9 +2026,6 @@ local function AutoStealAura(charRoot)
         end
     end
 end
-
-
-
 local function IsPlayerBagFull()
     local char = Player.Character
     local targets = { Player }
@@ -2399,7 +2039,6 @@ local function IsPlayerBagFull()
             return true
         end
     end
-
     local pGui = Player:FindFirstChild("PlayerGui")
     if pGui then
         for _, gui in ipairs(pGui:GetChildren()) do
@@ -2425,7 +2064,6 @@ local function IsPlayerBagFull()
     end
     return false
 end
-
 local function GetBestExit()
     local _, _, root = GetCharacterState()
     local best = nil
@@ -2446,7 +2084,6 @@ local function GetBestExit()
     end
     return best
 end
-
 local SODNavPath = PathfindingService:CreatePath({
     AgentRadius = 1.8,
     AgentHeight = 5.0,
@@ -2457,7 +2094,6 @@ local SODNavPath = PathfindingService:CreatePath({
         Water = 100.0
     }
 })
-
 local function GetItemStandPosition(part)
     if not part or not part.Parent then return nil end
     local itemPos = part.Position
@@ -2467,96 +2103,72 @@ local function GetItemStandPosition(part)
     if Player.Character then table.insert(exclude, Player.Character) end
     if SafePlatformModel then table.insert(exclude, SafePlatformModel) end
     rayParams.FilterDescendantsInstances = exclude
-
     local ray = Workspace:Raycast(itemPos + Vector3.new(0, 2, 0), Vector3.new(0, -35, 0), rayParams)
     local floorY = ray and ray.Position.Y or (itemPos.Y - 2.5)
-
     return Vector3.new(itemPos.X, floorY + 1.2, itemPos.Z)
 end
-
 local function NavigateAlongFloor(targetPos, myGen, checkAbort)
     local char, hum, root = GetCharacterState()
     if not char or not hum or hum.Health <= 0 or not root then return false end
-
     local startPos = root.Position
     local directDist = (Vector3.new(targetPos.X, startPos.Y, targetPos.Z) - startPos).Magnitude
     if directDist <= 4.0 then
         return true
     end
-
-    -- 1. Standard Pathfinding (uses game navmesh, strictly respects all walls)
     local ok, _ = pcall(function()
         SODNavPath:ComputeAsync(startPos, targetPos)
     end)
-
     local waypoints = {}
     if ok and SODNavPath.Status == Enum.PathStatus.Success then
         waypoints = SODNavPath:GetWaypoints()
     end
-
     if #waypoints > 1 then
         for i = 2, #waypoints do
             if not Settings.SODAutoFarm and not Settings.SODAutoEscape then return false end
             if checkAbort and checkAbort() then return false end
-
             local wp = waypoints[i]
             local wpPos = wp.Position
             local charCur, humCur, rootCur = GetCharacterState()
             if not charCur or not humCur or humCur.Health <= 0 or not rootCur then return false end
-
             if wp.Action == Enum.PathWaypointAction.Jump then
                 humCur.Jump = true
             end
-
             local wpDist = (Vector3.new(wpPos.X, rootCur.Position.Y, wpPos.Z) - rootCur.Position).Magnitude
             local maxWait = math.clamp(wpDist / 12, 0.3, 2.5)
             local t0 = os.clock()
-
             while (os.clock() - t0) < maxWait do
                 local c, h, r = GetCharacterState()
                 if not c or not h or h.Health <= 0 or not r then return false end
                 if not Settings.SODAutoFarm and not Settings.SODAutoEscape then return false end
                 if checkAbort and checkAbort() then return false end
-
                 local flatDiff = (Vector3.new(wpPos.X, r.Position.Y, wpPos.Z) - r.Position)
                 if flatDiff.Magnitude <= 2.2 then break end
-
-                -- Physical walking with collision ON (NO noclip)
                 h:MoveTo(wpPos)
                 h:Move(flatDiff.Unit, false)
-
                 RunService.Heartbeat:Wait()
             end
         end
         return true
     end
-
-    -- 2. Fallback: Raycast-guided collision corridor walking (never penetrates walls)
     local t0 = os.clock()
     local maxWait = math.clamp(directDist / 10, 1.0, 5.0)
-
     while (os.clock() - t0) < maxWait do
         local c, h, r = GetCharacterState()
         if not c or not h or h.Health <= 0 or not r then return false end
         if not Settings.SODAutoFarm and not Settings.SODAutoEscape then return false end
         if checkAbort and checkAbort() then return false end
-
         local toTarget = (targetPos - r.Position)
         local flatTarget = Vector3.new(toTarget.X, 0, toTarget.Z)
         if flatTarget.Magnitude <= 4.0 then return true end
-
         local fwdUnit = flatTarget.Unit
         local rayParams = RaycastParams.new()
         rayParams.FilterType = Enum.RaycastFilterType.Exclude
         rayParams.FilterDescendantsInstances = { c }
-
         local forwardRay = Workspace:Raycast(r.Position, fwdUnit * 4.0, rayParams)
         local steerUnit = fwdUnit
-
         if forwardRay then
             local angles = { 45, -45, 90, -90 }
             local bestScore = -999
-
             for _, ang in ipairs(angles) do
                 local rad = math.rad(ang)
                 local rotDir = Vector3.new(
@@ -2577,16 +2189,12 @@ local function NavigateAlongFloor(targetPos, myGen, checkAbort)
                 h.Jump = true
             end
         end
-
         h:MoveTo(r.Position + steerUnit * 4.0)
         h:Move(steerUnit, false)
-
         RunService.Heartbeat:Wait()
     end
-
     return false
 end
-
 local function StopAutoFarm()
     Settings.SODAutoFarm = false
     local _, hum, root = GetCharacterState()
@@ -2599,25 +2207,20 @@ local function StopAutoFarm()
     end
     AutoFarmRunning = false
 end
-
 local function StartAutoFarmLoop()
     if AutoFarmRunning then return end
     AutoFarmRunning = true
     getgenv().ToxSODFarmGen = (tonumber(getgenv().ToxSODFarmGen) or 0) + 1
     local myGen = getgenv().ToxSODFarmGen
-
     task.spawn(function()
         while Settings.SODAutoFarm and getgenv().ToxSODFarmGen == myGen do
             task.wait(0.05)
             if not Settings.SODAutoFarm then break end
-
             local char, hum, root = GetCharacterState()
             if not char or not hum or hum.Health <= 0 or not root then
                 task.wait(1)
                 continue
             end
-
-            -- 1. Pause on Danger
             local dangerDist = tonumber(Settings.SODFarmDangerDist) or 50
             local isDanger = false
             for _, mData in pairs(ActiveMonsters) do
@@ -2634,8 +2237,6 @@ local function StartAutoFarmLoop()
                 task.wait(0.5)
                 continue
             end
-
-            -- 2. Select Best Loot Target
             local bestPrompt, bestData, bestScore = nil, nil, -999999
             for prompt, data in pairs(ItemPrompts) do
                 if prompt.Parent and data.Part and data.Part.Parent then
@@ -2651,13 +2252,10 @@ local function StartAutoFarmLoop()
                     end
                 end
             end
-
             if not bestData or not bestPrompt or not bestPrompt.Parent then
                 task.wait(0.4)
                 continue
             end
-
-            -- 3. Walk along floor and corridors (NO noclip, follows walls and doorways)
             local targetFloor = GetItemStandPosition(bestData.Part) or bestData.Part.Position
             local function abortCondition()
                 if not bestPrompt or not bestPrompt.Parent or not bestData.Part or not bestData.Part.Parent then
@@ -2672,10 +2270,7 @@ local function StartAutoFarmLoop()
                 end
                 return false
             end
-
             NavigateAlongFloor(targetFloor, myGen, abortCondition)
-
-            -- 4. Trigger prompt if in range
             if bestPrompt and bestPrompt.Parent and bestData.Part and bestData.Part.Parent then
                 local curDist = (bestData.Part.Position - root.Position).Magnitude
                 if curDist <= (bestPrompt.MaxActivationDistance or 8) + 2.5 then
@@ -2685,29 +2280,23 @@ local function StartAutoFarmLoop()
                 end
             end
         end
-
         StopAutoFarm()
     end)
 end
-
--- Dedicated Auto Escape Loop
 local AutoEscapeRunning = false
 local function StartAutoEscapeLoop()
     if AutoEscapeRunning then return end
     AutoEscapeRunning = true
-
     task.spawn(function()
         local myGen = getgenv().ToxSODGeneration
         while Settings.SODAutoEscape and getgenv().ToxSODGeneration == myGen do
             task.wait(0.3)
             if not Settings.SODAutoEscape then break end
-
             local char, hum, root = GetCharacterState()
             if not char or not hum or hum.Health <= 0 or not root then
                 task.wait(1)
                 continue
             end
-
             if IsPlayerBagFull() then
                 local exit = GetBestExit()
                 if exit and exit.Part and exit.Part.Parent then
@@ -2721,7 +2310,6 @@ local function StartAutoEscapeLoop()
         AutoEscapeRunning = false
     end)
 end
-
 local function IsLocalPlayerMonster()
     local char = Player.Character
     if not char then return false end
@@ -2741,7 +2329,6 @@ local function IsLocalPlayerMonster()
     end
     return false
 end
-
 local AttackRemotesCache = nil
 local function GetAttackRemotes()
     if AttackRemotesCache then return AttackRemotesCache end
@@ -2760,29 +2347,23 @@ local function GetAttackRemotes()
     end)
     return AttackRemotesCache
 end
-
 local function StartEntityKillLoop()
     if EntityKillRunning then return end
     EntityKillRunning = true
-
     task.spawn(function()
         local myGen = getgenv().ToxSODGeneration
         while Settings.SODEntityKill and getgenv().ToxSODGeneration == myGen do
             task.wait(0.1)
             if not Settings.SODEntityKill then break end
-
             local char, hum, root = GetCharacterState()
             if not char or not hum or hum.Health <= 0 or not root then
                 task.wait(0.5)
                 continue
             end
-
             local isMon = IsLocalPlayerMonster()
             local bestTarget = nil
             local bestDist = 99999
-
             if isMon then
-                -- Player is monster: target nearest survivor player
                 for _, plr in ipairs(Players:GetPlayers()) do
                     if plr ~= Player then
                         local pChar = plr.Character
@@ -2798,7 +2379,6 @@ local function StartEntityKillLoop()
                     end
                 end
             else
-                -- Player is survivor: target monster/entity
                 for model, mData in pairs(ActiveMonsters) do
                     if model.Parent and mData.Root and mData.Root.Parent then
                         local mHum = model:FindFirstChildOfClass("Humanoid")
@@ -2811,7 +2391,6 @@ local function StartEntityKillLoop()
                         end
                     end
                 end
-                -- Fallback: scan workspace for entity/monster models if not in ActiveMonsters
                 if not bestTarget then
                     for _, m in ipairs(Workspace:GetChildren()) do
                         if m:IsA("Model") and m ~= char and not Players:GetPlayerFromCharacter(m) then
@@ -2831,19 +2410,14 @@ local function StartEntityKillLoop()
                     end
                 end
             end
-
             if not bestTarget then
                 task.wait(0.4)
                 continue
             end
-
             local tRoot = bestTarget.Root
             local tHum = bestTarget.Humanoid
-
             if tRoot and tRoot.Parent then
                 local dist = (tRoot.Position - root.Position).Magnitude
-
-                -- Position smoothly behind/at target to guarantee hit
                 if dist > 4 then
                     local lookDir = tRoot.CFrame.LookVector
                     local attackPos = tRoot.Position - (lookDir * 3.2) + Vector3.new(0, 0.5, 0)
@@ -2853,8 +2427,6 @@ local function StartEntityKillLoop()
                 else
                     root.CFrame = CFrame.new(root.Position, Vector3.new(tRoot.Position.X, root.Position.Y, tRoot.Position.Z))
                 end
-
-                -- Equip tools from backpack
                 pcall(function()
                     local backpack = Player:FindFirstChild("Backpack")
                     if backpack then
@@ -2865,8 +2437,6 @@ local function StartEntityKillLoop()
                         end
                     end
                 end)
-
-                -- Activate weapon/tool
                 pcall(function()
                     for _, tool in ipairs(char:GetChildren()) do
                         if tool:IsA("Tool") then
@@ -2874,10 +2444,6 @@ local function StartEntityKillLoop()
                         end
                     end
                 end)
-
-                -- Pure tool and remote execution (zero mouse interference)
-
-                -- Fire attack remotes
                 pcall(function()
                     for _, rem in ipairs(GetAttackRemotes()) do
                         pcall(function()
@@ -2887,8 +2453,6 @@ local function StartEntityKillLoop()
                         end)
                     end
                 end)
-
-                -- Trigger any attack/damage prompts
                 pcall(function()
                     for _, prompt in ipairs(bestTarget.Character:GetDescendants()) do
                         if prompt:IsA("ProximityPrompt") then
@@ -2901,26 +2465,19 @@ local function StartEntityKillLoop()
         EntityKillRunning = false
     end)
 end
-
 local HasVotedThisIntermission = false
 local AutoVoteAttempts = 0
 local SODAvailableMaps = { "Office", "Supermarket", "Liminal Lucidity", "Facility", "American Dorm", "Random" }
-
 local function IsGuiTrulyVisible(obj)
     if not obj or not obj:IsA("GuiObject") then return false end
     if not obj.Visible then return false end
-    
     local size = obj.AbsoluteSize
     if size.X <= 4 or size.Y <= 4 then return false end
-    
-    -- Check screen viewport bounds
     local pos = obj.AbsolutePosition
     local cam = Workspace.CurrentCamera
     local vp = cam and cam.ViewportSize or Vector2.new(1920, 1080)
     if (pos.X + size.X) < 0 or (pos.Y + size.Y) < 0 then return false end
     if pos.X > vp.X or pos.Y > vp.Y then return false end
-    
-    -- Walk ancestors to ensure ScreenGui is enabled and all parent frames are visible
     local curr = obj.Parent
     while curr and curr ~= game do
         if curr:IsA("ScreenGui") then
@@ -2935,29 +2492,21 @@ local function IsGuiTrulyVisible(obj)
     end
     return true
 end
-
 local function FindVotingCards()
     local pGui = Player:FindFirstChild("PlayerGui")
     if not pGui then return false, {}, {} end
-
     local mapCards = {}
     local entityCards = {}
     local hasVotingHeader = false
-
-    -- Search all active ScreenGuis in PlayerGui
     for _, gui in ipairs(pGui:GetChildren()) do
         if gui:IsA("ScreenGui") and gui.Enabled then
             for _, desc in ipairs(gui:GetDescendants()) do
                 if (desc:IsA("TextLabel") or desc:IsA("TextButton")) and desc.Text and desc.Text ~= "" and IsGuiTrulyVisible(desc) then
                     local rawText = desc.Text
                     local tUpper = string.upper(rawText)
-
-                    -- Check if voting window title/subtitle is visible
                     if string.find(tUpper, "PICK THE MAP") or (tUpper == "VOTE" and desc.TextSize and desc.TextSize >= 14) then
                         hasVotingHeader = true
                     end
-
-                    -- Helper to find the card container frame
                     local function ResolveCard(lbl)
                         local c = lbl
                         for _ = 1, 3 do
@@ -2974,8 +2523,6 @@ local function FindVotingCards()
                         end
                         return c
                     end
-
-                    -- Map Cards:
                     if string.find(tUpper, "OFFICE") and not string.find(tUpper, "SKYSCRAPER") then
                         mapCards["office"] = { Label = desc, Card = ResolveCard(desc) }
                     elseif (string.find(tUpper, "SUPERMARKET") or string.find(tUpper, "DAYLIGHT FOODS")) and not string.find(tUpper, "LONG AISLES") then
@@ -2987,8 +2534,6 @@ local function FindVotingCards()
                     elseif string.find(tUpper, "AMERICAN DORM") or (string.find(tUpper, "DORM") and not string.find(tUpper, "BEDROOM")) then
                         mapCards["american dorm"] = { Label = desc, Card = ResolveCard(desc) }
                     end
-
-                    -- Entity Cards:
                     if string.find(tUpper, "ENTITY:%s*AI") or tUpper == "ENTITY: AI" or (string.find(tUpper, "AI") and string.find(tUpper, "CONTROLLED")) then
                         entityCards["ai"] = { Label = desc, Card = ResolveCard(desc) }
                     elseif string.find(tUpper, "ENTITY:%s*PLAYER") or tUpper == "ENTITY: PLAYER" or (string.find(tUpper, "PLAYER") and string.find(tUpper, "BECOMES")) then
@@ -2998,22 +2543,16 @@ local function FindVotingCards()
             end
         end
     end
-
-    -- The voting window is genuinely active on screen if header is visible OR any map card is visible
     local isWindowOpen = hasVotingHeader or (next(mapCards) ~= nil)
     if not isWindowOpen then
         return false, {}, {}
     end
-
     return true, mapCards, entityCards
 end
-
 local function ClickTargetCard(entry)
     if not entry then return false end
     local label = entry.Label
     local card = entry.Card or label
-
-    -- Collect all interactive objects in this card
     local clickables = {}
     if card and card:IsA("GuiObject") then
         table.insert(clickables, card)
@@ -3026,8 +2565,6 @@ local function ClickTargetCard(entry)
     if label and not table.find(clickables, label) then
         table.insert(clickables, label)
     end
-
-    -- Fire signals and getconnections directly on UI elements without hijacking the user's mouse cursor
     for _, obj in ipairs(clickables) do
         if obj:IsA("GuiButton") then
             pcall(function()
@@ -3059,39 +2596,29 @@ local function ClickTargetCard(entry)
             end)
         end
     end
-
     return true
 end
-
 local function ProcessAutoVote()
     if not Settings.SODAutoVote then
         HasVotedThisIntermission = false
         AutoVoteAttempts = 0
         return
     end
-
     local isOpen, mapCards, entityCards = FindVotingCards()
     if not isOpen then
-        -- Voting window is NOT visible on screen: reset state so next intermission triggers cleanly
         HasVotedThisIntermission = false
         AutoVoteAttempts = 0
         return
     end
-
-    -- Window IS OPEN! Retry up to 3 times spaced 0.8s apart during the active intermission
     if AutoVoteAttempts >= 3 then
         return
     end
-
     local c1 = string.lower(Settings.SODVoteMapChoice1 or "Office")
     local c2 = string.lower(Settings.SODVoteMapChoice2 or "Supermarket")
     local c3 = string.lower(Settings.SODVoteMapChoice3 or "Liminal Lucidity")
     local userEntity = string.lower(Settings.SODVoteMonster or "AI")
-
-    -- 1. Click Map Card by priority order
     local chosenEntry = nil
     local chosenMapName = nil
-
     for _, choice in ipairs({ c1, c2, c3 }) do
         if choice == "random" then
             for mName, entry in pairs(mapCards) do
@@ -3105,7 +2632,6 @@ local function ProcessAutoVote()
             break
         end
     end
-
     if not chosenEntry then
         for mName, entry in pairs(mapCards) do
             chosenEntry = entry
@@ -3113,14 +2639,10 @@ local function ProcessAutoVote()
             break
         end
     end
-
     if chosenEntry then
         ClickTargetCard(chosenEntry)
     end
-
     task.wait(0.1)
-
-    -- 2. Click Entity Card (AI or PLAYER)
     local targetEntity = "ai"
     if string.find(userEntity, "player") then
         targetEntity = "player"
@@ -3129,13 +2651,10 @@ local function ProcessAutoVote()
     else
         targetEntity = "ai"
     end
-
     local entityEntry = entityCards[targetEntity] or entityCards["ai"] or entityCards["player"]
     if entityEntry then
         ClickTargetCard(entityEntry)
     end
-
-    -- 3. Also invoke voting RemoteEvents in ReplicatedStorage with exact Map & Entity strings
     pcall(function()
         for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
             if rem:IsA("RemoteEvent") then
@@ -3147,10 +2666,7 @@ local function ProcessAutoVote()
             end
         end
     end)
-
     AutoVoteAttempts = AutoVoteAttempts + 1
-
-    -- Notify only once on the first successful vote of the active intermission
     if not HasVotedThisIntermission then
         HasVotedThisIntermission = true
         local mapLabel = chosenMapName and string.upper(chosenMapName) or "MAP"
@@ -3158,7 +2674,6 @@ local function ProcessAutoVote()
         CustomNotify("Auto Voted: " .. mapLabel .. " | " .. entLabel, Color3.fromRGB(0, 255, 140), 3)
     end
 end
-
 local AutoVoteThread = nil
 local function StartAutoVoteLoop()
     if AutoVoteThread then return end
@@ -3175,7 +2690,6 @@ local function StartAutoVoteLoop()
         AutoVoteThread = nil
     end)
 end
-
 local function SetupAntiAFK(enable)
     if enable then
         if AntiAFKConnection then return end
@@ -3196,19 +2710,12 @@ local function SetupAntiAFK(enable)
         end
     end
 end
-
--- ==============================================================================
--- SAFE PLATFORM & UTILITIES
--- ==============================================================================
-
 local function EnsureSafePlatform()
     if SafePlatformModel and SafePlatformModel.Parent then
         return SafePlatformModel
     end
-
     local model = Instance.new("Model")
     model.Name = "ToxSODPlatform"
-
     local height = tonumber(Settings.SODPlatformHeight) or 350
     local part = Instance.new("Part")
     part.Name = "Floor"
@@ -3219,7 +2726,6 @@ local function EnsureSafePlatform()
     part.Material = Enum.Material.ForceField
     part.Color = Color3.fromRGB(30, 95, 255)
     part.Parent = model
-
     for _, offset in ipairs({
         { Vector3.new(0, 3, 22.5), Vector3.new(45, 6, 1) },
         { Vector3.new(0, 3, -22.5), Vector3.new(45, 6, 1) },
@@ -3236,12 +2742,10 @@ local function EnsureSafePlatform()
         rail.Transparency = 0.5
         rail.Parent = model
     end
-
     model.Parent = Workspace
     SafePlatformModel = model
     return model
 end
-
 local function ClearSafePlatform()
     if SafePlatformModel then
         pcall(function() SafePlatformModel:Destroy() end)
@@ -3253,11 +2757,6 @@ local function ClearSafePlatform()
         end
     end
 end
-
--- ==============================================================================
--- DAMAGE SHIELD (METAMETHOD HOOK)
--- ==============================================================================
-
 pcall(function()
     if hookmetamethod and getnamecallmethod then
         local oldNamecall
@@ -3284,22 +2783,15 @@ pcall(function()
         end))
     end
 end)
-
--- ==============================================================================
--- CTRL + CLICK TELEPORT
--- ==============================================================================
-
 local function GetClickTPCFrame()
     local char, _, root = GetCharacterState()
     if not root or not Mouse then return nil end
-
     local ray = Camera:ScreenPointToRay(Mouse.X, Mouse.Y)
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
     local exclude = { char }
     if SafePlatformModel then table.insert(exclude, SafePlatformModel) end
     params.FilterDescendantsInstances = exclude
-
     local result = Workspace:Raycast(ray.Origin, ray.Direction * 3000, params)
     if result and result.Position then
         return CFrame.new(result.Position + Vector3.new(0, 3.5, 0))
@@ -3309,7 +2801,6 @@ local function GetClickTPCFrame()
     end
     return nil
 end
-
 TrackConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if Settings.SODClickTP and input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -3321,36 +2812,27 @@ TrackConnection(UserInputService.InputBegan:Connect(function(input, gameProcesse
         end
     end
 end))
-
--- ==============================================================================
--- MAIN TICK / HEARTBEAT LOOP
--- ==============================================================================
-
 TrackConnection(RunService.Heartbeat:Connect(function(dt)
     local now = os.clock()
     local _, hum, root = GetCharacterState()
-
     if hum and hum.Health > 0 and Settings.SODSpeedBoost then
         local target = tonumber(Settings.SODSpeedValue) or 22
         if hum.WalkSpeed < target then
             hum.WalkSpeed = target
         end
     end
-
     if now - LastStaminaCheck >= 0.25 then
         LastStaminaCheck = now
         if Settings.SODInfiniteStamina then
             pcall(RefillStamina)
         end
     end
-
     if now - LastAuraCheck >= 0.2 then
         LastAuraCheck = now
         if Settings.SODAutoSteal and root then
             pcall(AutoStealAura, root)
         end
     end
-
     if now - LastDescendantSweep >= 3.5 then
         LastDescendantSweep = now
         for _, d in ipairs(Workspace:GetDescendants()) do
@@ -3359,7 +2841,6 @@ TrackConnection(RunService.Heartbeat:Connect(function(dt)
             end
         end
     end
-
     if now - LastESPInterval >= 0.15 then
         LastESPInterval = now
         local closestDist = UpdateMonsterESP(root)
@@ -3367,13 +2848,8 @@ TrackConnection(RunService.Heartbeat:Connect(function(dt)
         UpdatePlayerESP(root)
         UpdateExitESP(root)
         UpdateVentClosetESP(root)
-
--- AutoVote handled in dedicated background loop (0 lag)
-
-
     end
 end))
-
 if Settings.SODFullBright then
     pcall(ApplyFullBright)
 end
@@ -3393,17 +2869,10 @@ if Settings.SODAutoOpenCase then
     pcall(StartAutoCaseLoop)
 end
 pcall(StartAutoVoteLoop)
-
--- ==============================================================================
--- CASE / CRATE UNBOXING ENGINE
--- ==============================================================================
-
 local function OpenCrate(caseChoice)
     local target = string.lower(caseChoice or Settings.SODCaseChoice or "basketball")
     local pGui = Player:FindFirstChild("PlayerGui")
     if not pGui then return false end
-
-    -- 1. Ensure the CASES tab is opened in the Shop if not currently visible
     local function EnsureCasesTabOpen()
         for _, gui in ipairs(pGui:GetChildren()) do
             if gui:IsA("ScreenGui") and gui.Enabled then
@@ -3430,14 +2899,10 @@ local function OpenCrate(caseChoice)
             end
         end
     end
-
     EnsureCasesTabOpen()
     task.wait(0.05)
-
-    -- 2. Find the requested case card and its in-game cash button
     local foundButton = nil
     local caseNameFound = nil
-
     for _, gui in ipairs(pGui:GetChildren()) do
         if gui:IsA("ScreenGui") and gui.Enabled then
             for _, desc in ipairs(gui:GetDescendants()) do
@@ -3445,7 +2910,6 @@ local function OpenCrate(caseChoice)
                     local tLower = string.lower(desc.Text)
                     local isTargetCase = false
                     local cName = ""
-
                     if string.find(target, "basketball") and string.find(tLower, "basketball") then
                         isTargetCase = true
                         cName = "Basketball Case"
@@ -3459,9 +2923,7 @@ local function OpenCrate(caseChoice)
                         isTargetCase = true
                         cName = desc.Text
                     end
-
                     if isTargetCase then
-                        -- Find the parent card frame (ascend up to 4 levels)
                         local cardFrame = desc
                         for _ = 1, 4 do
                             if cardFrame.Parent and cardFrame.Parent:IsA("GuiObject") then
@@ -3472,23 +2934,17 @@ local function OpenCrate(caseChoice)
                                 break
                             end
                         end
-
-                        -- Now search for the cash purchase button inside this card frame
                         for _, child in ipairs(cardFrame:GetDescendants()) do
                             local text = ""
                             if child:IsA("TextButton") or child:IsA("TextLabel") then
                                 text = child.Text or ""
                             end
                             local textLower = string.lower(text)
-
-                            -- Must contain '$' or 'open' and must NEVER be robux
                             local isCash = (string.find(text, "%$") ~= nil or string.find(textLower, "open") ~= nil)
                             local isRobux = string.find(textLower, "robux") or string.find(textLower, "r%$")
-
                             if isCash and not isRobux then
                                 local btn = child:IsA("GuiButton") and child or child:FindFirstAncestorWhichIsA("GuiButton")
                                 if btn then
-                                    -- Check that this button is not green / robux
                                     local btnColor = btn.BackgroundColor3
                                     local isGreen = (btnColor.G > 0.6 and btnColor.G > btnColor.R * 1.5)
                                     if not isGreen then
@@ -3499,7 +2955,6 @@ local function OpenCrate(caseChoice)
                                 end
                             end
                         end
-
                         if foundButton then break end
                     end
                 end
@@ -3507,8 +2962,6 @@ local function OpenCrate(caseChoice)
         end
         if foundButton then break end
     end
-
-    -- 3. Click the cash button safely with signals
     if foundButton then
         pcall(function()
             if firesignal then
@@ -3525,8 +2978,6 @@ local function OpenCrate(caseChoice)
         end)
         CustomNotify("Opened " .. tostring(caseNameFound or "Case"), Color3.fromRGB(0, 255, 140), 2)
     end
-
-    -- 4. Also fire matching RemoteEvents in ReplicatedStorage as backup
     pcall(function()
         for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
             if rem:IsA("RemoteEvent") or rem:IsA("RemoteFunction") then
@@ -3536,7 +2987,6 @@ local function OpenCrate(caseChoice)
                              or string.find(target, "backpack") and "Backpack Case"
                              or string.find(target, "emote") and "Emote Case"
                              or "Basketball Case"
-
                     if rem:IsA("RemoteEvent") then
                         rem:FireServer(arg)
                         rem:FireServer(arg, "Cash")
@@ -3545,10 +2995,8 @@ local function OpenCrate(caseChoice)
             end
         end
     end)
-
     return foundButton ~= nil
 end
-
 local AutoCaseThread = nil
 local function StartAutoCaseLoop()
     if AutoCaseThread then return end
@@ -3564,7 +3012,6 @@ local function StartAutoCaseLoop()
         AutoCaseThread = nil
     end)
 end
-
 local function StopAutoCaseLoop()
     Settings.SODAutoOpenCase = false
     if AutoCaseThread then
@@ -3572,13 +3019,7 @@ local function StopAutoCaseLoop()
         AutoCaseThread = nil
     end
 end
-
--- ==============================================================================
--- UI BUILDER - SECTION 1: VISUALS
--- ==============================================================================
-
 CreateSODSection("VISUALS")
-
 SODCreateToggle(
     "Item ESP",
     GamePage,
@@ -3595,7 +3036,6 @@ SODCreateToggle(
     end,
     "SODItemESP"
 )
-
 SODCreateDropdown(
     "Item ESP Style",
     { "Name + Value", "Value Only", "Chams Only" },
@@ -3606,7 +3046,6 @@ SODCreateDropdown(
         AutoSaveConfiguration()
     end
 )
-
 SODCreateToggle(
     "Exit ESP",
     GamePage,
@@ -3623,7 +3062,6 @@ SODCreateToggle(
     end,
     "SODExitESP"
 )
-
 SODCreateToggle(
     "Monster ESP",
     GamePage,
@@ -3640,7 +3078,6 @@ SODCreateToggle(
     end,
     "SODMonsterESP"
 )
-
 SODCreateToggle(
     "Player ESP",
     GamePage,
@@ -3657,7 +3094,6 @@ SODCreateToggle(
     end,
     "SODPlayerESP"
 )
-
 SODCreateToggle(
     "Vents & Closets ESP",
     GamePage,
@@ -3678,7 +3114,6 @@ SODCreateToggle(
     end,
     "SODVentClosetESP"
 )
-
 SODCreateDropdown(
     "Rarity Filter",
     { "All", "Common+", "Uncommon+", "Rare+", "Epic+", "Legendary+", "Mythic Only" },
@@ -3690,7 +3125,6 @@ SODCreateDropdown(
         AutoSaveConfiguration()
     end
 )
-
 SODCreateToggleWithValue(
     "Min Item Value",
     GamePage,
@@ -3706,7 +3140,6 @@ SODCreateToggleWithValue(
     end,
     "SODMinValueEnabled"
 )
-
 SODCreateToggleWithValue(
     "ESP Text Size",
     GamePage,
@@ -3719,7 +3152,6 @@ SODCreateToggleWithValue(
     end,
     "SODESPTextSize"
 )
-
 SODCreateToggle(
     "FullBright",
     GamePage,
@@ -3731,13 +3163,7 @@ SODCreateToggle(
     end,
     "SODFullBright"
 )
-
--- ==============================================================================
--- UI BUILDER - SECTION 2: LOOTING
--- ==============================================================================
-
 CreateSODSection("LOOTING")
-
 SODCreateToggle(
     "Auto Farm",
     GamePage,
@@ -3753,7 +3179,6 @@ SODCreateToggle(
     end,
     "SODAutoFarm"
 )
-
 SODCreateToggleWithValue(
     "Farm Speed",
     GamePage,
@@ -3766,7 +3191,6 @@ SODCreateToggleWithValue(
     end,
     "SODFarmSpeed"
 )
-
 SODCreateToggle(
     "Auto Escape",
     GamePage,
@@ -3780,7 +3204,6 @@ SODCreateToggle(
     end,
     "SODAutoEscape"
 )
-
 SODCreateToggle(
     "Instant Steal",
     GamePage,
@@ -3808,7 +3231,6 @@ SODCreateToggle(
     end,
     "SODInstantSteal"
 )
-
 SODCreateToggleWithValue(
     "Auto Steal Aura",
     GamePage,
@@ -3824,7 +3246,6 @@ SODCreateToggleWithValue(
     end,
     "SODAutoSteal"
 )
-
 SODCreateToggle(
     "Instant Vent",
     GamePage,
@@ -3838,12 +3259,10 @@ SODCreateToggle(
     end,
     "SODInstantVent"
 )
-
 SODCreateButton("TP to Best Loot", GamePage, function()
     local bestPrompt = nil
     local bestVal = -1
     local bestData = nil
-
     for prompt, data in pairs(ItemPrompts) do
         if prompt.Parent and data.Part and data.Part.Parent then
             if (data.Value or 0) > bestVal then
@@ -3853,7 +3272,6 @@ SODCreateButton("TP to Best Loot", GamePage, function()
             end
         end
     end
-
     if bestData and bestData.Part then
         TeleportTo(bestData.Part.CFrame + Vector3.new(0, 2.5, 0), bestData.Name .. " (" .. FormatCurrency(bestData.Value) .. ")")
         task.wait(0.15)
@@ -3862,13 +3280,7 @@ SODCreateButton("TP to Best Loot", GamePage, function()
         CustomNotify("No loot found on map", Color3.fromRGB(255, 150, 50), 2)
     end
 end)
-
--- ==============================================================================
--- UI BUILDER - SECTION 3: SURVIVAL
--- ==============================================================================
-
 CreateSODSection("SURVIVAL")
-
 SODCreateToggle(
     "Auto Kill",
     GamePage,
@@ -3882,7 +3294,6 @@ SODCreateToggle(
     end,
     "SODEntityKill"
 )
-
 SODCreateToggle(
     "Infinite Stamina",
     GamePage,
@@ -3894,15 +3305,7 @@ SODCreateToggle(
     end,
     "SODInfiniteStamina"
 )
-
-
-
--- ==============================================================================
--- UI BUILDER - SECTION 4: TELEPORTS & UTILITIES
--- ==============================================================================
-
 CreateSODSection("TELEPORTS")
-
 SODCreateButton("TP to Extraction", GamePage, function()
     local bestExit = GetBestExit()
     if bestExit and bestExit.Part then
@@ -3911,12 +3314,10 @@ SODCreateButton("TP to Extraction", GamePage, function()
         CustomNotify("Extraction point not detected yet", Color3.fromRGB(255, 150, 50), 2)
     end
 end)
-
 SODCreateButton("TP to Nearest Hideout", GamePage, function()
     local _, _, root = GetCharacterState()
     if not root then return end
     local nearest, minDist, label = nil, 99999, "Hideout"
-
     for _, data in pairs(ClosetObjects) do
         if data.Part and data.Part.Parent then
             local dist = (data.Part.Position - root.Position).Magnitude
@@ -3937,14 +3338,12 @@ SODCreateButton("TP to Nearest Hideout", GamePage, function()
             end
         end
     end
-
     if nearest then
         TeleportTo(nearest.CFrame + Vector3.new(0, 2.5, 0), label .. " (" .. math.floor(minDist) .. "m)")
     else
         CustomNotify("No hiding spot found nearby", Color3.fromRGB(255, 150, 50), 2)
     end
 end)
-
 SODCreateToggle(
     "Ctrl Click TP",
     GamePage,
@@ -3955,7 +3354,6 @@ SODCreateToggle(
     end,
     "SODClickTP"
 )
-
 SODCreateToggle(
     "Auto Vote",
     GamePage,
@@ -3972,9 +3370,7 @@ SODCreateToggle(
     end,
     "SODAutoVote"
 )
-
 local MapChoicesList = { "Office", "Supermarket", "Liminal Lucidity", "Facility", "American Dorm", "Random" }
-
 SODCreateDropdown(
     "Vote Monster",
     { "AI", "Player", "Random" },
@@ -3985,7 +3381,6 @@ SODCreateDropdown(
         AutoSaveConfiguration()
     end
 )
-
 SODCreateDropdown(
     "Map 1st Choice",
     MapChoicesList,
@@ -3996,7 +3391,6 @@ SODCreateDropdown(
         AutoSaveConfiguration()
     end
 )
-
 SODCreateDropdown(
     "Map 2nd Choice",
     MapChoicesList,
@@ -4007,7 +3401,6 @@ SODCreateDropdown(
         AutoSaveConfiguration()
     end
 )
-
 SODCreateDropdown(
     "Map 3rd Choice",
     MapChoicesList,
@@ -4018,7 +3411,6 @@ SODCreateDropdown(
         AutoSaveConfiguration()
     end
 )
-
 SODCreateToggle(
     "Anti AFK",
     GamePage,
@@ -4030,13 +3422,7 @@ SODCreateToggle(
     end,
     "SODAntiAFK"
 )
-
--- ==============================================================================
--- UI BUILDER - SECTION: CASES
--- ==============================================================================
-
 CreateSODSection("CASES")
-
 SODCreateToggle(
     "Auto Open Case",
     GamePage,
@@ -4052,7 +3438,6 @@ SODCreateToggle(
     end,
     "SODAutoOpenCase"
 )
-
 SODCreateDropdown(
     "Select Case",
     { "Basketball Case ($350)", "Backpack Case ($650)", "Emote Case ($1,500)", "All Cases" },
@@ -4063,7 +3448,6 @@ SODCreateDropdown(
         AutoSaveConfiguration()
     end
 )
-
 SODCreateDropdown(
     "Case Delay",
     { "0.5s", "1.0s", "1.5s", "2.0s" },
@@ -4074,29 +3458,20 @@ SODCreateDropdown(
         AutoSaveConfiguration()
     end
 )
-
 SODCreateButton("Open 1 Case Now", GamePage, function()
     task.spawn(function()
         OpenCrate(Settings.SODCaseChoice)
     end)
 end)
-
--- ==============================================================================
--- CLEANUP HANDLER
--- ==============================================================================
-
 getgenv().ToxSODCleanup = function()
     getgenv().ToxSODGeneration = (tonumber(getgenv().ToxSODGeneration) or 0) + 1
-
     StopAutoFarm()
     StopAutoCaseLoop()
     SetupAntiAFK(false)
-
     for _, conn in ipairs(SODConnections) do
         pcall(function() conn:Disconnect() end)
     end
     table.clear(SODConnections)
-
     for _, esp in pairs(ItemESPObjects) do
         pcall(function()
             if esp.Highlight then esp.Highlight:Destroy() end
@@ -4104,7 +3479,6 @@ getgenv().ToxSODCleanup = function()
         end)
     end
     table.clear(ItemESPObjects)
-
     for _, esp in pairs(ExitESPObjects) do
         pcall(function()
             if esp.Highlight then esp.Highlight:Destroy() end
@@ -4112,7 +3486,6 @@ getgenv().ToxSODCleanup = function()
         end)
     end
     table.clear(ExitESPObjects)
-
     for _, esp in pairs(MonsterESPObjects) do
         pcall(function()
             if esp.Highlight then esp.Highlight:Destroy() end
@@ -4120,7 +3493,6 @@ getgenv().ToxSODCleanup = function()
         end)
     end
     table.clear(MonsterESPObjects)
-
     for _, esp in pairs(PlayerESPObjects) do
         pcall(function()
             if esp.Highlight then esp.Highlight:Destroy() end
@@ -4128,7 +3500,6 @@ getgenv().ToxSODCleanup = function()
         end)
     end
     table.clear(PlayerESPObjects)
-
     for _, esp in pairs(VentESPObjects) do
         pcall(function()
             if esp.Highlight then esp.Highlight:Destroy() end
@@ -4136,7 +3507,6 @@ getgenv().ToxSODCleanup = function()
         end)
     end
     table.clear(VentESPObjects)
-
     for _, esp in pairs(ClosetESPObjects) do
         pcall(function()
             if esp.Highlight then esp.Highlight:Destroy() end
@@ -4144,20 +3514,16 @@ getgenv().ToxSODCleanup = function()
         end)
     end
     table.clear(ClosetESPObjects)
-
     for prompt, hold in pairs(OrigHoldDurations) do
         pcall(function() prompt.HoldDuration = hold end)
     end
     table.clear(OrigHoldDurations)
-
     pcall(RestoreLighting)
     ClearSafePlatform()
-
     if WarnScreenGui then
         pcall(function() WarnScreenGui:Destroy() end)
         WarnScreenGui = nil
     end
-
     local _, hum, root = GetCharacterState()
     if root then
         root.AssemblyLinearVelocity = Vector3.zero
@@ -4169,7 +3535,6 @@ getgenv().ToxSODCleanup = function()
         end)
     end
 end
-
 getgenv().ToxSODModuleLoadedJobId = game.JobId
 getgenv().ToxSODModuleVersion = SODModuleVersion
 getgenv().ToxSODModulePage = GamePage
