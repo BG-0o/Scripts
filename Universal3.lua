@@ -1,12 +1,5 @@
---[=[
-    ToxHub Universal 3 - Visuals, ESP Engine & Floating HUD Widgets
-    Loaded via: https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Universal3.lua
-    Part of ToxHub Suite (Universal 1, Universal 2, Universal 3, Combat)
---]=]
-
 local env = getgenv()
 
--- Module Lifecycle & Cleanup
 if type(env.ToxUniversal3Cleanup) == "function" then
     pcall(env.ToxUniversal3Cleanup)
 end
@@ -15,7 +8,6 @@ local token = {}
 env.ToxUniversal3Token = token
 env.ToxUniversal3Loaded = true
 
--- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -44,9 +36,6 @@ local function IsLocalPlayer(p)
     return false
 end
 
--- ==============================================================================
--- DRAWING TRACKER & RECOVERY
--- ==============================================================================
 local function SafeRemoveDrawing(d)
     if not d then return end
     pcall(function() d.Visible = false end)
@@ -261,9 +250,6 @@ env.ToxClearSkeletons = function()
     end
 end
 
--- ==============================================================================
--- FLOATING HUD WIDGETS: SPECTATOR LIST & KEYBINDS LIST
--- ==============================================================================
 local Theme_Panel = Color3.fromRGB(16, 16, 26)
 local Theme_Outline = Color3.fromRGB(36, 36, 56)
 local Theme_Accent = Color3.fromRGB(30, 95, 255)
