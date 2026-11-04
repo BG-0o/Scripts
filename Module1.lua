@@ -391,6 +391,11 @@ getgenv().GameModuleRegistry = {
         ShortName = "WID",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/WID.lua",
         Ready = true
+    },
+    [70650894743738] = {
+        ShortName = "BE",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BE.lua",
+        Ready = true
     }
 }
 
