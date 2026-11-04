@@ -1502,8 +1502,8 @@ local function ToxOpenPage(targetPage)
         getgenv().ToxControlGui.Visible = (targetPage == ControlPage)
     end
 
-    if getgenv().JoinGamesGui and getgenv().JoinGamesGui.Parent then
-        getgenv().JoinGamesGui.Visible = (targetPage == JoinPage)
+    if targetPage == JoinPage and getgenv().RefreshQuickJoinGames then
+        pcall(getgenv().RefreshQuickJoinGames)
     end
 end
 getgenv().ToxOpenPage = ToxOpenPage
