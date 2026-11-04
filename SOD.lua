@@ -123,6 +123,8 @@ local OrigLightingProps = {
 }
 local LastAuraCheck = 0
 local LastESPInterval = 0
+local LastItemESPTick = 0
+local LastStaticESPTick = 0
 local LastStaminaCheck = 0
 local LastDescendantSweep = 0
 local ProximityPromptService = game:GetService("ProximityPromptService")
@@ -1222,11 +1224,7 @@ local function RegisterPrompt(prompt)
         if Settings.SODInstantVent then
             SetInstantPrompt(prompt, true)
         end
-        TrackConnection(prompt:GetPropertyChangedSignal("HoldDuration"):Connect(function()
-            if Settings.SODInstantVent and prompt.HoldDuration ~= 0 then
-                prompt.HoldDuration = 0
-            end
-        end))
+
         return
     end
     if string.find(nameLower, "closet") or string.find(nameLower, "locker") or string.find(nameLower, "wardrobe") or string.find(nameLower, "hidespot")
@@ -1266,11 +1264,7 @@ local function RegisterPrompt(prompt)
         if Settings.SODInstantSteal then
             SetInstantPrompt(prompt, true)
         end
-        TrackConnection(prompt:GetPropertyChangedSignal("HoldDuration"):Connect(function()
-            if Settings.SODInstantSteal and prompt.HoldDuration ~= 0 then
-                prompt.HoldDuration = 0
-            end
-        end))
+
     end
 end
 local function UnregisterPrompt(prompt)
@@ -1278,7 +1272,19 @@ local function UnregisterPrompt(prompt)
     ItemPrompts[prompt] = nil
     VentObjects[prompt] = nil
     if ItemESPObjects[prompt] then
-        pcall(function() ItemESPObjects[prompt].Billboard:Destroy() end)
+        pcall(function()
+            if ItemESPObjects[prompt].Highlight then
+                ItemESPObjects[prompt].Highlight:Destroy()
+            end
+            if ItemESPObjects[prompt].Highlights then
+                for _, h in ipairs(ItemESPObjects[prompt].Highlights) do
+                    pcall(function() h:Destroy() end)
+                end
+            end
+            if ItemESPObjects[prompt].Billboard then
+                ItemESPObjects[prompt].Billboard:Destroy()
+            end
+        end)
         ItemESPObjects[prompt] = nil
     end
     if ItemChamsObjects[prompt] then
@@ -1286,7 +1292,14 @@ local function UnregisterPrompt(prompt)
         ItemChamsObjects[prompt] = nil
     end
     if VentESPObjects[prompt] then
-        pcall(function() VentESPObjects[prompt].Billboard:Destroy() end)
+        pcall(function()
+            if VentESPObjects[prompt].Highlight then
+                VentESPObjects[prompt].Highlight:Destroy()
+            end
+            if VentESPObjects[prompt].Billboard then
+                VentESPObjects[prompt].Billboard:Destroy()
+            end
+        end)
         VentESPObjects[prompt] = nil
     end
 end
@@ -1602,102 +1615,45 @@ local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
     end
     return bb, label
 end
-local function GetItemParts(part, itemModel)
-    local parts = {}
-    local function addPart(p)
-        if p and p:IsA("BasePart") and not table.find(parts, p) then
-            if not p:IsA("Terrain") and not IsPartOfLocalPlayer(p) then
-                local s = p.Size
-                if s.X < 25 and s.Y < 25 and s.Z < 25 then
-                    table.insert(parts, p)
-                end
-            end
-        end
-    end
-    if itemModel and itemModel:IsA("Model") then
-        for _, desc in ipairs(itemModel:GetDescendants()) do
-            addPart(desc)
-        end
-    end
-    if part and part:IsA("BasePart") then
-        addPart(part)
-        for _, desc in ipairs(part:GetDescendants()) do
-            addPart(desc)
-        end
-        local parent = part.Parent
-        if parent and parent ~= Workspace and not parent:IsA("Terrain") then
-            local pName = string.lower(parent.Name)
-            if pName ~= "workspace" and pName ~= "rooms" and pName ~= "geometry" and pName ~= "map" and pName ~= "environment" then
-                for _, sib in ipairs(parent:GetChildren()) do
-                    addPart(sib)
-                    if sib:IsA("Model") or sib:IsA("Folder") then
-                        for _, sub in ipairs(sib:GetDescendants()) do
-                            addPart(sub)
-                        end
-                    end
-                end
-            end
-        end
-        pcall(function()
-            local searchContainers = { part, part.Parent, itemModel }
-            for _, container in ipairs(searchContainers) do
-                if container then
-                    for _, desc in ipairs(container:GetDescendants()) do
-                        if desc:IsA("WeldConstraint") then
-                            if desc.Part0 == part then addPart(desc.Part1) end
-                            if desc.Part1 == part then addPart(desc.Part0) end
-                        elseif desc:IsA("JointInstance") then
-                            if desc.Part0 == part then addPart(desc.Part1) end
-                            if desc.Part1 == part then addPart(desc.Part0) end
-                        end
-                    end
-                end
-            end
-        end)
-        pcall(function()
-            for _, connected in ipairs(part:GetConnectedParts()) do
-                addPart(connected)
-            end
-        end)
-    end
-    return parts, itemModel
-end
 local function UpdateItemESP(charRoot)
     local handledTargets = {}
     local style = Settings.SODItemESPStyle or "Name + Value"
     if Player.Character then
-        for _, child in ipairs(Player.Character:GetDescendants()) do
-            if child:IsA("Highlight") or child:IsA("BillboardGui") then
-                pcall(function() child:Destroy() end)
-            end
-        end
+        local hl = Player.Character:FindFirstChild("ToxSOD_ItemHL")
+        if hl then pcall(function() hl:Destroy() end) end
+        local bb = Player.Character:FindFirstChild("ToxSOD_ItemBB")
+        if bb then pcall(function() bb:Destroy() end) end
     end
     local cam = Workspace.CurrentCamera or Camera
     if cam then
-        for _, child in ipairs(cam:GetDescendants()) do
-            if child:IsA("Highlight") or child:IsA("BillboardGui") then
-                pcall(function() child:Destroy() end)
-            end
-        end
+        local hl = cam:FindFirstChild("ToxSOD_ItemHL")
+        if hl then pcall(function() hl:Destroy() end) end
+        local bb = cam:FindFirstChild("ToxSOD_ItemBB")
+        if bb then pcall(function() bb:Destroy() end) end
     end
     for prompt, data in pairs(ItemPrompts) do
         local part = data.Part
-        local itemParts, itemModel = GetItemParts(part, data.Model or GetItemModel(prompt) or GetItemModel(part))
-        local targetInst = itemModel or part
+        local targetInst = data.Model or part
         local isInvalid = not prompt.Parent or not part or not part.Parent
             or IsDescendantOfAnyPlayer(prompt)
             or IsDescendantOfAnyPlayer(part)
             or (targetInst and IsDescendantOfAnyPlayer(targetInst))
             or (targetInst and targetInst:IsA("Model") and targetInst:FindFirstChildOfClass("Humanoid") ~= nil)
+            or IsPartOfLocalPlayer(targetInst)
+            or IsPartOfLocalPlayer(part)
+            or IsPartOfLocalPlayer(prompt)
         if isInvalid then
             if ItemESPObjects[prompt] then
                 pcall(function()
-                    if ItemESPObjects[prompt].Highlights then
-                        for _, h in ipairs(ItemESPObjects[prompt].Highlights) do pcall(function() h:Destroy() end) end
-                    elseif ItemESPObjects[prompt].Highlight then
+                    if ItemESPObjects[prompt].Highlight then
                         ItemESPObjects[prompt].Highlight:Destroy()
                     end
-                    if ItemESPObjects[prompt].Billboard then ItemESPObjects[prompt].Billboard:Destroy() end
+                    if ItemESPObjects[prompt].Highlights then
+                        for _, h in ipairs(ItemESPObjects[prompt].Highlights) do pcall(function() h:Destroy() end) end
+                    end
+                    if ItemESPObjects[prompt].Billboard then
+                        ItemESPObjects[prompt].Billboard:Destroy()
+                    end
                 end)
                 ItemESPObjects[prompt] = nil
             end
@@ -1705,12 +1661,12 @@ local function UpdateItemESP(charRoot)
         else
             if targetInst and handledTargets[targetInst] then
                 if ItemESPObjects[prompt] then
-                    if ItemESPObjects[prompt].Highlights then
-                        for _, h in ipairs(ItemESPObjects[prompt].Highlights) do h.Enabled = false end
-                    elseif ItemESPObjects[prompt].Highlight then
+                    if ItemESPObjects[prompt].Highlight then
                         ItemESPObjects[prompt].Highlight.Enabled = false
                     end
-                    if ItemESPObjects[prompt].Billboard then ItemESPObjects[prompt].Billboard.Enabled = false end
+                    if ItemESPObjects[prompt].Billboard then
+                        ItemESPObjects[prompt].Billboard.Enabled = false
+                    end
                 end
                 continue
             end
@@ -1722,24 +1678,7 @@ local function UpdateItemESP(charRoot)
             local maxDist = tonumber(Settings.SODESPMaxDistance) or 350
             if show and dist <= maxDist then
                 local rColor = RarityColors[data.Rarity] or Color3.fromRGB(220, 220, 220)
-                local hls = {}
-                if itemModel and itemModel:IsA("Model") and not IsPartOfLocalPlayer(itemModel) then
-                    local hl = CreateOrUpdateHighlight(itemModel, rColor, "ToxSOD_ItemHL")
-                    if hl then table.insert(hls, hl) end
-                    for _, p in ipairs(itemParts) do
-                        if not p:IsDescendantOf(itemModel) and not IsPartOfLocalPlayer(p) then
-                            local subHl = CreateOrUpdateHighlight(p, rColor, "ToxSOD_ItemHL")
-                            if subHl then table.insert(hls, subHl) end
-                        end
-                    end
-                else
-                    for _, p in ipairs(itemParts) do
-                        if not IsPartOfLocalPlayer(p) then
-                            local hl = CreateOrUpdateHighlight(p, rColor, "ToxSOD_ItemHL")
-                            if hl then table.insert(hls, hl) end
-                        end
-                    end
-                end
+                local hl = CreateOrUpdateHighlight(targetInst, rColor, "ToxSOD_ItemHL")
                 local bb = nil
                 local label = nil
                 if style == "Chams Only" then
@@ -1755,15 +1694,15 @@ local function UpdateItemESP(charRoot)
                     local offset = dist < 7 and Vector3.new(0, 3.0, 0) or Vector3.new(0, 1.8, 0)
                     bb, label = CreateOrUpdateBillboard(part, "ToxSOD_ItemBB", tagText, rColor, offset)
                 end
-                ItemESPObjects[prompt] = { Highlights = hls, Highlight = hls[1], Billboard = bb, Label = label }
+                ItemESPObjects[prompt] = { Highlight = hl, Billboard = bb, Label = label }
             else
                 if ItemESPObjects[prompt] then
-                    if ItemESPObjects[prompt].Highlights then
-                        for _, h in ipairs(ItemESPObjects[prompt].Highlights) do h.Enabled = false end
-                    elseif ItemESPObjects[prompt].Highlight then
+                    if ItemESPObjects[prompt].Highlight then
                         ItemESPObjects[prompt].Highlight.Enabled = false
                     end
-                    if ItemESPObjects[prompt].Billboard then ItemESPObjects[prompt].Billboard.Enabled = false end
+                    if ItemESPObjects[prompt].Billboard then
+                        ItemESPObjects[prompt].Billboard.Enabled = false
+                    end
                 end
             end
         end
@@ -2833,19 +2772,17 @@ TrackConnection(RunService.Heartbeat:Connect(function(dt)
             pcall(AutoStealAura, root)
         end
     end
-    if now - LastDescendantSweep >= 3.5 then
-        LastDescendantSweep = now
-        for _, d in ipairs(Workspace:GetDescendants()) do
-            if d:IsA("ProximityPrompt") and not ItemPrompts[d] and not VentObjects[d] then
-                pcall(RegisterPrompt, d)
-            end
-        end
-    end
-    if now - LastESPInterval >= 0.15 then
+    if now - LastESPInterval >= 0.18 then
         LastESPInterval = now
         local closestDist = UpdateMonsterESP(root)
-        UpdateItemESP(root)
         UpdatePlayerESP(root)
+    end
+    if now - LastItemESPTick >= 0.25 then
+        LastItemESPTick = now
+        UpdateItemESP(root)
+    end
+    if now - LastStaticESPTick >= 0.8 then
+        LastStaticESPTick = now
         UpdateExitESP(root)
         UpdateVentClosetESP(root)
     end
