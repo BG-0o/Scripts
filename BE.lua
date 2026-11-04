@@ -1,16 +1,7 @@
--- ==============================================================================
--- TOXHUB - BUG EVOLUTION MODULE (BE.lua)
--- Game URL: https://www.roblox.com/games/70650894743738/Bug-Evolution
--- PlaceId: 70650894743738
--- Raw URL: https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BE.lua
--- ==============================================================================
-
 local BEPlaceId = 70650894743738
-
 if game.PlaceId ~= BEPlaceId and tostring(game.PlaceId) ~= "70650894743738" then
     return
 end
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -21,11 +12,9 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui = game:GetService("CoreGui")
 local TeleportService = game:GetService("TeleportService")
-
 local Player = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera or Workspace:FindFirstChildOfClass("Camera")
 local Mouse = Player and Player:GetMouse()
-
 local Settings = getgenv().Settings
 local GamePage = getgenv().GamePage
 local CreateToggle = getgenv().CreateToggle
@@ -37,37 +26,29 @@ local CustomNotify = getgenv().CustomNotify or function() end
 local AutoSaveConfiguration = getgenv().AutoSaveConfiguration or function() end
 local AddConnection = getgenv().AddConnection or function(c) return c end
 local SyncToggleVisuals = getgenv().SyncToggleVisuals
-
 if not Settings or not GamePage or not CreateToggle or not CreateButton then
     return
 end
-
 getgenv().ToxBEGeneration = (tonumber(getgenv().ToxBEGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxBEGeneration
-
 local BEModuleVersion = "2026-11-04-be-v1"
-
 if getgenv().ToxBEModuleLoadedJobId == game.JobId
 and getgenv().ToxBEModuleVersion == BEModuleVersion
 and getgenv().ToxBEModulePage == GamePage
 and not getgenv().Destroyed then
     return
 end
-
 if getgenv().ToxBECleanup then
     pcall(getgenv().ToxBECleanup)
 end
-
 for _, child in ipairs(GamePage:GetChildren()) do
     if child:IsA("GuiObject") then
         child:Destroy()
     end
 end
-
 Settings.BECollapsedSections = typeof(Settings.BECollapsedSections) == "table"
     and Settings.BECollapsedSections
     or {}
-
 Settings.BEAutoEat = Settings.BEAutoEat == true
 Settings.BEEatRange = math.clamp(tonumber(Settings.BEEatRange) or 50, 15, 200)
 Settings.BEAutoHuntNPCs = Settings.BEAutoHuntNPCs == true
@@ -76,40 +57,33 @@ Settings.BEAutoEvolve = Settings.BEAutoEvolve == true
 Settings.BETargetEvolve = tostring(Settings.BETargetEvolve or "Auto Next")
 Settings.BEAutoPerks = Settings.BEAutoPerks == true
 Settings.BEPerkPriority = tostring(Settings.BEPerkPriority or "Damage")
-
 Settings.BESmartKillAura = Settings.BESmartKillAura == true
 Settings.BEAuraRange = math.clamp(tonumber(Settings.BEAuraRange) or 18, 10, 40)
 Settings.BEOnlySmaller = Settings.BEOnlySmaller == true
 Settings.BEFastAttack = Settings.BEFastAttack == true
 Settings.BEHitboxExpander = Settings.BEHitboxExpander == true
 Settings.BEHitboxSize = tonumber(Settings.BEHitboxSize) or 6
-
 Settings.BEPredatorWarn = Settings.BEPredatorWarn == true
 Settings.BEWarnDistance = tonumber(Settings.BEWarnDistance) or 60
 Settings.BEAutoEscape = Settings.BEAutoEscape == true
 Settings.BEEscapeHealth = tonumber(Settings.BEEscapeHealth) or 30
 Settings.BEInfiniteStamina = Settings.BEInfiniteStamina == true
-
 Settings.BEPlayerESP = Settings.BEPlayerESP == true
 Settings.BEFoodESP = Settings.BEFoodESP == true
 Settings.BECocoonESP = Settings.BECocoonESP == true
 Settings.BEFullBright = Settings.BEFullBright == true
-
 Settings.BESpeedBoost = Settings.BESpeedBoost == true
 Settings.BESpeedMultiplier = math.clamp(tonumber(Settings.BESpeedMultiplier) or 1.5, 1.0, 3.0)
 Settings.BEInfiniteJump = Settings.BEInfiniteJump == true
 Settings.BEAntiAFK = Settings.BEAntiAFK == true
-
 local BEConnections = {}
 local BECurrentSection = nil
 local BESections = {}
-
 local FoodObjects = {}
 local NPCObjects = {}
 local PlayerESPObjects = {}
 local FoodESPObjects = {}
 local CocoonESPObjects = {}
-
 local OrigLightingProps = {
     Ambient = Lighting.Ambient,
     OutdoorAmbient = Lighting.OutdoorAmbient,
@@ -117,13 +91,11 @@ local OrigLightingProps = {
     ClockTime = Lighting.ClockTime,
     FogEnd = Lighting.FogEnd
 }
-
 local WarnScreenGui = nil
 local WarnFrame = nil
 local WarnText = nil
 local AntiAFKConnection = nil
 local InfiniteJumpConnection = nil
-
 local function TrackConnection(conn)
     if conn then
         table.insert(BEConnections, conn)
@@ -131,7 +103,6 @@ local function TrackConnection(conn)
     end
     return conn
 end
-
 local function GetCharacterState()
     local char = Player.Character
     if not char or not char.Parent then return nil, nil, nil end
@@ -139,7 +110,6 @@ local function GetCharacterState()
     local root = char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChildWhichIsA("BasePart")
     return char, hum, root
 end
-
 local function IsPartOfLocalPlayer(inst)
     if not inst then return false end
     local char = Player.Character
@@ -179,7 +149,6 @@ local function IsPartOfLocalPlayer(inst)
     end
     return false
 end
-
 local function SafeTeleportTo(cf)
     local char, hum, root = GetCharacterState()
     if not root then return false end
@@ -194,7 +163,6 @@ local function SafeTeleportTo(cf)
     end)
     return true
 end
-
 local function GetBugStats(model, plr)
     local stats = {
         Level = 1,
@@ -204,13 +172,11 @@ local function GetBugStats(model, plr)
         MaxHealth = 100
     }
     if not model then return stats end
-
     local hum = model:FindFirstChildOfClass("Humanoid")
     if hum then
         stats.Health = hum.Health
         stats.MaxHealth = hum.MaxHealth
     end
-
     local holders = { model, plr }
     for _, h in ipairs(holders) do
         if h then
@@ -237,22 +203,17 @@ local function GetBugStats(model, plr)
             end
         end
     end
-
     if stats.Size == 1 and model:IsA("Model") then
         local cf, size = model:GetBoundingBox()
         stats.Size = size.X * size.Y * size.Z
     end
-
     return stats
 end
-
 local function ClassifyThreat(targetPlr, targetChar)
     local myChar = Player.Character
     if not myChar or not targetChar then return "NEUTRAL", Color3.fromRGB(240, 240, 240) end
-
     local myStats = GetBugStats(myChar, Player)
     local targetStats = GetBugStats(targetChar, targetPlr)
-
     if targetStats.Level > (myStats.Level + 1) or targetStats.Size > (myStats.Size * 1.3) then
         return "PREDATOR", Color3.fromRGB(255, 45, 60)
     elseif targetStats.Level < myStats.Level or targetStats.Size < (myStats.Size * 0.85) then
@@ -261,7 +222,6 @@ local function ClassifyThreat(targetPlr, targetChar)
         return "NEUTRAL", Color3.fromRGB(255, 205, 50)
     end
 end
-
 local function GetAttackRemotes()
     local remotes = {}
     pcall(function()
@@ -278,20 +238,16 @@ local function GetAttackRemotes()
     end)
     return remotes
 end
-
 local function ExecuteBugAttack(targetModel)
     local char = Player.Character
     if not char then return end
-
     for _, tool in ipairs(char:GetChildren()) do
         if tool:IsA("Tool") then
             pcall(function() tool:Activate() end)
         end
     end
-
     local tHum = targetModel and targetModel:FindFirstChildOfClass("Humanoid")
     local tRoot = targetModel and (targetModel:FindFirstChild("HumanoidRootPart") or targetModel.PrimaryPart)
-
     for _, rem in ipairs(GetAttackRemotes()) do
         pcall(function()
             if rem:IsA("RemoteEvent") then
@@ -302,7 +258,6 @@ local function ExecuteBugAttack(targetModel)
         end)
     end
 end
-
 local function CreateOrUpdateHighlight(instance, color, name)
     if not instance or not instance.Parent then return nil end
     local hlName = name or "ToxBE_HL"
@@ -311,7 +266,6 @@ local function CreateOrUpdateHighlight(instance, color, name)
         if old then pcall(function() old:Destroy() end) end
         return nil
     end
-
     local hl = instance:FindFirstChild(hlName)
     if not hl or not hl:IsA("Highlight") then
         hl = Instance.new("Highlight")
@@ -326,7 +280,6 @@ local function CreateOrUpdateHighlight(instance, color, name)
             hl.Adornee = instance
         end
     end
-
     if hl.FillColor ~= color then
         hl.FillColor = color
         hl.OutlineColor = Color3.fromRGB(255, 255, 255)
@@ -336,12 +289,10 @@ local function CreateOrUpdateHighlight(instance, color, name)
     end
     return hl
 end
-
 local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
     if not adornee or not adornee.Parent or IsPartOfLocalPlayer(adornee) then return nil end
     local bb = adornee:FindFirstChild(name)
     local label = nil
-
     if not bb or not bb:IsA("BillboardGui") then
         bb = Instance.new("BillboardGui")
         bb.Name = name
@@ -350,7 +301,6 @@ local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
         bb.AlwaysOnTop = true
         bb.MaxDistance = 350
         bb.Adornee = adornee
-
         label = Instance.new("TextLabel")
         label.Size = UDim2.new(1, 0, 1, 0)
         label.BackgroundTransparency = 1
@@ -372,23 +322,18 @@ local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
     if not bb.Enabled then bb.Enabled = true end
     return bb, label
 end
-
 local function UpdatePlayerESP(charRoot)
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= Player then
             local char = plr.Character
             local root = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChildWhichIsA("BasePart"))
-
             if char and char.Parent and root and Settings.BEPlayerESP then
                 local classification, color = ClassifyThreat(plr, char)
                 local stats = GetBugStats(char, plr)
                 local dist = charRoot and (root.Position - charRoot.Position).Magnitude or 0
-
                 local tagText = string.format("[%s] %s\nLv.%d - %s (%dm)", classification, plr.DisplayName or plr.Name, stats.Level, stats.Species, math.floor(dist))
-
                 local hl = CreateOrUpdateHighlight(char, color, "ToxBE_PlayerHL")
                 local bb, label = CreateOrUpdateBillboard(root, "ToxBE_PlayerBB", tagText, color, Vector3.new(0, 3.2, 0))
-
                 PlayerESPObjects[plr] = { Highlight = hl, Billboard = bb, Label = label }
             else
                 if PlayerESPObjects[plr] then
@@ -402,7 +347,6 @@ local function UpdatePlayerESP(charRoot)
         end
     end
 end
-
 local function SetupWarningHUD()
     if WarnScreenGui then return end
     pcall(function()
@@ -411,7 +355,6 @@ local function SetupWarningHUD()
         WarnScreenGui.Name = "ToxBE_WarnGui"
         WarnScreenGui.ResetOnSpawn = false
         WarnScreenGui.Parent = parent
-
         WarnFrame = Instance.new("Frame")
         WarnFrame.Size = UDim2.new(0, 320, 0, 36)
         WarnFrame.Position = UDim2.new(0.5, -160, 0.12, 0)
@@ -419,10 +362,8 @@ local function SetupWarningHUD()
         WarnFrame.BorderSizePixel = 0
         WarnFrame.Visible = false
         WarnFrame.Parent = WarnScreenGui
-
         local corner = Instance.new("UICorner") corner.CornerRadius = UDim.new(0, 6) corner.Parent = WarnFrame
         local stroke = Instance.new("UIStroke") stroke.Color = Color3.fromRGB(255, 45, 60) stroke.Thickness = 1.5 stroke.Parent = WarnFrame
-
         WarnText = Instance.new("TextLabel")
         WarnText.Size = UDim2.new(1, 0, 1, 0)
         WarnText.BackgroundTransparency = 1
@@ -433,7 +374,6 @@ local function SetupWarningHUD()
         WarnText.Parent = WarnFrame
     end)
 end
-
 local function ApplyFullBright()
     if Settings.BEFullBright then
         Lighting.Brightness = 2.5
@@ -449,21 +389,17 @@ local function ApplyFullBright()
         Lighting.Ambient = OrigLightingProps.Ambient or Color3.fromRGB(0, 0, 0)
     end
 end
-
 local function FindNearbyFood(root, maxDist)
     local bestFood = nil
     local minDist = maxDist or 50
-
     for _, obj in ipairs(Workspace:GetDescendants()) do
         if obj:IsA("BasePart") and not IsPartOfLocalPlayer(obj) then
             local n = string.lower(obj.Name)
             local pName = obj.Parent and string.lower(obj.Parent.Name) or ""
-
             local isFood = string.find(n, "food") or string.find(n, "orb") or string.find(n, "pellet")
                         or string.find(n, "apple") or string.find(n, "meat") or string.find(n, "xp")
                         or string.find(n, "seed") or string.find(n, "berry")
                         or string.find(pName, "food") or string.find(pName, "orbs")
-
             if isFood and obj.Size.X < 15 and obj.Size.Z < 15 then
                 local dist = (obj.Position - root.Position).Magnitude
                 if dist < minDist then
@@ -475,7 +411,6 @@ local function FindNearbyFood(root, maxDist)
     end
     return bestFood, minDist
 end
-
 local function ProcessAutoEat(root)
     local food, dist = FindNearbyFood(root, Settings.BEEatRange or 50)
     if food and food.Parent then
@@ -498,21 +433,17 @@ local function ProcessAutoEat(root)
         end
     end
 end
-
 local function ProcessSmartKillAura(root)
     local bestTarget = nil
     local minDist = Settings.BEAuraRange or 18
-
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= Player then
             local char = plr.Character
             local tRoot = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart)
             local hum = char and char:FindFirstChildOfClass("Humanoid")
-
             if char and tRoot and hum and hum.Health > 0 then
                 local classification = ClassifyThreat(plr, char)
                 local canAttack = not Settings.BEOnlySmaller or (classification == "PREY")
-
                 if canAttack then
                     local dist = (tRoot.Position - root.Position).Magnitude
                     if dist <= minDist then
@@ -523,7 +454,6 @@ local function ProcessSmartKillAura(root)
             end
         end
     end
-
     if not bestTarget and (Settings.BEAutoHuntNPCs or Settings.BEHuntCocoons) then
         for _, m in ipairs(Workspace:GetChildren()) do
             if m:IsA("Model") and m ~= Player.Character and not Players:GetPlayerFromCharacter(m) then
@@ -531,7 +461,6 @@ local function ProcessSmartKillAura(root)
                 local mRoot = m:FindFirstChild("HumanoidRootPart") or m.PrimaryPart or m:FindFirstChildWhichIsA("BasePart")
                 local mName = string.lower(m.Name)
                 local isCocoon = string.find(mName, "cocoon")
-
                 if mRoot and ((isCocoon and Settings.BEHuntCocoons) or (hum and hum.Health > 0 and Settings.BEAutoHuntNPCs)) then
                     local dist = (mRoot.Position - root.Position).Magnitude
                     if dist <= minDist then
@@ -542,27 +471,22 @@ local function ProcessSmartKillAura(root)
             end
         end
     end
-
     if bestTarget then
         ExecuteBugAttack(bestTarget)
     end
 end
-
 local function ProcessAutoEscape(hum, root)
     if not hum or not root then return end
     local hpPercent = (hum.Health / math.max(hum.MaxHealth, 1)) * 100
-
     if hpPercent <= (Settings.BEEscapeHealth or 30) then
         local escapeCF = root.CFrame + Vector3.new(0, 45, 0)
         SafeTeleportTo(escapeCF)
         CustomNotify("Low HP: Auto Escaped to Safety!", Color3.fromRGB(0, 255, 140), 2)
     end
 end
-
 local function ProcessInfiniteStamina()
     local char = Player.Character
     if not char then return end
-
     for _, name in ipairs({ "Stamina", "Energy", "Boost", "RunEnergy" }) do
         local val = char:GetAttribute(name)
         if typeof(val) == "number" and val < 100 then
@@ -574,7 +498,6 @@ local function ProcessInfiniteStamina()
         end
     end
 end
-
 local function ProcessAutoEvolve()
     pcall(function()
         for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
@@ -590,7 +513,6 @@ local function ProcessAutoEvolve()
         end
     end)
 end
-
 local function ProcessAutoPerks()
     pcall(function()
         for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
@@ -604,18 +526,14 @@ local function ProcessAutoPerks()
         end
     end)
 end
-
 local LastAuraTick = 0
 local LastEatTick = 0
 local LastEvolveTick = 0
 local LastESPTick = 0
-
 TrackConnection(RunService.Heartbeat:Connect(function()
     if getgenv().ToxBEGeneration ~= CurrentGeneration or getgenv().Destroyed then return end
-
     local char, hum, root = GetCharacterState()
     local now = os.clock()
-
     if char then
         for _, c in ipairs(char:GetDescendants()) do
             if c:IsA("Highlight") and string.find(c.Name, "ToxBE") then
@@ -631,22 +549,17 @@ TrackConnection(RunService.Heartbeat:Connect(function()
             end
         end
     end
-
     if not root or not hum or hum.Health <= 0 then return end
-
     if Settings.BESpeedBoost and hum then
         local baseSpeed = 16
         hum.WalkSpeed = math.max(baseSpeed * (Settings.BESpeedMultiplier or 1.5), hum.WalkSpeed)
     end
-
     if Settings.BEInfiniteStamina then
         ProcessInfiniteStamina()
     end
-
     if Settings.BEAutoEscape then
         ProcessAutoEscape(hum, root)
     end
-
     if Settings.BEHitboxExpander then
         local head = char:FindFirstChild("Head") or char:FindFirstChild("Jaw") or char:FindFirstChild("Mouth")
         if head and head:IsA("BasePart") then
@@ -655,27 +568,22 @@ TrackConnection(RunService.Heartbeat:Connect(function()
             head.CanCollide = false
         end
     end
-
     if Settings.BEAutoEat and (now - LastEatTick >= 0.15) then
         LastEatTick = now
         ProcessAutoEat(root)
     end
-
     if Settings.BESmartKillAura and (now - LastAuraTick >= 0.1) then
         LastAuraTick = now
         ProcessSmartKillAura(root)
     end
-
     if (Settings.BEAutoEvolve or Settings.BEAutoPerks) and (now - LastEvolveTick >= 2.5) then
         LastEvolveTick = now
         if Settings.BEAutoEvolve then ProcessAutoEvolve() end
         if Settings.BEAutoPerks then ProcessAutoPerks() end
     end
-
     if now - LastESPTick >= 0.18 then
         LastESPTick = now
         UpdatePlayerESP(root)
-
         if Settings.BEPredatorWarn and WarnFrame then
             local closestPredatorDist = 9999
             for _, plr in ipairs(Players:GetPlayers()) do
@@ -692,7 +600,6 @@ TrackConnection(RunService.Heartbeat:Connect(function()
                     end
                 end
             end
-
             local warnDist = Settings.BEWarnDistance or 60
             if closestPredatorDist <= warnDist then
                 WarnFrame.Visible = true
@@ -705,7 +612,6 @@ TrackConnection(RunService.Heartbeat:Connect(function()
         end
     end
 end))
-
 local function SetupInfiniteJump(enable)
     if InfiniteJumpConnection then
         InfiniteJumpConnection:Disconnect()
@@ -723,7 +629,6 @@ local function SetupInfiniteJump(enable)
         TrackConnection(InfiniteJumpConnection)
     end
 end
-
 local function SetupAntiAFK(enable)
     if AntiAFKConnection then
         AntiAFKConnection:Disconnect()
@@ -743,9 +648,7 @@ local function SetupAntiAFK(enable)
         TrackConnection(AntiAFKConnection)
     end
 end
-
 SetupWarningHUD()
-
 if Settings.BEFullBright then
     pcall(ApplyFullBright)
 end
@@ -755,7 +658,6 @@ end
 if Settings.BEAntiAFK then
     pcall(function() SetupAntiAFK(true) end)
 end
-
 local function TrackControl(control)
     if not control then return nil end
     if BECurrentSection then
@@ -764,11 +666,9 @@ local function TrackControl(control)
     end
     return control
 end
-
 local function CreateBESection(text)
     local name = tostring(text)
     local key = string.gsub(name, "%s+", "")
-
     local Header = Instance.new("TextButton")
     Header.Size = UDim2.new(1, -5, 0, 24)
     Header.BackgroundColor3 = Color3.fromRGB(13, 13, 21)
@@ -776,10 +676,8 @@ local function CreateBESection(text)
     Header.Text = ""
     Header.AutoButtonColor = false
     Header.Parent = GamePage
-
     local HeaderCorner = Instance.new("UICorner") HeaderCorner.CornerRadius = UDim.new(0, 4) HeaderCorner.Parent = Header
     local HeaderStroke = Instance.new("UIStroke") HeaderStroke.Color = Color3.fromRGB(28, 28, 42) HeaderStroke.Thickness = 1 HeaderStroke.Parent = Header
-
     local Title = Instance.new("TextLabel")
     Title.Size = UDim2.new(1, -50, 1, 0)
     Title.Position = UDim2.new(0, 8, 0, 0)
@@ -790,7 +688,6 @@ local function CreateBESection(text)
     Title.Font = Enum.Font.GothamBold
     Title.TextXAlignment = Enum.TextXAlignment.Left
     Title.Parent = Header
-
     local Indicator = Instance.new("TextLabel")
     Indicator.Size = UDim2.new(0, 20, 1, 0)
     Indicator.Position = UDim2.new(1, -24, 0, 0)
@@ -799,7 +696,6 @@ local function CreateBESection(text)
     Indicator.TextSize = 11
     Indicator.Font = Enum.Font.GothamBold
     Indicator.Parent = Header
-
     local sectionData = {
         Key = key,
         Header = Header,
@@ -807,14 +703,12 @@ local function CreateBESection(text)
         Collapsed = Settings.BECollapsedSections[key] == true,
         Controls = {}
     }
-
     local function UpdateVisuals()
         Indicator.Text = sectionData.Collapsed and "+" or "-"
         for _, ctrl in ipairs(sectionData.Controls) do
             ctrl.Visible = not sectionData.Collapsed
         end
     end
-
     Header.MouseButton1Click:Connect(function()
         if getgenv().Destroyed or getgenv().ToxOptionsReady == false then return end
         sectionData.Collapsed = not sectionData.Collapsed
@@ -822,30 +716,24 @@ local function CreateBESection(text)
         UpdateVisuals()
         AutoSaveConfiguration()
     end)
-
     UpdateVisuals()
     table.insert(BESections, sectionData)
     BECurrentSection = sectionData
     return sectionData
 end
-
 local function BECreateToggle(...)
     return TrackControl(CreateToggle(...))
 end
-
 local function BECreateButton(...)
     return TrackControl(CreateButton(...))
 end
-
 local function BECreateDropdown(...)
     if CreateDropdown then
         return TrackControl(CreateDropdown(...))
     end
     return nil
 end
-
 CreateBESection("FARMING & PROGRESSION")
-
 BECreateToggle(
     "Auto Eat",
     GamePage,
@@ -856,7 +744,6 @@ BECreateToggle(
     end,
     "BEAutoEat"
 )
-
 BECreateDropdown(
     "Eat Range",
     { "25 studs", "50 studs", "100 studs", "150 studs" },
@@ -868,7 +755,6 @@ BECreateDropdown(
         AutoSaveConfiguration()
     end
 )
-
 BECreateToggle(
     "Auto Hunt NPCs",
     GamePage,
@@ -879,7 +765,6 @@ BECreateToggle(
     end,
     "BEAutoHuntNPCs"
 )
-
 BECreateToggle(
     "Hunt Cocoons",
     GamePage,
@@ -890,7 +775,6 @@ BECreateToggle(
     end,
     "BEHuntCocoons"
 )
-
 BECreateToggle(
     "Auto Evolve",
     GamePage,
@@ -901,7 +785,6 @@ BECreateToggle(
     end,
     "BEAutoEvolve"
 )
-
 BECreateDropdown(
     "Target Evolution",
     { "Auto Next", "Spider", "Ant", "Fly", "Grasshopper", "Hornet", "Tarantula", "Mantis" },
@@ -912,7 +795,6 @@ BECreateDropdown(
         AutoSaveConfiguration()
     end
 )
-
 BECreateToggle(
     "Auto Upgrade Perks",
     GamePage,
@@ -923,7 +805,6 @@ BECreateToggle(
     end,
     "BEAutoPerks"
 )
-
 BECreateDropdown(
     "Perk Priority",
     { "Damage", "Speed", "Max Health", "Stamina" },
@@ -934,9 +815,7 @@ BECreateDropdown(
         AutoSaveConfiguration()
     end
 )
-
 CreateBESection("COMBAT")
-
 BECreateToggle(
     "Smart Kill Aura",
     GamePage,
@@ -947,7 +826,6 @@ BECreateToggle(
     end,
     "BESmartKillAura"
 )
-
 BECreateToggle(
     "Only Smaller Bugs",
     GamePage,
@@ -958,7 +836,6 @@ BECreateToggle(
     end,
     "BEOnlySmaller"
 )
-
 BECreateDropdown(
     "Aura Range",
     { "12 studs", "18 studs", "25 studs", "35 studs" },
@@ -970,7 +847,6 @@ BECreateDropdown(
         AutoSaveConfiguration()
     end
 )
-
 BECreateToggle(
     "Hitbox Expander",
     GamePage,
@@ -986,9 +862,7 @@ BECreateToggle(
     end,
     "BEHitboxExpander"
 )
-
 CreateBESection("SURVIVAL")
-
 BECreateToggle(
     "Predator Warning",
     GamePage,
@@ -1000,7 +874,6 @@ BECreateToggle(
     end,
     "BEPredatorWarn"
 )
-
 BECreateToggle(
     "Auto Escape",
     GamePage,
@@ -1011,7 +884,6 @@ BECreateToggle(
     end,
     "BEAutoEscape"
 )
-
 BECreateDropdown(
     "Escape Health",
     { "20% HP", "30% HP", "40% HP", "50% HP" },
@@ -1023,7 +895,6 @@ BECreateDropdown(
         AutoSaveConfiguration()
     end
 )
-
 BECreateToggle(
     "Infinite Stamina",
     GamePage,
@@ -1034,9 +905,7 @@ BECreateToggle(
     end,
     "BEInfiniteStamina"
 )
-
 CreateBESection("VISUALS")
-
 BECreateToggle(
     "Player ESP",
     GamePage,
@@ -1053,7 +922,6 @@ BECreateToggle(
     end,
     "BEPlayerESP"
 )
-
 BECreateToggle(
     "FullBright",
     GamePage,
@@ -1065,9 +933,7 @@ BECreateToggle(
     end,
     "BEFullBright"
 )
-
 CreateBESection("MOVEMENT & MISC")
-
 BECreateToggle(
     "Speed Boost",
     GamePage,
@@ -1082,7 +948,6 @@ BECreateToggle(
     end,
     "BESpeedBoost"
 )
-
 BECreateDropdown(
     "Speed Multiplier",
     { "1.25x", "1.5x", "2.0x", "2.5x" },
@@ -1094,7 +959,6 @@ BECreateDropdown(
         AutoSaveConfiguration()
     end
 )
-
 BECreateToggle(
     "Infinite Jump",
     GamePage,
@@ -1106,7 +970,6 @@ BECreateToggle(
     end,
     "BEInfiniteJump"
 )
-
 BECreateToggle(
     "Anti AFK",
     GamePage,
@@ -1118,22 +981,17 @@ BECreateToggle(
     end,
     "BEAntiAFK"
 )
-
 BECreateButton("Rejoin Server", GamePage, function()
     TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player)
 end)
-
 getgenv().ToxBECleanup = function()
     getgenv().ToxBEGeneration = (tonumber(getgenv().ToxBEGeneration) or 0) + 1
-
     SetupInfiniteJump(false)
     SetupAntiAFK(false)
-
     for _, conn in ipairs(BEConnections) do
         pcall(function() conn:Disconnect() end)
     end
     table.clear(BEConnections)
-
     for _, esp in pairs(PlayerESPObjects) do
         pcall(function()
             if esp.Highlight then esp.Highlight:Destroy() end
@@ -1141,14 +999,12 @@ getgenv().ToxBECleanup = function()
         end)
     end
     table.clear(PlayerESPObjects)
-
     if WarnScreenGui then
         pcall(function() WarnScreenGui:Destroy() end)
         WarnScreenGui = nil
         WarnFrame = nil
         WarnText = nil
     end
-
     pcall(function()
         Lighting.Brightness = OrigLightingProps.Brightness or 2
         Lighting.ClockTime = OrigLightingProps.ClockTime or 14
@@ -1157,10 +1013,7 @@ getgenv().ToxBECleanup = function()
         Lighting.Ambient = OrigLightingProps.Ambient or Color3.fromRGB(0, 0, 0)
     end)
 end
-
 getgenv().ToxBEModuleLoadedJobId = game.JobId
 getgenv().ToxBEModuleVersion = BEModuleVersion
 getgenv().ToxBEModulePage = GamePage
-
 CustomNotify("ToxHub: Bug Evolution Loaded!", Color3.fromRGB(50, 230, 100), 3)
-
