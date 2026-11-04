@@ -32,7 +32,7 @@ if not Settings or not GamePage or not CreateToggle or not CreateButton then
 end
 getgenv().ToxSBRGeneration = (tonumber(getgenv().ToxSBRGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxSBRGeneration
-local SBRModuleVersion = "2026-11-04-sbr-v2"
+local SBRModuleVersion = "2026-11-04-sbr-v3"
 if getgenv().ToxSBRModuleLoadedJobId == game.JobId
 and getgenv().ToxSBRModuleVersion == SBRModuleVersion
 and getgenv().ToxSBRModulePage == GamePage
@@ -61,7 +61,7 @@ Settings.SBRItemESP = Settings.SBRItemESP == true
 Settings.SBRPlayerESP = Settings.SBRPlayerESP == true
 Settings.SBRFullBright = Settings.SBRFullBright == true
 Settings.SBRSpeedBoost = Settings.SBRSpeedBoost == true
-Settings.SBRSpeedMultiplier = math.clamp(tonumber(Settings.SBRSpeedMultiplier) or 1.25, 1.0, 2.5)
+Settings.SBRSpeedMultiplier = math.clamp(tonumber(Settings.SBRSpeedMultiplier) or 1.35, 1.0, 2.5)
 Settings.SBRInfiniteJump = Settings.SBRInfiniteJump == true
 Settings.SBRAntiAFK = Settings.SBRAntiAFK == true
 local SBRConnections = {}
@@ -71,14 +71,13 @@ local MonsterESPObjects = {}
 local MachineESPObjects = {}
 local ItemESPObjects = {}
 local PlayerESPObjects = {}
-local RegisteredPrompts = {}
-local ItemPrompts = {}
-local MachinePrompts = {}
+local KnownPrompts = {}
 local OrigHoldDurations = setmetatable({}, { __mode = "k" })
 local WarnScreenGui = nil
 local WarnFrame = nil
 local WarnLabel = nil
 local SafePlatformPart = nil
+local DefaultWalkSpeed = 16
 local OrigLightingProps = {
     Ambient = Lighting.Ambient,
     OutdoorAmbient = Lighting.OutdoorAmbient,
@@ -106,7 +105,7 @@ local EstimatedScrapValues = {
     ["plate"] = 45,
     ["bolt"] = 25,
     ["wire"] = 30,
-    ["scrap"] = 45
+    ["scrap"] = 50
 }
 local function TrackConnection(conn)
     if conn then
@@ -155,6 +154,28 @@ local function IsPartOfLocalPlayer(inst)
     end
     return false
 end
+local function ResolvePromptPart(prompt)
+    if not prompt then return nil end
+    local p = prompt.Parent
+    if not p then return nil end
+    if p:IsA("BasePart") then return p end
+    if p:IsA("Attachment") and p.Parent and p.Parent:IsA("BasePart") then
+        return p.Parent
+    end
+    if p:IsA("Model") then
+        return p.PrimaryPart or p:FindFirstChildWhichIsA("BasePart", true)
+    end
+    local curr = p.Parent
+    while curr and curr ~= Workspace and curr ~= game do
+        if curr:IsA("BasePart") then return curr end
+        if curr:IsA("Model") then
+            local part = curr.PrimaryPart or curr:FindFirstChildWhichIsA("BasePart", true)
+            if part then return part end
+        end
+        curr = curr.Parent
+    end
+    return nil
+end
 local function TriggerPrompt(prompt)
     if not prompt or not prompt.Parent then return false end
     pcall(function()
@@ -185,7 +206,7 @@ local function TriggerPrompt(prompt)
     return true
 end
 local function ApplyPromptInstant(prompt)
-    if not prompt then return end
+    if not prompt or not prompt.Parent then return end
     pcall(function()
         if Settings.SBRInstantCollect then
             if OrigHoldDurations[prompt] == nil then
@@ -199,20 +220,11 @@ local function ApplyPromptInstant(prompt)
         end
     end)
 end
-local function RefreshAllPromptsInstant()
-    for _, desc in ipairs(Workspace:GetDescendants()) do
-        if desc:IsA("ProximityPrompt") then
-            ApplyPromptInstant(desc)
-        end
-    end
-end
-local function IsShowcaseMonster(model)
+local function IsInLobbyOrShowcase(model)
     if not model or not model.Parent then return true end
     local mName = string.lower(model.Name)
     local ignoreKeywords = {
-        "lobby", "spawn", "display", "showcase", "statue", "sample",
-        "amostra", "shop", "store", "exhibition", "preview", "cage",
-        "pedestal", "prop", "decor", "museum", "stand"
+        "showcase", "display", "statue", "sample", "amostra", "shop", "menu"
     }
     for _, kw in ipairs(ignoreKeywords) do
         if string.find(mName, kw, 1, true) then
@@ -228,24 +240,6 @@ local function IsShowcaseMonster(model)
             end
         end
         curr = curr.Parent
-    end
-    local root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
-    if not root then return true end
-    if root.Anchored == true then
-        local allPartsAnchored = true
-        for _, p in ipairs(model:GetChildren()) do
-            if p:IsA("BasePart") and not p.Anchored then
-                allPartsAnchored = false
-                break
-            end
-        end
-        if allPartsAnchored then
-            return true
-        end
-    end
-    local spawnLoc = Workspace:FindFirstChild("SpawnLocation") or Workspace:FindFirstChildWhichIsA("SpawnLocation", true)
-    if spawnLoc and (root.Position - spawnLoc.Position).Magnitude < 70 and root.Anchored then
-        return true
     end
     return false
 end
@@ -263,7 +257,7 @@ local function GetMonsters()
         if folder then
             for _, item in ipairs(folder:GetChildren()) do
                 if item:IsA("Model") and item ~= char and not Players:GetPlayerFromCharacter(item) then
-                    if not IsShowcaseMonster(item) then
+                    if not IsInLobbyOrShowcase(item) then
                         table.insert(monsters, item)
                     end
                 end
@@ -283,7 +277,7 @@ local function GetMonsters()
                     or string.find(nLow, "mimic")
                     or string.find(nLow, "white")
                     or string.find(nLow, "monster")
-                if matchesMonster and not IsShowcaseMonster(item) then
+                if matchesMonster and not IsInLobbyOrShowcase(item) then
                     table.insert(monsters, item)
                 end
             end
@@ -291,157 +285,195 @@ local function GetMonsters()
     end
     return monsters
 end
-local function ExtractScrapValue(instance, prompt)
-    local rawValue = nil
-    local candidates = {}
-    if prompt then table.insert(candidates, prompt) end
-    if instance then table.insert(candidates, instance) end
-    if instance and instance.Parent and instance.Parent:IsA("Model") then
-        table.insert(candidates, instance.Parent)
-    end
-    for _, obj in ipairs(candidates) do
-        for _, attr in ipairs({ "Value", "Price", "Worth", "ScrapValue", "Amount", "Cash", "Money", "Cost" }) do
-            local val = obj:GetAttribute(attr)
-            if typeof(val) == "number" and val > 0 then
-                return math.floor(val)
-            elseif typeof(val) == "string" then
-                local num = tonumber(string.match(val, "%d+"))
-                if num and num > 0 then
-                    return num
+local function ExtractScrapInfo(prompt, part)
+    local name = nil
+    local value = nil
+    local obj = prompt and prompt.Parent or part
+    local model = (part and part:FindFirstAncestorOfClass("Model")) or (obj and obj:IsA("Model") and obj) or nil
+    if model and model == Workspace then model = nil end
+    local checkObjects = {}
+    if prompt then table.insert(checkObjects, prompt) end
+    if part then table.insert(checkObjects, part) end
+    if obj and obj ~= part then table.insert(checkObjects, obj) end
+    if model then table.insert(checkObjects, model) end
+    for _, o in ipairs(checkObjects) do
+        if not value then
+            for _, attr in ipairs({ "Value", "Price", "Worth", "ScrapValue", "Amount", "Cash", "Money", "Cost" }) do
+                local val = o:GetAttribute(attr)
+                if typeof(val) == "number" and val > 0 then
+                    value = math.floor(val)
+                    break
+                elseif typeof(val) == "string" then
+                    local num = tonumber(string.match(val, "%d+"))
+                    if num and num > 0 then
+                        value = num
+                        break
+                    end
                 end
             end
         end
-        for _, childName in ipairs({ "Value", "Price", "Worth", "ScrapValue", "Amount" }) do
-            local valObj = obj:FindFirstChild(childName)
-            if valObj and (valObj:IsA("IntValue") or valObj:IsA("NumberValue")) and valObj.Value > 0 then
-                return math.floor(valObj.Value)
-            elseif valObj and valObj:IsA("StringValue") then
-                local num = tonumber(string.match(valObj.Value, "%d+"))
-                if num and num > 0 then
-                    return num
-                end
-            end
-        end
-    end
-    if prompt then
-        local combinedText = tostring(prompt.ObjectText or "") .. " " .. tostring(prompt.ActionText or "")
-        local dollarMatch = string.match(combinedText, "%$%s*(%d+)")
-            or string.match(combinedText, "%[%s*(%d+)%s*%]")
-            or string.match(combinedText, "%(%s*(%d+)%s*%)")
-            or string.match(combinedText, "(%d+)%s*[sS]crap")
-        if dollarMatch then
-            return tonumber(dollarMatch)
-        end
-    end
-    if instance then
-        local nameText = instance.Name
-        local nameMatch = string.match(nameText, "%$%s*(%d+)")
-            or string.match(nameText, "%[%s*(%d+)%s*%]")
-            or string.match(nameText, "%(%s*(%d+)%s*%)")
-            or string.match(nameText, "_(%d+)")
-        if nameMatch then
-            return tonumber(nameMatch)
-        end
-    end
-    if instance then
-        for _, desc in ipairs(instance:GetDescendants()) do
-            if desc:IsA("TextLabel") and desc.Text ~= "" then
-                local labelMatch = string.match(desc.Text, "%$%s*(%d+)")
-                    or string.match(desc.Text, "(%d+)%s*[sS]crap")
-                if labelMatch then
-                    return tonumber(labelMatch)
+        if not value then
+            for _, cName in ipairs({ "Value", "Price", "Worth", "ScrapValue", "Amount", "Cash" }) do
+                local valObj = o:FindFirstChild(cName)
+                if valObj and (valObj:IsA("IntValue") or valObj:IsA("NumberValue")) and valObj.Value > 0 then
+                    value = math.floor(valObj.Value)
+                    break
+                elseif valObj and valObj:IsA("StringValue") then
+                    local num = tonumber(string.match(valObj.Value, "%d+"))
+                    if num and num > 0 then
+                        value = num
+                        break
+                    end
                 end
             end
         end
     end
-    local searchName = string.lower((prompt and prompt.ObjectText ~= "" and prompt.ObjectText) or (instance and instance.Name) or "")
-    for word, est in pairs(EstimatedScrapValues) do
-        if string.find(searchName, word, 1, true) then
-            return est
+    if not value and prompt then
+        local txt = tostring(prompt.ObjectText or "") .. " " .. tostring(prompt.ActionText or "")
+        local match = string.match(txt, "%$%s*(%d+)")
+            or string.match(txt, "(%d+)%s*[sS]crap")
+            or string.match(txt, "%[%s*(%d+)%s*%]")
+            or string.match(txt, "%(%s*(%d+)%s*%)")
+        if match then
+            value = tonumber(match)
         end
     end
-    return 45
-end
-local function ResolveScrapName(instance, prompt)
+    if not value and (model or part) then
+        local txt = (model and model.Name) or (part and part.Name) or ""
+        local match = string.match(txt, "%$%s*(%d+)")
+            or string.match(txt, "(%d+)%s*[sS]crap")
+            or string.match(txt, "%[%s*(%d+)%s*%]")
+            or string.match(txt, "%(%s*(%d+)%s*%)")
+            or string.match(txt, "_(%d+)")
+        if match then
+            value = tonumber(match)
+        end
+    end
+    if not value and (model or part) then
+        local target = model or part
+        for _, d in ipairs(target:GetDescendants()) do
+            if d:IsA("TextLabel") and d.Text ~= "" then
+                local match = string.match(d.Text, "%$%s*(%d+)") or string.match(d.Text, "(%d+)%s*[sS]crap")
+                if match then
+                    value = tonumber(match)
+                    break
+                end
+            end
+        end
+    end
     if prompt and typeof(prompt.ObjectText) == "string" and prompt.ObjectText ~= "" then
         local clean = string.gsub(prompt.ObjectText, "%b()", "")
         clean = string.gsub(clean, "%b[]", "")
         clean = string.gsub(clean, "%$%d+", "")
         clean = string.match(clean, "^%s*(.-)%s*$")
         if clean and clean ~= "" then
-            return clean
+            name = clean
         end
     end
-    if instance then
-        local clean = string.gsub(instance.Name, "%b()", "")
+    if not name and model and model.Name ~= "Model" and model.Name ~= "Workspace" then
+        local clean = string.gsub(model.Name, "%b()", "")
+        clean = string.gsub(clean, "%b[]", "")
+        clean = string.gsub(clean, "_%d+", "")
+        clean = string.match(clean, "^%s*(.-)%s*$")
+        if clean and clean ~= "" then
+            name = clean
+        end
+    end
+    if not name and part then
+        local clean = string.gsub(part.Name, "%b()", "")
         clean = string.gsub(clean, "%b[]", "")
         clean = string.gsub(clean, "_%d+", "")
         clean = string.match(clean, "^%s*(.-)%s*$")
         if clean and clean ~= "" and clean ~= "Part" and clean ~= "MeshPart" and clean ~= "Union" then
-            return clean
-        end
-        if instance.Parent and instance.Parent:IsA("Model") and instance.Parent ~= Workspace then
-            local pClean = string.gsub(instance.Parent.Name, "%b()", "")
-            pClean = string.gsub(pClean, "%b[]", "")
-            pClean = string.match(pClean, "^%s*(.-)%s*$")
-            if pClean and pClean ~= "" and pClean ~= "Model" and pClean ~= "Workspace" then
-                return pClean
-            end
+            name = clean
         end
     end
-    return "Scrap"
-end
-local function ScanAndCategorizePrompts()
-    table.clear(ItemPrompts)
-    table.clear(MachinePrompts)
-    for _, desc in ipairs(Workspace:GetDescendants()) do
-        if desc:IsA("ProximityPrompt") and desc.Parent then
-            local parent = desc.Parent
-            if not IsPartOfLocalPlayer(parent) then
-                local pName = string.lower(parent.Name)
-                local actText = string.lower(desc.ActionText or "")
-                local objText = string.lower(desc.ObjectText or "")
-                local combined = pName .. " " .. actText .. " " .. objText
-                local isMachine = string.find(combined, "generator", 1, true)
-                    or string.find(combined, "machine", 1, true)
-                    or string.find(combined, "fuse", 1, true)
-                    or string.find(combined, "terminal", 1, true)
-                    or string.find(combined, "power", 1, true)
-                    or string.find(combined, "breaker", 1, true)
-                    or string.find(combined, "repair", 1, true)
-                    or string.find(combined, "fix", 1, true)
-                    or string.find(combined, "lever", 1, true)
-                local isIgnored = string.find(combined, "door", 1, true)
-                    or string.find(combined, "closet", 1, true)
-                    or string.find(combined, "locker", 1, true)
-                    or string.find(combined, "hide", 1, true)
-                    or string.find(combined, "shop", 1, true)
-                    or string.find(combined, "vendor", 1, true)
-                    or string.find(combined, "buy", 1, true)
-                    or string.find(combined, "sell", 1, true)
-                local rootPart = parent:IsA("BasePart") and parent or (parent:FindFirstChildWhichIsA("BasePart") or parent.PrimaryPart)
-                if rootPart and rootPart.Size.Magnitude < 25 then
-                    if isMachine and not isIgnored then
-                        MachinePrompts[desc] = {
-                            Prompt = desc,
-                            Object = parent,
-                            Part = rootPart,
-                            Name = ResolveScrapName(parent, desc)
-                        }
-                    elseif not isIgnored then
-                        local scrapVal = ExtractScrapValue(parent, desc)
-                        local scrapName = ResolveScrapName(parent, desc)
-                        ItemPrompts[desc] = {
-                            Prompt = desc,
-                            Object = parent,
-                            Part = rootPart,
-                            Name = scrapName,
-                            Value = scrapVal
-                        }
-                    end
-                end
+    if not name or name == "" then
+        name = "Scrap"
+    end
+    if not value or value == 0 then
+        local nameLow = string.lower(name)
+        for word, est in pairs(EstimatedScrapValues) do
+            if string.find(nameLow, word, 1, true) then
+                value = est
+                break
             end
         end
+        if not value then
+            value = 50
+        end
+    end
+    return name, value
+end
+local function RegisterPrompt(prompt)
+    if not prompt or not prompt.Parent then return end
+    if KnownPrompts[prompt] then return end
+    local parent = prompt.Parent
+    if IsPartOfLocalPlayer(parent) then return end
+    local part = ResolvePromptPart(prompt)
+    if not part then return end
+    local pName = string.lower(parent.Name)
+    local actText = string.lower(prompt.ActionText or "")
+    local objText = string.lower(prompt.ObjectText or "")
+    local combined = pName .. " " .. actText .. " " .. objText
+    local isIgnored = string.find(combined, "door", 1, true)
+        or string.find(combined, "gate", 1, true)
+        or string.find(combined, "closet", 1, true)
+        or string.find(combined, "locker", 1, true)
+        or string.find(combined, "hide", 1, true)
+        or string.find(combined, "shop", 1, true)
+        or string.find(combined, "vendor", 1, true)
+    if isIgnored then return end
+    local isMachine = string.find(combined, "generator", 1, true)
+        or string.find(combined, "machine", 1, true)
+        or string.find(combined, "fuse", 1, true)
+        or string.find(combined, "terminal", 1, true)
+        or string.find(combined, "power", 1, true)
+        or string.find(combined, "breaker", 1, true)
+        or string.find(combined, "repair", 1, true)
+        or string.find(combined, "fix", 1, true)
+        or string.find(combined, "lever", 1, true)
+        or string.find(combined, "station", 1, true)
+        or string.find(combined, "engine", 1, true)
+    local itemModel = (part:FindFirstAncestorOfClass("Model") ~= Workspace and part:FindFirstAncestorOfClass("Model")) or parent
+    if isMachine then
+        KnownPrompts[prompt] = {
+            Type = "Machine",
+            Prompt = prompt,
+            Part = part,
+            Model = itemModel,
+            Name = (prompt.ObjectText ~= "" and prompt.ObjectText) or itemModel.Name
+        }
+    else
+        local sName, sVal = ExtractScrapInfo(prompt, part)
+        KnownPrompts[prompt] = {
+            Type = "Scrap",
+            Prompt = prompt,
+            Part = part,
+            Model = itemModel,
+            Name = sName,
+            Value = sVal
+        }
+    end
+    if Settings.SBRInstantCollect then
+        ApplyPromptInstant(prompt)
+    end
+end
+local function UnregisterPrompt(prompt)
+    KnownPrompts[prompt] = nil
+    if ItemESPObjects[prompt] then
+        pcall(function()
+            if ItemESPObjects[prompt].Highlight then ItemESPObjects[prompt].Highlight:Destroy() end
+            if ItemESPObjects[prompt].Billboard then ItemESPObjects[prompt].Billboard:Destroy() end
+        end)
+        ItemESPObjects[prompt] = nil
+    end
+    if MachineESPObjects[prompt] then
+        pcall(function()
+            if MachineESPObjects[prompt].Highlight then MachineESPObjects[prompt].Highlight:Destroy() end
+            if MachineESPObjects[prompt].Billboard then MachineESPObjects[prompt].Billboard:Destroy() end
+        end)
+        MachineESPObjects[prompt] = nil
     end
 end
 local function SetupWarnGui()
@@ -566,7 +598,7 @@ local function CreateOrUpdateMachineESP(prompt, mData)
         highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
         highlight.FillTransparency = 0.5
         highlight.OutlineTransparency = 0.2
-        highlight.Adornee = mData.Object
+        highlight.Adornee = mData.Model or mData.Part
         highlight.Parent = CoreGui
         local bbg = Instance.new("BillboardGui")
         bbg.Name = "SBR_MachineBillboard"
@@ -606,10 +638,10 @@ local function UpdateMachineESP()
         return
     end
     local seen = {}
-    for prompt, mData in pairs(MachinePrompts) do
-        if prompt and prompt.Parent then
+    for prompt, data in pairs(KnownPrompts) do
+        if data.Type == "Machine" and prompt and prompt.Parent then
             seen[prompt] = true
-            CreateOrUpdateMachineESP(prompt, mData)
+            CreateOrUpdateMachineESP(prompt, data)
         end
     end
     for prompt, data in pairs(MachineESPObjects) do
@@ -633,7 +665,7 @@ local function CreateOrUpdateItemESP(prompt, iData)
         highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
         highlight.FillTransparency = 0.45
         highlight.OutlineTransparency = 0.15
-        highlight.Adornee = iData.Object
+        highlight.Adornee = iData.Model or iData.Part
         highlight.Parent = CoreGui
         local bbg = Instance.new("BillboardGui")
         bbg.Name = "SBR_ItemBillboard"
@@ -659,7 +691,7 @@ local function CreateOrUpdateItemESP(prompt, iData)
     end
     local _, _, myRoot = GetCharacterState()
     local dist = (myRoot and (myRoot.Position - root.Position).Magnitude) or 0
-    data.Label.Text = string.format("%s - $%d (%dm)", iData.Name, iData.Value or 45, math.floor(dist))
+    data.Label.Text = string.format("%s - $%d (%dm)", iData.Name, iData.Value or 50, math.floor(dist))
 end
 local function UpdateItemESP()
     if not Settings.SBRItemESP then
@@ -673,10 +705,10 @@ local function UpdateItemESP()
         return
     end
     local seen = {}
-    for prompt, iData in pairs(ItemPrompts) do
-        if prompt and prompt.Parent then
+    for prompt, data in pairs(KnownPrompts) do
+        if data.Type == "Scrap" and prompt and prompt.Parent then
             seen[prompt] = true
-            CreateOrUpdateItemESP(prompt, iData)
+            CreateOrUpdateItemESP(prompt, data)
         end
     end
     for prompt, data in pairs(ItemESPObjects) do
@@ -829,14 +861,28 @@ local function ApplyFullBright(enabled)
         Lighting.GlobalShadows = OrigLightingProps.GlobalShadows
     end
 end
+local function EnforceWalkSpeed()
+    local _, hum = GetCharacterState()
+    if hum and hum.Health > 0 then
+        if Settings.SBRSpeedBoost then
+            local mult = math.clamp(tonumber(Settings.SBRSpeedMultiplier) or 1.35, 1.0, 2.5)
+            local target = math.floor(DefaultWalkSpeed * mult)
+            if hum.WalkSpeed ~= target then
+                hum.WalkSpeed = target
+            end
+        elseif hum.WalkSpeed ~= DefaultWalkSpeed then
+            hum.WalkSpeed = DefaultWalkSpeed
+        end
+    end
+end
 local function TriggerNearbyPrompts()
     local _, _, root = GetCharacterState()
     if not root then return end
     local range = Settings.SBRCollectRange or 15
     local triggered = 0
-    for prompt, iData in pairs(ItemPrompts) do
-        if prompt and prompt.Parent and iData.Part then
-            local dist = (root.Position - iData.Part.Position).Magnitude
+    for prompt, data in pairs(KnownPrompts) do
+        if prompt and prompt.Parent and data.Part then
+            local dist = (root.Position - data.Part.Position).Magnitude
             if dist <= range then
                 TriggerPrompt(prompt)
                 triggered = triggered + 1
@@ -844,7 +890,7 @@ local function TriggerNearbyPrompts()
         end
     end
     if triggered > 0 then
-        CustomNotify("Interact", string.format("Collected %d scrap items", triggered), 2)
+        CustomNotify("Interact", string.format("Triggered %d prompts", triggered), 2)
     end
 end
 local function ToggleSafePlatform()
@@ -870,6 +916,22 @@ local function ToggleSafePlatform()
         CustomNotify("Safe Platform", "Teleported to safe platform", 3)
     end
 end
+for _, desc in ipairs(Workspace:GetDescendants()) do
+    if desc:IsA("ProximityPrompt") then
+        pcall(RegisterPrompt, desc)
+    end
+end
+TrackConnection(Workspace.DescendantAdded:Connect(function(desc)
+    if CurrentGeneration ~= getgenv().ToxSBRGeneration or getgenv().Destroyed then return end
+    if desc:IsA("ProximityPrompt") then
+        pcall(RegisterPrompt, desc)
+    end
+end))
+TrackConnection(Workspace.DescendantRemoving:Connect(function(desc)
+    if desc:IsA("ProximityPrompt") then
+        pcall(UnregisterPrompt, desc)
+    end
+end))
 TrackConnection(ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt, plr)
     if CurrentGeneration ~= getgenv().ToxSBRGeneration or getgenv().Destroyed then return end
     if plr and plr ~= Player then return end
@@ -879,14 +941,9 @@ TrackConnection(ProximityPromptService.PromptButtonHoldBegan:Connect(function(pr
 end))
 TrackConnection(ProximityPromptService.PromptShown:Connect(function(prompt)
     if CurrentGeneration ~= getgenv().ToxSBRGeneration or getgenv().Destroyed then return end
+    pcall(RegisterPrompt, prompt)
     if Settings.SBRInstantCollect then
         ApplyPromptInstant(prompt)
-    end
-end))
-TrackConnection(Workspace.DescendantAdded:Connect(function(desc)
-    if CurrentGeneration ~= getgenv().ToxSBRGeneration or getgenv().Destroyed then return end
-    if desc:IsA("ProximityPrompt") and Settings.SBRInstantCollect then
-        ApplyPromptInstant(desc)
     end
 end))
 TrackConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -896,24 +953,13 @@ TrackConnection(UserInputService.InputBegan:Connect(function(input, gameProcesse
         local _, _, root = GetCharacterState()
         if not root then return end
         local bestPrompt = nil
-        local bestDist = 12
-        for prompt, iData in pairs(ItemPrompts) do
-            if prompt and prompt.Parent and iData.Part then
-                local dist = (root.Position - iData.Part.Position).Magnitude
+        local bestDist = 14
+        for prompt, data in pairs(KnownPrompts) do
+            if prompt and prompt.Parent and data.Part then
+                local dist = (root.Position - data.Part.Position).Magnitude
                 if dist <= (prompt.MaxActivationDistance or 10) and dist < bestDist then
                     bestDist = dist
                     bestPrompt = prompt
-                end
-            end
-        end
-        if not bestPrompt then
-            for prompt, mData in pairs(MachinePrompts) do
-                if prompt and prompt.Parent and mData.Part then
-                    local dist = (root.Position - mData.Part.Position).Magnitude
-                    if dist <= (prompt.MaxActivationDistance or 10) and dist < bestDist then
-                        bestDist = dist
-                        bestPrompt = prompt
-                    end
                 end
             end
         end
@@ -922,19 +968,22 @@ TrackConnection(UserInputService.InputBegan:Connect(function(input, gameProcesse
         end
     end
 end))
-TrackConnection(RunService.RenderStepped:Connect(function()
+TrackConnection(RunService.Heartbeat:Connect(function()
     if CurrentGeneration ~= getgenv().ToxSBRGeneration or getgenv().Destroyed then return end
-    if Settings.SBRSpeedBoost then
-        local char, hum, root = GetCharacterState()
-        if char and hum and root and hum.MoveDirection.Magnitude > 0 then
-            local mult = math.clamp(tonumber(Settings.SBRSpeedMultiplier) or 1.25, 1.0, 2.5)
-            local targetSpeed = hum.WalkSpeed * mult
-            local moveDir = hum.MoveDirection.Unit
-            root.AssemblyLinearVelocity = Vector3.new(
-                moveDir.X * targetSpeed,
-                root.AssemblyLinearVelocity.Y,
-                moveDir.Z * targetSpeed
-            )
+    EnforceWalkSpeed()
+    if Settings.SBRInstantCollect then
+        local _, _, root = GetCharacterState()
+        if root then
+            for prompt, data in pairs(KnownPrompts) do
+                if prompt and prompt.Parent and data.Part then
+                    if (root.Position - data.Part.Position).Magnitude <= 16 then
+                        if prompt.HoldDuration ~= 0 then
+                            prompt.HoldDuration = 0
+                            prompt.RequiresLineOfSight = false
+                        end
+                    end
+                end
+            end
         end
     end
 end))
@@ -958,14 +1007,13 @@ TrackConnection(Player.Idled:Connect(function()
 end))
 task.spawn(function()
     while CurrentGeneration == getgenv().ToxSBRGeneration and not getgenv().Destroyed do
-        pcall(ScanAndCategorizePrompts)
         if Settings.SBRAutoCollect then
             local _, _, root = GetCharacterState()
             if root then
                 local range = Settings.SBRCollectRange or 15
-                for prompt, iData in pairs(ItemPrompts) do
-                    if prompt and prompt.Parent and iData.Part then
-                        local dist = (root.Position - iData.Part.Position).Magnitude
+                for prompt, data in pairs(KnownPrompts) do
+                    if data.Type == "Scrap" and prompt and prompt.Parent and data.Part then
+                        local dist = (root.Position - data.Part.Position).Magnitude
                         if dist <= range then
                             TriggerPrompt(prompt)
                         end
@@ -987,7 +1035,7 @@ task.spawn(function()
     while CurrentGeneration == getgenv().ToxSBRGeneration and not getgenv().Destroyed do
         pcall(UpdateMachineESP)
         pcall(UpdateItemESP)
-        task.wait(0.4)
+        task.wait(0.35)
     end
 end)
 task.spawn(function()
@@ -1000,7 +1048,9 @@ if Settings.SBRFullBright then
     pcall(function() ApplyFullBright(true) end)
 end
 if Settings.SBRInstantCollect then
-    pcall(RefreshAllPromptsInstant)
+    for prompt, _ in pairs(KnownPrompts) do
+        ApplyPromptInstant(prompt)
+    end
 end
 local function TrackControl(control)
     if not control then return nil end
@@ -1089,7 +1139,9 @@ SBRCreateToggle(
     Settings.SBRInstantCollect,
     function(v)
         Settings.SBRInstantCollect = v == true
-        RefreshAllPromptsInstant()
+        for prompt, _ in pairs(KnownPrompts) do
+            ApplyPromptInstant(prompt)
+        end
         AutoSaveConfiguration()
     end,
     "SBRInstantCollect"
@@ -1207,18 +1259,20 @@ SBRCreateToggle(
     Settings.SBRSpeedBoost,
     function(v)
         Settings.SBRSpeedBoost = v == true
+        EnforceWalkSpeed()
         AutoSaveConfiguration()
     end,
     "SBRSpeedBoost"
 )
 SBRCreateDropdown(
     "Speed Multiplier",
-    { "1.15x", "1.25x", "1.4x", "1.6x", "1.8x", "2.0x" },
+    { "1.2x", "1.35x", "1.5x", "1.75x", "2.0x" },
     GamePage,
-    (Settings.SBRSpeedMultiplier or 1.25) .. "x",
+    (Settings.SBRSpeedMultiplier or 1.35) .. "x",
     function(choice)
-        local num = tonumber(string.match(choice, "%d+%.?%d*")) or 1.25
+        local num = tonumber(string.match(choice, "%d+%.?%d*")) or 1.35
         Settings.SBRSpeedMultiplier = num
+        EnforceWalkSpeed()
         AutoSaveConfiguration()
     end
 )
@@ -1287,15 +1341,17 @@ getgenv().ToxSBRCleanup = function()
         end)
     end
     table.clear(PlayerESPObjects)
-    table.clear(RegisteredPrompts)
-    table.clear(ItemPrompts)
-    table.clear(MachinePrompts)
+    table.clear(KnownPrompts)
     for prompt, hold in pairs(OrigHoldDurations) do
         pcall(function()
             prompt.HoldDuration = hold
         end)
     end
     table.clear(OrigHoldDurations)
+    local _, hum = GetCharacterState()
+    if hum then
+        hum.WalkSpeed = DefaultWalkSpeed
+    end
     if SafePlatformPart and SafePlatformPart.Parent then
         pcall(function() SafePlatformPart:Destroy() end)
         SafePlatformPart = nil
