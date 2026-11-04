@@ -1400,7 +1400,8 @@ local SupportedToxGames = {
     { Name = "Prison Life", PlaceId = 155615604, Code = "PL", Status = "online" },
     { Name = "Steal Or Die", PlaceId = 119925538689885, Code = "SOD", Status = "online" },
     { Name = "Bug Evolution", PlaceId = 70650894743738, Code = "BE", Status = "online" },
-    { Name = "When In Disgrace", PlaceId = 109440000000000 + 485612336, Code = "WID", Status = "online" }
+    { Name = "When In Disgrace", PlaceId = 109440000000000 + 485612336, Code = "WID", Status = "online" },
+    { Name = "+1 Venom Evolution", PlaceId = 116448925875915, Code = "VE", Status = "online" }
 }
 local function RefreshQuickJoinGames()
     local scroll = (getgenv and getgenv().JoinGamesScroll) or JoinGamesScroll
@@ -6341,7 +6342,7 @@ task.spawn(function()
                 end
             end)
         end
-        CreateSection("Save Game & World (WASOR)", getgenv().ScriptsPage)
+        CreateSection(getgenv().ScriptsPage, "Save Game & World", "")
         CreateButton("Save Place (Standard)", getgenv().ScriptsPage, function() RunSaveGame(false) end)
         CreateButton("Save Place (Decompile Scripts)", getgenv().ScriptsPage, function() RunSaveGame(true) end)
     end
@@ -6414,7 +6415,7 @@ task.spawn(function()
         end, "ReturnByDeath")
     end
     if getgenv().FlingPage then
-        CreateSection("World & Prompts (WASOR)", getgenv().FlingPage)
+        CreateSection(getgenv().FlingPage, "World & Prompts", "")
         CreateToggle("Instant Proximity Prompts", getgenv().FlingPage, Settings.InstantPrompts == true, function(v)
             Settings.InstantPrompts = v
             if v then
