@@ -1400,8 +1400,7 @@ local SupportedToxGames = {
     { Name = "Prison Life", PlaceId = 155615604, Code = "PL", Status = "online" },
     { Name = "Steal Or Die", PlaceId = 119925538689885, Code = "SOD", Status = "online" },
     { Name = "Bug Evolution", PlaceId = 70650894743738, Code = "BE", Status = "online" },
-    { Name = "When In Disgrace", PlaceId = 109440000000000 + 485612336, Code = "WID", Status = "online" },
-    { Name = "+1 Venom Evolution", PlaceId = 116448925875915, Code = "VE", Status = "online" }
+    { Name = "When In Disgrace", PlaceId = 109440000000000 + 485612336, Code = "WID", Status = "online" }
 }
 local function RefreshQuickJoinGames()
     local scroll = (getgenv and getgenv().JoinGamesScroll) or JoinGamesScroll
