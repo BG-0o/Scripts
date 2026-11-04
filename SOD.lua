@@ -113,6 +113,9 @@ Settings.SODVoteMapChoice1 = tostring(Settings.SODVoteMapChoice1 or "Office")
 Settings.SODVoteMapChoice2 = tostring(Settings.SODVoteMapChoice2 or "Supermarket")
 Settings.SODVoteMapChoice3 = tostring(Settings.SODVoteMapChoice3 or "Liminal Lucidity")
 Settings.SODAntiAFK = Settings.SODAntiAFK == true
+Settings.SODAutoOpenCase = Settings.SODAutoOpenCase == true
+Settings.SODCaseChoice = tostring(Settings.SODCaseChoice or "Basketball Case ($350)")
+Settings.SODCaseDelay = tostring(Settings.SODCaseDelay or "1.0s")
 
 -- ==============================================================================
 -- STATE VARIABLES
@@ -1347,18 +1350,68 @@ local function IsLootObject(prompt, instance, nameLower)
     return false
 end
 
-local function IsDescendantOfAnyPlayer(inst)
+local function IsPartOfLocalPlayer(inst)
     if not inst then return false end
-    if Player.Character and inst:IsDescendantOf(Player.Character) then
+
+    -- 1. Check local player character and its descendants (limbs, tools, accessories)
+    local char = Player.Character
+    if char and (inst == char or inst:IsDescendantOf(char)) then
         return true
     end
+
+    -- 2. Check local player backpack and Player instance
     local bp = Player:FindFirstChild("Backpack")
     if bp and inst:IsDescendantOf(bp) then
         return true
     end
+    if inst == Player or inst:IsDescendantOf(Player) then
+        return true
+    end
+
+    -- 3. Check Workspace.CurrentCamera and its descendants (first-person viewmodels, arms, held items)
+    local cam = Workspace.CurrentCamera or Camera
+    if cam and (inst == cam or inst:IsDescendantOf(cam)) then
+        return true
+    end
+
+    -- 4. Check matching assembly root part
+    if char then
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if inst:IsA("BasePart") and root and inst.AssemblyRootPart == root.AssemblyRootPart then
+            return true
+        end
+    end
+
+    -- 5. Hierarchy name check for FPS viewmodels, arms, first-person rigs
+    local curr = inst
+    while curr and curr ~= Workspace and curr ~= game do
+        local cName = string.lower(curr.Name)
+        if string.find(cName, "viewmodel") or string.find(cName, "arms") or string.find(cName, "fps") or string.find(cName, "firstperson") then
+            return true
+        end
+        curr = curr.Parent
+    end
+
+    -- 6. Lens proximity check: any object within 3.8 studs of camera is held in front of viewport
+    if cam and (inst:IsA("BasePart") or (inst:IsA("Model") and inst.PrimaryPart)) then
+        local p = inst:IsA("BasePart") and inst or inst.PrimaryPart
+        if p and (p.Position - cam.CFrame.Position).Magnitude <= 3.8 then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function IsDescendantOfAnyPlayer(inst)
+    if not inst then return false end
+    if IsPartOfLocalPlayer(inst) then
+        return true
+    end
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= Player then
-            if plr.Character and inst:IsDescendantOf(plr.Character) then
+            local pChar = plr.Character
+            if pChar and (inst == pChar or inst:IsDescendantOf(pChar)) then
                 return true
             end
             local pbp = plr:FindFirstChild("Backpack")
@@ -1374,14 +1427,14 @@ local function RegisterPrompt(prompt)
     if not prompt or not prompt.Parent then return end
     if ItemPrompts[prompt] or VentObjects[prompt] then return end
 
-    -- NEVER register prompts that are on or inside any player character or backpack
-    if IsDescendantOfAnyPlayer(prompt) or IsDescendantOfAnyPlayer(prompt.Parent) then
+    -- NEVER register prompts that are on or inside any player character, camera, viewmodel, or backpack
+    if IsDescendantOfAnyPlayer(prompt) or IsDescendantOfAnyPlayer(prompt.Parent) or IsPartOfLocalPlayer(prompt) or IsPartOfLocalPlayer(prompt.Parent) then
         return
     end
 
     local instance = prompt.Parent
     local part = ResolveBasePart(prompt) or ResolveBasePart(instance)
-    if not part or IsDescendantOfAnyPlayer(part) then return end
+    if not part or IsDescendantOfAnyPlayer(part) or IsPartOfLocalPlayer(part) then return end
 
     local name = ResolveItemName(prompt, instance)
     local nameLower = string.lower(name)
@@ -1752,22 +1805,14 @@ local function MatchesRarityFilter(rarity, value)
     return true
 end
 
-local function IsPartOfLocalPlayer(inst)
-    if not inst then return false end
-    local char = Player.Character
-    if not char then return false end
-    if inst == char or inst:IsDescendantOf(char) then return true end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if inst:IsA("BasePart") and root and inst.AssemblyRootPart == root.AssemblyRootPart then
-        return true
-    end
-    return false
-end
-
 local function CreateOrUpdateHighlight(instance, color, name)
     if not instance or not instance.Parent then return nil end
-    if IsPartOfLocalPlayer(instance) then return nil end
     local hlName = name or "ToxSOD_HL"
+    if IsPartOfLocalPlayer(instance) then
+        local old = instance:FindFirstChild(hlName)
+        if old then pcall(function() old:Destroy() end) end
+        return nil
+    end
     local hl = instance:FindFirstChild(hlName)
     if not hl or not hl:IsA("Highlight") then
         hl = Instance.new("Highlight")
@@ -1793,7 +1838,12 @@ local function CreateOrUpdateHighlight(instance, color, name)
 end
 
 local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
-    if not adornee or not adornee.Parent or IsPartOfLocalPlayer(adornee) then return nil end
+    if not adornee or not adornee.Parent then return nil end
+    if IsPartOfLocalPlayer(adornee) then
+        local old = adornee:FindFirstChild(name)
+        if old then pcall(function() old:Destroy() end) end
+        return nil
+    end
     local bb = adornee:FindFirstChild(name)
     local label = nil
     local textSize = tonumber(Settings.SODESPTextSize) or 10
@@ -1848,17 +1898,94 @@ local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
     return bb, label
 end
 
+local function GetItemParts(part, itemModel)
+    local parts = {}
+    local function addPart(p)
+        if p and p:IsA("BasePart") and not table.find(parts, p) then
+            if not p:IsA("Terrain") and not IsPartOfLocalPlayer(p) then
+                local s = p.Size
+                if s.X < 25 and s.Y < 25 and s.Z < 25 then
+                    table.insert(parts, p)
+                end
+            end
+        end
+    end
+
+    -- 1. All descendant BaseParts of itemModel if it's a Model
+    if itemModel and itemModel:IsA("Model") then
+        for _, desc in ipairs(itemModel:GetDescendants()) do
+            addPart(desc)
+        end
+    end
+
+    -- 2. BasePart and all its child BaseParts
+    if part and part:IsA("BasePart") then
+        addPart(part)
+        for _, desc in ipairs(part:GetDescendants()) do
+            addPart(desc)
+        end
+
+        -- 3. Siblings in parent container (if not workspace/map)
+        local parent = part.Parent
+        if parent and parent ~= Workspace and not parent:IsA("Terrain") then
+            local pName = string.lower(parent.Name)
+            if pName ~= "workspace" and pName ~= "rooms" and pName ~= "geometry" and pName ~= "map" and pName ~= "environment" then
+                for _, sib in ipairs(parent:GetChildren()) do
+                    addPart(sib)
+                    if sib:IsA("Model") or sib:IsA("Folder") then
+                        for _, sub in ipairs(sib:GetDescendants()) do
+                            addPart(sub)
+                        end
+                    end
+                end
+            end
+        end
+
+        -- 4. Connected parts via WeldConstraints (Part0 / Part1)
+        pcall(function()
+            local searchContainers = { part, part.Parent, itemModel }
+            for _, container in ipairs(searchContainers) do
+                if container then
+                    for _, desc in ipairs(container:GetDescendants()) do
+                        if desc:IsA("WeldConstraint") then
+                            if desc.Part0 == part then addPart(desc.Part1) end
+                            if desc.Part1 == part then addPart(desc.Part0) end
+                        elseif desc:IsA("JointInstance") then
+                            if desc.Part0 == part then addPart(desc.Part1) end
+                            if desc.Part1 == part then addPart(desc.Part0) end
+                        end
+                    end
+                end
+            end
+        end)
+
+        -- 5. Legacy JointInstance connected parts
+        pcall(function()
+            for _, connected in ipairs(part:GetConnectedParts()) do
+                addPart(connected)
+            end
+        end)
+    end
+
+    return parts, itemModel
+end
+
 local function UpdateItemESP(charRoot)
     local handledTargets = {}
     local style = Settings.SODItemESPStyle or "Name + Value"
 
-    -- Active purge: Remove ANY Item Highlight or Item Billboard accidentally attached to the local player's character
+    -- Active purge: Remove ANY Highlight or Billboard attached to local player's character or camera
     if Player.Character then
         for _, child in ipairs(Player.Character:GetDescendants()) do
-            if child:IsA("Highlight") and child.Name == "ToxSOD_ItemHL" then
+            if child:IsA("Highlight") or child:IsA("BillboardGui") then
                 pcall(function() child:Destroy() end)
             end
-            if child:IsA("BillboardGui") and child.Name == "ToxSOD_ItemBB" then
+        end
+    end
+    local cam = Workspace.CurrentCamera or Camera
+    if cam then
+        for _, child in ipairs(cam:GetDescendants()) do
+            if child:IsA("Highlight") or child:IsA("BillboardGui") then
                 pcall(function() child:Destroy() end)
             end
         end
@@ -1866,7 +1993,7 @@ local function UpdateItemESP(charRoot)
 
     for prompt, data in pairs(ItemPrompts) do
         local part = data.Part
-        local itemModel = data.Model or GetItemModel(prompt) or GetItemModel(part)
+        local itemParts, itemModel = GetItemParts(part, data.Model or GetItemModel(prompt) or GetItemModel(part))
         local targetInst = itemModel or part
 
         local isInvalid = not prompt.Parent or not part or not part.Parent
@@ -1878,7 +2005,11 @@ local function UpdateItemESP(charRoot)
         if isInvalid then
             if ItemESPObjects[prompt] then
                 pcall(function()
-                    if ItemESPObjects[prompt].Highlight then ItemESPObjects[prompt].Highlight:Destroy() end
+                    if ItemESPObjects[prompt].Highlights then
+                        for _, h in ipairs(ItemESPObjects[prompt].Highlights) do pcall(function() h:Destroy() end) end
+                    elseif ItemESPObjects[prompt].Highlight then
+                        ItemESPObjects[prompt].Highlight:Destroy()
+                    end
                     if ItemESPObjects[prompt].Billboard then ItemESPObjects[prompt].Billboard:Destroy() end
                 end)
                 ItemESPObjects[prompt] = nil
@@ -1888,7 +2019,11 @@ local function UpdateItemESP(charRoot)
             -- Prevent multiple ESP objects on the exact same item model/part
             if targetInst and handledTargets[targetInst] then
                 if ItemESPObjects[prompt] then
-                    if ItemESPObjects[prompt].Highlight then ItemESPObjects[prompt].Highlight.Enabled = false end
+                    if ItemESPObjects[prompt].Highlights then
+                        for _, h in ipairs(ItemESPObjects[prompt].Highlights) do h.Enabled = false end
+                    elseif ItemESPObjects[prompt].Highlight then
+                        ItemESPObjects[prompt].Highlight.Enabled = false
+                    end
                     if ItemESPObjects[prompt].Billboard then ItemESPObjects[prompt].Billboard.Enabled = false end
                 end
                 continue
@@ -1904,8 +2039,25 @@ local function UpdateItemESP(charRoot)
             if show and dist <= maxDist then
                 local rColor = RarityColors[data.Rarity] or Color3.fromRGB(220, 220, 220)
 
-                -- 3D Chams on entire Model (all sub-parts of the item glow with chams)
-                local hl = CreateOrUpdateHighlight(targetInst, rColor, "ToxSOD_ItemHL")
+                -- 3D Chams on entire item (highlights all sub-parts, arm, shade, bulb, books together)
+                local hls = {}
+                if itemModel and itemModel:IsA("Model") and not IsPartOfLocalPlayer(itemModel) then
+                    local hl = CreateOrUpdateHighlight(itemModel, rColor, "ToxSOD_ItemHL")
+                    if hl then table.insert(hls, hl) end
+                    for _, p in ipairs(itemParts) do
+                        if not p:IsDescendantOf(itemModel) and not IsPartOfLocalPlayer(p) then
+                            local subHl = CreateOrUpdateHighlight(p, rColor, "ToxSOD_ItemHL")
+                            if subHl then table.insert(hls, subHl) end
+                        end
+                    end
+                else
+                    for _, p in ipairs(itemParts) do
+                        if not IsPartOfLocalPlayer(p) then
+                            local hl = CreateOrUpdateHighlight(p, rColor, "ToxSOD_ItemHL")
+                            if hl then table.insert(hls, hl) end
+                        end
+                    end
+                end
 
                 local bb = nil
                 local label = nil
@@ -1927,10 +2079,14 @@ local function UpdateItemESP(charRoot)
                     bb, label = CreateOrUpdateBillboard(part, "ToxSOD_ItemBB", tagText, rColor, offset)
                 end
 
-                ItemESPObjects[prompt] = { Highlight = hl, Billboard = bb, Label = label }
+                ItemESPObjects[prompt] = { Highlights = hls, Highlight = hls[1], Billboard = bb, Label = label }
             else
                 if ItemESPObjects[prompt] then
-                    if ItemESPObjects[prompt].Highlight then ItemESPObjects[prompt].Highlight.Enabled = false end
+                    if ItemESPObjects[prompt].Highlights then
+                        for _, h in ipairs(ItemESPObjects[prompt].Highlights) do h.Enabled = false end
+                    elseif ItemESPObjects[prompt].Highlight then
+                        ItemESPObjects[prompt].Highlight.Enabled = false
+                    end
                     if ItemESPObjects[prompt].Billboard then ItemESPObjects[prompt].Billboard.Enabled = false end
                 end
             end
@@ -1938,12 +2094,54 @@ local function UpdateItemESP(charRoot)
     end
 end
 
+local function IsPlayerMonster(plr, char)
+    if not plr and not char then return false end
+    if char and ActiveMonsters[char] ~= nil then return true end
+    if plr then
+        if plr:GetAttribute("IsEntity") == true or plr:GetAttribute("EntityKind") ~= nil then return true end
+        local role = plr:GetAttribute("Role")
+        if role and (string.find(string.lower(tostring(role)), "monster") or string.find(string.lower(tostring(role)), "entity")) then
+            return true
+        end
+    end
+    if char then
+        local cName = string.lower(char.Name)
+        if string.find(cName, "monster") or string.find(cName, "entity") or string.find(cName, "wendell") then
+            return true
+        end
+        local role = char:GetAttribute("Role")
+        if role and (string.find(string.lower(tostring(role)), "monster") or string.find(string.lower(tostring(role)), "entity")) then
+            return true
+        end
+    end
+    return false
+end
+
 local function UpdateMonsterESP(charRoot)
     local closestDist = nil
     local closestMonsterName = "ENTITY"
 
+    -- Proactively register any player who became the monster
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= Player and plr.Character then
+            if IsPlayerMonster(plr, plr.Character) and not ActiveMonsters[plr.Character] then
+                RegisterMonster(plr.Character)
+            end
+        end
+    end
+
+    -- Proactively scan Workspace for newly spawned NPC monsters
+    for _, m in ipairs(Workspace:GetChildren()) do
+        if m:IsA("Model") and m ~= Player.Character and not ActiveMonsters[m] then
+            if IsMonsterEntity(m) then
+                RegisterMonster(m)
+            end
+        end
+    end
+
     for model, data in pairs(ActiveMonsters) do
-        if not model.Parent or not data.Root or not data.Root.Parent then
+        local root = data.Root or (model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart"))
+        if not model.Parent or not root or not root.Parent then
             if MonsterESPObjects[model] then
                 pcall(function()
                     if MonsterESPObjects[model].Highlight then MonsterESPObjects[model].Highlight:Destroy() end
@@ -1951,18 +2149,19 @@ local function UpdateMonsterESP(charRoot)
                 end)
                 MonsterESPObjects[model] = nil
             end
+            ActiveMonsters[model] = nil
         else
-            local dist = charRoot and (data.Root.Position - charRoot.Position).Magnitude or 9999
+            local dist = charRoot and (root.Position - charRoot.Position).Magnitude or 9999
             if not closestDist or dist < closestDist then
                 closestDist = dist
-                closestMonsterName = data.Kind or data.Name
+                closestMonsterName = data.Kind or data.Name or "Monster"
             end
 
             if Settings.SODMonsterESP then
                 local red = Color3.fromRGB(255, 35, 45)
                 local hl = CreateOrUpdateHighlight(model, red, "ToxSOD_MonsterHL")
                 local tagText = string.format("%s (%dm)", data.Name or "Monster", math.floor(dist))
-                local bb, label = CreateOrUpdateBillboard(data.Root, "ToxSOD_MonsterBB", tagText, red, Vector3.new(0, 3.2, 0))
+                local bb, label = CreateOrUpdateBillboard(root, "ToxSOD_MonsterBB", tagText, red, Vector3.new(0, 3.2, 0))
                 MonsterESPObjects[model] = { Highlight = hl, Billboard = bb, Label = label }
             else
                 if MonsterESPObjects[model] then
@@ -1990,19 +2189,20 @@ local function UpdatePlayerESP(charRoot)
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= Player then
             local char = plr.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local root = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") or char:FindFirstChildWhichIsA("BasePart"))
+            local isMonster = IsPlayerMonster(plr, char)
 
             -- If player is a monster, Monster ESP handles them with red highlight and tag
-            local isMonster = (char and ActiveMonsters[char] ~= nil) or plr:GetAttribute("IsEntity") == true or plr:GetAttribute("EntityKind") ~= nil
-
-            if char and hum and root and hum.Health > 0 and not isMonster then
+            if char and char.Parent and root and not isMonster then
                 if Settings.SODPlayerESP then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    local isDowned = hum and hum.Health <= 0
                     local dist = charRoot and (root.Position - charRoot.Position).Magnitude or 0
-                    local cyan = Color3.fromRGB(0, 195, 255)
+                    local cyan = isDowned and Color3.fromRGB(255, 120, 0) or Color3.fromRGB(0, 195, 255)
 
                     local hl = CreateOrUpdateHighlight(char, cyan, "ToxSOD_PlayerHL")
-                    local tagText = string.format("%s (%dm)", plr.DisplayName or plr.Name, math.floor(dist))
+                    local prefix = isDowned and "[DOWNED] " or ""
+                    local tagText = string.format("%s%s (%dm)", prefix, plr.DisplayName or plr.Name, math.floor(dist))
                     local bb, label = CreateOrUpdateBillboard(root, "ToxSOD_PlayerBB", tagText, cyan, Vector3.new(0, 3.0, 0))
 
                     PlayerESPObjects[plr] = { Highlight = hl, Billboard = bb, Label = label }
@@ -2675,19 +2875,7 @@ local function StartEntityKillLoop()
                     end
                 end)
 
-                -- Simulate physical mouse clicks via VirtualInputManager and VirtualUser
-                pcall(function()
-                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-                    task.wait(0.02)
-                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-                end)
-                pcall(function()
-                    local vu = game:GetService("VirtualUser")
-                    vu:CaptureController()
-                    vu:Button1Down(Vector2.zero)
-                    task.wait(0.02)
-                    vu:Button1Up(Vector2.zero)
-                end)
+                -- Pure tool and remote execution (zero mouse interference)
 
                 -- Fire attack remotes
                 pcall(function()
@@ -2839,37 +3027,7 @@ local function ClickTargetCard(entry)
         table.insert(clickables, label)
     end
 
-    -- 1. Hardware mouse clicks via VirtualInputManager & VirtualUser at Card center and Label center
-    local clickPoints = {}
-    if card and card:IsA("GuiObject") and card.AbsoluteSize.X > 0 and card.AbsoluteSize.Y > 0 then
-        table.insert(clickPoints, Vector2.new(
-            card.AbsolutePosition.X + (card.AbsoluteSize.X / 2),
-            card.AbsolutePosition.Y + (card.AbsoluteSize.Y / 2)
-        ))
-    end
-    if label and label:IsA("GuiObject") and label.AbsoluteSize.X > 0 and label.AbsoluteSize.Y > 0 then
-        table.insert(clickPoints, Vector2.new(
-            label.AbsolutePosition.X + (label.AbsoluteSize.X / 2),
-            label.AbsolutePosition.Y + (label.AbsoluteSize.Y / 2)
-        ))
-    end
-
-    for _, pt in ipairs(clickPoints) do
-        pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(pt.X, pt.Y, 0, true, game, 0)
-            task.wait(0.03)
-            VirtualInputManager:SendMouseButtonEvent(pt.X, pt.Y, 0, false, game, 0)
-        end)
-        pcall(function()
-            local vu = game:GetService("VirtualUser")
-            vu:CaptureController()
-            vu:Button1Down(pt)
-            task.wait(0.03)
-            vu:Button1Up(pt)
-        end)
-    end
-
-    -- 2. Fire signals and getconnections on all clickable candidates
+    -- Fire signals and getconnections directly on UI elements without hijacking the user's mouse cursor
     for _, obj in ipairs(clickables) do
         if obj:IsA("GuiButton") then
             pcall(function()
@@ -2893,7 +3051,7 @@ local function ClickTargetCard(entry)
                             c:Fire({
                                 UserInputType = Enum.UserInputType.MouseButton1,
                                 UserInputState = Enum.UserInputState.Begin,
-                                Position = Vector3.new(clickPoints[1] and clickPoints[1].X or 0, clickPoints[1] and clickPoints[1].Y or 0, 0)
+                                Position = Vector3.zero
                             })
                         end)
                     end
@@ -3231,7 +3389,189 @@ end
 if Settings.SODAntiAFK then
     pcall(function() SetupAntiAFK(true) end)
 end
+if Settings.SODAutoOpenCase then
+    pcall(StartAutoCaseLoop)
+end
 pcall(StartAutoVoteLoop)
+
+-- ==============================================================================
+-- CASE / CRATE UNBOXING ENGINE
+-- ==============================================================================
+
+local function OpenCrate(caseChoice)
+    local target = string.lower(caseChoice or Settings.SODCaseChoice or "basketball")
+    local pGui = Player:FindFirstChild("PlayerGui")
+    if not pGui then return false end
+
+    -- 1. Ensure the CASES tab is opened in the Shop if not currently visible
+    local function EnsureCasesTabOpen()
+        for _, gui in ipairs(pGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Enabled then
+                for _, desc in ipairs(gui:GetDescendants()) do
+                    if (desc:IsA("TextButton") or desc:IsA("TextLabel")) and desc.Text then
+                        local tLower = string.lower(desc.Text)
+                        if tLower == "cases" or string.find(tLower, "skins, at random") then
+                            local btn = desc:IsA("GuiButton") and desc or desc:FindFirstAncestorWhichIsA("GuiButton")
+                            if btn then
+                                pcall(function()
+                                    if firesignal then
+                                        firesignal(btn.MouseButton1Click)
+                                        firesignal(btn.Activated)
+                                    end
+                                    if getconnections then
+                                        for _, c in ipairs(getconnections(btn.MouseButton1Click)) do pcall(function() c:Fire() end) end
+                                        for _, c in ipairs(getconnections(btn.Activated)) do pcall(function() c:Fire() end) end
+                                    end
+                                end)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    EnsureCasesTabOpen()
+    task.wait(0.05)
+
+    -- 2. Find the requested case card and its in-game cash button
+    local foundButton = nil
+    local caseNameFound = nil
+
+    for _, gui in ipairs(pGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Enabled then
+            for _, desc in ipairs(gui:GetDescendants()) do
+                if (desc:IsA("TextLabel") or desc:IsA("TextButton")) and desc.Text then
+                    local tLower = string.lower(desc.Text)
+                    local isTargetCase = false
+                    local cName = ""
+
+                    if string.find(target, "basketball") and string.find(tLower, "basketball") then
+                        isTargetCase = true
+                        cName = "Basketball Case"
+                    elseif string.find(target, "backpack") and string.find(tLower, "backpack") then
+                        isTargetCase = true
+                        cName = "Backpack Case"
+                    elseif string.find(target, "emote") and string.find(tLower, "emote") then
+                        isTargetCase = true
+                        cName = "Emote Case"
+                    elseif string.find(target, "all") and (string.find(tLower, "basketball") or string.find(tLower, "backpack") or string.find(tLower, "emote")) then
+                        isTargetCase = true
+                        cName = desc.Text
+                    end
+
+                    if isTargetCase then
+                        -- Find the parent card frame (ascend up to 4 levels)
+                        local cardFrame = desc
+                        for _ = 1, 4 do
+                            if cardFrame.Parent and cardFrame.Parent:IsA("GuiObject") then
+                                local p = cardFrame.Parent
+                                if p.AbsoluteSize.X > 600 or p:IsA("ScreenGui") then break end
+                                cardFrame = p
+                            else
+                                break
+                            end
+                        end
+
+                        -- Now search for the cash purchase button inside this card frame
+                        for _, child in ipairs(cardFrame:GetDescendants()) do
+                            local text = ""
+                            if child:IsA("TextButton") or child:IsA("TextLabel") then
+                                text = child.Text or ""
+                            end
+                            local textLower = string.lower(text)
+
+                            -- Must contain '$' or 'open' and must NEVER be robux
+                            local isCash = (string.find(text, "%$") ~= nil or string.find(textLower, "open") ~= nil)
+                            local isRobux = string.find(textLower, "robux") or string.find(textLower, "r%$")
+
+                            if isCash and not isRobux then
+                                local btn = child:IsA("GuiButton") and child or child:FindFirstAncestorWhichIsA("GuiButton")
+                                if btn then
+                                    -- Check that this button is not green / robux
+                                    local btnColor = btn.BackgroundColor3
+                                    local isGreen = (btnColor.G > 0.6 and btnColor.G > btnColor.R * 1.5)
+                                    if not isGreen then
+                                        foundButton = btn
+                                        caseNameFound = cName
+                                        break
+                                    end
+                                end
+                            end
+                        end
+
+                        if foundButton then break end
+                    end
+                end
+            end
+        end
+        if foundButton then break end
+    end
+
+    -- 3. Click the cash button safely with signals
+    if foundButton then
+        pcall(function()
+            if firesignal then
+                firesignal(foundButton.MouseButton1Click)
+                firesignal(foundButton.Activated)
+                firesignal(foundButton.MouseButton1Down)
+                firesignal(foundButton.MouseButton1Up)
+            end
+            if getconnections then
+                for _, c in ipairs(getconnections(foundButton.MouseButton1Click)) do pcall(function() c:Fire() end) end
+                for _, c in ipairs(getconnections(foundButton.Activated)) do pcall(function() c:Fire() end) end
+                for _, c in ipairs(getconnections(foundButton.MouseButton1Down)) do pcall(function() c:Fire() end) end
+            end
+        end)
+        CustomNotify("Opened " .. tostring(caseNameFound or "Case"), Color3.fromRGB(0, 255, 140), 2)
+    end
+
+    -- 4. Also fire matching RemoteEvents in ReplicatedStorage as backup
+    pcall(function()
+        for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
+            if rem:IsA("RemoteEvent") or rem:IsA("RemoteFunction") then
+                local rLower = string.lower(rem.Name)
+                if string.find(rLower, "case") or string.find(rLower, "crate") or string.find(rLower, "unbox") or string.find(rLower, "opencase") then
+                    local arg = string.find(target, "basketball") and "Basketball Case"
+                             or string.find(target, "backpack") and "Backpack Case"
+                             or string.find(target, "emote") and "Emote Case"
+                             or "Basketball Case"
+
+                    if rem:IsA("RemoteEvent") then
+                        rem:FireServer(arg)
+                        rem:FireServer(arg, "Cash")
+                    end
+                end
+            end
+        end
+    end)
+
+    return foundButton ~= nil
+end
+
+local AutoCaseThread = nil
+local function StartAutoCaseLoop()
+    if AutoCaseThread then return end
+    AutoCaseThread = task.spawn(function()
+        while Settings.SODAutoOpenCase do
+            pcall(function()
+                OpenCrate(Settings.SODCaseChoice)
+            end)
+            local dStr = tostring(Settings.SODCaseDelay or "1.0s")
+            local delayNum = tonumber(string.match(dStr, "[%d%.]+")) or 1.0
+            task.wait(math.clamp(delayNum, 0.4, 5.0))
+        end
+        AutoCaseThread = nil
+    end)
+end
+
+local function StopAutoCaseLoop()
+    Settings.SODAutoOpenCase = false
+    if AutoCaseThread then
+        task.cancel(AutoCaseThread)
+        AutoCaseThread = nil
+    end
+end
 
 -- ==============================================================================
 -- UI BUILDER - SECTION 1: VISUALS
@@ -3692,6 +4032,56 @@ SODCreateToggle(
 )
 
 -- ==============================================================================
+-- UI BUILDER - SECTION: CASES
+-- ==============================================================================
+
+CreateSODSection("CASES")
+
+SODCreateToggle(
+    "Auto Open Case",
+    GamePage,
+    Settings.SODAutoOpenCase,
+    function(v)
+        Settings.SODAutoOpenCase = v == true
+        if v then
+            StartAutoCaseLoop()
+        else
+            StopAutoCaseLoop()
+        end
+        AutoSaveConfiguration()
+    end,
+    "SODAutoOpenCase"
+)
+
+SODCreateDropdown(
+    "Select Case",
+    { "Basketball Case ($350)", "Backpack Case ($650)", "Emote Case ($1,500)", "All Cases" },
+    GamePage,
+    Settings.SODCaseChoice or "Basketball Case ($350)",
+    function(choice)
+        Settings.SODCaseChoice = tostring(choice)
+        AutoSaveConfiguration()
+    end
+)
+
+SODCreateDropdown(
+    "Case Delay",
+    { "0.5s", "1.0s", "1.5s", "2.0s" },
+    GamePage,
+    Settings.SODCaseDelay or "1.0s",
+    function(choice)
+        Settings.SODCaseDelay = tostring(choice)
+        AutoSaveConfiguration()
+    end
+)
+
+SODCreateButton("Open 1 Case Now", GamePage, function()
+    task.spawn(function()
+        OpenCrate(Settings.SODCaseChoice)
+    end)
+end)
+
+-- ==============================================================================
 -- CLEANUP HANDLER
 -- ==============================================================================
 
@@ -3699,6 +4089,7 @@ getgenv().ToxSODCleanup = function()
     getgenv().ToxSODGeneration = (tonumber(getgenv().ToxSODGeneration) or 0) + 1
 
     StopAutoFarm()
+    StopAutoCaseLoop()
     SetupAntiAFK(false)
 
     for _, conn in ipairs(SODConnections) do
