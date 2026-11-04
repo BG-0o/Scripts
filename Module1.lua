@@ -2,19 +2,16 @@ do
     local env = getgenv()
     local current = env.__ToxHubBootLock
     local now = os.clock()
-
     if typeof(current) == "table"
     and current.Game == game
     and now - (tonumber(current.StartedAt) or now) < 8 then
         return
     end
-
     env.__ToxHubBootLock = {
         Game = game,
         StartedAt = now
     }
 end
-
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -25,47 +22,37 @@ local TextChatService = game:GetService("TextChatService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
-
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local ToxParentContainer = (gethui and gethui()) or game:GetService("CoreGui")
-
 local function HasRunningToxHub()
     local gui = getgenv().Gui
     local notifGui = getgenv().NotifGui
-
     if typeof(gui) == "Instance"
     and gui.Parent then
         return true
     end
-
     if typeof(notifGui) == "Instance"
     and notifGui.Parent then
         return true
     end
-
     if getgenv().ToxHubActive == true
     and getgenv().Destroyed ~= true then
         return true
     end
-
     for _, object in ipairs(ToxParentContainer:GetChildren()) do
         if object.Name == "ToxV1Gui"
         or object.Name == "ToxNotifs" then
             return true
         end
     end
-
     return false
 end
-
 local function ShowReexecuteConfirm()
     if getgenv().ToxReexecuteConfirmOpen then
         return false
     end
-
     getgenv().ToxReexecuteConfirmOpen = true
-
     local confirmGui = Instance.new("ScreenGui")
     confirmGui.Name = "ToxReexecuteConfirm"
     confirmGui.ResetOnSpawn = false
@@ -73,30 +60,25 @@ local function ShowReexecuteConfirm()
     confirmGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     confirmGui.DisplayOrder = 2147483647
     confirmGui.Parent = ToxParentContainer
-
     local shadow = Instance.new("Frame")
     shadow.Size = UDim2.new(1, 0, 1, 0)
     shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     shadow.BackgroundTransparency = 0.35
     shadow.BorderSizePixel = 0
     shadow.Parent = confirmGui
-
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 380, 0, 190)
     frame.Position = UDim2.new(0.5, -190, 0.5, -95)
     frame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
     frame.BorderSizePixel = 0
     frame.Parent = confirmGui
-
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 10)
     corner.Parent = frame
-
     local stroke = Instance.new("UIStroke")
     stroke.Color = Color3.fromRGB(9, 0, 136)
     stroke.Thickness = 2
     stroke.Parent = frame
-
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, -30, 0, 42)
     title.Position = UDim2.new(0, 15, 0, 12)
@@ -107,7 +89,6 @@ local function ShowReexecuteConfirm()
     title.TextSize = 18
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.Parent = frame
-
     local body = Instance.new("TextLabel")
     body.Size = UDim2.new(1, -30, 0, 58)
     body.Position = UDim2.new(0, 15, 0, 58)
@@ -120,7 +101,6 @@ local function ShowReexecuteConfirm()
     body.TextXAlignment = Enum.TextXAlignment.Left
     body.TextYAlignment = Enum.TextYAlignment.Top
     body.Parent = frame
-
     local execute = Instance.new("TextButton")
     execute.Size = UDim2.new(0.5, -22, 0, 38)
     execute.Position = UDim2.new(0, 15, 1, -53)
@@ -131,11 +111,9 @@ local function ShowReexecuteConfirm()
     execute.Font = Enum.Font.GothamBold
     execute.TextSize = 12
     execute.Parent = frame
-
     local executeCorner = Instance.new("UICorner")
     executeCorner.CornerRadius = UDim.new(0, 7)
     executeCorner.Parent = execute
-
     local cancel = Instance.new("TextButton")
     cancel.Size = UDim2.new(0.5, -22, 0, 38)
     cancel.Position = UDim2.new(0.5, 7, 1, -53)
@@ -146,43 +124,32 @@ local function ShowReexecuteConfirm()
     cancel.Font = Enum.Font.GothamBold
     cancel.TextSize = 12
     cancel.Parent = frame
-
     local cancelCorner = Instance.new("UICorner")
     cancelCorner.CornerRadius = UDim.new(0, 7)
     cancelCorner.Parent = cancel
-
     local result = nil
-
     execute.MouseButton1Click:Connect(function()
         result = true
     end)
-
     cancel.MouseButton1Click:Connect(function()
         result = false
     end)
-
     local started = os.clock()
-
     repeat
         task.wait(0.05)
     until result ~= nil
     or os.clock() - started > 60
-
     pcall(function()
         confirmGui:Destroy()
     end)
-
     getgenv().ToxReexecuteConfirmOpen = nil
-
     return result == true
 end
-
 if HasRunningToxHub() then
     if not ShowReexecuteConfirm() then
         getgenv().__ToxHubBootLock = nil
         return
     end
-
     getgenv().Destroyed = true
     getgenv().ScriptLoaded = false
     Destroyed = true
@@ -224,66 +191,51 @@ if HasRunningToxHub() then
     getgenv().ToxGameModuleLoadedPage = nil
     getgenv().ToxGameModuleLoadingUrl = nil
     getgenv().ToxGameModuleLoadingPage = nil
-
     if getgenv().ToxUniversal2ExtraCleanup then
         pcall(getgenv().ToxUniversal2ExtraCleanup)
     end
-
     if getgenv().ToxUniversal2Cleanup then
         pcall(getgenv().ToxUniversal2Cleanup)
     end
-
     if getgenv().ToxLightingCleanup then
         pcall(getgenv().ToxLightingCleanup)
     end
-
     if getgenv().ToxChatCleanup then
         pcall(getgenv().ToxChatCleanup)
     end
-
     if getgenv().ToxNDSCleanup then
         pcall(getgenv().ToxNDSCleanup)
     end
-
     if getgenv().ToxMM2Cleanup then
         pcall(getgenv().ToxMM2Cleanup)
     end
-
     if getgenv().UpdateFullbright and getgenv().Settings then
         pcall(function()
             getgenv().Settings.Fullbright = false
             getgenv().UpdateFullbright()
         end)
     end
-
     if getgenv().ToxSystemsCleanup then
         pcall(getgenv().ToxSystemsCleanup)
     end
-
     if getgenv().ToxADMINCleanup then
         pcall(getgenv().ToxADMINCleanup)
     end
-
     if getgenv().ToxLBBCleanup then
         pcall(getgenv().ToxLBBCleanup)
     end
-
     if getgenv().ToxFTFCleanup then
         pcall(getgenv().ToxFTFCleanup)
     end
-
     if getgenv().ToxPLCleanup then
         pcall(getgenv().ToxPLCleanup)
     end
-
     if getgenv().ToxBABFTCleanup then
         pcall(getgenv().ToxBABFTCleanup)
     end
-
     if getgenv().ToxSODCleanup then
         pcall(getgenv().ToxSODCleanup)
     end
-
     if getgenv().ScriptConnections then
         for _, conn in ipairs(getgenv().ScriptConnections) do
             pcall(function()
@@ -291,10 +243,8 @@ if HasRunningToxHub() then
             end)
         end
     end
-
     task.wait(0.25)
 end
-
 if getgenv().Gui then
     pcall(function() getgenv().Gui:Destroy() end)
     getgenv().Gui = nil
@@ -309,10 +259,8 @@ if getgenv().NotifGui then
     pcall(function() getgenv().NotifGui:Destroy() end)
     getgenv().NotifGui = nil
 end
-
 local LOGO_ID = "rbxassetid://120675082996894"
 local MAIN_COLOR = Color3.fromRGB(9, 0, 136)
-
 local GUIColorMap = {
     ["Blue"] = Color3.fromRGB(9, 0, 136),
     ["Cyan"] = Color3.fromRGB(0, 120, 160),
@@ -324,7 +272,6 @@ local GUIColorMap = {
     ["Gold"] = Color3.fromRGB(175, 130, 20),
     ["White"] = Color3.fromRGB(150, 150, 165)
 }
-
 local ColorMap = {
 	["White"] = Color3.fromRGB(255, 255, 255),
 	["Red"] = Color3.fromRGB(255, 50, 50),
@@ -339,12 +286,10 @@ local ColorMap = {
     ["Pink"] = Color3.fromRGB(255, 105, 180),
     ["Gold"] = Color3.fromRGB(255, 215, 0)
 }
-
 getgenv().ColorMap = ColorMap
 getgenv().GUIColorMap = GUIColorMap
 getgenv().LOGO_ID = LOGO_ID
 getgenv().MAIN_COLOR = MAIN_COLOR
-
 getgenv().GameModuleRegistry = {
     [189707] = {
         ShortName = "NDS",
@@ -398,34 +343,28 @@ getgenv().GameModuleRegistry = {
         Ready = true
     }
 }
-
 getgenv().CurrentGameModule = getgenv().GameModuleRegistry[game.PlaceId]
 getgenv().ToxTeleportBypassUntil = 0
 getgenv().ToxTeleportWhitelistUntil = 0
 getgenv().ToxTeleportWhitelistReason = nil
 getgenv().AllowToxTeleport = function(seconds, reason)
     local untilTime = tick() + (tonumber(seconds) or 1)
-
     getgenv().ToxTeleportBypassUntil = math.max(
         tonumber(getgenv().ToxTeleportBypassUntil) or 0,
         untilTime
     )
-
     getgenv().ToxTeleportWhitelistUntil = math.max(
         tonumber(getgenv().ToxTeleportWhitelistUntil) or 0,
         untilTime
     )
-
     getgenv().ToxTeleportWhitelistReason = tostring(reason or "ToxHub")
 end
-
 getgenv().ToxIsToxTeleportAllowed = function()
     return tick() < math.max(
         tonumber(getgenv().ToxTeleportBypassUntil) or 0,
         tonumber(getgenv().ToxTeleportWhitelistUntil) or 0
     )
 end
-
 getgenv().Settings = {
 	Noclip = false,
 	InfiniteJump = false,
@@ -451,11 +390,9 @@ getgenv().Settings = {
     GUISizes = {},
     MobileToggle = true,
     CollapseSidebar = false,
-
 	SpeedValue = 16,
 	JumpValue = 50,
 	FlySpeed = 10,
-
     FOVEnabled = false,
     FOVValue = 70,
     NoclipCamera = false,
@@ -465,7 +402,6 @@ getgenv().Settings = {
     ShiftLockKey = "Shift",
     MaxZoom = false,
     MaxZoomDistance = 400,
-
     Aimbot = false,
     AimbotMode = "CAMERA",
     AimbotBindEnabled = false,
@@ -497,7 +433,6 @@ getgenv().Settings = {
     HeadHitboxSize = 7,
     KillAura = false,
     KillAuraRange = 15,
-
     Bhop = false,
     BhopInterval = 0.2,
     AirWalk = false,
@@ -508,7 +443,6 @@ getgenv().Settings = {
     CarFly = false,
     CarFlySpeed = 80,
     LoopTPTarget = nil,
-
     ESPEnabled = false,
     ESPNames = false,
     ESPNameMode = "Display",
@@ -573,12 +507,10 @@ getgenv().Settings = {
     StartHidden = false,
     UnlockCursor = false,
     PanicKey = nil,
-
     MusicAutoPlay = false,
     MusicLoop = false,
     MusicVolume = 100,
     CurrentTrackIndex = 1,
-
     NDSAutoWin = false,
     NDSWaterFly = false,
     NDSWaterFlySpeed = 40,
@@ -591,7 +523,6 @@ getgenv().Settings = {
     NDSRemoveTsunamiWave = false,
     NDSRemoveBarbedWire = false,
     NDSIslandRocksCollidable = false,
-
     MM2RoleESP = false,
     MM2AutoFarm = false,
     MM2AutoFarmV2 = false,
@@ -620,25 +551,20 @@ getgenv().Settings = {
     MM2VoteInfinite = true,
     ToxUITheme = "Dark Neon",
     ToxUITransparency = 0,
-
     ADMINPrefix = ".",
     ADMINKillTarget = "",
     ADMINKillAll = false,
     ADMINRocketTarget = "",
     ADMINRocketAll = false,
     ADMINKickTarget = "",
-
     ToxLastChangelogVersion = "",
     ToxServerInfoVisible = false,
     ToxServerInfoMode = "FPS/Ping/Players"
 }
-
 local PersistedSettingKeys = {}
-
 for key in pairs(getgenv().Settings) do
     PersistedSettingKeys[key] = true
 end
-
 getgenv().SavedIDs = {}
 getgenv().SavedJoinGames = {}
 getgenv().SavedWaypoints = {}
@@ -675,14 +601,12 @@ getgenv().ToxGameModuleLoadingUrl = nil
 getgenv().ToxGameModuleLoadingPage = nil
 Destroyed = false
 ScriptLoaded = false
-
 if getgenv().ScriptConnections then
     for _, conn in ipairs(getgenv().ScriptConnections) do
         pcall(function() conn:Disconnect() end)
     end
 end
 getgenv().ScriptConnections = {}
-
 getgenv().OriginalLighting = {
     Ambient = Lighting.Ambient,
     Brightness = Lighting.Brightness,
@@ -690,14 +614,12 @@ getgenv().OriginalLighting = {
     FogEnd = Lighting.FogEnd,
     GlobalShadows = Lighting.GlobalShadows
 }
-
 local function AddConnection(conn)
     if not conn then return end
     table.insert(getgenv().ScriptConnections, conn)
     return conn
 end
 getgenv().AddConnection = AddConnection
-
 local FolderName = "ToxHub"
 local LegacyFolderName = "ToxV1_Data"
 local CurrentPlaceKey = tostring(game.PlaceId)
@@ -706,7 +628,6 @@ local LegacyUserConfigFilePath =
     .. "/config_"
     .. tostring(Player.UserId)
     .. ".json"
-
 local ConfigFilePath =
     FolderName
     .. "/config_"
@@ -714,10 +635,8 @@ local ConfigFilePath =
     .. "_"
     .. CurrentPlaceKey
     .. ".json"
-
 local PrimaryConfigFilePath =
     ConfigFilePath
-
 local ConfigBackupFilePath =
     FolderName
     .. "/config_"
@@ -725,19 +644,15 @@ local ConfigBackupFilePath =
     .. "_"
     .. CurrentPlaceKey
     .. "_backup.json"
-
 local MusicIDsFilePath =
     FolderName
     .. "/music_ids.json"
-
 local JoinGamesFilePath =
     FolderName
     .. "/saved_join_games.json"
-
 local LegacyConfigFilePath =
     FolderName
     .. "/config.json"
-
 local OldPlaceConfigFilePath =
     LegacyFolderName
     .. "/config_"
@@ -745,40 +660,29 @@ local OldPlaceConfigFilePath =
     .. "_"
     .. CurrentPlaceKey
     .. ".json"
-
 local OldMusicIDsFilePath =
     LegacyFolderName
     .. "/music_ids.json"
-
 local OldJoinGamesFilePath =
     LegacyFolderName
     .. "/saved_join_games.json"
-
 local OldLegacyConfigFilePath =
     LegacyFolderName
     .. "/config.json"
-
 getgenv().ToxConfigFilePath =
     PrimaryConfigFilePath
-
 getgenv().ToxPlaceConfigFilePath =
     ConfigFilePath
-
 getgenv().ToxConfigBackupFilePath =
     ConfigBackupFilePath
-
 getgenv().ToxLegacyUserConfigFilePath =
     LegacyUserConfigFilePath
-
 getgenv().ToxConfigPlaceId =
     game.PlaceId
-
 getgenv().ToxMusicIDsFilePath =
     MusicIDsFilePath
-
 getgenv().ToxJoinGamesFilePath =
     JoinGamesFilePath
-
 local function EnsureFolder()
     if makefolder and isfolder then
         pcall(function()
@@ -788,10 +692,8 @@ local function EnsureFolder()
         end)
     end
 end
-
 local function MigrateLegacySaveFolder()
     EnsureFolder()
-
     if not isfolder
     or not isfolder(LegacyFolderName)
     or not listfiles
@@ -799,31 +701,25 @@ local function MigrateLegacySaveFolder()
     or not writefile then
         return
     end
-
     pcall(function()
         for _, sourcePath in ipairs(listfiles(LegacyFolderName)) do
             local normalized = tostring(sourcePath):gsub("\\", "/")
             local fileName = string.match(normalized, "([^/]+)$")
-
             if fileName and fileName ~= "" then
                 local targetPath = FolderName .. "/" .. fileName
                 local migrated = isfile and isfile(targetPath) or false
-
                 if not migrated then
                     local readOK, raw = pcall(function()
                         return readfile(sourcePath)
                     end)
-
                     if readOK and raw ~= nil then
                         local writeOK = pcall(function()
                             writefile(targetPath, raw)
                         end)
-
                         migrated = writeOK
                             and (not isfile or isfile(targetPath))
                     end
                 end
-
                 if migrated and delfile then
                     pcall(function()
                         delfile(sourcePath)
@@ -831,10 +727,8 @@ local function MigrateLegacySaveFolder()
                 end
             end
         end
-
         if delfolder and isfolder(LegacyFolderName) then
             local remaining = listfiles(LegacyFolderName)
-
             if typeof(remaining) == "table"
             and #remaining == 0 then
                 pcall(function()
@@ -844,9 +738,7 @@ local function MigrateLegacySaveFolder()
         end
     end)
 end
-
 MigrateLegacySaveFolder()
-
 local SharedPersistentKeys = {
     Speed = true,
     SpeedValue = true,
@@ -862,62 +754,48 @@ local SharedPersistentKeys = {
     ESPNames = true,
     ESPTeamColors = true
 }
-
 getgenv().SharedPersistentKeys = SharedPersistentKeys
-
 local function PersistentSetting(Key)
     return Settings[Key]
 end
-
 local function GetGameSettingOwner(Key)
     if typeof(Key) ~= "string" then
         return nil
     end
-
     for PlaceId, Info in pairs(getgenv().GameModuleRegistry or {}) do
         local Prefix = Info and tostring(Info.ShortName or "") or ""
-
         if Prefix ~= ""
         and string.sub(Key, 1, #Prefix) == Prefix then
             return tostring(PlaceId), Prefix
         end
     end
-
     return nil
 end
-
 local function IsCurrentGameSetting(Key)
     local OwnerPlaceId = GetGameSettingOwner(Key)
-
     return OwnerPlaceId ~= nil
         and OwnerPlaceId == tostring(game.PlaceId)
 end
-
 local function SerializeConfigValue(value, seen)
     local valueType = typeof(value)
-
     if value == nil then
         return {
             __toxType = "Nil"
         }
     end
-
     if valueType == "boolean"
     or valueType == "number"
     or valueType == "string" then
         return value
     end
-
     if valueType == "EnumItem" then
         local enumTypeName = tostring(value.EnumType):match("^Enum%.(.+)$")
-
         return {
             __toxType = "EnumItem",
             enumType = enumTypeName,
             name = value.Name
         }
     end
-
     if valueType == "Color3" then
         return {
             __toxType = "Color3",
@@ -926,7 +804,6 @@ local function SerializeConfigValue(value, seen)
             b = value.B
         }
     end
-
     if valueType == "Vector2" then
         return {
             __toxType = "Vector2",
@@ -934,7 +811,6 @@ local function SerializeConfigValue(value, seen)
             y = value.Y
         }
     end
-
     if valueType == "Vector3" then
         return {
             __toxType = "Vector3",
@@ -943,7 +819,6 @@ local function SerializeConfigValue(value, seen)
             z = value.Z
         }
     end
-
     if valueType == "UDim" then
         return {
             __toxType = "UDim",
@@ -951,7 +826,6 @@ local function SerializeConfigValue(value, seen)
             offset = value.Offset
         }
     end
-
     if valueType == "UDim2" then
         return {
             __toxType = "UDim2",
@@ -961,14 +835,12 @@ local function SerializeConfigValue(value, seen)
             yOffset = value.Y.Offset
         }
     end
-
     if valueType == "CFrame" then
         return {
             __toxType = "CFrame",
             components = {value:GetComponents()}
         }
     end
-
     if valueType == "Instance" then
         if value:IsA("Player") then
             return {
@@ -976,75 +848,57 @@ local function SerializeConfigValue(value, seen)
                 userId = value.UserId
             }
         end
-
         return {
             __toxType = "Unsupported"
         }
     end
-
     if valueType == "table" then
         seen = seen or {}
-
         if seen[value] then
             return {
                 __toxType = "Cycle"
             }
         end
-
         seen[value] = true
-
         local result = {}
-
         for key, item in pairs(value) do
             local serializedKey = key
-
             if typeof(key) ~= "string"
             and typeof(key) ~= "number" then
                 serializedKey = tostring(key)
             end
-
             result[serializedKey] = SerializeConfigValue(
                 item,
                 seen
             )
         end
-
         seen[value] = nil
         return result
     end
-
     return {
         __toxType = "Unsupported"
     }
 end
-
 local function DeserializeConfigValue(value)
     if typeof(value) ~= "table" then
         return value
     end
-
     local marker = rawget(value, "__toxType")
-
     if marker == "Nil" then
         return nil
     end
-
     if marker == "EnumItem" then
         local enumType = value.enumType and Enum[value.enumType]
-
         if enumType and value.name then
             local ok, enumItem = pcall(function()
                 return enumType[value.name]
             end)
-
             if ok then
                 return enumItem
             end
         end
-
         return nil
     end
-
     if marker == "Color3" then
         return Color3.new(
             tonumber(value.r) or 0,
@@ -1052,14 +906,12 @@ local function DeserializeConfigValue(value)
             tonumber(value.b) or 0
         )
     end
-
     if marker == "Vector2" then
         return Vector2.new(
             tonumber(value.x) or 0,
             tonumber(value.y) or 0
         )
     end
-
     if marker == "Vector3" then
         return Vector3.new(
             tonumber(value.x) or 0,
@@ -1067,14 +919,12 @@ local function DeserializeConfigValue(value)
             tonumber(value.z) or 0
         )
     end
-
     if marker == "UDim" then
         return UDim.new(
             tonumber(value.scale) or 0,
             tonumber(value.offset) or 0
         )
     end
-
     if marker == "UDim2" then
         return UDim2.new(
             tonumber(value.xScale) or 0,
@@ -1083,38 +933,29 @@ local function DeserializeConfigValue(value)
             tonumber(value.yOffset) or 0
         )
     end
-
     if marker == "CFrame" then
         local components = value.components
-
         if typeof(components) == "table"
         and #components >= 12 then
             return CFrame.new(table.unpack(components))
         end
-
         return CFrame.new()
     end
-
     if marker == "Player" then
         return Players:GetPlayerByUserId(
             tonumber(value.userId) or 0
         )
     end
-
     if marker == "Unsupported"
     or marker == "Cycle" then
         return nil
     end
-
     local result = {}
-
     for key, item in pairs(value) do
         result[key] = DeserializeConfigValue(item)
     end
-
     return result
 end
-
 local function DecodeSavedIDsFromFile(
     path
 )
@@ -1124,60 +965,47 @@ local function DecodeSavedIDsFromFile(
     or not isfile(path) then
         return nil
     end
-
     local ok, value =
         pcall(function()
             local raw =
                 readfile(path)
-
             if not raw
             or raw == "" then
                 return nil
             end
-
             local data =
                 HttpService:
                     JSONDecode(raw)
-
             if typeof(data)
                 ~= "table" then
                 return nil
             end
-
             local source =
                 data.SavedIDs
                 or data.IDs
                 or data
-
             local decoded =
                 DeserializeConfigValue(
                     source
                 )
-
             if typeof(decoded)
                 == "table"
             and next(decoded)
                 ~= nil then
                 return decoded
             end
-
             return nil
         end)
-
     if ok then
         return value
     end
-
     return nil
 end
-
 local function SaveSharedMusicIDs()
     EnsureFolder()
-
     if not writefile then
         return false
     end
-
     local data = {
         Version = 1,
         SavedIDs =
@@ -1186,7 +1014,6 @@ local function SaveSharedMusicIDs()
                 or {}
             )
     }
-
     return pcall(function()
         writefile(
             MusicIDsFilePath,
@@ -1195,41 +1022,35 @@ local function SaveSharedMusicIDs()
         )
     end)
 end
-
 local function LoadSharedMusicIDs()
     local saved =
         DecodeSavedIDsFromFile(
             MusicIDsFilePath
         )
-
     if not saved then
         saved =
             DecodeSavedIDsFromFile(
                 OldMusicIDsFilePath
             )
     end
-
     if not saved then
         saved =
             DecodeSavedIDsFromFile(
                 LegacyConfigFilePath
             )
     end
-
     if not saved then
         saved =
             DecodeSavedIDsFromFile(
                 OldLegacyConfigFilePath
             )
     end
-
     if not saved then
         saved =
             DecodeSavedIDsFromFile(
                 ConfigFilePath
             )
     end
-
     if not saved
     and listfiles then
         pcall(function()
@@ -1237,14 +1058,12 @@ local function LoadSharedMusicIDs()
                 listfiles(
                     FolderName
                 )
-
             for _, path in ipairs(
                 files
             ) do
                 local normalized =
                     tostring(path)
                         :gsub("\\", "/")
-
                 if string.match(
                     normalized,
                     "/config_%d+%.json$"
@@ -1257,7 +1076,6 @@ local function LoadSharedMusicIDs()
                         DecodeSavedIDsFromFile(
                             path
                         )
-
                     if candidate then
                         saved = candidate
                         break
@@ -1266,19 +1084,15 @@ local function LoadSharedMusicIDs()
             end
         end)
     end
-
     if typeof(saved)
         == "table" then
         getgenv().SavedIDs =
             saved
-
         SaveSharedMusicIDs()
     end
 end
-
 getgenv().SaveToxMusicIDs =
     SaveSharedMusicIDs
-
 local function DecodeSavedJoinGamesFromFile(
     path
 )
@@ -1288,64 +1102,50 @@ local function DecodeSavedJoinGamesFromFile(
     or not isfile(path) then
         return nil
     end
-
     local ok, value =
         pcall(function()
             local raw =
                 readfile(path)
-
             if not raw
             or raw == "" then
                 return nil
             end
-
             local data =
                 HttpService:
                     JSONDecode(raw)
-
             if typeof(data)
                 ~= "table" then
                 return nil
             end
-
             local source =
                 data.SavedJoinGames
                 or data.JoinGames
                 or data.PlaceIDs
-
             if source == nil then
                 return nil
             end
-
             local decoded =
                 DeserializeConfigValue(
                     source
                 )
-
             if typeof(decoded)
                 == "table"
             and next(decoded)
                 ~= nil then
                 return decoded
             end
-
             return nil
         end)
-
     if ok then
         return value
     end
-
     return nil
 end
-
 local function SaveSharedJoinGames()
     EnsureFolder()
-
     if not writefile then
         return false
     end
-
     local data = {
         Version = 1,
         SavedJoinGames =
@@ -1354,7 +1154,6 @@ local function SaveSharedJoinGames()
                 or {}
             )
     }
-
     return pcall(function()
         writefile(
             JoinGamesFilePath,
@@ -1363,41 +1162,35 @@ local function SaveSharedJoinGames()
         )
     end)
 end
-
 local function LoadSharedJoinGames()
     local saved =
         DecodeSavedJoinGamesFromFile(
             JoinGamesFilePath
         )
-
     if not saved then
         saved =
             DecodeSavedJoinGamesFromFile(
                 OldJoinGamesFilePath
             )
     end
-
     if not saved then
         saved =
             DecodeSavedJoinGamesFromFile(
                 LegacyConfigFilePath
             )
     end
-
     if not saved then
         saved =
             DecodeSavedJoinGamesFromFile(
                 OldLegacyConfigFilePath
             )
     end
-
     if not saved then
         saved =
             DecodeSavedJoinGamesFromFile(
                 ConfigFilePath
             )
     end
-
     if not saved
     and listfiles then
         pcall(function()
@@ -1405,14 +1198,12 @@ local function LoadSharedJoinGames()
                 listfiles(
                     FolderName
                 )
-
             for _, path in ipairs(
                 files
             ) do
                 local normalized =
                     tostring(path)
                         :gsub("\\", "/")
-
                 if string.match(
                     normalized,
                     "/config_%d+%.json$"
@@ -1425,7 +1216,6 @@ local function LoadSharedJoinGames()
                         DecodeSavedJoinGamesFromFile(
                             path
                         )
-
                     if candidate then
                         saved = candidate
                         break
@@ -1434,57 +1224,44 @@ local function LoadSharedJoinGames()
             end
         end)
     end
-
     if typeof(saved)
         == "table" then
         getgenv().SavedJoinGames =
             saved
-
         SaveSharedJoinGames()
     end
 end
-
 getgenv().SaveToxJoinGames =
     SaveSharedJoinGames
-
 local function BuildGlobalSettingsSnapshot()
     local snapshot = {}
     local keys = {}
-
     for key in pairs(PersistedSettingKeys) do
         keys[key] = true
     end
-
     for key in pairs(Settings) do
         keys[key] = true
     end
-
     for key in pairs(keys) do
         local ownerPlaceId = GetGameSettingOwner(key)
-
         if not ownerPlaceId then
             snapshot[key] = SerializeConfigValue(
                 Settings[key]
             )
         end
     end
-
     snapshot.GUIKeybind = SerializeConfigValue(
         Settings.GUIKeybind
     )
-
     return snapshot
 end
-
 local function BuildCurrentGameSettingsSnapshot()
     local snapshot = {}
-
     local gamePrefix = ""
     local curMod = getgenv().CurrentGameModule
     if curMod and curMod.ShortName then
         gamePrefix = tostring(curMod.ShortName)
     end
-
     local function isGameKey(k)
         if typeof(k) ~= "string" then return false end
         if IsCurrentGameSetting(k) then return true end
@@ -1496,7 +1273,6 @@ local function BuildCurrentGameSettingsSnapshot()
         end
         return false
     end
-
     for key in pairs(PersistedSettingKeys) do
         if isGameKey(key) then
             snapshot[key] = SerializeConfigValue(
@@ -1504,7 +1280,6 @@ local function BuildCurrentGameSettingsSnapshot()
             )
         end
     end
-
     for key in pairs(Settings) do
         if isGameKey(key) then
             snapshot[key] = SerializeConfigValue(
@@ -1512,13 +1287,10 @@ local function BuildCurrentGameSettingsSnapshot()
             )
         end
     end
-
     return snapshot
 end
-
 local function ApplyLoadedSetting(key, savedValue)
     local value
-
     if typeof(savedValue) == "table"
     and savedValue.__toxType then
         value = DeserializeConfigValue(savedValue)
@@ -1534,7 +1306,6 @@ local function ApplyLoadedSetting(key, savedValue)
             local ok, enumItem = pcall(function()
                 return Enum.KeyCode[savedValue]
             end)
-
             if ok then
                 value = enumItem
             end
@@ -1542,7 +1313,6 @@ local function ApplyLoadedSetting(key, savedValue)
     else
         value = DeserializeConfigValue(savedValue)
     end
-
     if key == "EspColorName" then
         Settings.EspColorName = value
         Settings.EspColor =
@@ -1554,21 +1324,17 @@ local function ApplyLoadedSetting(key, savedValue)
     else
         Settings[key] = value
     end
-
     PersistedSettingKeys[key] = true
 end
-
 local function MigrateLegacyGameSettings(data)
     getgenv().GameSpecificSettings =
         typeof(getgenv().GameSpecificSettings) == "table"
         and getgenv().GameSpecificSettings
         or {}
-
     if typeof(data.GameSpecificSettings) == "table" then
         local decoded = DeserializeConfigValue(
             data.GameSpecificSettings
         )
-
         if typeof(decoded) == "table" then
             for placeKey, state in pairs(decoded) do
                 if typeof(state) == "table" then
@@ -1578,16 +1344,13 @@ local function MigrateLegacyGameSettings(data)
             end
         end
     end
-
     if typeof(data.GameSettings) == "table" then
         local decoded = DeserializeConfigValue(
             data.GameSettings
         )
-
         if typeof(decoded) == "table" then
             for placeKey, state in pairs(decoded) do
                 local key = tostring(placeKey)
-
                 if typeof(state) == "table"
                 and getgenv().GameSpecificSettings[key] == nil then
                     getgenv().GameSpecificSettings[key] = state
@@ -1595,18 +1358,15 @@ local function MigrateLegacyGameSettings(data)
             end
         end
     end
-
     if typeof(data.Settings) == "table" then
         for key, savedValue in pairs(data.Settings) do
             local ownerPlaceId = GetGameSettingOwner(key)
-
             if ownerPlaceId then
                 if typeof(
                     getgenv().GameSpecificSettings[ownerPlaceId]
                 ) ~= "table" then
                     getgenv().GameSpecificSettings[ownerPlaceId] = {}
                 end
-
                 if getgenv().GameSpecificSettings[ownerPlaceId][key] == nil then
                     getgenv().GameSpecificSettings[ownerPlaceId][key] =
                         savedValue
@@ -1615,7 +1375,6 @@ local function MigrateLegacyGameSettings(data)
         end
     end
 end
-
 local function ReadConfigMetadata(path)
     if not isfile
     or not readfile
@@ -1623,52 +1382,39 @@ local function ReadConfigMetadata(path)
     or not isfile(path) then
         return nil
     end
-
     local ok, data = pcall(function()
         local raw = readfile(path)
-
         if not raw
         or raw == "" then
             return nil
         end
-
         local decoded = HttpService:JSONDecode(raw)
-
         if typeof(decoded) ~= "table" then
             return nil
         end
-
         return decoded
     end)
-
     if ok then
         return data
     end
-
     return nil
 end
-
 local function ResolveConfigReadPath()
     if not isfile then
         return nil, false
     end
-
     if isfile(ConfigFilePath) then
         local metadata = ReadConfigMetadata(ConfigFilePath)
         local version = metadata
             and tonumber(metadata.ConfigVersion)
             or 0
-
         return ConfigFilePath, version < 8
     end
-
     if isfile(OldPlaceConfigFilePath) then
         return OldPlaceConfigFilePath, true
     end
-
     return nil, false
 end
-
 local function HasSavedConfigForCurrentPlace()
     if not isfile or not readfile then return false, nil, false end
     local placePath, isLegacy = ResolveConfigReadPath()
@@ -1680,63 +1426,48 @@ local function HasSavedConfigForCurrentPlace()
     end
     return false, nil, false
 end
-
 getgenv().HasSavedConfigForCurrentPlace = HasSavedConfigForCurrentPlace
-
 getgenv().AutoSaveConfiguration = function(force)
     if getgenv().Destroyed then
         return false
     end
-
     if getgenv().ToxOptionsReady == false then
         return false
     end
-
     if not force and getgenv().ToxAutoSaveEnabled ~= true then
         return false
     end
-
     if not getgenv().CurrentGameModule then
         SaveSharedMusicIDs()
         SaveSharedJoinGames()
     end
-
     EnsureFolder()
-
     if not writefile then
         getgenv().ToxConfigLastSaveOK = false
         getgenv().ToxConfigLastSaveError = "writefile unavailable"
         return false
     end
-
     local placeKey = tostring(game.PlaceId)
-
     getgenv().GameSpecificSettings =
         typeof(getgenv().GameSpecificSettings) == "table"
         and getgenv().GameSpecificSettings
         or {}
-
     if getgenv().CurrentGameModule then
         getgenv().GameSpecificSettings[placeKey] =
             BuildCurrentGameSettingsSnapshot()
     end
-
     getgenv().SavedWaypointsByPlace =
         typeof(getgenv().SavedWaypointsByPlace) == "table"
         and getgenv().SavedWaypointsByPlace
         or {}
-
     getgenv().SavedWaypointsByPlace[placeKey] =
         getgenv().SavedWaypoints
         or {}
-
     local guiKeyName = "NONE"
-
     if Settings.GUIKeybind
     and typeof(Settings.GUIKeybind) == "EnumItem" then
         guiKeyName = Settings.GUIKeybind.Name
     end
-
     local data = {
         ConfigVersion = 8,
         SavedAt = os.time(),
@@ -1758,12 +1489,10 @@ getgenv().AutoSaveConfiguration = function(force)
             getgenv().UIPositions
         )
     }
-
     local encodeOK, encoded =
         pcall(function()
             return HttpService:JSONEncode(data)
         end)
-
     if not encodeOK
     or typeof(encoded) ~= "string"
     or encoded == "" then
@@ -1772,9 +1501,7 @@ getgenv().AutoSaveConfiguration = function(force)
             tostring(encoded or "JSON encode failed")
         return false
     end
-
     local oldPrimary = nil
-
     if readfile
     and isfile
     and isfile(ConfigFilePath) then
@@ -1782,7 +1509,6 @@ getgenv().AutoSaveConfiguration = function(force)
             oldPrimary = readfile(ConfigFilePath)
         end)
     end
-
     local primaryOK, primaryError =
         pcall(function()
             writefile(
@@ -1790,7 +1516,6 @@ getgenv().AutoSaveConfiguration = function(force)
                 encoded
             )
         end)
-
     if primaryOK
     and oldPrimary
     and oldPrimary ~= ""
@@ -1802,33 +1527,25 @@ getgenv().AutoSaveConfiguration = function(force)
             )
         end)
     end
-
     getgenv().ToxConfigLastSaveOK =
         primaryOK == true
-
     getgenv().ToxConfigLastSaveError =
         primaryOK
         and nil
         or tostring(primaryError)
-
     getgenv().ToxConfigLastSavedAt =
         primaryOK
         and data.SavedAt
         or getgenv().ToxConfigLastSavedAt
-
     SaveSharedMusicIDs()
     SaveSharedJoinGames()
-
     return primaryOK
 end
-
 local function LoadConfiguration()
     if not readfile then
         return
     end
-
     local hasSave, sourcePath, migratedFromLegacy = HasSavedConfigForCurrentPlace()
-
     if not hasSave or not sourcePath then
         getgenv().ToxHasPlaceConfig = false
         getgenv().ToxAutoSaveEnabled = false
@@ -1841,30 +1558,22 @@ local function LoadConfiguration()
         Settings.Render3DDisabled = false
         return
     end
-
     getgenv().ToxHasPlaceConfig = true
     getgenv().ToxAutoSaveEnabled = true
     getgenv().ToxConfigLoadedFrom = sourcePath
-
     local loaded = false
     local strictPlaceMigration = false
-
     pcall(function()
         local raw = readfile(sourcePath)
-
         if not raw or raw == "" then
             return
         end
-
         local data = HttpService:JSONDecode(raw)
-
         if typeof(data) ~= "table" then
             return
         end
-
         local configVersion = tonumber(data.ConfigVersion) or 0
         local savedPlaceId = tonumber(data.PlaceId)
-
         if savedPlaceId
         and savedPlaceId ~= game.PlaceId then
             return
@@ -1872,9 +1581,7 @@ local function LoadConfiguration()
         strictPlaceMigration =
             game.PlaceId == 189707
             and configVersion < 6
-
         MigrateLegacyGameSettings(data)
-
         if typeof(data.Settings) == "table"
         and configVersion >= 8
         and not strictPlaceMigration then
@@ -1887,18 +1594,15 @@ local function LoadConfiguration()
                 end
             end
         end
-
         local currentGameState =
             getgenv().GameSpecificSettings[
                 tostring(game.PlaceId)
             ]
-
         if typeof(currentGameState) == "table" then
             local decodedState =
                 DeserializeConfigValue(
                     currentGameState
                 )
-
             if typeof(decodedState) == "table" then
                 for key, savedValue in pairs(decodedState) do
                     if typeof(savedValue) == "EnumItem"
@@ -1919,13 +1623,11 @@ local function LoadConfiguration()
                 end
             end
         end
-
         if configVersion >= 8
         and data.GlobalGUIKeybind ~= nil then
             local keyName = tostring(
                 data.GlobalGUIKeybind
             )
-
             if keyName == "NONE"
             or keyName == "" then
                 Settings.GUIKeybind = nil
@@ -1933,29 +1635,23 @@ local function LoadConfiguration()
                 local ok, enumItem = pcall(function()
                     return Enum.KeyCode[keyName]
                 end)
-
                 if ok and enumItem then
                     Settings.GUIKeybind = enumItem
                 end
             end
         end
-
         local currentPlaceKey = tostring(game.PlaceId)
-
         if data.SavedWaypointsByPlace ~= nil then
             local value = DeserializeConfigValue(
                 data.SavedWaypointsByPlace
             )
-
             if typeof(value) == "table" then
                 local currentValue = value[currentPlaceKey]
-
                 if typeof(currentValue) == "table" then
                     getgenv().SavedWaypointsByPlace =
                         typeof(getgenv().SavedWaypointsByPlace) == "table"
                         and getgenv().SavedWaypointsByPlace
                         or {}
-
                     getgenv().SavedWaypointsByPlace[currentPlaceKey] =
                         currentValue
                 elseif migratedFromLegacy then
@@ -1963,91 +1659,74 @@ local function LoadConfiguration()
                 end
             end
         end
-
         if data.SavedWaypoints ~= nil then
             local value = DeserializeConfigValue(
                 data.SavedWaypoints
             )
-
             if typeof(value) == "table" then
                 getgenv().SavedWaypointsByPlace =
                     typeof(getgenv().SavedWaypointsByPlace) == "table"
                     and getgenv().SavedWaypointsByPlace
                     or {}
-
                 if typeof(getgenv().SavedWaypointsByPlace[currentPlaceKey]) ~= "table" then
                     getgenv().SavedWaypointsByPlace[currentPlaceKey] = value
                 end
             end
         end
-
         if typeof(getgenv().SavedWaypointsByPlace) == "table"
         and typeof(getgenv().SavedWaypointsByPlace[currentPlaceKey]) == "table" then
             getgenv().SavedWaypoints = getgenv().SavedWaypointsByPlace[currentPlaceKey]
         end
-
         if configVersion >= 8
         and data.UIPositions ~= nil then
             local value = DeserializeConfigValue(
                 data.UIPositions
             )
-
             if typeof(value) == "table" then
                 getgenv().UIPositions = value
             end
         end
-
         loaded = true
     end)
-
     if loaded
     and (migratedFromLegacy or strictPlaceMigration) then
         getgenv().AutoSaveConfiguration()
     end
 end
-
 local function NormalizeStartupDefaultToggles()
     Settings.Render3D = true
     Settings.Render3DDisabled = false
 end
-
 local function DisableUnsupportedGameActions()
     if getgenv().CurrentGameModule or getgenv().ToxHasPlaceConfig then
         return
     end
-
     for key, value in pairs(Settings) do
         if typeof(value) == "boolean" then
             Settings[key] = false
         end
     end
-
     Settings.Render3D = true
     Settings.Render3DDisabled = false
     getgenv().ToxUnsupportedGameDefaultsForced = true
 end
-
 local function StageOptionsUntilLoadScreen()
     local staged = {}
-
     for key, value in pairs(Settings) do
         if typeof(value) == "boolean" then
             staged[key] = value == true
         end
     end
-
     getgenv().ToxStartupBooleanState = staged
     getgenv().ToxStartupToggleCallbacks = getgenv().ToxStartupToggleCallbacks or {}
     getgenv().ToxStartupOptionsApplied = false
     getgenv().ToxOptionsReady = true
 end
-
 getgenv().SavePlaceConfiguration = function()
     getgenv().ToxAutoSaveEnabled = true
     getgenv().ToxHasPlaceConfig = true
     return getgenv().AutoSaveConfiguration(true)
 end
-
 getgenv().LoadPlaceConfiguration = function()
     local hasSave = HasSavedConfigForCurrentPlace()
     if hasSave then
@@ -2061,7 +1740,6 @@ getgenv().LoadPlaceConfiguration = function()
     end
     return false
 end
-
 getgenv().ResetPlaceConfiguration = function()
     if isfile and isfile(ConfigFilePath) then
         if typeof(delfile) == "function" then
@@ -2071,10 +1749,8 @@ getgenv().ResetPlaceConfiguration = function()
             pcall(writefile, ConfigFilePath, "")
         end
     end
-
     getgenv().ToxHasPlaceConfig = false
     getgenv().ToxAutoSaveEnabled = false
-
     for key, val in pairs(Settings) do
         if typeof(val) == "boolean" and key ~= "Render3D" then
             Settings[key] = false
@@ -2086,63 +1762,48 @@ getgenv().ResetPlaceConfiguration = function()
     Settings.JumpPower = 50
     Settings.HitboxSize = 10
     Settings.HeadHitboxSize = 7
-
     if getgenv().RestoreHitboxDefaults then pcall(getgenv().RestoreHitboxDefaults) end
     if getgenv().RestoreHeadHitboxDefaults then pcall(getgenv().RestoreHeadHitboxDefaults) end
-
     if getgenv().SyncAllTogglesToUI then
         pcall(getgenv().SyncAllTogglesToUI)
     end
     return true
 end
-
 LoadConfiguration()
 NormalizeStartupDefaultToggles()
 DisableUnsupportedGameActions()
 StageOptionsUntilLoadScreen()
-
 getgenv().SavedWaypointsByPlace =
     typeof(getgenv().SavedWaypointsByPlace) == "table"
     and getgenv().SavedWaypointsByPlace
     or {}
-
 local CurrentWaypointPlaceKey = tostring(game.PlaceId)
-
 if typeof(getgenv().SavedWaypointsByPlace[CurrentWaypointPlaceKey]) ~= "table" then
     getgenv().SavedWaypointsByPlace[CurrentWaypointPlaceKey] =
         typeof(getgenv().SavedWaypoints) == "table"
         and getgenv().SavedWaypoints
         or {}
 end
-
 getgenv().SavedWaypoints =
     getgenv().SavedWaypointsByPlace[CurrentWaypointPlaceKey]
-
 getgenv().GetCurrentToxWaypoints = function()
     local placeKey = tostring(game.PlaceId)
-
     getgenv().SavedWaypointsByPlace =
         typeof(getgenv().SavedWaypointsByPlace) == "table"
         and getgenv().SavedWaypointsByPlace
         or {}
-
     if typeof(getgenv().SavedWaypointsByPlace[placeKey]) ~= "table" then
         getgenv().SavedWaypointsByPlace[placeKey] = {}
     end
-
     getgenv().SavedWaypoints = getgenv().SavedWaypointsByPlace[placeKey]
-
     return getgenv().SavedWaypoints
 end
-
 if typeof(Settings.GUIScales) ~= "table" then
     Settings.GUIScales = {}
 end
-
 if typeof(Settings.GUISizes) ~= "table" then
     Settings.GUISizes = {}
 end
-
 local LoadedGUIColor =
     GUIColorMap[
         tostring(
@@ -2150,101 +1811,78 @@ local LoadedGUIColor =
             or "Blue"
         )
     ]
-
 if LoadedGUIColor then
     MAIN_COLOR = LoadedGUIColor
     getgenv().MAIN_COLOR = MAIN_COLOR
 else
     Settings.GUIColorName = "Blue"
 end
-
 LoadSharedMusicIDs()
 LoadSharedJoinGames()
-
 local function ResolveQueueOnTeleport()
     local env = getgenv()
-
     if env and type(env.queue_on_teleport) == "function" then
         return env.queue_on_teleport
     end
-
     if type(queue_on_teleport) == "function" then
         return queue_on_teleport
     end
-
     if syn and type(syn.queue_on_teleport) == "function" then
         return syn.queue_on_teleport
     end
-
     if fluxus and type(fluxus.queue_on_teleport) == "function" then
         return fluxus.queue_on_teleport
     end
-
     return nil
 end
-
 local AutoExecutePayload = [[
 if not game:IsLoaded() then
     game.Loaded:Wait()
 end
-
 local env = getgenv()
-
 -- O payload atual ja foi consumido; libera o Auto Execute para armar a proxima rodada.
 env.ToxAutoExecuteQueued = false
 env.ToxAutoExecuteQueuedGame = nil
-
 task.wait(0.55)
-
 local shouldExecute = false
 local configWasRead = false
-
 for _ = 1, 20 do
     local success = pcall(function()
         local Players =
             game:GetService("Players")
-
         local localPlayer =
             Players.LocalPlayer
-
         local userId = tostring(
             localPlayer
             and localPlayer.UserId
             or 0
         )
-
         local configPath =
             "ToxHub/config_"
             .. userId
             .. "_"
             .. tostring(game.PlaceId)
             .. ".json"
-
         local legacyConfigPath =
             "ToxV1_Data/config_"
             .. userId
             .. "_"
             .. tostring(game.PlaceId)
             .. ".json"
-
         local readPath = nil
-
         if isfile and isfile(configPath) then
             readPath = configPath
         elseif isfile and isfile(legacyConfigPath) then
             readPath = legacyConfigPath
         end
-
         if readfile
         and readPath then
             local HttpService =
                 game:GetService("HttpService")
             local raw = readfile(readPath)
-
             if raw and raw ~= "" then
                 local data =
                     HttpService:JSONDecode(raw)
-
                 if data
                 and tonumber(data.PlaceId) == game.PlaceId
                 and data.Settings then
@@ -2255,30 +1893,23 @@ for _ = 1, 20 do
             end
         end
     end)
-
     if success and configWasRead then
         break
     end
-
     task.wait(0.25)
 end
-
 if not shouldExecute then
     return
 end
-
 local guardNow = tick()
 local previousGuardAt = tonumber(env.__ToxQueuedDestinationAt) or 0
-
 -- Bloqueia apenas payloads duplicados quase simultaneos, nao futuros kicks.
 if env.__ToxQueuedDestinationGame == game
 and guardNow - previousGuardAt < 2 then
     return
 end
-
 env.__ToxQueuedDestinationGame = game
 env.__ToxQueuedDestinationAt = guardNow
-
 task.delay(2, function()
     if env.__ToxQueuedDestinationGame == game
     and env.__ToxQueuedDestinationAt == guardNow then
@@ -2286,7 +1917,6 @@ task.delay(2, function()
         env.__ToxQueuedDestinationAt = nil
     end
 end)
-
 local ok = pcall(function()
     loadstring(
         game:HttpGet(
@@ -2294,51 +1924,40 @@ local ok = pcall(function()
         )
     )()
 end)
-
 if not ok
 and env.__ToxQueuedDestinationAt == guardNow then
     env.__ToxQueuedDestinationGame = nil
     env.__ToxQueuedDestinationAt = nil
 end
 ]]
-
 if getgenv().ToxAutoExecuteQueuedGame ~= game then
     getgenv().ToxAutoExecuteQueued = false
     getgenv().ToxAutoExecuteQueuedGame = game
 end
-
 getgenv().QueueToxAutoExecute = function()
     if getgenv().ToxAutoExecuteQueued
     and getgenv().ToxAutoExecuteQueuedGame == game then
         return true
     end
-
     local queueFunction = ResolveQueueOnTeleport()
-
     if not queueFunction then
         return false
     end
-
     local ok = pcall(function()
         queueFunction(AutoExecutePayload)
     end)
-
     if ok then
         getgenv().ToxAutoExecuteQueued = true
         getgenv().ToxAutoExecuteQueuedGame = game
     end
-
     return ok
 end
-
 if Settings.AutoExecute then
     getgenv().QueueToxAutoExecute()
 end
-
 for Key in pairs(SharedPersistentKeys) do
     getgenv().BaseSharedSettings[Key] = Settings[Key]
 end
-
 pcall(function()
     if cleardrawcache then
         cleardrawcache()
@@ -2346,7 +1965,6 @@ pcall(function()
         Drawing.clear()
     end
 end)
-
 if getgenv().FOVCircle then pcall(function() getgenv().FOVCircle:Remove() end) end
 local FOVCircle = (Drawing and Drawing.new) and Drawing.new("Circle") or nil
 if FOVCircle then
@@ -2357,7 +1975,6 @@ if FOVCircle then
     FOVCircle.Visible = false
 end
 getgenv().FOVCircle = FOVCircle
-
 if getgenv().CrosshairH then pcall(function() getgenv().CrosshairH:Remove() end) end
 if getgenv().CrosshairV then pcall(function() getgenv().CrosshairV:Remove() end) end
 local CrosshairH = (Drawing and Drawing.new) and Drawing.new("Line") or nil
@@ -2372,38 +1989,31 @@ if CrosshairH and CrosshairV then
 end
 getgenv().CrosshairH = CrosshairH
 getgenv().CrosshairV = CrosshairV
-
 local NotifGui = Instance.new("ScreenGui")
 NotifGui.Name = "ToxNotifs"
 NotifGui.DisplayOrder = 999
 NotifGui.Parent = (gethui and gethui()) or game:GetService("CoreGui")
 getgenv().NotifGui = NotifGui
-
 local NotifContainer = Instance.new("Frame")
 NotifContainer.Size = UDim2.new(0, 240, 1, -40)
 NotifContainer.Position = UDim2.new(1, -250, 0, 20)
 NotifContainer.BackgroundTransparency = 1
 NotifContainer.Parent = NotifGui
-
 local NotifLayout = Instance.new("UIListLayout")
 NotifLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 NotifLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 NotifLayout.SortOrder = Enum.SortOrder.LayoutOrder
 NotifLayout.Padding = UDim.new(0, 6)
 NotifLayout.Parent = NotifContainer
-
 getgenv().ToxLastNotificationText = getgenv().ToxLastNotificationText or nil
 getgenv().ToxLastNotificationTime = getgenv().ToxLastNotificationTime or 0
-
 getgenv().CustomNotify = function(text, color, customTime)
     local now = os.clock()
     local message = tostring(text or "")
-
     if getgenv().ToxLastNotificationText == message
     and now - getgenv().ToxLastNotificationTime < 1.5 then
         return
     end
-
     getgenv().ToxLastNotificationText = message
     getgenv().ToxLastNotificationTime = now
     local Frame = Instance.new("Frame")
@@ -2412,10 +2022,8 @@ getgenv().CustomNotify = function(text, color, customTime)
     Frame.BorderSizePixel = 0
     Frame.ClipsDescendants = true
     Frame.Parent = NotifContainer
-    
     local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 6) Corner.Parent = Frame
     local Stroke = Instance.new("UIStroke") Stroke.Color = MAIN_COLOR Stroke.Thickness = 1.5 Stroke.Parent = Frame
-    
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(1, -16, 1, 0)
     Label.Position = UDim2.new(0, 10, 0, 0)
@@ -2427,14 +2035,11 @@ getgenv().CustomNotify = function(text, color, customTime)
     Label.TextXAlignment = Enum.TextXAlignment.Left
     Label.TextTruncate = Enum.TextTruncate.AtEnd
     Label.Parent = Frame
-    
     Frame.BackgroundTransparency = 1 Label.TextTransparency = 1 Stroke.Transparency = 1
-
     local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
     TweenService:Create(Frame, tweenInfo, {BackgroundTransparency = 0}):Play()
     TweenService:Create(Label, tweenInfo, {TextTransparency = 0}):Play()
     TweenService:Create(Stroke, tweenInfo, {Transparency = 0}):Play()
-
     task.delay(customTime or 3, function()
         if Frame and Frame.Parent then
             local tweenOut = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
@@ -2446,13 +2051,10 @@ getgenv().CustomNotify = function(text, color, customTime)
         end
     end)
 end
-
 local ToxChatPopupContainer =
     Instance.new("Frame")
-
 ToxChatPopupContainer.Name =
     "ToxChatPopupContainer"
-
 ToxChatPopupContainer.Size =
     UDim2.new(
         0,
@@ -2460,7 +2062,6 @@ ToxChatPopupContainer.Size =
         0.62,
         -30
     )
-
 ToxChatPopupContainer.Position =
     UDim2.new(
         1,
@@ -2468,31 +2069,23 @@ ToxChatPopupContainer.Position =
         0,
         18
     )
-
 ToxChatPopupContainer.BackgroundTransparency = 1
 ToxChatPopupContainer.Parent = NotifGui
-
 local ToxChatPopupLayout =
     Instance.new("UIListLayout")
-
 ToxChatPopupLayout.VerticalAlignment =
     Enum.VerticalAlignment.Top
-
 ToxChatPopupLayout.HorizontalAlignment =
     Enum.HorizontalAlignment.Right
-
 ToxChatPopupLayout.SortOrder =
     Enum.SortOrder.LayoutOrder
-
 ToxChatPopupLayout.Padding =
     UDim.new(
         0,
         7
     )
-
 ToxChatPopupLayout.Parent =
     ToxChatPopupContainer
-
 getgenv().ShowToxChatPopup =
     function(
         displayName,
@@ -2503,10 +2096,8 @@ getgenv().ShowToxChatPopup =
         or not ToxChatPopupContainer.Parent then
             return
         end
-
         local frame =
             Instance.new("Frame")
-
         frame.Size =
             UDim2.new(
                 1,
@@ -2514,43 +2105,33 @@ getgenv().ShowToxChatPopup =
                 0,
                 66
             )
-
         frame.AutomaticSize =
             Enum.AutomaticSize.Y
-
         frame.BackgroundColor3 =
             Color3.fromRGB(
                 12,
                 12,
                 20
             )
-
         frame.BorderSizePixel = 0
         frame.ClipsDescendants = true
         frame.Parent =
             ToxChatPopupContainer
-
         local corner =
             Instance.new("UICorner")
-
         corner.CornerRadius =
             UDim.new(
                 0,
                 7
             )
-
         corner.Parent = frame
-
         local stroke =
             Instance.new("UIStroke")
-
         stroke.Color = MAIN_COLOR
         stroke.Thickness = 2
         stroke.Parent = frame
-
         local title =
             Instance.new("TextLabel")
-
         title.Size =
             UDim2.new(
                 1,
@@ -2558,7 +2139,6 @@ getgenv().ShowToxChatPopup =
                 0,
                 22
             )
-
         title.Position =
             UDim2.new(
                 0,
@@ -2566,14 +2146,12 @@ getgenv().ShowToxChatPopup =
                 0,
                 7
             )
-
         title.BackgroundTransparency = 1
         title.Text =
             "Tox Chat • "
             .. tostring(
                 displayName
             )
-
         title.TextColor3 =
             blocked
             and Color3.fromRGB(
@@ -2586,22 +2164,16 @@ getgenv().ShowToxChatPopup =
                 245,
                 255
             )
-
         title.Font =
             Enum.Font.GothamBold
-
         title.TextSize = 14
         title.TextXAlignment =
             Enum.TextXAlignment.Left
-
         title.TextTruncate =
             Enum.TextTruncate.AtEnd
-
         title.Parent = frame
-
         local body =
             Instance.new("TextLabel")
-
         body.Size =
             UDim2.new(
                 1,
@@ -2609,7 +2181,6 @@ getgenv().ShowToxChatPopup =
                 0,
                 0
             )
-
         body.Position =
             UDim2.new(
                 0,
@@ -2617,16 +2188,13 @@ getgenv().ShowToxChatPopup =
                 0,
                 31
             )
-
         body.AutomaticSize =
             Enum.AutomaticSize.Y
-
         body.BackgroundTransparency = 1
         body.Text =
             tostring(
                 message
             )
-
         body.TextColor3 =
             blocked
             and Color3.fromRGB(
@@ -2639,43 +2207,33 @@ getgenv().ShowToxChatPopup =
                 225,
                 238
             )
-
         body.Font =
             Enum.Font.GothamMedium
-
         body.TextSize = 14
         body.TextWrapped = true
         body.TextXAlignment =
             Enum.TextXAlignment.Left
-
         body.TextYAlignment =
             Enum.TextYAlignment.Top
-
         body.Parent = frame
-
         local padding =
             Instance.new("UIPadding")
-
         padding.PaddingBottom =
             UDim.new(
                 0,
                 9
             )
-
         padding.Parent = frame
-
         frame.BackgroundTransparency = 1
         title.TextTransparency = 1
         body.TextTransparency = 1
         stroke.Transparency = 1
-
         local tweenInfo =
             TweenInfo.new(
                 0.28,
                 Enum.EasingStyle.Quart,
                 Enum.EasingDirection.Out
             )
-
         TweenService:
             Create(
                 frame,
@@ -2685,7 +2243,6 @@ getgenv().ShowToxChatPopup =
                 }
             ):
             Play()
-
         TweenService:
             Create(
                 title,
@@ -2695,7 +2252,6 @@ getgenv().ShowToxChatPopup =
                 }
             ):
             Play()
-
         TweenService:
             Create(
                 body,
@@ -2705,7 +2261,6 @@ getgenv().ShowToxChatPopup =
                 }
             ):
             Play()
-
         TweenService:
             Create(
                 stroke,
@@ -2715,7 +2270,6 @@ getgenv().ShowToxChatPopup =
                 }
             ):
             Play()
-
         task.delay(
             5,
             function()
@@ -2723,14 +2277,12 @@ getgenv().ShowToxChatPopup =
                 or not frame.Parent then
                     return
                 end
-
                 local tweenOut =
                     TweenInfo.new(
                         0.3,
                         Enum.EasingStyle.Quart,
                         Enum.EasingDirection.In
                     )
-
                 local fade =
                     TweenService:
                         Create(
@@ -2740,7 +2292,6 @@ getgenv().ShowToxChatPopup =
                                 BackgroundTransparency = 1
                             }
                         )
-
                 TweenService:
                     Create(
                         title,
@@ -2750,7 +2301,6 @@ getgenv().ShowToxChatPopup =
                         }
                     ):
                     Play()
-
                 TweenService:
                     Create(
                         body,
@@ -2760,7 +2310,6 @@ getgenv().ShowToxChatPopup =
                         }
                     ):
                     Play()
-
                 TweenService:
                     Create(
                         stroke,
@@ -2770,9 +2319,7 @@ getgenv().ShowToxChatPopup =
                         }
                     ):
                     Play()
-
                 fade:Play()
-
                 fade.Completed:
                     Connect(function()
                         if frame
@@ -2784,15 +2331,12 @@ getgenv().ShowToxChatPopup =
             end
         )
     end
-
 AddConnection(Players.PlayerAdded:Connect(function(p)
     if getgenv().ScriptLoaded then CustomNotify("(" .. p.Name .. ") joined", Color3.fromRGB(50, 255, 50), 3) end
 end))
-
 AddConnection(Players.PlayerRemoving:Connect(function(p)
     if getgenv().ScriptLoaded then CustomNotify("(" .. p.Name .. ") left", Color3.fromRGB(255, 50, 50), 3) end
 end))
-
 getgenv().MakeDraggable = function(Frame, DragHandle)
     local Dragging, DragInput, DragStart, StartPos
     DragHandle.InputBegan:Connect(function(input)
@@ -2815,9 +2359,7 @@ getgenv().MakeDraggable = function(Frame, DragHandle)
         end
     end))
 end
-
 local GuiSizeSaveTokens = {}
-
 getgenv().GetSavedGuiSize =
     function(
         key,
@@ -2828,30 +2370,25 @@ getgenv().GetSavedGuiSize =
                 key
                 or ""
             )
-
         Settings.GUISizes =
             typeof(Settings.GUISizes)
                 == "table"
             and Settings.GUISizes
             or {}
-
         local saved =
             Settings.GUISizes[
                 key
             ]
-
         if typeof(saved)
             == "table" then
             local width =
                 tonumber(
                     saved.Width
                 )
-
             local height =
                 tonumber(
                     saved.Height
                 )
-
             if width
             and height
             and width >= 140
@@ -2869,10 +2406,8 @@ getgenv().GetSavedGuiSize =
                     )
             end
         end
-
         return defaultSize
     end
-
 getgenv().MakeResizable =
     function(
         frame,
@@ -2884,50 +2419,40 @@ getgenv().MakeResizable =
         or not frame:IsA("GuiObject") then
             return nil
         end
-
         key =
             tostring(
                 key
                 or frame.Name
                 or "GUI"
             )
-
         Settings.GUISizes =
             typeof(Settings.GUISizes)
                 == "table"
             and Settings.GUISizes
             or {}
-
         local oldScale =
             frame:
                 FindFirstChild(
                     "ToxGuiScale"
                 )
-
         if oldScale then
             oldScale:
                 Destroy()
         end
-
         local initialWidth =
             frame.Size.X.Offset
-
         local initialHeight =
             frame.Size.Y.Offset
-
         if initialWidth <= 0 then
             initialWidth = 330
         end
-
         if initialHeight <= 0 then
             initialHeight = 395
         end
-
         local minWidth = 140
         local minHeight = 80
         local maxWidth = 3840
         local maxHeight = 2160
-
         if typeof(minRatio) == "Vector2" then
             minWidth = minRatio.X
             minHeight = minRatio.Y
@@ -2935,7 +2460,6 @@ getgenv().MakeResizable =
             minWidth = math.max(140, math.floor(initialWidth * minRatio))
             minHeight = math.max(80, math.floor(initialHeight * minRatio))
         end
-
         if typeof(maxRatio) == "Vector2" then
             maxWidth = maxRatio.X
             maxHeight = maxRatio.Y
@@ -2943,24 +2467,20 @@ getgenv().MakeResizable =
             maxWidth = math.max(minWidth, math.floor(initialWidth * maxRatio))
             maxHeight = math.max(minHeight, math.floor(initialHeight * maxRatio))
         end
-
         local saved =
             Settings.GUISizes[
                 key
             ]
-
         if typeof(saved)
             == "table" then
             local width =
                 tonumber(
                     saved.Width
                 )
-
             local height =
                 tonumber(
                     saved.Height
                 )
-
             if width
             and height then
                 frame.Size =
@@ -2984,26 +2504,21 @@ getgenv().MakeResizable =
                     )
             end
         end
-
         local oldHandle =
             frame:
                 FindFirstChild(
                     "ToxResizeHandle"
                 )
-
         if oldHandle then
             oldHandle:
                 Destroy()
         end
-
         local handle =
             Instance.new(
                 "TextButton"
             )
-
         handle.Name =
             "ToxResizeHandle"
-
         handle.Size =
             UDim2.new(
                 0,
@@ -3011,7 +2526,6 @@ getgenv().MakeResizable =
                 0,
                 20
             )
-
         handle.Position =
             UDim2.new(
                 1,
@@ -3019,55 +2533,44 @@ getgenv().MakeResizable =
                 1,
                 -20
             )
-
         handle.BackgroundTransparency = 1
         handle.BorderSizePixel = 0
         handle.Text = "◢"
-
         handle.TextColor3 =
             Color3.fromRGB(
                 175,
                 175,
                 195
             )
-
         handle.TextSize = 15
         handle.Font =
             Enum.Font.GothamBold
-
         handle.AutoButtonColor = false
         handle.Active = true
         handle.ZIndex = 100
         handle.Parent = frame
-
         local resizing = false
         local resizeInput = nil
         local dragStart = nil
         local startWidth = 0
         local startHeight = 0
-
         local function isFrameMinimized()
             if frame == getgenv().Main
             and getgenv().ToxMainMinimized == true then
                 return true
             end
-
             if frame:FindFirstChild("ToxSubGuiMinimize")
             and frame.AbsoluteSize.Y <= 44 then
                 return true
             end
-
             return false
         end
-
         local function saveSize()
             if isFrameMinimized() then
                 return
             end
-
             local currentSize =
                 frame.AbsoluteSize
-
             Settings.GUISizes[
                 key
             ] = {
@@ -3082,7 +2585,6 @@ getgenv().MakeResizable =
                         + 0.5
                     )
             }
-
             GuiSizeSaveTokens[
                 key
             ] =
@@ -3093,12 +2595,10 @@ getgenv().MakeResizable =
                     or 0
                 )
                 + 1
-
             local token =
                 GuiSizeSaveTokens[
                     key
                 ]
-
             task.delay(
                 0.35,
                 function()
@@ -3111,7 +2611,6 @@ getgenv().MakeResizable =
                 end
             )
         end
-
         handle.InputBegan:
             Connect(function(input)
                 if input.UserInputType
@@ -3120,25 +2619,19 @@ getgenv().MakeResizable =
                     ~= Enum.UserInputType.Touch then
                     return
                 end
-
                 if isFrameMinimized() then
                     resizing = false
                     return
                 end
-
                 resizing = true
                 dragStart =
                     input.Position
-
                 local currentSize =
                     frame.AbsoluteSize
-
                 startWidth =
                     currentSize.X
-
                 startHeight =
                     currentSize.Y
-
                 input.Changed:
                     Connect(function()
                         if input.UserInputState
@@ -3148,7 +2641,6 @@ getgenv().MakeResizable =
                         end
                     end)
             end)
-
         handle.InputChanged:
             Connect(function(input)
                 if input.UserInputType
@@ -3159,7 +2651,6 @@ getgenv().MakeResizable =
                         input
                 end
             end)
-
         AddConnection(
             UserInputService.InputChanged:
                 Connect(function(input)
@@ -3169,19 +2660,15 @@ getgenv().MakeResizable =
                     or not dragStart then
                         return
                     end
-
                     if isFrameMinimized() then
                         resizing = false
                         return
                     end
-
                     local delta =
                         input.Position
                         - dragStart
-
                     local viewport =
                         Camera.ViewportSize
-
                     local viewportMaxWidth =
                         math.max(
                             minWidth,
@@ -3191,7 +2678,6 @@ getgenv().MakeResizable =
                                 - 24
                             )
                         )
-
                     local viewportMaxHeight =
                         math.max(
                             minHeight,
@@ -3201,7 +2687,6 @@ getgenv().MakeResizable =
                                 - 24
                             )
                         )
-
                     local newWidth =
                         math.clamp(
                             math.floor(
@@ -3212,7 +2697,6 @@ getgenv().MakeResizable =
                             minWidth,
                             viewportMaxWidth
                         )
-
                     local newHeight =
                         math.clamp(
                             math.floor(
@@ -3223,7 +2707,6 @@ getgenv().MakeResizable =
                             minHeight,
                             viewportMaxHeight
                         )
-
                     frame.Size =
                         UDim2.new(
                             0,
@@ -3233,12 +2716,9 @@ getgenv().MakeResizable =
                         )
                 end)
         )
-
         return handle
     end
-
 local GuiPositionSaveTokens = {}
-
 getgenv().EncodeGuiPosition = function(position)
     return {
         XS = position.X.Scale,
@@ -3247,50 +2727,39 @@ getgenv().EncodeGuiPosition = function(position)
         YO = position.Y.Offset
     }
 end
-
 getgenv().DecodeGuiPosition = function(data)
     if typeof(data) ~= "table" then
         return nil
     end
-
     if typeof(data.XS) ~= "number"
     or typeof(data.XO) ~= "number"
     or typeof(data.YS) ~= "number"
     or typeof(data.YO) ~= "number" then
         return nil
     end
-
     return UDim2.new(data.XS, data.XO, data.YS, data.YO)
 end
-
 getgenv().GetSavedGuiPosition = function(key)
     return getgenv().DecodeGuiPosition(getgenv().UIPositions[key])
 end
-
 getgenv().ApplySavedGuiPosition = function(key, gui)
     if not gui then
         return nil
     end
-
     local saved = getgenv().GetSavedGuiPosition(key)
-
     if saved then
         gui.Position = saved
     end
-
     return saved or gui.Position
 end
-
 getgenv().TrackGuiPosition = function(key, gui)
     if not gui then
         return
     end
-
     AddConnection(gui:GetPropertyChangedSignal("Position"):Connect(function()
         getgenv().UIPositions[key] = getgenv().EncodeGuiPosition(gui.Position)
         GuiPositionSaveTokens[key] = (GuiPositionSaveTokens[key] or 0) + 1
         local token = GuiPositionSaveTokens[key]
-
         task.delay(0.25, function()
             if GuiPositionSaveTokens[key] == token and not Destroyed then
                 AutoSaveConfiguration()
@@ -3298,30 +2767,24 @@ getgenv().TrackGuiPosition = function(key, gui)
         end)
     end))
 end
-
 local AirWalkPart = nil
 local LockedAirWalkY = nil
 local AirWalkLastUpdate = tick()
-
 local function UpdateAirWalk()
     local now = tick()
-
     local deltaTime =
         math.clamp(
             now - AirWalkLastUpdate,
             0,
             0.08
         )
-
     AirWalkLastUpdate = now
-
     local Root =
         Player.Character
         and Player.Character:
             FindFirstChild(
                 "HumanoidRootPart"
             )
-
     if Settings.AirWalk
     and Root then
         if not LockedAirWalkY then
@@ -3329,47 +2792,38 @@ local function UpdateAirWalk()
                 Root.Position.Y
                 - 3.4
         end
-
         local vertical = 0
-
         if UserInputService:IsKeyDown(Enum.KeyCode.E)
         or UserInputService:IsKeyDown(Enum.KeyCode.Space) then
             vertical = vertical + 1
         end
-
         if UserInputService:IsKeyDown(Enum.KeyCode.Q)
         or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
         or UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
             vertical = vertical - 1
         end
-
         if vertical ~= 0 then
             LockedAirWalkY = LockedAirWalkY + (vertical * 28 * deltaTime)
         end
-
         if not AirWalkPart
         or not AirWalkPart.Parent then
             AirWalkPart =
                 Instance.new(
                     "Part"
                 )
-
             AirWalkPart.Name =
                 "ToxAirWalk"
-
             AirWalkPart.Size =
                 Vector3.new(
                     8,
                     1,
                     8
                 )
-
             AirWalkPart.Transparency = 1
             AirWalkPart.Anchored = true
             AirWalkPart.CanCollide = true
             AirWalkPart.Parent = workspace
         end
-
         AirWalkPart.CFrame =
             CFrame.new(
                 Root.Position.X,
@@ -3378,19 +2832,15 @@ local function UpdateAirWalk()
             )
     else
         LockedAirWalkY = nil
-
         if AirWalkPart then
             AirWalkPart:
                 Destroy()
-
             AirWalkPart = nil
         end
     end
 end
-
 getgenv().UpdateAirWalk =
     UpdateAirWalk
-
 if not getgenv().__ToxModule1AirWalkHooked then
     getgenv().__ToxModule1AirWalkHooked = true
     RunService.Heartbeat:Connect(function()
@@ -3399,7 +2849,6 @@ if not getgenv().__ToxModule1AirWalkHooked then
         end
     end)
 end
-
 local function UpdateMouseIcon()
     pcall(function()
         if Settings.Crosshair and Settings.MouseIconID ~= "" then
@@ -3416,7 +2865,6 @@ local function UpdateMouseIcon()
     end)
 end
 getgenv().UpdateMouseIcon = UpdateMouseIcon
-
 local function RestoreCollisions()
     if Player.Character then
         for _, part in ipairs(Player.Character:GetChildren()) do
@@ -3431,7 +2879,6 @@ local function RestoreCollisions()
     end
 end
 getgenv().RestoreCollisions = RestoreCollisions
-
 local function ResetHitboxes()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= Player and p.Character then
@@ -3444,10 +2891,8 @@ local function ResetHitboxes()
     end
 end
 getgenv().ResetHitboxes = ResetHitboxes
-
 local FullbrightDefaults = nil
 local FullbrightActive = false
-
 local function CaptureFullbrightDefaults()
     return {
         Ambient = Lighting.Ambient,
@@ -3464,30 +2909,25 @@ local function CaptureFullbrightDefaults()
         EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale
     }
 end
-
 local function RestoreFullbrightDefaults()
     local defaults = FullbrightDefaults
     FullbrightDefaults = nil
     FullbrightActive = false
-
     if not defaults then
         return
     end
-
     for property, value in pairs(defaults) do
         pcall(function()
             Lighting[property] = value
         end)
     end
 end
-
 local function UpdateFullbright()
     if Settings.Fullbright then
         if not FullbrightActive then
             FullbrightDefaults = CaptureFullbrightDefaults()
             FullbrightActive = true
         end
-
         pcall(function() Lighting.Ambient = Color3.fromRGB(180, 180, 180) end)
         pcall(function() Lighting.OutdoorAmbient = Color3.fromRGB(180, 180, 180) end)
         pcall(function() Lighting.Brightness = 1.2 end)
@@ -3502,4 +2942,3 @@ local function UpdateFullbright()
 end
 getgenv().UpdateFullbright = UpdateFullbright
 getgenv().RestoreFullbrightDefaults = RestoreFullbrightDefaults
-
