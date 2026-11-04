@@ -32,7 +32,7 @@ if not Settings or not GamePage or not CreateToggle or not CreateButton then
 end
 getgenv().ToxSBRGeneration = (tonumber(getgenv().ToxSBRGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxSBRGeneration
-local SBRModuleVersion = "2026-11-04-sbr-v1"
+local SBRModuleVersion = "2026-11-04-sbr-v2"
 if getgenv().ToxSBRModuleLoadedJobId == game.JobId
 and getgenv().ToxSBRModuleVersion == SBRModuleVersion
 and getgenv().ToxSBRModulePage == GamePage
@@ -61,7 +61,7 @@ Settings.SBRItemESP = Settings.SBRItemESP == true
 Settings.SBRPlayerESP = Settings.SBRPlayerESP == true
 Settings.SBRFullBright = Settings.SBRFullBright == true
 Settings.SBRSpeedBoost = Settings.SBRSpeedBoost == true
-Settings.SBRSpeedMultiplier = math.clamp(tonumber(Settings.SBRSpeedMultiplier) or 1.5, 1.0, 3.0)
+Settings.SBRSpeedMultiplier = math.clamp(tonumber(Settings.SBRSpeedMultiplier) or 1.25, 1.0, 2.5)
 Settings.SBRInfiniteJump = Settings.SBRInfiniteJump == true
 Settings.SBRAntiAFK = Settings.SBRAntiAFK == true
 local SBRConnections = {}
@@ -71,6 +71,9 @@ local MonsterESPObjects = {}
 local MachineESPObjects = {}
 local ItemESPObjects = {}
 local PlayerESPObjects = {}
+local RegisteredPrompts = {}
+local ItemPrompts = {}
+local MachinePrompts = {}
 local OrigHoldDurations = setmetatable({}, { __mode = "k" })
 local WarnScreenGui = nil
 local WarnFrame = nil
@@ -83,6 +86,27 @@ local OrigLightingProps = {
     ClockTime = Lighting.ClockTime,
     FogEnd = Lighting.FogEnd,
     GlobalShadows = Lighting.GlobalShadows
+}
+local EstimatedScrapValues = {
+    ["chip"] = 180,
+    ["cpu"] = 220,
+    ["circuit"] = 160,
+    ["core"] = 250,
+    ["crystal"] = 200,
+    ["gold"] = 260,
+    ["motor"] = 110,
+    ["battery"] = 90,
+    ["gear"] = 75,
+    ["valve"] = 80,
+    ["radio"] = 95,
+    ["tool"] = 70,
+    ["bottle"] = 35,
+    ["pipe"] = 40,
+    ["sheet"] = 50,
+    ["plate"] = 45,
+    ["bolt"] = 25,
+    ["wire"] = 30,
+    ["scrap"] = 45
 }
 local function TrackConnection(conn)
     if conn then
@@ -137,20 +161,28 @@ local function TriggerPrompt(prompt)
         prompt.HoldDuration = 0
         prompt.RequiresLineOfSight = false
     end)
-    if fireproximityprompt then
-        pcall(function()
+    pcall(function()
+        if fireproximityprompt then
+            fireproximityprompt(prompt)
             fireproximityprompt(prompt, 0, true)
-        end)
-        return true
-    elseif prompt.InputHoldBegin and prompt.InputHoldEnd then
-        pcall(function()
+            fireproximityprompt(prompt, 1, true)
+        end
+    end)
+    pcall(function()
+        if prompt.InputHoldBegin and prompt.InputHoldEnd then
             prompt:InputHoldBegin()
             task.wait(0.01)
             prompt:InputHoldEnd()
-        end)
-        return true
-    end
-    return false
+        end
+    end)
+    pcall(function()
+        if getconnections then
+            for _, conn in ipairs(getconnections(prompt.Triggered)) do
+                conn:Fire(Player)
+            end
+        end
+    end)
+    return true
 end
 local function ApplyPromptInstant(prompt)
     if not prompt then return end
@@ -171,6 +203,244 @@ local function RefreshAllPromptsInstant()
     for _, desc in ipairs(Workspace:GetDescendants()) do
         if desc:IsA("ProximityPrompt") then
             ApplyPromptInstant(desc)
+        end
+    end
+end
+local function IsShowcaseMonster(model)
+    if not model or not model.Parent then return true end
+    local mName = string.lower(model.Name)
+    local ignoreKeywords = {
+        "lobby", "spawn", "display", "showcase", "statue", "sample",
+        "amostra", "shop", "store", "exhibition", "preview", "cage",
+        "pedestal", "prop", "decor", "museum", "stand"
+    }
+    for _, kw in ipairs(ignoreKeywords) do
+        if string.find(mName, kw, 1, true) then
+            return true
+        end
+    end
+    local curr = model.Parent
+    while curr and curr ~= Workspace and curr ~= game do
+        local pName = string.lower(curr.Name)
+        for _, kw in ipairs(ignoreKeywords) do
+            if string.find(pName, kw, 1, true) then
+                return true
+            end
+        end
+        curr = curr.Parent
+    end
+    local root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
+    if not root then return true end
+    if root.Anchored == true then
+        local allPartsAnchored = true
+        for _, p in ipairs(model:GetChildren()) do
+            if p:IsA("BasePart") and not p.Anchored then
+                allPartsAnchored = false
+                break
+            end
+        end
+        if allPartsAnchored then
+            return true
+        end
+    end
+    local spawnLoc = Workspace:FindFirstChild("SpawnLocation") or Workspace:FindFirstChildWhichIsA("SpawnLocation", true)
+    if spawnLoc and (root.Position - spawnLoc.Position).Magnitude < 70 and root.Anchored then
+        return true
+    end
+    return false
+end
+local function GetMonsters()
+    local monsters = {}
+    local char = Player.Character
+    local monsterFolders = {
+        Workspace:FindFirstChild("Monsters"),
+        Workspace:FindFirstChild("NPCs"),
+        Workspace:FindFirstChild("Baboons"),
+        Workspace:FindFirstChild("Entities"),
+        Workspace:FindFirstChild("Enemies")
+    }
+    for _, folder in ipairs(monsterFolders) do
+        if folder then
+            for _, item in ipairs(folder:GetChildren()) do
+                if item:IsA("Model") and item ~= char and not Players:GetPlayerFromCharacter(item) then
+                    if not IsShowcaseMonster(item) then
+                        table.insert(monsters, item)
+                    end
+                end
+            end
+        end
+    end
+    if #monsters == 0 then
+        for _, item in ipairs(Workspace:GetChildren()) do
+            if item:IsA("Model") and item ~= char and not Players:GetPlayerFromCharacter(item) then
+                local hum = item:FindFirstChildOfClass("Humanoid") or item:FindFirstChildOfClass("AnimationController")
+                local nLow = string.lower(item.Name)
+                local matchesMonster = hum
+                    or string.find(nLow, "baboon")
+                    or string.find(nLow, "meatman")
+                    or string.find(nLow, "fred")
+                    or string.find(nLow, "larry")
+                    or string.find(nLow, "mimic")
+                    or string.find(nLow, "white")
+                    or string.find(nLow, "monster")
+                if matchesMonster and not IsShowcaseMonster(item) then
+                    table.insert(monsters, item)
+                end
+            end
+        end
+    end
+    return monsters
+end
+local function ExtractScrapValue(instance, prompt)
+    local rawValue = nil
+    local candidates = {}
+    if prompt then table.insert(candidates, prompt) end
+    if instance then table.insert(candidates, instance) end
+    if instance and instance.Parent and instance.Parent:IsA("Model") then
+        table.insert(candidates, instance.Parent)
+    end
+    for _, obj in ipairs(candidates) do
+        for _, attr in ipairs({ "Value", "Price", "Worth", "ScrapValue", "Amount", "Cash", "Money", "Cost" }) do
+            local val = obj:GetAttribute(attr)
+            if typeof(val) == "number" and val > 0 then
+                return math.floor(val)
+            elseif typeof(val) == "string" then
+                local num = tonumber(string.match(val, "%d+"))
+                if num and num > 0 then
+                    return num
+                end
+            end
+        end
+        for _, childName in ipairs({ "Value", "Price", "Worth", "ScrapValue", "Amount" }) do
+            local valObj = obj:FindFirstChild(childName)
+            if valObj and (valObj:IsA("IntValue") or valObj:IsA("NumberValue")) and valObj.Value > 0 then
+                return math.floor(valObj.Value)
+            elseif valObj and valObj:IsA("StringValue") then
+                local num = tonumber(string.match(valObj.Value, "%d+"))
+                if num and num > 0 then
+                    return num
+                end
+            end
+        end
+    end
+    if prompt then
+        local combinedText = tostring(prompt.ObjectText or "") .. " " .. tostring(prompt.ActionText or "")
+        local dollarMatch = string.match(combinedText, "%$%s*(%d+)")
+            or string.match(combinedText, "%[%s*(%d+)%s*%]")
+            or string.match(combinedText, "%(%s*(%d+)%s*%)")
+            or string.match(combinedText, "(%d+)%s*[sS]crap")
+        if dollarMatch then
+            return tonumber(dollarMatch)
+        end
+    end
+    if instance then
+        local nameText = instance.Name
+        local nameMatch = string.match(nameText, "%$%s*(%d+)")
+            or string.match(nameText, "%[%s*(%d+)%s*%]")
+            or string.match(nameText, "%(%s*(%d+)%s*%)")
+            or string.match(nameText, "_(%d+)")
+        if nameMatch then
+            return tonumber(nameMatch)
+        end
+    end
+    if instance then
+        for _, desc in ipairs(instance:GetDescendants()) do
+            if desc:IsA("TextLabel") and desc.Text ~= "" then
+                local labelMatch = string.match(desc.Text, "%$%s*(%d+)")
+                    or string.match(desc.Text, "(%d+)%s*[sS]crap")
+                if labelMatch then
+                    return tonumber(labelMatch)
+                end
+            end
+        end
+    end
+    local searchName = string.lower((prompt and prompt.ObjectText ~= "" and prompt.ObjectText) or (instance and instance.Name) or "")
+    for word, est in pairs(EstimatedScrapValues) do
+        if string.find(searchName, word, 1, true) then
+            return est
+        end
+    end
+    return 45
+end
+local function ResolveScrapName(instance, prompt)
+    if prompt and typeof(prompt.ObjectText) == "string" and prompt.ObjectText ~= "" then
+        local clean = string.gsub(prompt.ObjectText, "%b()", "")
+        clean = string.gsub(clean, "%b[]", "")
+        clean = string.gsub(clean, "%$%d+", "")
+        clean = string.match(clean, "^%s*(.-)%s*$")
+        if clean and clean ~= "" then
+            return clean
+        end
+    end
+    if instance then
+        local clean = string.gsub(instance.Name, "%b()", "")
+        clean = string.gsub(clean, "%b[]", "")
+        clean = string.gsub(clean, "_%d+", "")
+        clean = string.match(clean, "^%s*(.-)%s*$")
+        if clean and clean ~= "" and clean ~= "Part" and clean ~= "MeshPart" and clean ~= "Union" then
+            return clean
+        end
+        if instance.Parent and instance.Parent:IsA("Model") and instance.Parent ~= Workspace then
+            local pClean = string.gsub(instance.Parent.Name, "%b()", "")
+            pClean = string.gsub(pClean, "%b[]", "")
+            pClean = string.match(pClean, "^%s*(.-)%s*$")
+            if pClean and pClean ~= "" and pClean ~= "Model" and pClean ~= "Workspace" then
+                return pClean
+            end
+        end
+    end
+    return "Scrap"
+end
+local function ScanAndCategorizePrompts()
+    table.clear(ItemPrompts)
+    table.clear(MachinePrompts)
+    for _, desc in ipairs(Workspace:GetDescendants()) do
+        if desc:IsA("ProximityPrompt") and desc.Parent then
+            local parent = desc.Parent
+            if not IsPartOfLocalPlayer(parent) then
+                local pName = string.lower(parent.Name)
+                local actText = string.lower(desc.ActionText or "")
+                local objText = string.lower(desc.ObjectText or "")
+                local combined = pName .. " " .. actText .. " " .. objText
+                local isMachine = string.find(combined, "generator", 1, true)
+                    or string.find(combined, "machine", 1, true)
+                    or string.find(combined, "fuse", 1, true)
+                    or string.find(combined, "terminal", 1, true)
+                    or string.find(combined, "power", 1, true)
+                    or string.find(combined, "breaker", 1, true)
+                    or string.find(combined, "repair", 1, true)
+                    or string.find(combined, "fix", 1, true)
+                    or string.find(combined, "lever", 1, true)
+                local isIgnored = string.find(combined, "door", 1, true)
+                    or string.find(combined, "closet", 1, true)
+                    or string.find(combined, "locker", 1, true)
+                    or string.find(combined, "hide", 1, true)
+                    or string.find(combined, "shop", 1, true)
+                    or string.find(combined, "vendor", 1, true)
+                    or string.find(combined, "buy", 1, true)
+                    or string.find(combined, "sell", 1, true)
+                local rootPart = parent:IsA("BasePart") and parent or (parent:FindFirstChildWhichIsA("BasePart") or parent.PrimaryPart)
+                if rootPart and rootPart.Size.Magnitude < 25 then
+                    if isMachine and not isIgnored then
+                        MachinePrompts[desc] = {
+                            Prompt = desc,
+                            Object = parent,
+                            Part = rootPart,
+                            Name = ResolveScrapName(parent, desc)
+                        }
+                    elseif not isIgnored then
+                        local scrapVal = ExtractScrapValue(parent, desc)
+                        local scrapName = ResolveScrapName(parent, desc)
+                        ItemPrompts[desc] = {
+                            Prompt = desc,
+                            Object = parent,
+                            Part = rootPart,
+                            Name = scrapName,
+                            Value = scrapVal
+                        }
+                    end
+                end
+            end
         end
     end
 end
@@ -208,108 +478,6 @@ local function SetupWarnGui()
     WarnScreenGui = screen
     WarnFrame = frame
     WarnLabel = text
-end
-local function GetMonsters()
-    local monsters = {}
-    local char = Player.Character
-    local monsterFolders = {
-        Workspace:FindFirstChild("Monsters"),
-        Workspace:FindFirstChild("NPCs"),
-        Workspace:FindFirstChild("Baboons"),
-        Workspace:FindFirstChild("Entities"),
-        Workspace:FindFirstChild("Enemies")
-    }
-    for _, folder in ipairs(monsterFolders) do
-        if folder then
-            for _, item in ipairs(folder:GetChildren()) do
-                if item:IsA("Model") and item ~= char and not Players:GetPlayerFromCharacter(item) then
-                    table.insert(monsters, item)
-                end
-            end
-        end
-    end
-    if #monsters == 0 then
-        for _, item in ipairs(Workspace:GetChildren()) do
-            if item:IsA("Model") and item ~= char and not Players:GetPlayerFromCharacter(item) then
-                local hum = item:FindFirstChildOfClass("Humanoid") or item:FindFirstChildOfClass("AnimationController")
-                local nLow = string.lower(item.Name)
-                if hum or string.find(nLow, "baboon") or string.find(nLow, "meatman") or string.find(nLow, "fred") or string.find(nLow, "larry") or string.find(nLow, "mimic") or string.find(nLow, "white") or string.find(nLow, "monster") then
-                    if not string.find(nLow, "shop") and not string.find(nLow, "vendor") and not string.find(nLow, "lobby") then
-                        table.insert(monsters, item)
-                    end
-                end
-            end
-        end
-    end
-    return monsters
-end
-local function GetMachines()
-    local machines = {}
-    local knownFolder = Workspace:FindFirstChild("Machines") or Workspace:FindFirstChild("Generators") or Workspace:FindFirstChild("Objectives")
-    if knownFolder then
-        for _, item in ipairs(knownFolder:GetChildren()) do
-            table.insert(machines, item)
-        end
-    end
-    if #machines == 0 then
-        for _, desc in ipairs(Workspace:GetDescendants()) do
-            if (desc:IsA("Model") or desc:IsA("BasePart")) and not IsPartOfLocalPlayer(desc) then
-                local nLow = string.lower(desc.Name)
-                local isMachineName = string.find(nLow, "generator")
-                    or string.find(nLow, "machine")
-                    or string.find(nLow, "fuse")
-                    or string.find(nLow, "terminal")
-                    or string.find(nLow, "power")
-                    or string.find(nLow, "breaker")
-                    or string.find(nLow, "console")
-                if isMachineName then
-                    local size = desc:IsA("BasePart") and desc.Size or (desc:IsA("Model") and desc:GetExtentsSize() or Vector3.zero)
-                    if size.Magnitude > 0 and size.Magnitude < 40 then
-                        table.insert(machines, desc)
-                        if #machines >= 40 then
-                            break
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return machines
-end
-local function GetItems()
-    local items = {}
-    local itemFolder = Workspace:FindFirstChild("Items") or Workspace:FindFirstChild("Scrap") or Workspace:FindFirstChild("Loots") or Workspace:FindFirstChild("Drops")
-    if itemFolder then
-        for _, item in ipairs(itemFolder:GetChildren()) do
-            if not IsPartOfLocalPlayer(item) then
-                table.insert(items, item)
-            end
-        end
-    end
-    if #items == 0 then
-        for _, desc in ipairs(Workspace:GetDescendants()) do
-            if desc:IsA("ProximityPrompt") then
-                local actLow = string.lower(desc.ActionText)
-                local objLow = string.lower(desc.ObjectText)
-                if string.find(actLow, "take")
-                    or string.find(actLow, "grab")
-                    or string.find(actLow, "pick")
-                    or string.find(actLow, "collect")
-                    or string.find(actLow, "loot")
-                    or string.find(objLow, "scrap")
-                    or string.find(objLow, "item") then
-                    local parentObj = desc.Parent
-                    if parentObj and not IsPartOfLocalPlayer(parentObj) then
-                        table.insert(items, parentObj)
-                        if #items >= 50 then
-                            break
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return items
 end
 local function CreateOrUpdateMonsterESP(monster)
     if not monster or not monster.Parent then return end
@@ -387,20 +555,10 @@ local function UpdateMonsterESP()
         end
     end
 end
-local function CreateOrUpdateMachineESP(machine)
-    if not machine or not machine.Parent then return end
-    local root = machine:IsA("BasePart") and machine or (machine.PrimaryPart or machine:FindFirstChildWhichIsA("BasePart"))
-    if not root then
-        if MachineESPObjects[machine] then
-            pcall(function()
-                if MachineESPObjects[machine].Highlight then MachineESPObjects[machine].Highlight:Destroy() end
-                if MachineESPObjects[machine].Billboard then MachineESPObjects[machine].Billboard:Destroy() end
-            end)
-            MachineESPObjects[machine] = nil
-        end
-        return
-    end
-    local data = MachineESPObjects[machine]
+local function CreateOrUpdateMachineESP(prompt, mData)
+    if not prompt or not prompt.Parent or not mData or not mData.Part then return end
+    local root = mData.Part
+    local data = MachineESPObjects[prompt]
     if not data then
         local highlight = Instance.new("Highlight")
         highlight.Name = "SBR_MachineHighlight"
@@ -408,11 +566,11 @@ local function CreateOrUpdateMachineESP(machine)
         highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
         highlight.FillTransparency = 0.5
         highlight.OutlineTransparency = 0.2
-        highlight.Adornee = machine
+        highlight.Adornee = mData.Object
         highlight.Parent = CoreGui
         local bbg = Instance.new("BillboardGui")
         bbg.Name = "SBR_MachineBillboard"
-        bbg.Size = UDim2.new(0, 150, 0, 28)
+        bbg.Size = UDim2.new(0, 160, 0, 28)
         bbg.StudsOffset = Vector3.new(0, 2.5, 0)
         bbg.AlwaysOnTop = true
         bbg.Adornee = root
@@ -430,15 +588,15 @@ local function CreateOrUpdateMachineESP(machine)
             Billboard = bbg,
             Label = label
         }
-        MachineESPObjects[machine] = data
+        MachineESPObjects[prompt] = data
     end
     local _, _, myRoot = GetCharacterState()
     local dist = (myRoot and (myRoot.Position - root.Position).Magnitude) or 0
-    data.Label.Text = string.format("%s (%dm)", machine.Name, math.floor(dist))
+    data.Label.Text = string.format("%s (%dm)", mData.Name, math.floor(dist))
 end
 local function UpdateMachineESP()
     if not Settings.SBRMachineESP then
-        for machine, data in pairs(MachineESPObjects) do
+        for prompt, data in pairs(MachineESPObjects) do
             pcall(function()
                 if data.Highlight then data.Highlight:Destroy() end
                 if data.Billboard then data.Billboard:Destroy() end
@@ -447,48 +605,39 @@ local function UpdateMachineESP()
         table.clear(MachineESPObjects)
         return
     end
-    local machines = GetMachines()
     local seen = {}
-    for _, mach in ipairs(machines) do
-        seen[mach] = true
-        CreateOrUpdateMachineESP(mach)
+    for prompt, mData in pairs(MachinePrompts) do
+        if prompt and prompt.Parent then
+            seen[prompt] = true
+            CreateOrUpdateMachineESP(prompt, mData)
+        end
     end
-    for mach, data in pairs(MachineESPObjects) do
-        if not seen[mach] then
+    for prompt, data in pairs(MachineESPObjects) do
+        if not seen[prompt] then
             pcall(function()
                 if data.Highlight then data.Highlight:Destroy() end
                 if data.Billboard then data.Billboard:Destroy() end
             end)
-            MachineESPObjects[mach] = nil
+            MachineESPObjects[prompt] = nil
         end
     end
 end
-local function CreateOrUpdateItemESP(item)
-    if not item or not item.Parent then return end
-    local root = item:IsA("BasePart") and item or (item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart"))
-    if not root then
-        if ItemESPObjects[item] then
-            pcall(function()
-                if ItemESPObjects[item].Highlight then ItemESPObjects[item].Highlight:Destroy() end
-                if ItemESPObjects[item].Billboard then ItemESPObjects[item].Billboard:Destroy() end
-            end)
-            ItemESPObjects[item] = nil
-        end
-        return
-    end
-    local data = ItemESPObjects[item]
+local function CreateOrUpdateItemESP(prompt, iData)
+    if not prompt or not prompt.Parent or not iData or not iData.Part then return end
+    local root = iData.Part
+    local data = ItemESPObjects[prompt]
     if not data then
         local highlight = Instance.new("Highlight")
         highlight.Name = "SBR_ItemHighlight"
         highlight.FillColor = Color3.fromRGB(40, 255, 120)
         highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-        highlight.FillTransparency = 0.5
-        highlight.OutlineTransparency = 0.2
-        highlight.Adornee = item
+        highlight.FillTransparency = 0.45
+        highlight.OutlineTransparency = 0.15
+        highlight.Adornee = iData.Object
         highlight.Parent = CoreGui
         local bbg = Instance.new("BillboardGui")
         bbg.Name = "SBR_ItemBillboard"
-        bbg.Size = UDim2.new(0, 140, 0, 24)
+        bbg.Size = UDim2.new(0, 160, 0, 26)
         bbg.StudsOffset = Vector3.new(0, 1.8, 0)
         bbg.AlwaysOnTop = true
         bbg.Adornee = root
@@ -496,7 +645,7 @@ local function CreateOrUpdateItemESP(item)
         local label = Instance.new("TextLabel")
         label.Size = UDim2.new(1, 0, 1, 0)
         label.BackgroundTransparency = 1
-        label.TextColor3 = Color3.fromRGB(80, 255, 150)
+        label.TextColor3 = Color3.fromRGB(60, 255, 140)
         label.TextSize = 11
         label.Font = Enum.Font.GothamBold
         label.TextStrokeTransparency = 0.2
@@ -506,15 +655,15 @@ local function CreateOrUpdateItemESP(item)
             Billboard = bbg,
             Label = label
         }
-        ItemESPObjects[item] = data
+        ItemESPObjects[prompt] = data
     end
     local _, _, myRoot = GetCharacterState()
     local dist = (myRoot and (myRoot.Position - root.Position).Magnitude) or 0
-    data.Label.Text = string.format("%s (%dm)", item.Name, math.floor(dist))
+    data.Label.Text = string.format("%s - $%d (%dm)", iData.Name, iData.Value or 45, math.floor(dist))
 end
 local function UpdateItemESP()
     if not Settings.SBRItemESP then
-        for item, data in pairs(ItemESPObjects) do
+        for prompt, data in pairs(ItemESPObjects) do
             pcall(function()
                 if data.Highlight then data.Highlight:Destroy() end
                 if data.Billboard then data.Billboard:Destroy() end
@@ -523,19 +672,20 @@ local function UpdateItemESP()
         table.clear(ItemESPObjects)
         return
     end
-    local items = GetItems()
     local seen = {}
-    for _, it in ipairs(items) do
-        seen[it] = true
-        CreateOrUpdateItemESP(it)
+    for prompt, iData in pairs(ItemPrompts) do
+        if prompt and prompt.Parent then
+            seen[prompt] = true
+            CreateOrUpdateItemESP(prompt, iData)
+        end
     end
-    for it, data in pairs(ItemESPObjects) do
-        if not seen[it] then
+    for prompt, data in pairs(ItemESPObjects) do
+        if not seen[prompt] then
             pcall(function()
                 if data.Highlight then data.Highlight:Destroy() end
                 if data.Billboard then data.Billboard:Destroy() end
             end)
-            ItemESPObjects[it] = nil
+            ItemESPObjects[prompt] = nil
         end
     end
 end
@@ -684,20 +834,17 @@ local function TriggerNearbyPrompts()
     if not root then return end
     local range = Settings.SBRCollectRange or 15
     local triggered = 0
-    for _, desc in ipairs(Workspace:GetDescendants()) do
-        if desc:IsA("ProximityPrompt") and desc.Parent then
-            local part = desc.Parent:IsA("BasePart") and desc.Parent or (desc.Parent:FindFirstChildWhichIsA("BasePart") or desc.Parent.PrimaryPart)
-            if part then
-                local dist = (root.Position - part.Position).Magnitude
-                if dist <= range then
-                    TriggerPrompt(desc)
-                    triggered = triggered + 1
-                end
+    for prompt, iData in pairs(ItemPrompts) do
+        if prompt and prompt.Parent and iData.Part then
+            local dist = (root.Position - iData.Part.Position).Magnitude
+            if dist <= range then
+                TriggerPrompt(prompt)
+                triggered = triggered + 1
             end
         end
     end
     if triggered > 0 then
-        CustomNotify("Interact", string.format("Triggered %d prompts", triggered), 2)
+        CustomNotify("Interact", string.format("Collected %d scrap items", triggered), 2)
     end
 end
 local function ToggleSafePlatform()
@@ -723,10 +870,17 @@ local function ToggleSafePlatform()
         CustomNotify("Safe Platform", "Teleported to safe platform", 3)
     end
 end
-TrackConnection(ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt)
+TrackConnection(ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt, plr)
     if CurrentGeneration ~= getgenv().ToxSBRGeneration or getgenv().Destroyed then return end
+    if plr and plr ~= Player then return end
     if Settings.SBRInstantCollect then
         TriggerPrompt(prompt)
+    end
+end))
+TrackConnection(ProximityPromptService.PromptShown:Connect(function(prompt)
+    if CurrentGeneration ~= getgenv().ToxSBRGeneration or getgenv().Destroyed then return end
+    if Settings.SBRInstantCollect then
+        ApplyPromptInstant(prompt)
     end
 end))
 TrackConnection(Workspace.DescendantAdded:Connect(function(desc)
@@ -735,18 +889,51 @@ TrackConnection(Workspace.DescendantAdded:Connect(function(desc)
         ApplyPromptInstant(desc)
     end
 end))
+TrackConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if CurrentGeneration ~= getgenv().ToxSBRGeneration or getgenv().Destroyed then return end
+    if not Settings.SBRInstantCollect then return end
+    if input.KeyCode == Enum.KeyCode.E or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local _, _, root = GetCharacterState()
+        if not root then return end
+        local bestPrompt = nil
+        local bestDist = 12
+        for prompt, iData in pairs(ItemPrompts) do
+            if prompt and prompt.Parent and iData.Part then
+                local dist = (root.Position - iData.Part.Position).Magnitude
+                if dist <= (prompt.MaxActivationDistance or 10) and dist < bestDist then
+                    bestDist = dist
+                    bestPrompt = prompt
+                end
+            end
+        end
+        if not bestPrompt then
+            for prompt, mData in pairs(MachinePrompts) do
+                if prompt and prompt.Parent and mData.Part then
+                    local dist = (root.Position - mData.Part.Position).Magnitude
+                    if dist <= (prompt.MaxActivationDistance or 10) and dist < bestDist then
+                        bestDist = dist
+                        bestPrompt = prompt
+                    end
+                end
+            end
+        end
+        if bestPrompt then
+            TriggerPrompt(bestPrompt)
+        end
+    end
+end))
 TrackConnection(RunService.RenderStepped:Connect(function()
     if CurrentGeneration ~= getgenv().ToxSBRGeneration or getgenv().Destroyed then return end
     if Settings.SBRSpeedBoost then
         local char, hum, root = GetCharacterState()
         if char and hum and root and hum.MoveDirection.Magnitude > 0 then
-            local mult = math.clamp(tonumber(Settings.SBRSpeedMultiplier) or 1.5, 1.0, 3.0)
-            local extra = hum.WalkSpeed * (mult - 1)
-            local addVel = hum.MoveDirection * extra
+            local mult = math.clamp(tonumber(Settings.SBRSpeedMultiplier) or 1.25, 1.0, 2.5)
+            local targetSpeed = hum.WalkSpeed * mult
+            local moveDir = hum.MoveDirection.Unit
             root.AssemblyLinearVelocity = Vector3.new(
-                root.AssemblyLinearVelocity.X + (addVel.X * 0.25),
+                moveDir.X * targetSpeed,
                 root.AssemblyLinearVelocity.Y,
-                root.AssemblyLinearVelocity.Z + (addVel.Z * 0.25)
+                moveDir.Z * targetSpeed
             )
         end
     end
@@ -771,18 +958,16 @@ TrackConnection(Player.Idled:Connect(function()
 end))
 task.spawn(function()
     while CurrentGeneration == getgenv().ToxSBRGeneration and not getgenv().Destroyed do
+        pcall(ScanAndCategorizePrompts)
         if Settings.SBRAutoCollect then
             local _, _, root = GetCharacterState()
             if root then
                 local range = Settings.SBRCollectRange or 15
-                for _, desc in ipairs(Workspace:GetDescendants()) do
-                    if desc:IsA("ProximityPrompt") and desc.Parent then
-                        local part = desc.Parent:IsA("BasePart") and desc.Parent or (desc.Parent:FindFirstChildWhichIsA("BasePart") or desc.Parent.PrimaryPart)
-                        if part then
-                            local dist = (root.Position - part.Position).Magnitude
-                            if dist <= range then
-                                TriggerPrompt(desc)
-                            end
+                for prompt, iData in pairs(ItemPrompts) do
+                    if prompt and prompt.Parent and iData.Part then
+                        local dist = (root.Position - iData.Part.Position).Magnitude
+                        if dist <= range then
+                            TriggerPrompt(prompt)
                         end
                     end
                 end
@@ -802,7 +987,7 @@ task.spawn(function()
     while CurrentGeneration == getgenv().ToxSBRGeneration and not getgenv().Destroyed do
         pcall(UpdateMachineESP)
         pcall(UpdateItemESP)
-        task.wait(0.5)
+        task.wait(0.4)
     end
 end)
 task.spawn(function()
@@ -1028,11 +1213,11 @@ SBRCreateToggle(
 )
 SBRCreateDropdown(
     "Speed Multiplier",
-    { "1.3x", "1.6x", "2.0x", "2.5x" },
+    { "1.15x", "1.25x", "1.4x", "1.6x", "1.8x", "2.0x" },
     GamePage,
-    (Settings.SBRSpeedMultiplier or 1.5) .. "x",
+    (Settings.SBRSpeedMultiplier or 1.25) .. "x",
     function(choice)
-        local num = tonumber(string.match(choice, "%d+%.?%d*")) or 1.5
+        local num = tonumber(string.match(choice, "%d+%.?%d*")) or 1.25
         Settings.SBRSpeedMultiplier = num
         AutoSaveConfiguration()
     end
@@ -1081,14 +1266,14 @@ getgenv().ToxSBRCleanup = function()
         end)
     end
     table.clear(MonsterESPObjects)
-    for mach, data in pairs(MachineESPObjects) do
+    for prompt, data in pairs(MachineESPObjects) do
         pcall(function()
             if data.Highlight then data.Highlight:Destroy() end
             if data.Billboard then data.Billboard:Destroy() end
         end)
     end
     table.clear(MachineESPObjects)
-    for it, data in pairs(ItemESPObjects) do
+    for prompt, data in pairs(ItemESPObjects) do
         pcall(function()
             if data.Highlight then data.Highlight:Destroy() end
             if data.Billboard then data.Billboard:Destroy() end
@@ -1102,6 +1287,9 @@ getgenv().ToxSBRCleanup = function()
         end)
     end
     table.clear(PlayerESPObjects)
+    table.clear(RegisteredPrompts)
+    table.clear(ItemPrompts)
+    table.clear(MachinePrompts)
     for prompt, hold in pairs(OrigHoldDurations) do
         pcall(function()
             prompt.HoldDuration = hold
@@ -1130,4 +1318,3 @@ getgenv().ToxSBRCleanup = function()
     getgenv().ToxSBRModuleVersion = nil
     getgenv().ToxSBRModulePage = nil
 end
-
