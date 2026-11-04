@@ -1,7 +1,6 @@
 if getgenv().ToxUniversalLoaded then
     return
 end
-
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -17,10 +16,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GuiService = game:GetService("GuiService")
 local CoreGui = game:GetService("CoreGui")
 local StatsService = game:GetService("Stats")
-
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
-
 local function IsLocalPlayer(p)
     if not p then return true end
     if p == Player or p == Players.LocalPlayer then return true end
@@ -31,95 +28,72 @@ local function IsLocalPlayer(p)
     end
     return false
 end
-
 getgenv().Settings = getgenv().Settings or {}
 Settings = getgenv().Settings
-
 local NDSPlaceId = 189707
 local MM2PlaceId = 142823291
-
 if game.PlaceId ~= NDSPlaceId then
     local env = getgenv()
-
     if env.SetNDSNoTP then
         pcall(function()
             env.SetNDSNoTP(false, true)
         end)
     end
-
     if env.Settings then
         env.Settings.NDSNoTP = false
     end
 end
-
 Settings.WalkFling = Settings.WalkFling == true
 Settings.EspMaxDistanceByPlace =
     typeof(Settings.EspMaxDistanceByPlace) == "table"
     and Settings.EspMaxDistanceByPlace
     or {}
-
 ToxUpdateVersion = "2026-10-19-kick-autoreexec-persist-v10"
-
-
 function ClearToxTable(target)
     if typeof(target) ~= "table" then
         return
     end
-
     for key in pairs(target) do
         target[key] = nil
     end
 end
-
 Settings.ToxServerInfoVisible = Settings.ToxServerInfoVisible == true
 Settings.ToxServerInfoMode = Settings.ToxServerInfoMode or "FPS/Ping/Players"
-
 function GetCurrentPlaceKey()
     return tostring(game.PlaceId)
 end
-
 function GetCurrentESPMAX()
     local placeKey = GetCurrentPlaceKey()
     local saved = tonumber(
         Settings.EspMaxDistanceByPlace[placeKey]
     )
-
     if saved then
         return saved
     end
-
     return tonumber(Settings.EspMaxDistance) or 1000
 end
-
 function SetCurrentESPMAX(value)
     local number = math.clamp(
         math.floor((tonumber(value) or 1000) + 0.5),
         0,
         100000
     )
-
     Settings.EspMaxDistance = number
     Settings.EspMaxDistanceByPlace[GetCurrentPlaceKey()] = number
-
     if getgenv().AutoSaveConfiguration then
         getgenv().AutoSaveConfiguration()
     end
-
     return number
 end
-
 Settings.EspMaxDistance = GetCurrentESPMAX()
-
 local HumanoidDefaults = setmetatable({}, {__mode = "k"})
 local NoclipDefaults = setmetatable({}, {__mode = "k"})
 local AntiFlingDefaults = setmetatable({}, {__mode = "k"})
 local HitboxDefaults = setmetatable({}, {__mode = "k"})
-
 local FOVDefault = Camera.FieldOfView
 local FOVCaptured = false
 local ShiftLockDefaults = nil
 local isShiftLockActive = false
-
 local ToxChatGui = getgenv().ToxChatGui
 local JoinGamesGui = getgenv().JoinGamesGui
 local JoinGamesScroll = getgenv().JoinGamesScroll
@@ -128,50 +102,39 @@ local JoinGameAddButton = getgenv().JoinGameAddButton
 local SavedJoinGames = getgenv().SavedJoinGames or {}
 local CheckMusicIDsBtn = getgenv().CheckMusicIDsBtn
 local SetMusicIDStatus = getgenv().SetMusicIDStatus
-
 getgenv().MusicIDStatus = {}
 local MusicIDStatus = getgenv().MusicIDStatus
 local MusicCheckRunning = false
 local MusicCheckGeneration = 0
 local MusicInitialNoticeShown = false
-
 local function GetSavedMusicIDs()
     local ids = {}
     local seen = {}
-
     for _, item in ipairs(SavedIDs or {}) do
         local id = nil
-
         if typeof(item) == "table" then
             id = tonumber(item.id)
         else
             id = tonumber(item)
         end
-
         if id and not seen[id] then
             seen[id] = true
             table.insert(ids, id)
         end
     end
-
     return ids
 end
-
 local function IsMusicIDActive(id)
     local success, info = pcall(function()
         return MarketplaceService:GetProductInfo(id, Enum.InfoType.Asset)
     end)
-
     if not success or typeof(info) ~= "table" then
         return false
     end
-
     if tonumber(info.AssetTypeId) ~= 3 then
         return false
     end
-
     local name = string.lower(tostring(info.Name or ""))
-
     if name == ""
     or string.find(name, "content deleted", 1, true)
     or string.find(name, "[deleted]", 1, true)
@@ -179,42 +142,33 @@ local function IsMusicIDActive(id)
     or string.find(name, "deleted", 1, true) == 1 then
         return false
     end
-
     return true
 end
-
 local function ApplyMusicStatus(id, status)
     MusicIDStatus[tostring(id)] = status
-
     if SetMusicIDStatus then
         SetMusicIDStatus(id, status)
     end
 end
-
 local function CheckSavedMusicIDs(force)
     if MusicCheckRunning and not force then
         return
     end
-
     local ids = GetSavedMusicIDs()
-
     if #ids == 0 then
         if CheckMusicIDsBtn then
             CheckMusicIDsBtn.Text = "Check IDs"
         end
         return
     end
-
     MusicCheckGeneration = MusicCheckGeneration + 1
     local generation = MusicCheckGeneration
     MusicCheckRunning = true
-
     if CheckMusicIDsBtn then
         CheckMusicIDsBtn.Text = "Checking..."
         CheckMusicIDsBtn.TextColor3 = Color3.fromRGB(255, 215, 70)
         CheckMusicIDsBtn.Active = false
     end
-
     for _, id in ipairs(ids) do
         if force or MusicIDStatus[tostring(id)] == nil then
             ApplyMusicStatus(id, "checking")
@@ -222,44 +176,35 @@ local function CheckSavedMusicIDs(force)
             ApplyMusicStatus(id, MusicIDStatus[tostring(id)])
         end
     end
-
     task.spawn(function()
         local activeCount = 0
         local unavailableCount = 0
-
         for _, id in ipairs(ids) do
             if generation ~= MusicCheckGeneration then
                 return
             end
-
             local key = tostring(id)
             local status = MusicIDStatus[key]
-
             if force or status == nil or status == "checking" then
                 status = IsMusicIDActive(id)
                 ApplyMusicStatus(id, status)
                 task.wait(0.12)
             end
-
             if status == true then
                 activeCount = activeCount + 1
             elseif status == false then
                 unavailableCount = unavailableCount + 1
             end
         end
-
         if generation ~= MusicCheckGeneration then
             return
         end
-
         MusicCheckRunning = false
-
         if CheckMusicIDsBtn and CheckMusicIDsBtn.Parent then
             CheckMusicIDsBtn.Text = "Check IDs"
             CheckMusicIDsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
             CheckMusicIDsBtn.Active = true
         end
-
         if not MusicInitialNoticeShown then
             MusicInitialNoticeShown = true
             CustomNotify(
@@ -275,13 +220,11 @@ local function CheckSavedMusicIDs(force)
         end
     end)
 end
-
 if CheckMusicIDsBtn then
     CheckMusicIDsBtn.MouseButton1Click:Connect(function()
         CheckSavedMusicIDs(true)
     end)
 end
-
 if MusicGui then
     AddConnection(MusicGui:GetPropertyChangedSignal("Visible"):Connect(function()
         if MusicGui.Visible then
@@ -291,16 +234,12 @@ if MusicGui then
         end
     end))
 end
-
 task.delay(1, function()
     CheckSavedMusicIDs(true)
 end)
-
 local RequestFunction = nil
-
 pcall(function()
     local env = getgenv()
-
     if syn and syn.request then
         RequestFunction = syn.request
     elseif http and http.request then
@@ -319,13 +258,9 @@ pcall(function()
         RequestFunction = request
     end
 end)
-
 getgenv().ToxRequestFunction = RequestFunction
-
-
 local function GetHumanoidDefaults(hum)
     if not hum then return nil end
-
     if not HumanoidDefaults[hum] then
         HumanoidDefaults[hum] = {
             WalkSpeed = hum.WalkSpeed,
@@ -334,40 +269,32 @@ local function GetHumanoidDefaults(hum)
             JumpHeight = hum.JumpHeight
         }
     end
-
     return HumanoidDefaults[hum]
 end
-
 local function RestoreSpeed()
     local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
     local defaults = hum and HumanoidDefaults[hum]
-
     if hum and defaults then
         hum.WalkSpeed = defaults.WalkSpeed
     end
 end
-
 local function RestoreJump()
     local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
     local defaults = hum and HumanoidDefaults[hum]
-
     if hum and defaults then
         hum.UseJumpPower = defaults.UseJumpPower
         hum.JumpPower = defaults.JumpPower
         hum.JumpHeight = defaults.JumpHeight
     end
 end
-
 local function CaptureNoclipDefaults()
     if not Player.Character then return end
-
     for _, part in ipairs(Player.Character:GetDescendants()) do
         if part:IsA("BasePart") and NoclipDefaults[part] == nil then
             NoclipDefaults[part] = part.CanCollide
         end
     end
 end
-
 local function RestoreNoclipDefaults()
     for part, canCollide in pairs(NoclipDefaults) do
         if part and part.Parent then
@@ -376,7 +303,6 @@ local function RestoreNoclipDefaults()
         NoclipDefaults[part] = nil
     end
 end
-
 local function RestoreAntiFlingDefaults()
     for part, canCollide in pairs(AntiFlingDefaults) do
         if part and part.Parent then
@@ -385,7 +311,6 @@ local function RestoreAntiFlingDefaults()
         AntiFlingDefaults[part] = nil
     end
 end
-
 local function RestoreHitboxDefaults()
     for hrp, data in pairs(HitboxDefaults) do
         if hrp and hrp.Parent then
@@ -402,21 +327,18 @@ local function RestoreHitboxDefaults()
         HitboxDefaults[hrp] = nil
     end
 end
-
 local function CaptureFOVDefault()
     if not FOVCaptured then
         FOVDefault = Camera.FieldOfView
         FOVCaptured = true
     end
 end
-
 local function RestoreFOVDefault()
     if FOVCaptured then
         Camera.FieldOfView = FOVDefault
         FOVCaptured = false
     end
 end
-
 local function CaptureShiftLockDefaults()
     if not ShiftLockDefaults then
         ShiftLockDefaults = {
@@ -425,52 +347,40 @@ local function CaptureShiftLockDefaults()
         }
     end
 end
-
 local function RestoreShiftLockDefaults()
     if ShiftLockDefaults then
         pcall(function()
             Player.DevEnableMouseLock = ShiftLockDefaults.DevEnableMouseLock
         end)
-
         pcall(function()
             UserInputService.MouseBehavior = ShiftLockDefaults.MouseBehavior
         end)
-
         ShiftLockDefaults = nil
     end
-
     isShiftLockActive = false
 end
-
 local SubGuiControls = {}
-
 local function FindSubGuiTopBar(gui)
     if not gui then return nil end
-
     for _, child in ipairs(gui:GetChildren()) do
         if child:IsA("Frame") and child.Size.Y.Offset == 32 and child.Position.Y.Offset == 0 then
             return child
         end
     end
-
     return nil
 end
-
 local function SetSubGuiContentVisible(data, visible)
     local gui = data.Gui
     local topBar = data.TopBar
-
     if visible then
         for child, wasVisible in pairs(data.ChildVisibility) do
             if child and child.Parent == gui and child:IsA("GuiObject") then
                 child.Visible = wasVisible
             end
         end
-
         data.ChildVisibility = {}
     else
         data.ChildVisibility = {}
-
         for _, child in ipairs(gui:GetChildren()) do
             if child:IsA("GuiObject") and child ~= topBar then
                 data.ChildVisibility[child] = child.Visible
@@ -479,19 +389,15 @@ local function SetSubGuiContentVisible(data, visible)
         end
     end
 end
-
 local function SetSubGuiMinimized(data, minimized)
     if not data or not data.Gui then
         return
     end
-
     local gui = data.Gui
-
     if minimized then
         if not data.Minimized and (gui.Size.Y.Offset > 32 or gui.Size.Y.Scale ~= 0) then
             data.ExpandedSize = gui.Size
         end
-
         gui.ClipsDescendants = true
         SetSubGuiContentVisible(data, false)
         gui.Size = UDim2.new(data.ExpandedSize.X.Scale, data.ExpandedSize.X.Offset, 0, 32)
@@ -504,26 +410,21 @@ local function SetSubGuiMinimized(data, minimized)
         data.Minimized = false
     end
 end
-
 local function RegisterSubGuiMinimize(gui, buttonOffset)
     if not gui then return nil end
-
     local topBar = FindSubGuiTopBar(gui)
     if not topBar then return nil end
-
     for _, child in ipairs(topBar:GetChildren()) do
         if child:IsA("TextButton") and (child.Text == "-" or child.Text == "+") then
             child:Destroy()
         end
     end
-
     for _, child in ipairs(topBar:GetChildren()) do
         if child:IsA("TextLabel") then
             child.Size = UDim2.new(1, math.min(child.Size.X.Offset, -70), child.Size.Y.Scale, child.Size.Y.Offset)
             break
         end
     end
-
     local button = Instance.new("TextButton")
     button.Name = "ToxSubGuiMinimize"
     button.Size = UDim2.new(0, 24, 0, 22)
@@ -536,11 +437,9 @@ local function RegisterSubGuiMinimize(gui, buttonOffset)
     button.TextSize = 14
     button.AutoButtonColor = false
     button.Parent = topBar
-
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 4)
     corner.Parent = button
-
     local data = {
         Gui = gui,
         TopBar = topBar,
@@ -549,59 +448,44 @@ local function RegisterSubGuiMinimize(gui, buttonOffset)
         Minimized = false,
         ChildVisibility = {}
     }
-
     SubGuiControls[gui] = data
-
     button.MouseButton1Click:Connect(function()
         SetSubGuiMinimized(data, not data.Minimized)
     end)
-
     return data
 end
-
 RegisterSubGuiMinimize(ChatLogGui, -88)
 RegisterSubGuiMinimize(MusicGui, -52)
 RegisterSubGuiMinimize(WaypointsGui, -52)
-
 if JoinGamesGui then
     JoinGamesGui.Visible = false
 end
-
 if getgenv().MakeResizable then
     getgenv().MakeResizable(Main, "Main", 0.88, 1.50)
     getgenv().MakeResizable(ChatLogGui, "ChatLogs", 0.85, 1.50)
     getgenv().MakeResizable(MusicGui, "Music", 0.85, 1.50)
     getgenv().MakeResizable(WaypointsGui, "Waypoints", 0.85, 1.50)
 end
-
 getgenv().ToxLinkedSubGuis = getgenv().ToxLinkedSubGuis or {}
-
 getgenv().RegisterToxSubGuiMinimize = function(gui, buttonOffset)
     if not gui then
         return nil
     end
-
     local existing = SubGuiControls[gui]
-
     if existing then
         return existing
     end
-
     return RegisterSubGuiMinimize(gui, buttonOffset or -52)
 end
-
 getgenv().RegisterToxLinkedSubGui = function(key, gui)
     if not key or not gui then
         return
     end
-
     local normalizedKey =
         tostring(key)
-
     getgenv().ToxLinkedSubGuis[
         normalizedKey
     ] = gui
-
     if getgenv().MakeResizable then
         getgenv().MakeResizable(
             gui,
@@ -612,9 +496,7 @@ getgenv().RegisterToxLinkedSubGui = function(key, gui)
         )
     end
 end
-
 local ToxPages = getgenv().Pages
-
 if typeof(ToxPages) == "table" then
     for _, page in pairs(ToxPages) do
         if page and page.GetChildren and page.Name ~= "HOME" and (not getgenv().GamePage or page ~= getgenv().GamePage) then
@@ -626,49 +508,37 @@ if typeof(ToxPages) == "table" then
         end
     end
 end
-
 local JoinTargetCache = nil
 local JoinLookupGeneration = 0
-
 local JoinTargetBox = nil
 local JoinPlayingLabel = nil
 local JoinPlayerButton = nil
 local JoinGamesButton = nil
-
 local function CleanJoinTarget(text)
     text = tostring(text or "")
     text = text:gsub("^%s+", ""):gsub("%s+$", "")
     text = text:gsub("^@", "")
     return text
 end
-
 local function ResolveJoinUserId(text)
     local cleaned = CleanJoinTarget(text)
-
     if cleaned == "" then
         return nil, "Enter nick or ID"
     end
-
     local numeric = tonumber(cleaned)
-
     if numeric and numeric > 0 then
         return math.floor(numeric)
     end
-
     local ok, userId = pcall(function()
         return Players:GetUserIdFromNameAsync(cleaned)
     end)
-
     if ok and tonumber(userId) then
         return tonumber(userId)
     end
-
     return nil, "User not found"
 end
-
 local ToxRelayHost =
     "https://tox-control-relay.1kobg-0o.workers.dev"
-
 local function PresenceRelayRequestOnce(
     userId
 )
@@ -682,9 +552,7 @@ local function PresenceRelayRequestOnce(
                 os.clock() * 1000
             )
         )
-
     local body = nil
-
     if RequestFunction then
         local ok, response =
             pcall(function()
@@ -699,7 +567,6 @@ local function PresenceRelayRequestOnce(
                     }
                 })
             end)
-
         if ok
         and typeof(response)
             == "table" then
@@ -709,15 +576,12 @@ local function PresenceRelayRequestOnce(
                     or response.Status
                     or 0
                 ) or 0
-
             local success =
                 response.Success
-
             if success == nil then
                 success =
                     response.success
             end
-
             if (
                 status >= 200
                 and status < 300
@@ -729,7 +593,6 @@ local function PresenceRelayRequestOnce(
             end
         end
     end
-
     if typeof(body)
         ~= "string"
     or body == "" then
@@ -740,7 +603,6 @@ local function PresenceRelayRequestOnce(
                     true
                 )
             end)
-
         if not ok then
             ok, response =
                 pcall(function()
@@ -749,26 +611,22 @@ local function PresenceRelayRequestOnce(
                     )
                 end)
         end
-
         if ok
         and typeof(response)
             == "string" then
             body = response
         end
     end
-
     if typeof(body)
         ~= "string"
     or body == "" then
         return nil
     end
-
     local ok, decoded =
         pcall(function()
             return HttpService:
                 JSONDecode(body)
         end)
-
     if ok
     and typeof(decoded)
         == "table"
@@ -777,20 +635,16 @@ local function PresenceRelayRequestOnce(
         == "table" then
         return decoded.presence
     end
-
     return nil
 end
-
 local function PresenceRequestOnce(userId)
     local relayPresence =
         PresenceRelayRequestOnce(
             userId
         )
-
     if relayPresence then
         return relayPresence
     end
-
     local requestData = {
         Url = "https://presence.roblox.com/v1/presence/users",
         Method = "POST",
@@ -799,31 +653,24 @@ local function PresenceRequestOnce(userId)
         },
         Body = HttpService:JSONEncode({userIds = {userId}})
     }
-
     local ok = false
     local response = nil
-
     if RequestFunction then
         ok, response = pcall(function()
             return RequestFunction(requestData)
         end)
-
         if not ok or typeof(response) ~= "table" then
             requestData.URL = requestData.Url
             requestData.Url = nil
-
             ok, response = pcall(function()
                 return RequestFunction(requestData)
             end)
         end
     end
-
     local body = nil
-
     if ok and typeof(response) == "table" then
         body = response.Body or response.body
     end
-
     if typeof(body) ~= "string" or body == "" then
         local postOk, postBody = pcall(function()
             return HttpService:PostAsync(
@@ -832,65 +679,49 @@ local function PresenceRequestOnce(userId)
                 Enum.HttpContentType.ApplicationJson
             )
         end)
-
         if postOk and typeof(postBody) == "string" then
             body = postBody
         end
     end
-
     if typeof(body) ~= "string" or body == "" then
         return nil
     end
-
     local decodedOk, decoded = pcall(function()
         return HttpService:JSONDecode(body)
     end)
-
     if not decodedOk or typeof(decoded) ~= "table" then
         return nil
     end
-
     local presence = decoded.userPresences and decoded.userPresences[1]
-
     if typeof(presence) ~= "table" then
         return nil
     end
-
     return presence
 end
-
 local function PresenceRequest(userId)
     local bestPresence = nil
     local bestScore = -1
-
     for attempt = 1, 4 do
         local presence = PresenceRequestOnce(userId)
-
         if presence then
             local presenceType = tonumber(presence.userPresenceType) or 0
             local placeId = tonumber(presence.placeId)
                 or tonumber(presence.rootPlaceId)
             local gameId = presence.gameId and tostring(presence.gameId) or nil
-
             local score = presenceType
-
             if presenceType == 2 then
                 score = score + 10
             end
-
             if placeId then
                 score = score + 20
             end
-
             if gameId and gameId ~= "" then
                 score = score + 40
             end
-
             if score > bestScore then
                 bestScore = score
                 bestPresence = presence
             end
-
             if presenceType == 2
             and placeId
             and gameId
@@ -898,47 +729,35 @@ local function PresenceRequest(userId)
                 break
             end
         end
-
         if attempt < 4 then
             task.wait(0.3)
         end
     end
-
     if not bestPresence then
         return nil, "Presence unavailable"
     end
-
     return bestPresence
 end
-
 local function UpdateJoinStatus(text, notifyFailure)
     JoinLookupGeneration = JoinLookupGeneration + 1
     local generation = JoinLookupGeneration
-
     if JoinPlayingLabel then
         JoinPlayingLabel.Text = "Checking..."
         JoinPlayingLabel.TextColor3 = Color3.fromRGB(255, 215, 70)
     end
-
     local userId, resolveError = ResolveJoinUserId(text)
-
     if not userId then
         JoinTargetCache = nil
-
         if JoinPlayingLabel then
             JoinPlayingLabel.Text = resolveError or "User not found"
             JoinPlayingLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
         end
-
         if notifyFailure then
             CustomNotify(resolveError or "User not found", Color3.fromRGB(255, 100, 100))
         end
-
         return nil
     end
-
     local sameServerPlayer = Players:GetPlayerByUserId(userId)
-
     if sameServerPlayer then
         JoinTargetCache = {
             UserId = userId,
@@ -947,42 +766,32 @@ local function UpdateJoinStatus(text, notifyFailure)
             GameId = game.JobId,
             LastLocation = "This server"
         }
-
         if generation == JoinLookupGeneration and JoinPlayingLabel then
             JoinPlayingLabel.Text = "Playing: this server"
             JoinPlayingLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
         end
-
         return JoinTargetCache
     end
-
     local presence, presenceError = PresenceRequest(userId)
-
     if generation ~= JoinLookupGeneration then
         return nil
     end
-
     if not presence then
         JoinTargetCache = nil
-
         if JoinPlayingLabel then
             JoinPlayingLabel.Text = presenceError or "Presence unavailable"
             JoinPlayingLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
         end
-
         if notifyFailure then
             CustomNotify(presenceError or "Presence unavailable", Color3.fromRGB(255, 100, 100))
         end
-
         return nil
     end
-
     local presenceType = tonumber(presence.userPresenceType) or 0
     local lastLocation = tostring(presence.lastLocation or "")
     local placeId = tonumber(presence.placeId)
         or tonumber(presence.rootPlaceId)
     local gameId = presence.gameId and tostring(presence.gameId) or nil
-
     JoinTargetCache = {
         UserId = userId,
         PresenceType = presenceType,
@@ -990,7 +799,6 @@ local function UpdateJoinStatus(text, notifyFailure)
         GameId = gameId,
         LastLocation = lastLocation
     }
-
     if JoinPlayingLabel then
         if presenceType == 2 then
             JoinPlayingLabel.Text = "Playing: " .. (lastLocation ~= "" and lastLocation or "Roblox")
@@ -1003,13 +811,10 @@ local function UpdateJoinStatus(text, notifyFailure)
             JoinPlayingLabel.TextColor3 = Color3.fromRGB(255, 215, 70)
         end
     end
-
     return JoinTargetCache
 end
-
 local function RequestJson(url)
     local body = nil
-
     if RequestFunction then
         local ok, response = pcall(function()
             return RequestFunction({
@@ -1017,62 +822,48 @@ local function RequestJson(url)
                 Method = "GET"
             })
         end)
-
         if ok and typeof(response) == "table" then
             body = response.Body or response.body
         end
     end
-
     if typeof(body) ~= "string" or body == "" then
         local ok, result = pcall(function()
             return game:HttpGet(url)
         end)
-
         if ok and typeof(result) == "string" then
             body = result
         end
     end
-
     if typeof(body) ~= "string" or body == "" then
         return nil
     end
-
     local ok, decoded = pcall(function()
         return HttpService:JSONDecode(body)
     end)
-
     if ok and typeof(decoded) == "table" then
         return decoded
     end
-
     return nil
 end
-
 local function GetPopulatedPublicServer(placeId)
     local cursor = nil
     local bestServer = nil
     local bestPlaying = -1
-
     for _ = 1, 3 do
         local url = "https://games.roblox.com/v1/games/"
             .. tostring(placeId)
             .. "/servers/Public?sortOrder=Desc&excludeFullGames=true&limit=100"
-
         if cursor and cursor ~= "" then
             url = url .. "&cursor=" .. HttpService:UrlEncode(cursor)
         end
-
         local decoded = RequestJson(url)
-
         if not decoded or typeof(decoded.data) ~= "table" then
             break
         end
-
         for _, server in ipairs(decoded.data) do
             local serverId = tostring(server.id or "")
             local playing = tonumber(server.playing) or 0
             local maxPlayers = tonumber(server.maxPlayers) or 0
-
             if serverId ~= ""
             and serverId ~= game.JobId
             and playing > 0
@@ -1082,80 +873,61 @@ local function GetPopulatedPublicServer(placeId)
                 bestServer = server
             end
         end
-
         cursor = decoded.nextPageCursor
-
         if not cursor or cursor == "" then
             break
         end
     end
-
     return bestServer
 end
-
 local ReturnButtonCleanupPayload = [[
 local CoreGui = game:GetService("CoreGui")
 local StatsService = game:GetService("Stats")
-
 local function hideReturnObject(obj)
     if not obj then
         return
     end
-
     local text = nil
-
     if obj:IsA("TextLabel")
     or obj:IsA("TextButton") then
         text = tostring(obj.Text or "")
     end
-
     if not text or text == "" then
         return
     end
-
     local lower = string.lower(text)
-
     if not string.find(lower, "return to", 1, true)
     and not string.find(lower, "voltar para", 1, true) then
         return
     end
-
     local current = obj
-
     for _ = 1, 6 do
         if not current then
             break
         end
-
         if current:IsA("GuiObject") then
             pcall(function()
                 current.Visible = false
             end)
         end
-
         if current:IsA("TextButton")
         or current:IsA("ImageButton") then
             break
         end
-
         current = current.Parent
     end
 end
-
 local function scan()
     for _, obj in ipairs(CoreGui:GetDescendants()) do
         hideReturnObject(obj)
     end
 end
-
 task.spawn(function()
     task.wait(1)
     scan()
-
     CoreGui.DescendantAdded:Connect(function(obj)
         task.defer(function()
             hideReturnObject(obj)
-
             if obj:IsA("TextLabel")
             or obj:IsA("TextButton") then
                 pcall(function()
@@ -1166,18 +938,15 @@ task.spawn(function()
             end
         end)
     end)
-
     for _ = 1, 30 do
         task.wait(1)
         scan()
     end
 end)
 ]]
-
 local function QueueReturnButtonCleanup()
     local queueFunction = nil
     local env = getgenv()
-
     if env and type(env.queue_on_teleport) == "function" then
         queueFunction = env.queue_on_teleport
     elseif type(queue_on_teleport) == "function" then
@@ -1187,37 +956,28 @@ local function QueueReturnButtonCleanup()
     elseif fluxus and type(fluxus.queue_on_teleport) == "function" then
         queueFunction = fluxus.queue_on_teleport
     end
-
     if not queueFunction then
         return false
     end
-
     return pcall(function()
         queueFunction(ReturnButtonCleanupPayload)
     end)
 end
-
 local function JoinPublicGame(placeId)
     placeId = tonumber(placeId)
-
     if getgenv().AutoSaveConfiguration then
         pcall(getgenv().AutoSaveConfiguration)
     end
-
     if Settings.AutoExecute and getgenv().QueueToxAutoExecute then
         pcall(getgenv().QueueToxAutoExecute)
     end
-
     QueueReturnButtonCleanup()
     task.wait(0.12)
-
     if not placeId or placeId <= 0 then
         CustomNotify("Invalid Place ID", Color3.fromRGB(255, 100, 100))
         return false
     end
-
     local server = GetPopulatedPublicServer(placeId)
-
     if server and server.id then
         CustomNotify(
             "Joining public server • "
@@ -1226,7 +986,6 @@ local function JoinPublicGame(placeId)
                 .. tostring(server.maxPlayers or "?"),
             Color3.fromRGB(100, 255, 100)
         )
-
         local ok = pcall(function()
             TeleportService:TeleportToPlaceInstance(
                 placeId,
@@ -1234,83 +993,64 @@ local function JoinPublicGame(placeId)
                 Player
             )
         end)
-
         return ok
     end
-
     CustomNotify(
         "No populated server found, using normal matchmaking",
         Color3.fromRGB(255, 215, 70)
     )
-
     return pcall(function()
         TeleportService:Teleport(placeId, Player)
     end)
 end
-
 local function JoinTargetPlayer()
     if not JoinTargetBox then
         return
     end
-
     if getgenv().AutoSaveConfiguration then
         pcall(getgenv().AutoSaveConfiguration)
     end
-
     if Settings.AutoExecute and getgenv().QueueToxAutoExecute then
         pcall(getgenv().QueueToxAutoExecute)
     end
-
     QueueReturnButtonCleanup()
     task.wait(0.12)
-
     local target = UpdateJoinStatus(JoinTargetBox.Text, true)
-
     if not target then
         return
     end
-
     if target.SameServer then
         CustomNotify("Player is already in this server", Color3.fromRGB(255, 215, 70))
         return
     end
-
     if target.PresenceType ~= 2 then
         CustomNotify("Player is not in a game", Color3.fromRGB(255, 180, 70))
         return
     end
-
     if target.PlaceId and target.GameId and target.GameId ~= "" then
         local fallbackConnection = nil
         local fallbackUsed = false
-
         fallbackConnection = TeleportService.TeleportInitFailed:Connect(function(player)
             if player ~= Player or fallbackUsed then
                 return
             end
-
             fallbackUsed = true
-
             if fallbackConnection then
                 fallbackConnection:Disconnect()
             end
-
             CustomNotify(
                 "Exact server blocked; joining a public server in the same game",
                 Color3.fromRGB(255, 180, 70)
             )
-
             task.spawn(function()
                 JoinPublicGame(target.PlaceId)
             end)
         end)
-
         task.delay(8, function()
             if fallbackConnection then
                 fallbackConnection:Disconnect()
             end
         end)
-
         local ok = pcall(function()
             TeleportService:TeleportToPlaceInstance(
                 target.PlaceId,
@@ -1318,44 +1058,35 @@ local function JoinTargetPlayer()
                 Player
             )
         end)
-
         if not ok then
             if fallbackConnection then
                 fallbackConnection:Disconnect()
             end
-
             JoinPublicGame(target.PlaceId)
         end
-
         return
     end
-
     if target.PlaceId then
         CustomNotify(
             "Roblox hides the exact server; joining the same game instead",
             Color3.fromRGB(255, 180, 70)
         )
-
         JoinPublicGame(target.PlaceId)
         return
     end
-
     CustomNotify(
         "Roblox did not expose this player's PlaceId/JobId",
         Color3.fromRGB(255, 100, 100)
     )
 end
-
 local function CreateJoinInterface()
     if not JoinPage then
         return
     end
-
     local card =
         Instance.new(
             "Frame"
         )
-
     card.Size =
         UDim2.new(
             1,
@@ -1363,36 +1094,29 @@ local function CreateJoinInterface()
             0,
             78
         )
-
     card.BackgroundColor3 =
         Color3.fromRGB(
             18,
             18,
             26
         )
-
     card.BorderSizePixel = 0
     card.LayoutOrder = 1
     card.Parent = JoinPage
-
     local cardCorner =
         Instance.new(
             "UICorner"
         )
-
     cardCorner.CornerRadius =
         UDim.new(
             0,
             4
         )
-
     cardCorner.Parent = card
-
     JoinTargetBox =
         Instance.new(
             "TextBox"
         )
-
     JoinTargetBox.Size =
         UDim2.new(
             0.52,
@@ -1400,7 +1124,6 @@ local function CreateJoinInterface()
             0,
             30
         )
-
     JoinTargetBox.Position =
         UDim2.new(
             0,
@@ -1408,60 +1131,48 @@ local function CreateJoinInterface()
             0,
             8
         )
-
     JoinTargetBox.BackgroundColor3 =
         Color3.fromRGB(
             27,
             27,
             39
         )
-
     JoinTargetBox.BorderSizePixel = 0
     JoinTargetBox.PlaceholderText =
         "Nick / ID"
-
     JoinTargetBox.Text = ""
-
     JoinTargetBox.TextColor3 =
         Color3.fromRGB(
             245,
             245,
             245
         )
-
     JoinTargetBox.PlaceholderColor3 =
         Color3.fromRGB(
             130,
             130,
             150
         )
-
     JoinTargetBox.Font =
         Enum.Font.Gotham
-
     JoinTargetBox.TextSize = 12
     JoinTargetBox.ClearTextOnFocus = false
     JoinTargetBox.Parent = card
-
     local inputCorner =
         Instance.new(
             "UICorner"
         )
-
     inputCorner.CornerRadius =
         UDim.new(
             0,
             4
         )
-
     inputCorner.Parent =
         JoinTargetBox
-
     JoinPlayingLabel =
         Instance.new(
             "TextLabel"
         )
-
     JoinPlayingLabel.Size =
         UDim2.new(
             0.48,
@@ -1469,7 +1180,6 @@ local function CreateJoinInterface()
             0,
             30
         )
-
     JoinPlayingLabel.Position =
         UDim2.new(
             0.52,
@@ -1477,56 +1187,44 @@ local function CreateJoinInterface()
             0,
             8
         )
-
     JoinPlayingLabel.BackgroundColor3 =
         Color3.fromRGB(
             22,
             22,
             32
         )
-
     JoinPlayingLabel.BorderSizePixel = 0
     JoinPlayingLabel.Text =
         "Playing: --"
-
     JoinPlayingLabel.TextColor3 =
         Color3.fromRGB(
             170,
             170,
             185
         )
-
     JoinPlayingLabel.Font =
         Enum.Font.Gotham
-
     JoinPlayingLabel.TextSize = 10
     JoinPlayingLabel.TextXAlignment =
         Enum.TextXAlignment.Center
-
     JoinPlayingLabel.TextTruncate =
         Enum.TextTruncate.AtEnd
-
     JoinPlayingLabel.Parent = card
-
     local playingCorner =
         Instance.new(
             "UICorner"
         )
-
     playingCorner.CornerRadius =
         UDim.new(
             0,
             4
         )
-
     playingCorner.Parent =
         JoinPlayingLabel
-
     JoinPlayerButton =
         Instance.new(
             "TextButton"
         )
-
     JoinPlayerButton.Size =
         UDim2.new(
             1,
@@ -1534,7 +1232,6 @@ local function CreateJoinInterface()
             0,
             28
         )
-
     JoinPlayerButton.Position =
         UDim2.new(
             0,
@@ -1542,87 +1239,69 @@ local function CreateJoinInterface()
             0,
             44
         )
-
     JoinPlayerButton.BackgroundColor3 =
         MAIN_COLOR
-
     JoinPlayerButton.BorderSizePixel = 0
     JoinPlayerButton.Text = "JOIN"
-
     JoinPlayerButton.TextColor3 =
         Color3.fromRGB(
             255,
             255,
             255
         )
-
     JoinPlayerButton.Font =
         Enum.Font.GothamBold
-
     JoinPlayerButton.TextSize = 12
     JoinPlayerButton.Parent = card
-
     local joinCorner =
         Instance.new(
             "UICorner"
         )
-
     joinCorner.CornerRadius =
         UDim.new(
             0,
             4
         )
-
     joinCorner.Parent =
         JoinPlayerButton
-
     local quickGamesCard =
         Instance.new(
             "Frame"
         )
-
     quickGamesCard.Name =
         "InlineQuickGames"
-
     quickGamesCard.Size =
         UDim2.new(
             1,
             -5,
             0,
-            326
+            420
         )
-
     quickGamesCard.BackgroundColor3 =
         Color3.fromRGB(
             18,
             18,
             26
         )
-
     quickGamesCard.BorderSizePixel = 0
     quickGamesCard.LayoutOrder = 2
     quickGamesCard.ClipsDescendants = true
     quickGamesCard.Parent = JoinPage
-
     local quickCorner =
         Instance.new(
             "UICorner"
         )
-
     quickCorner.CornerRadius =
         UDim.new(
             0,
             4
         )
-
     quickCorner.Parent =
         quickGamesCard
-
     local quickTitle =
         Instance.new(
             "TextLabel"
         )
-
     quickTitle.Size =
         UDim2.new(
             1,
@@ -1630,7 +1309,6 @@ local function CreateJoinInterface()
             0,
             24
         )
-
     quickTitle.Position =
         UDim2.new(
             0,
@@ -1638,55 +1316,45 @@ local function CreateJoinInterface()
             0,
             5
         )
-
     quickTitle.BackgroundTransparency = 1
-    quickTitle.Text = "Quick Games"
-
+    quickTitle.Text = "Supported Games"
     quickTitle.TextColor3 =
         Color3.fromRGB(
             245,
             245,
             245
         )
-
     quickTitle.Font =
         Enum.Font.GothamBold
-
     quickTitle.TextSize = 11
     quickTitle.TextXAlignment =
         Enum.TextXAlignment.Left
-
     quickTitle.Parent =
         quickGamesCard
-
-    pcall(function()
-        local box = (getgenv and getgenv().JoinGameIdBox) or JoinGameIdBox
-        if box and box.Parent then
-            local addArea = box.Parent
-            if addArea and addArea.Parent then
-                addArea.Parent = quickGamesCard
-                addArea.Size = UDim2.new(1, -16, 0, 32)
-                addArea.Position = UDim2.new(0, 8, 0, 32)
-            end
-        end
+    local directScroll = Instance.new("ScrollingFrame")
+    directScroll.Name = "JoinGamesScroll"
+    directScroll.Size = UDim2.new(1, -16, 1, -38)
+    directScroll.Position = UDim2.new(0, 8, 0, 32)
+    directScroll.BackgroundTransparency = 1
+    directScroll.BorderSizePixel = 0
+    directScroll.ScrollBarThickness = 3
+    directScroll.ScrollBarImageColor3 = Color3.fromRGB(30, 95, 255)
+    directScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    directScroll.Parent = quickGamesCard
+    getgenv().JoinGamesScroll = directScroll
+    JoinGamesScroll = directScroll
+    local directLayout = Instance.new("UIListLayout")
+    directLayout.Padding = UDim.new(0, 6)
+    directLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    directLayout.Parent = directScroll
+    directLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        directScroll.CanvasSize = UDim2.new(0, 0, 0, directLayout.AbsoluteContentSize.Y + 14)
     end)
-
-    pcall(function()
-        local scroll = (getgenv and getgenv().JoinGamesScroll) or JoinGamesScroll
-        if scroll and scroll.Parent then
-            scroll.Parent = quickGamesCard
-            scroll.Size = UDim2.new(1, -16, 1, -72)
-            scroll.Position = UDim2.new(0, 8, 0, 68)
-        end
-    end)
-
     if JoinGamesGui then
         pcall(function() JoinGamesGui:Destroy() end)
         getgenv().JoinGamesGui = nil
     end
-
     JoinGamesButton = nil
-
     JoinTargetBox.FocusLost:
         Connect(function()
             if CleanJoinTarget(
@@ -1700,7 +1368,6 @@ local function CreateJoinInterface()
                 end)
             end
         end)
-
     JoinPlayerButton.MouseButton1Click:
         Connect(function()
             task.spawn(
@@ -1708,7 +1375,6 @@ local function CreateJoinInterface()
             )
         end)
 end
-
 local function ResolvePlaceName(placeId)
     local ok, info = pcall(function()
         return MarketplaceService:GetProductInfo(
@@ -1716,44 +1382,36 @@ local function ResolvePlaceName(placeId)
             Enum.InfoType.Asset
         )
     end)
-
     if ok and typeof(info) == "table" then
         local name = tostring(info.Name or "")
-
         if name ~= "" then
             return name
         end
     end
-
     return "Place " .. tostring(placeId)
 end
-
 local SupportedToxGames = {
     { Name = "Murder Mystery 2", PlaceId = 142823291, Code = "MM2", Status = "online" },
     { Name = "Natural Disaster Survival", PlaceId = 189707, Code = "NDS", Status = "online" },
     { Name = "Kohls Admin House", PlaceId = 4522347649, Code = "ADMIN", Status = "online" },
     { Name = "Build A Boat For Treasure", PlaceId = 537413528, Code = "BABFT", Status = "online" },
     { Name = "Lucky Block Battleground", PlaceId = 662417684, Code = "LBB", Status = "online" },
-    { Name = "Flee the Facility", PlaceId = 893973440, Code = "FTF", Status = "updating" },
+    { Name = "Flee the Facility", PlaceId = 893973440, Code = "FTF", Status = "online" },
     { Name = "Prison Life", PlaceId = 155615604, Code = "PL", Status = "online" },
     { Name = "Steal Or Die", PlaceId = 119925538689885, Code = "SOD", Status = "online" },
     { Name = "Bug Evolution", PlaceId = 70650894743738, Code = "BE", Status = "online" },
     { Name = "When In Disgrace", PlaceId = 109440000000000 + 485612336, Code = "WID", Status = "online" }
 }
-
 local function RefreshQuickJoinGames()
     local scroll = (getgenv and getgenv().JoinGamesScroll) or JoinGamesScroll
     if not scroll or not pcall(function() return scroll.Parent end) or scroll.Parent == nil then
         return
     end
-
     for _, child in ipairs(scroll:GetChildren()) do
         if child:IsA("Frame") then
             pcall(function() child:Destroy() end)
         end
     end
-
-    -- Dynamically ensure any registered game in GameModuleRegistry is present
     local knownPlaceIds = {}
     for _, g in ipairs(SupportedToxGames) do
         knownPlaceIds[g.PlaceId] = true
@@ -1772,10 +1430,7 @@ local function RefreshQuickJoinGames()
             end
         end
     end
-
     local displayOrder = 1
-
-    -- Render Official Supported Games with Status Dots
     for _, gInfo in ipairs(SupportedToxGames) do
         local row = Instance.new("Frame")
         row.Size = UDim2.new(1, -4, 0, 50)
@@ -1784,16 +1439,13 @@ local function RefreshQuickJoinGames()
         row.LayoutOrder = displayOrder
         displayOrder = displayOrder + 1
         pcall(function() row.Parent = scroll end)
-
         local rowCorner = Instance.new("UICorner")
         rowCorner.CornerRadius = UDim.new(0, 6)
         rowCorner.Parent = row
-
         local rowStroke = Instance.new("UIStroke")
         rowStroke.Color = Color3.fromRGB(36, 36, 56)
         rowStroke.Thickness = 1
         rowStroke.Parent = row
-
         local nameLabel = Instance.new("TextLabel")
         nameLabel.Size = UDim2.new(1, -95, 0, 20)
         nameLabel.Position = UDim2.new(0, 10, 0, 6)
@@ -1805,7 +1457,6 @@ local function RefreshQuickJoinGames()
         nameLabel.TextXAlignment = Enum.TextXAlignment.Left
         nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
         nameLabel.Parent = row
-
         local idLabel = Instance.new("TextLabel")
         idLabel.Size = UDim2.new(1, -95, 0, 16)
         idLabel.Position = UDim2.new(0, 10, 0, 26)
@@ -1816,18 +1467,8 @@ local function RefreshQuickJoinGames()
         idLabel.TextSize = 10
         idLabel.TextXAlignment = Enum.TextXAlignment.Left
         idLabel.Parent = row
-
-        -- Status Indicator Dot (Green = Online, Yellow = Updating, Red = Offline)
         local statusColor = Color3.fromRGB(50, 230, 100)
-        local statusText = "ONLINE"
-        if gInfo.Status == "updating" then
-            statusColor = Color3.fromRGB(255, 205, 50)
-            statusText = "UPDATING"
-        elseif gInfo.Status == "offline" then
-            statusColor = Color3.fromRGB(255, 60, 70)
-            statusText = "OFFLINE"
-        end
-
+        local statusText = "ONLINE" 
         local statusDot = Instance.new("Frame")
         statusDot.Size = UDim2.new(0, 7, 0, 7)
         statusDot.Position = UDim2.new(1, -78, 0, 10)
@@ -1837,7 +1478,6 @@ local function RefreshQuickJoinGames()
         local dotCorner = Instance.new("UICorner")
         dotCorner.CornerRadius = UDim.new(1, 0)
         dotCorner.Parent = statusDot
-
         local statusLbl = Instance.new("TextLabel")
         statusLbl.Size = UDim2.new(0, 65, 0, 14)
         statusLbl.Position = UDim2.new(1, -68, 0, 7)
@@ -1848,8 +1488,6 @@ local function RefreshQuickJoinGames()
         statusLbl.TextSize = 9
         statusLbl.TextXAlignment = Enum.TextXAlignment.Left
         statusLbl.Parent = row
-
-        -- Join Button
         local joinBtn = Instance.new("TextButton")
         joinBtn.Size = UDim2.new(0, 64, 0, 22)
         joinBtn.Position = UDim2.new(1, -74, 1, -26)
@@ -1863,7 +1501,6 @@ local function RefreshQuickJoinGames()
         local jbCorner = Instance.new("UICorner")
         jbCorner.CornerRadius = UDim.new(0, 4)
         jbCorner.Parent = joinBtn
-
         local targetPlaceId = gInfo.PlaceId
         joinBtn.MouseButton1Click:Connect(function()
             task.spawn(function()
@@ -1874,8 +1511,6 @@ local function RefreshQuickJoinGames()
             end)
         end)
     end
-
-    -- Render Custom Saved Games
     for idx, info in ipairs(
         SavedJoinGames
     ) do
@@ -1884,7 +1519,6 @@ local function RefreshQuickJoinGames()
                 info.id
                 or info.PlaceId
             )
-
         local gameName =
             tostring(
                 info.name
@@ -1897,15 +1531,12 @@ local function RefreshQuickJoinGames()
                     )
                 )
             )
-
         local favorite =
             info.favorite == true
-
         local row =
             Instance.new(
                 "Frame"
             )
-
         row.Size =
             UDim2.new(
                 1,
@@ -1913,38 +1544,31 @@ local function RefreshQuickJoinGames()
                 0,
                 74
             )
-
         row.BackgroundColor3 =
             Color3.fromRGB(
                 18,
                 18,
                 28
             )
-
         row.BorderSizePixel = 0
         row.LayoutOrder = idx
         pcall(function()
             row.Parent = scroll
         end)
-
         local rowCorner =
             Instance.new(
                 "UICorner"
             )
-
         rowCorner.CornerRadius =
             UDim.new(
                 0,
                 4
             )
-
         rowCorner.Parent = row
-
         local nameLabel =
             Instance.new(
                 "TextLabel"
             )
-
         nameLabel.Size =
             UDim2.new(
                 1,
@@ -1952,7 +1576,6 @@ local function RefreshQuickJoinGames()
                 0,
                 22
             )
-
         nameLabel.Position =
             UDim2.new(
                 0,
@@ -1960,9 +1583,7 @@ local function RefreshQuickJoinGames()
                 0,
                 3
             )
-
         nameLabel.BackgroundTransparency = 1
-
         nameLabel.Text =
             (
                 favorite
@@ -1970,7 +1591,6 @@ local function RefreshQuickJoinGames()
                 or ""
             )
             .. gameName
-
         nameLabel.TextColor3 =
             favorite
             and Color3.fromRGB(
@@ -1983,24 +1603,18 @@ local function RefreshQuickJoinGames()
                 245,
                 245
             )
-
         nameLabel.Font =
             Enum.Font.GothamBold
-
         nameLabel.TextSize = 11
         nameLabel.TextXAlignment =
             Enum.TextXAlignment.Left
-
         nameLabel.TextTruncate =
             Enum.TextTruncate.AtEnd
-
         nameLabel.Parent = row
-
         local idLabel =
             Instance.new(
                 "TextLabel"
             )
-
         idLabel.Size =
             UDim2.new(
                 1,
@@ -2008,7 +1622,6 @@ local function RefreshQuickJoinGames()
                 0,
                 15
             )
-
         idLabel.Position =
             UDim2.new(
                 0,
@@ -2016,7 +1629,6 @@ local function RefreshQuickJoinGames()
                 0,
                 24
             )
-
         idLabel.BackgroundTransparency = 1
         idLabel.Text =
             "ID: "
@@ -2024,23 +1636,18 @@ local function RefreshQuickJoinGames()
                 placeId
                 or "?"
             )
-
         idLabel.TextColor3 =
             Color3.fromRGB(
                 145,
                 145,
                 165
             )
-
         idLabel.Font =
             Enum.Font.Gotham
-
         idLabel.TextSize = 9
         idLabel.TextXAlignment =
             Enum.TextXAlignment.Left
-
         idLabel.Parent = row
-
         local function makeButton(
             text,
             xScale,
@@ -2050,7 +1657,6 @@ local function RefreshQuickJoinGames()
                 Instance.new(
                     "TextButton"
                 )
-
             button.Size =
                 UDim2.new(
                     widthScale,
@@ -2058,7 +1664,6 @@ local function RefreshQuickJoinGames()
                     0,
                     24
                 )
-
             button.Position =
                 UDim2.new(
                     xScale,
@@ -2066,82 +1671,67 @@ local function RefreshQuickJoinGames()
                     0,
                     44
                 )
-
             button.BackgroundColor3 =
                 Color3.fromRGB(
                     25,
                     25,
                     38
                 )
-
             button.BorderSizePixel = 0
             button.Text = text
-
             button.TextColor3 =
                 Color3.fromRGB(
                     240,
                     240,
                     240
                 )
-
             button.Font =
                 Enum.Font.GothamBold
-
             button.TextSize = 9
             button.Parent = row
-
             local corner =
                 Instance.new(
                     "UICorner"
                 )
-
             corner.CornerRadius =
                 UDim.new(
                     0,
                     4
                 )
-
             corner.Parent =
                 button
-
             return button
         end
-
         local joinButton =
             makeButton(
                 "Join",
                 0,
                 0.20
             )
-
         local upButton =
             makeButton(
                 "Up",
                 0.20,
                 0.14
             )
-
         local downButton =
             makeButton(
                 "Down",
                 0.34,
                 0.18
             )
-
         local favoriteButton =
             makeButton(
                 "Fav",
                 0.52,
                 0.17
             )
-
         local removeButton =
             makeButton(
                 "Remove",
                 0.69,
                 0.31
             )
-
         favoriteButton.TextColor3 =
             favorite
             and Color3.fromRGB(
@@ -2154,7 +1744,6 @@ local function RefreshQuickJoinGames()
                 210,
                 220
             )
-
         joinButton.MouseButton1Click:
             Connect(function()
                 if placeId then
@@ -2165,7 +1754,6 @@ local function RefreshQuickJoinGames()
                     end)
                 end
             end)
-
         upButton.MouseButton1Click:
             Connect(function()
                 if idx > 1 then
@@ -2181,12 +1769,10 @@ local function RefreshQuickJoinGames()
                         SavedJoinGames[
                             idx
                         ]
-
                     AutoSaveConfiguration()
                     RefreshQuickJoinGames()
                 end
             end)
-
         downButton.MouseButton1Click:
             Connect(function()
                 if idx
@@ -2203,86 +1789,68 @@ local function RefreshQuickJoinGames()
                         SavedJoinGames[
                             idx
                         ]
-
                     AutoSaveConfiguration()
                     RefreshQuickJoinGames()
                 end
             end)
-
         favoriteButton.MouseButton1Click:
             Connect(function()
                 SavedJoinGames[
                     idx
                 ].favorite =
                     not favorite
-
                 AutoSaveConfiguration()
                 RefreshQuickJoinGames()
             end)
-
         removeButton.MouseButton1Click:
             Connect(function()
                 table.remove(
                     SavedJoinGames,
                     idx
                 )
-
                 AutoSaveConfiguration()
                 RefreshQuickJoinGames()
             end)
     end
 end
-
 getgenv().RefreshQuickJoinGames = RefreshQuickJoinGames
-
 local function AddQuickJoinGame()
     if not JoinGameIdBox then
         return
     end
-
     local cleaned = tostring(JoinGameIdBox.Text or ""):match("%d+")
     local placeId = tonumber(cleaned)
-
     if not placeId or placeId <= 0 then
         CustomNotify("Invalid Place ID", Color3.fromRGB(255, 100, 100))
         return
     end
-
     for _, info in ipairs(SavedJoinGames) do
         if tonumber(info.id or info.PlaceId) == placeId then
             CustomNotify("Game already saved", Color3.fromRGB(255, 215, 70))
             return
         end
     end
-
     JoinGameAddButton.Text = "Adding..."
-
     task.spawn(function()
         local name = ResolvePlaceName(placeId)
-
         table.insert(SavedJoinGames, {
             id = placeId,
             name = name,
             favorite = false
         })
-
         AutoSaveConfiguration()
         RefreshQuickJoinGames()
-
         JoinGameIdBox.Text = ""
         JoinGameAddButton.Text = "Add Game"
-
         CustomNotify(
             "Saved: " .. name,
             Color3.fromRGB(100, 255, 100)
         )
     end)
 end
-
 if JoinGameAddButton then
     JoinGameAddButton.MouseButton1Click:Connect(AddQuickJoinGame)
 end
-
 if JoinGameIdBox then
     JoinGameIdBox.FocusLost:Connect(function(enterPressed)
         if enterPressed then
@@ -2290,46 +1858,36 @@ if JoinGameIdBox then
         end
     end)
 end
-
 CreateJoinInterface()
 RefreshQuickJoinGames()
-
 local ToxActiveFlingTargets = getgenv().ToxActiveFlingTargets
-
 if typeof(ToxActiveFlingTargets) ~= "table" then
     ToxActiveFlingTargets = setmetatable({}, {__mode = "k"})
     getgenv().ToxActiveFlingTargets = ToxActiveFlingTargets
 end
-
 local function GetToxFlingBlockReason(targetPlayer)
     if not targetPlayer
     or not targetPlayer.Parent
     or not targetPlayer.Character then
         return "unavailable"
     end
-
     local character = targetPlayer.Character
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     local root = character:FindFirstChild("HumanoidRootPart")
         or humanoid and humanoid.RootPart
-
     if not humanoid
     or humanoid.Health <= 0
     or not root then
         return "dead"
     end
-
     local activeUntil = ToxActiveFlingTargets[targetPlayer]
-
     if typeof(activeUntil) == "number"
     and activeUntil > tick() then
         return "busy"
     end
-
     local velocity = root.AssemblyLinearVelocity.Magnitude
     local angular = root.AssemblyAngularVelocity.Magnitude
     local state = humanoid:GetState()
-
     if humanoid.Sit
     or humanoid.PlatformStand
     or state == Enum.HumanoidStateType.Ragdoll
@@ -2338,31 +1896,23 @@ local function GetToxFlingBlockReason(targetPlayer)
     or state == Enum.HumanoidStateType.Seated then
         return "unstable"
     end
-
     if velocity > 95
     or angular > 85 then
         return "moving"
     end
-
     return nil
 end
-
 local function CanStartToxFlingTarget(targetPlayer)
     local reason = GetToxFlingBlockReason(targetPlayer)
     return reason == nil, reason
 end
-
 getgenv().ToxCanFlingTarget = CanStartToxFlingTarget
-
 local function SkidFling(TargetPlayer)
     local canFling, blockReason = CanStartToxFlingTarget(TargetPlayer)
-
     if not canFling then
         return false, blockReason
     end
-
     if not TargetPlayer or not TargetPlayer.Character then return false end
-
     local Character = Player.Character
     local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
     local RootPart = Humanoid and Humanoid.RootPart
@@ -2372,12 +1922,9 @@ local function SkidFling(TargetPlayer)
     local THead = TCharacter and TCharacter:FindFirstChild("Head")
     local Accessory = TCharacter and TCharacter:FindFirstChildOfClass("Accessory")
     local Handle = Accessory and Accessory:FindFirstChild("Handle")
-
     if not (Character and Humanoid and RootPart and TCharacter) then return false end
-
     getgenv().OldPos = RootPart.CFrame
     if THumanoid and THumanoid.Sit then return false end
-
     local oldCameraSubject = Camera.CameraSubject
     if THead then
         Camera.CameraSubject = THead
@@ -2386,17 +1933,13 @@ local function SkidFling(TargetPlayer)
     elseif THumanoid then
         Camera.CameraSubject = THumanoid
     end
-
     local targetBasePart = TRootPart or THead or Handle
     if not targetBasePart then
         Camera.CameraSubject = oldCameraSubject
         return false
     end
-
     ToxActiveFlingTargets[TargetPlayer] = tick() + 4
-
     getgenv().FPDH = workspace.FallenPartsDestroyHeight
-
     getgenv().ToxFlingBypassUntil =
         math.max(
             tonumber(
@@ -2404,7 +1947,6 @@ local function SkidFling(TargetPlayer)
             ) or 0,
             tick() + 4
         )
-
     local FPos = function(BasePart, Pos, Ang)
         if not RootPart or not BasePart or not BasePart.Parent then return end
         RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
@@ -2416,18 +1958,14 @@ local function SkidFling(TargetPlayer)
         RootPart.Velocity = Vector3.new(9e7, 9e8, 9e7)
         RootPart.RotVelocity = Vector3.new(9e8, 9e8, 9e8)
     end
-
     local SFBasePart = function(BasePart)
         local TimeToWait = 2
         local Time = tick()
         local Angle = 0
-
         repeat
             if not RootPart or not THumanoid or Humanoid.Health <= 0 then break end
-
             if BasePart.Velocity.Magnitude < 50 then
                 Angle = Angle + 100
-
                 FPos(BasePart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
                 task.wait()
                 FPos(BasePart, CFrame.new(0, -1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
@@ -2470,26 +2008,21 @@ local function SkidFling(TargetPlayer)
             or Humanoid.Health <= 0
             or tick() > Time + TimeToWait
     end
-
     pcall(function()
         workspace.FallenPartsDestroyHeight = 0/0
     end)
-
     local BV = Instance.new("BodyVelocity")
     BV.Name = "EpixVel"
     BV.Parent = RootPart
     BV.Velocity = Vector3.new(9e8, 9e8, 9e8)
     BV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-
     local BAV = Instance.new("BodyAngularVelocity")
     BAV.Name = "ToxFlingSpin"
     BAV.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
     BAV.AngularVelocity = Vector3.new(0, 999999, 0)
     BAV.P = 1e9
     BAV.Parent = RootPart
-
     Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
-
     if TRootPart and THead then
         if (TRootPart.Position - THead.Position).Magnitude > 5 then
             SFBasePart(THead)
@@ -2503,12 +2036,10 @@ local function SkidFling(TargetPlayer)
     elseif Handle then
         SFBasePart(Handle)
     end
-
     if BAV and BAV.Parent then pcall(function() BAV:Destroy() end) end
     BV:Destroy()
     Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
     Camera.CameraSubject = Humanoid
-
     local OldPos = getgenv().OldPos or RootPart.CFrame
     repeat
         RootPart.CFrame = OldPos * CFrame.new(0, 0.5, 0)
@@ -2516,21 +2047,17 @@ local function SkidFling(TargetPlayer)
             Character:SetPrimaryPartCFrame(OldPos * CFrame.new(0, 0.5, 0))
         end)
         Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-
         for _, x in ipairs(Character:GetChildren()) do
             if x:IsA("BasePart") then
                 x.Velocity = Vector3.zero
                 x.RotVelocity = Vector3.zero
             end
         end
-
         task.wait()
     until (RootPart.Position - OldPos.Position).Magnitude < 25
-
     pcall(function()
         workspace.FallenPartsDestroyHeight = getgenv().FPDH
     end)
-
     getgenv().ToxFlingBypassUntil =
         math.max(
             tonumber(
@@ -2538,7 +2065,6 @@ local function SkidFling(TargetPlayer)
             ) or 0,
             tick() + 0.25
         )
-
     if getgenv().SetNDSNoTPAnchor then
         pcall(function()
             getgenv().SetNDSNoTPAnchor(
@@ -2547,72 +2073,54 @@ local function SkidFling(TargetPlayer)
             )
         end)
     end
-
     ToxActiveFlingTargets[TargetPlayer] = nil
     return true
 end
-
 getgenv().ToxFlingBypassUntil =
     tonumber(
         getgenv().ToxFlingBypassUntil
     ) or 0
-
 getgenv().ToxFlingPlayer = SkidFling
-
 local LastTeleportReturnCFrame =
     typeof(getgenv().ToxLastTeleportReturnCFrame) == "CFrame"
     and getgenv().ToxLastTeleportReturnCFrame
     or nil
-
 local function GetLocalRoot()
     return Player.Character
         and Player.Character:FindFirstChild("HumanoidRootPart")
 end
-
 local function RecordTeleportReturn()
     local root = GetLocalRoot()
-
     if root then
         LastTeleportReturnCFrame = root.CFrame
         getgenv().ToxLastTeleportReturnCFrame = root.CFrame
         return true
     end
-
     return false
 end
-
 getgenv().RecordToxTeleportReturn = RecordTeleportReturn
-
 local function ResolveSafeGroundCFrame(cframe)
     if typeof(cframe) ~= "CFrame" then
         return nil
     end
-
     local origin =
         cframe.Position
         + Vector3.new(0, 95, 0)
-
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
-
     local excluded = {}
-
     if Player.Character then
         table.insert(excluded, Player.Character)
     end
-
     if getgenv().Gui then
         table.insert(excluded, getgenv().Gui)
     end
-
     params.FilterDescendantsInstances = excluded
-
     local result = workspace:Raycast(
         origin,
         Vector3.new(0, -220, 0),
         params
     )
-
     if result
     and result.Instance
     and result.Instance.CanCollide then
@@ -2621,55 +2129,42 @@ local function ResolveSafeGroundCFrame(cframe)
             result.Position + Vector3.new(0, 4, 0)
         ) * CFrame.Angles(0, y, 0)
     end
-
     return cframe
 end
-
 getgenv().ToxSafeTeleportToCFrame = function(cframe, useGround, reason)
     local root = GetLocalRoot()
     local humanoid = Player.Character
         and Player.Character:FindFirstChildOfClass("Humanoid")
-
     if typeof(cframe) ~= "CFrame"
     or not root
     or not humanoid
     or humanoid.Health <= 0 then
         return false
     end
-
     RecordTeleportReturn()
-
     if getgenv().AllowToxTeleport then
         getgenv().AllowToxTeleport(1.5, reason or "ToxHub")
     end
-
     local targetCFrame = useGround and ResolveSafeGroundCFrame(cframe) or cframe
-
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
-
     if Player.Character then
         Player.Character:PivotTo(targetCFrame)
     else
         root.CFrame = targetCFrame
     end
-
     if getgenv().SetNDSNoTPAnchor then
         pcall(function()
             getgenv().SetNDSNoTPAnchor(root.CFrame, true)
         end)
     end
-
     return true
 end
-
 getgenv().ToxReturnToLastTeleport = nil
-
 local function ExecuteFling(TargetInput)
     if not TargetInput or TargetInput == "" then
         return CustomNotify("Enter username or 'all'", Color3.fromRGB(255, 100, 100))
     end
-
     if game.PlaceId == 189707
     and Settings.NDSNoTP
     and getgenv().SetNDSNoTP then
@@ -2679,21 +2174,17 @@ local function ExecuteFling(TargetInput)
                 true
             )
         end)
-
         if getgenv().AutoSaveConfiguration then
             pcall(
                 getgenv().AutoSaveConfiguration
             )
         end
     end
-
     local LowerInput = string.lower(TargetInput)
-
     if LowerInput == "all" or LowerInput == "others" then
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= Player then
                 local canFling = CanStartToxFlingTarget(p)
-
                 if canFling then
                     task.spawn(function()
                         SkidFling(p)
@@ -2703,7 +2194,6 @@ local function ExecuteFling(TargetInput)
         end
         return
     end
-
     local target = nil
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= Player and (string.find(string.lower(p.Name), LowerInput, 1, true) or string.find(string.lower(p.DisplayName), LowerInput, 1, true)) then
@@ -2711,10 +2201,8 @@ local function ExecuteFling(TargetInput)
             break
         end
     end
-
     if target then
         local canFling, blockReason = CanStartToxFlingTarget(target)
-
         if canFling then
             task.spawn(function()
                 SkidFling(target)
@@ -2729,9 +2217,7 @@ local function ExecuteFling(TargetInput)
         CustomNotify("Player not found!", Color3.fromRGB(255, 100, 100))
     end
 end
-
 getgenv().ToxExecuteFling = ExecuteFling
-
 local function ExecuteTeleport(TargetInput, mode)
     if not TargetInput or TargetInput == "" then 
         if mode == "LOOP" then Settings.LoopTPTarget = nil CustomNotify("Loop TP Disabled", Color3.fromRGB(255, 100, 100)) end
@@ -2744,7 +2230,6 @@ local function ExecuteTeleport(TargetInput, mode)
             targetObj = p break
         end
     end
-
     if targetObj and targetObj.Character and targetObj.Character:FindFirstChild("HumanoidRootPart") then
         local tHrp = targetObj.Character.HumanoidRootPart
         local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
@@ -2760,11 +2245,9 @@ local function ExecuteTeleport(TargetInput, mode)
                     if getgenv().RecordToxTeleportReturn then
                         getgenv().RecordToxTeleportReturn()
                     end
-
                     if getgenv().AllowToxTeleport then
                         getgenv().AllowToxTeleport(1.25, "Player TP")
                     end
-
                     Root.CFrame = tHrp.CFrame * CFrame.new(0, 0, -3)
                 end
             end
@@ -2782,7 +2265,6 @@ local function ExecuteTeleport(TargetInput, mode)
         CustomNotify("Player not found!", Color3.fromRGB(255, 100, 100))
     end
 end
-
 local Render3DColorMap = {
     WHITE =
         Color3.fromRGB(
@@ -2809,7 +2291,6 @@ local Render3DColorMap = {
             110
         )
 }
-
 Settings.Render3DColor =
     string.upper(
         tostring(
@@ -2817,43 +2298,34 @@ Settings.Render3DColor =
             or "BLACK"
         )
     )
-
 if not Render3DColorMap[
     Settings.Render3DColor
 ] then
     Settings.Render3DColor =
         "BLACK"
 end
-
 local oldRenderBackdrop =
     getgenv().ToxRenderBackdropGui
-
 if oldRenderBackdrop then
     pcall(function()
         oldRenderBackdrop:
             Destroy()
     end)
 end
-
 local RenderBackdropGui =
     Instance.new("ScreenGui")
-
 RenderBackdropGui.Name =
     "ToxRenderBackdrop"
-
 RenderBackdropGui.IgnoreGuiInset = true
 RenderBackdropGui.ResetOnSpawn = false
 RenderBackdropGui.DisplayOrder = -100
 RenderBackdropGui.ZIndexBehavior =
     Enum.ZIndexBehavior.Sibling
-
 RenderBackdropGui.Parent =
     (gethui and gethui())
     or CoreGui
-
 local RenderBackdrop =
     Instance.new("Frame")
-
 RenderBackdrop.Size =
     UDim2.new(
         1,
@@ -2861,7 +2333,6 @@ RenderBackdrop.Size =
         1,
         0
     )
-
 RenderBackdrop.Position =
     UDim2.new(
         0,
@@ -2869,7 +2340,6 @@ RenderBackdrop.Position =
         0,
         0
     )
-
 RenderBackdrop.BorderSizePixel = 0
 RenderBackdrop.ZIndex = 1
 RenderBackdrop.Visible = false
@@ -2878,37 +2348,30 @@ RenderBackdrop.BackgroundColor3 =
     or Render3DColorMap.BLACK
 RenderBackdrop.Parent =
     RenderBackdropGui
-
 getgenv().ToxRenderBackdropGui =
     RenderBackdropGui
-
 local function RefreshRenderBackdrop()
     RenderBackdrop.BackgroundColor3 =
         Render3DColorMap[
             Settings.Render3DColor
         ]
         or Render3DColorMap.BLACK
-
     RenderBackdrop.Visible =
         Settings.Render3D == false
 end
-
 local function SetRender3DEnabled(
     enabled
 )
     Settings.Render3D =
         enabled == true
-
     pcall(function()
         RunService:
             Set3dRenderingEnabled(
                 Settings.Render3D
             )
     end)
-
     RefreshRenderBackdrop()
 end
-
 local function SetRender3DColor(
     colorName
 )
@@ -2919,72 +2382,56 @@ local function SetRender3DColor(
                 or "BLACK"
             )
         )
-
     if not Render3DColorMap[
         normalized
     ] then
         return false
     end
-
     Settings.Render3DColor =
         normalized
-
     RefreshRenderBackdrop()
-
     return true
 end
-
 getgenv().ToxSetRender3DEnabled = SetRender3DEnabled
 getgenv().ToxSetRender3DColor = SetRender3DColor
-
 local AntiKickRejoining = false
-
 local function ResolveAntiKickQueue()
     local env =
         getgenv()
-
     if env
     and type(
         env.queue_on_teleport
     ) == "function" then
         return env.queue_on_teleport
     end
-
     if type(queue_on_teleport)
         == "function" then
         return queue_on_teleport
     end
-
     if syn
     and type(
         syn.queue_on_teleport
     ) == "function" then
         return syn.queue_on_teleport
     end
-
     if fluxus
     and type(
         fluxus.queue_on_teleport
     ) == "function" then
         return fluxus.queue_on_teleport
     end
-
     return nil
 end
-
 local function QueueAntiKickResume()
     local queueFunction =
         ResolveAntiKickQueue()
-
     if not queueFunction then
         return false
     end
-
     local resumeFarm =
         game.PlaceId == MM2PlaceId
         and Settings.MM2AutoFarmV2
             == true
-
     local payload =
         "if not game:IsLoaded() then game.Loaded:Wait() end\n"
         .. "local env = getgenv()\n"
@@ -3010,13 +2457,11 @@ local function QueueAntiKickResume()
         )
         .. "))() end)\n"
         .. "if not ok and env.__ToxQueuedDestinationAt == guardNow then env.__ToxQueuedDestinationGame = nil; env.__ToxQueuedDestinationAt = nil end"
-
     return pcall(
         queueFunction,
         payload
     )
 end
-
 local function TryAntiKickRejoin(
     reason
 )
@@ -3025,7 +2470,6 @@ local function TryAntiKickRejoin(
     or getgenv().Destroyed then
         return
     end
-
     local text =
         string.lower(
             tostring(
@@ -3033,7 +2477,6 @@ local function TryAntiKickRejoin(
                 or ""
             )
         )
-
     if text ~= ""
     and not (
         string.find(
@@ -3075,16 +2518,11 @@ local function TryAntiKickRejoin(
     ) then
         return
     end
-
-    -- Salva o estado atual antes do teleport/kick; o proximo boot restaura as opcoes ativas.
     if getgenv().AutoSaveConfiguration then
         pcall(getgenv().AutoSaveConfiguration)
     end
-
     AntiKickRejoining = true
-
     QueueAntiKickResume()
-
     CustomNotify(
         "Anti Kick • Rejoining server...",
         Color3.fromRGB(
@@ -3094,16 +2532,13 @@ local function TryAntiKickRejoin(
         ),
         5
     )
-
     if getgenv().AllowToxTeleport then
         getgenv().AllowToxTeleport(
             8
         )
     end
-
     task.spawn(function()
         task.wait(0.15)
-
         local sameServer =
             pcall(function()
                 if game.JobId
@@ -3120,7 +2555,6 @@ local function TryAntiKickRejoin(
                     )
                 end
             end)
-
         if not sameServer then
             pcall(function()
                 TeleportService:
@@ -3147,7 +2581,6 @@ local function TryAntiKickRejoin(
         end
     end)
 end
-
 pcall(function()
     AddConnection(
         GuiService.
@@ -3159,21 +2592,18 @@ pcall(function()
             end)
     )
 end)
-
 pcall(function()
     local promptGui =
         CoreGui:
             FindFirstChild(
                 "RobloxPromptGui"
             )
-
     local promptOverlay =
         promptGui
         and promptGui:
             FindFirstChild(
                 "promptOverlay"
             )
-
     if promptOverlay then
         AddConnection(
             promptOverlay.ChildAdded:
@@ -3185,9 +2615,7 @@ pcall(function()
                             or not child.Parent then
                                 return
                             end
-
                             local parts = {}
-
                             for _, item in ipairs(
                                 child:
                                     GetDescendants()
@@ -3207,7 +2635,6 @@ pcall(function()
                                     )
                                 end
                             end
-
                             TryAntiKickRejoin(
                                 table.concat(
                                     parts,
@@ -3220,31 +2647,25 @@ pcall(function()
         )
     end
 end)
-
 local ServerHopMenu = nil
 local ServerHopOverlay = nil
-
 local function CloseServerHopMenu()
     if ServerHopMenu then
         ServerHopMenu:Destroy()
         ServerHopMenu = nil
     end
-
     if ServerHopOverlay then
         ServerHopOverlay:Destroy()
         ServerHopOverlay = nil
     end
 end
-
 local function GetServerHopInfo(server, mode)
     if typeof(server) ~= "table" then
         return nil
     end
-
     local playing = tonumber(server.playing) or 0
     local maxPlayers = tonumber(server.maxPlayers) or 0
     local serverId = tostring(server.id or "")
-
     if serverId == ""
     or serverId == game.JobId
     or maxPlayers <= 0
@@ -3252,43 +2673,33 @@ local function GetServerHopInfo(server, mode)
     or playing >= maxPlayers then
         return nil
     end
-
     if mode == "Low" then
         if playing >= 1
         and playing <= math.min(2, maxPlayers - 1) then
             return playing, true
         end
-
         return nil
     end
-
     if mode == "High" then
         local wanted = math.max(1, maxPlayers - 2)
-
         if maxPlayers == 12 then
             wanted = 10
         end
-
         if playing >= wanted
         and playing <= maxPlayers - 1 then
             return -playing, true
         end
-
         return nil
     end
-
     local target = maxPlayers * 0.5
     local low = math.max(1, math.floor(target - 1))
     local high = math.min(maxPlayers - 1, math.ceil(target + 1))
-
     if playing >= low
     and playing <= high then
         return math.abs(playing - target), true
     end
-
     return nil
 end
-
 local function FetchServerHopPage(cursor, order)
     local url =
         "https://games.roblox.com/v1/games/"
@@ -3296,57 +2707,44 @@ local function FetchServerHopPage(cursor, order)
         .. "/servers/Public?sortOrder="
         .. order
         .. "&limit=100"
-
     if cursor and cursor ~= "" then
         url = url .. "&cursor=" .. cursor
     end
-
     local ok, result = pcall(function()
         return game:HttpGet(url)
     end)
-
     if not ok
     or not result then
         return nil
     end
-
     local decodeOk, data = pcall(function()
         return HttpService:JSONDecode(result)
     end)
-
     if decodeOk then
         return data
     end
-
     return nil
 end
-
 local function FindServerHopTarget(mode)
     mode = tostring(mode or "Low")
-
     if mode ~= "Low"
     and mode ~= "Medium"
     and mode ~= "High" then
         mode = "Low"
     end
-
     local order = mode == "High" and "Desc" or "Asc"
     local cursor = nil
     local selected = nil
     local selectedScore = nil
     local maxPages = mode == "Medium" and 18 or 10
-
     for _ = 1, maxPages do
         local data = FetchServerHopPage(cursor, order)
-
         if not data
         or typeof(data.data) ~= "table" then
             break
         end
-
         for _, server in ipairs(data.data) do
             local score = GetServerHopInfo(server, mode)
-
             if score
             and (
                 not selectedScore
@@ -3356,47 +2754,37 @@ local function FindServerHopTarget(mode)
                 selectedScore = score
             end
         end
-
         if selected
         and mode == "High" then
             break
         end
-
         if selected
         and mode == "Low"
         and selectedScore == 1 then
             break
         end
-
         if selected
         and mode == "Medium"
         and selectedScore <= 0.5 then
             break
         end
-
         cursor = data.nextPageCursor
-
         if not cursor
         or cursor == "" then
             break
         end
     end
-
     return selected
 end
-
 local function ServerHop(mode)
     mode = tostring(mode or "Low")
-
     CustomNotify(
         "Searching " .. mode .. " server...",
         Color3.fromRGB(100, 180, 255),
         3
     )
-
     task.spawn(function()
         local server = FindServerHopTarget(mode)
-
         if server
         and server.id then
             CustomNotify(
@@ -3409,16 +2797,13 @@ local function ServerHop(mode)
                 Color3.fromRGB(100, 255, 100),
                 5
             )
-
             TeleportService:TeleportToPlaceInstance(
                 game.PlaceId,
                 tostring(server.id),
                 Player
             )
-
             return
         end
-
         CustomNotify(
             "No " .. mode .. " server found",
             Color3.fromRGB(255, 100, 100),
@@ -3426,7 +2811,6 @@ local function ServerHop(mode)
         )
     end)
 end
-
 local function AddServerHopOption(parent, text, y, mode)
     local button = Instance.new("TextButton")
     button.Size = UDim2.new(1, -10, 0, 28)
@@ -3439,28 +2823,22 @@ local function AddServerHopOption(parent, text, y, mode)
     button.Font = Enum.Font.GothamMedium
     button.ZIndex = 202
     button.Parent = parent
-
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 4)
     corner.Parent = button
-
     button.MouseButton1Click:Connect(function()
         CloseServerHopMenu()
         ServerHop(mode)
     end)
 end
-
 local function ShowServerHopMenu(button)
     CloseServerHopMenu()
-
     local gui = getgenv().Gui
-
     if not gui
     or not button then
         ServerHop("Low")
         return
     end
-
     ServerHopOverlay = Instance.new("TextButton")
     ServerHopOverlay.Name = "ToxServerHopOverlay"
     ServerHopOverlay.Size = UDim2.new(1, 0, 1, 0)
@@ -3470,13 +2848,11 @@ local function ShowServerHopMenu(button)
     ServerHopOverlay.AutoButtonColor = false
     ServerHopOverlay.ZIndex = 198
     ServerHopOverlay.Parent = gui
-
     local absolute = button.AbsolutePosition
     local size = button.AbsoluteSize
     local viewport = Camera and Camera.ViewportSize or Vector2.new(800, 600)
     local x = math.clamp(absolute.X, 8, math.max(8, viewport.X - 176))
     local y = math.clamp(absolute.Y + size.Y + 4, 8, math.max(8, viewport.Y - 110))
-
     ServerHopMenu = Instance.new("Frame")
     ServerHopMenu.Name = "ToxServerHopMenu"
     ServerHopMenu.Size = UDim2.new(0, 168, 0, 100)
@@ -3485,30 +2861,24 @@ local function ShowServerHopMenu(button)
     ServerHopMenu.BorderSizePixel = 0
     ServerHopMenu.ZIndex = 200
     ServerHopMenu.Parent = gui
-
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 6)
     corner.Parent = ServerHopMenu
-
     local stroke = Instance.new("UIStroke")
     stroke.Color = MAIN_COLOR
     stroke.Thickness = 1
     stroke.Transparency = 0.15
     stroke.Parent = ServerHopMenu
-
     AddServerHopOption(ServerHopMenu, "Low", 6, "Low")
     AddServerHopOption(ServerHopMenu, "Medium", 36, "Medium")
     AddServerHopOption(ServerHopMenu, "High", 66, "High")
-
     ServerHopOverlay.MouseButton1Click:Connect(CloseServerHopMenu)
     ServerHopOverlay.MouseButton2Click:Connect(CloseServerHopMenu)
 end
-
 local FPSObjectDefaults = {}
 local FPSLightingDefaults = nil
 local FPSWorkspaceConnection = nil
 local FPSLightingConnection = nil
-
 local FPSImportantNames = {
     GunDrop = true,
     Gun = true,
@@ -3517,23 +2887,18 @@ local FPSImportantNames = {
     Handle = true,
     HumanoidRootPart = true
 }
-
 local function IsPlayerCharacterObject(object)
     for _, target in ipairs(Players:GetPlayers()) do
         local character = target.Character
-
         if character
         and object:IsDescendantOf(character) then
             return true
         end
     end
-
     return false
 end
-
 local function HasImportantFPSAncestor(object)
     local current = object
-
     while current do
         if current:IsA("Tool")
         or current:IsA("Backpack")
@@ -3544,9 +2909,7 @@ local function HasImportantFPSAncestor(object)
         or FPSImportantNames[current.Name] then
             return true
         end
-
         local lower = string.lower(tostring(current.Name or ""))
-
         if string.find(lower, "gundrop", 1, true)
         or string.find(lower, "weapon", 1, true)
         or string.find(lower, "knife", 1, true)
@@ -3556,45 +2919,35 @@ local function HasImportantFPSAncestor(object)
         or string.find(lower, "tox", 1, true) then
             return true
         end
-
         current = current.Parent
     end
-
     return false
 end
-
 local function ShouldIgnoreFPSObject(object)
     if not object
     or not object.Parent then
         return true
     end
-
     if object == Camera
     or object:IsDescendantOf(CoreGui) then
         return true
     end
-
     if getgenv().Gui
     and object:IsDescendantOf(getgenv().Gui) then
         return true
     end
-
     if IsPlayerCharacterObject(object)
     or HasImportantFPSAncestor(object) then
         return true
     end
-
     return false
 end
-
 local function CaptureFPSObject(object)
     if ShouldIgnoreFPSObject(object)
     or FPSObjectDefaults[object] then
         return
     end
-
     local data = nil
-
     if object:IsA("BasePart") then
         data = {
             Kind = "BasePart",
@@ -3643,19 +2996,15 @@ local function CaptureFPSObject(object)
             Enabled = object.Enabled
         }
     end
-
     if data then
         FPSObjectDefaults[object] = data
     end
 end
-
 local function ApplyFPSObject(object)
     if ShouldIgnoreFPSObject(object) then
         return
     end
-
     CaptureFPSObject(object)
-
     if object:IsA("BasePart") then
         object.Material = Enum.Material.SmoothPlastic
         object.MaterialVariant = ""
@@ -3680,14 +3029,12 @@ local function ApplyFPSObject(object)
         object.Enabled = false
     end
 end
-
 local function RestoreFPSObject(object, data)
     if not object
     or not object.Parent
     or typeof(data) ~= "table" then
         return
     end
-
     pcall(function()
         if data.Kind == "BasePart" then
             object.Material = data.Material
@@ -3709,12 +3056,10 @@ local function RestoreFPSObject(object, data)
         end
     end)
 end
-
 local function CaptureFPSLighting()
     if FPSLightingDefaults then
         return
     end
-
     FPSLightingDefaults = {
         GlobalShadows = Lighting.GlobalShadows,
         FogEnd = Lighting.FogEnd,
@@ -3726,12 +3071,10 @@ local function CaptureFPSLighting()
         EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale
     }
 end
-
 local function RestoreFPSLighting()
     if not FPSLightingDefaults then
         return
     end
-
     pcall(function()
         Lighting.GlobalShadows = FPSLightingDefaults.GlobalShadows
         Lighting.FogEnd = FPSLightingDefaults.FogEnd
@@ -3742,36 +3085,27 @@ local function RestoreFPSLighting()
         Lighting.EnvironmentDiffuseScale = FPSLightingDefaults.EnvironmentDiffuseScale
         Lighting.EnvironmentSpecularScale = FPSLightingDefaults.EnvironmentSpecularScale
     end)
-
     FPSLightingDefaults = nil
 end
-
 local function SetFPSBooster(enabled, silent)
     enabled = enabled == true
     Settings.FPSBooster = enabled
-
     if enabled then
         CaptureFPSLighting()
-
         Lighting.GlobalShadows = false
         Lighting.FogEnd = 9e9
-
         for _, object in ipairs(workspace:GetDescendants()) do
             pcall(ApplyFPSObject, object)
         end
-
         for _, object in ipairs(Lighting:GetDescendants()) do
             pcall(ApplyFPSObject, object)
         end
-
         if FPSWorkspaceConnection then
             FPSWorkspaceConnection:Disconnect()
         end
-
         if FPSLightingConnection then
             FPSLightingConnection:Disconnect()
         end
-
         FPSWorkspaceConnection = workspace.DescendantAdded:Connect(function(object)
             if Settings.FPSBooster then
                 task.defer(function()
@@ -3779,7 +3113,6 @@ local function SetFPSBooster(enabled, silent)
                 end)
             end
         end)
-
         FPSLightingConnection = Lighting.DescendantAdded:Connect(function(object)
             if Settings.FPSBooster then
                 task.defer(function()
@@ -3787,7 +3120,6 @@ local function SetFPSBooster(enabled, silent)
                 end)
             end
         end)
-
         if not silent then
             CustomNotify(
                 "FPS Booster Enabled",
@@ -3799,21 +3131,16 @@ local function SetFPSBooster(enabled, silent)
             FPSWorkspaceConnection:Disconnect()
             FPSWorkspaceConnection = nil
         end
-
         if FPSLightingConnection then
             FPSLightingConnection:Disconnect()
             FPSLightingConnection = nil
         end
-
         RestoreFPSLighting()
-
         for object, data in pairs(FPSObjectDefaults) do
             RestoreFPSObject(object, data)
             FPSObjectDefaults[object] = nil
         end
-
         ClearToxTable(FPSObjectDefaults)
-
         if not silent then
             CustomNotify(
                 "FPS Booster Restored",
@@ -3821,58 +3148,47 @@ local function SetFPSBooster(enabled, silent)
             )
         end
     end
-
     return true
 end
-
 local LastSafeCFrame = nil
 local AntiVoidConnection = nil
 local AntiVoidCharacterConnection = nil
 local AntiVoidLastSave = 0
 local AntiVoidLastRescue = 0
-
 local function GetVoidThreshold()
     local fallen =
         tonumber(
             workspace.FallenPartsDestroyHeight
         ) or -500
-
     return math.max(
         fallen + 35,
         -250
     )
 end
-
 local function IsUsableSafeCFrame(cframe)
     if typeof(cframe) ~= "CFrame" then
         return false
     end
-
     return cframe.Position.Y
         > GetVoidThreshold() + 20
 end
-
 local function GetSpawnFallbackCFrame(root)
     local ndsSafe =
         getgenv().NDSSafeSpawnCFrame
-
     if game.PlaceId == 189707
     and IsUsableSafeCFrame(ndsSafe) then
         return ndsSafe
     end
-
     local spawn =
         workspace:
             FindFirstChildWhichIsA(
                 "SpawnLocation",
                 true
             )
-
     if spawn then
         return spawn.CFrame
             + Vector3.new(0, 4, 0)
     end
-
     if root then
         local origin =
             Vector3.new(
@@ -3883,13 +3199,11 @@ local function GetSpawnFallbackCFrame(root)
                 ),
                 root.Position.Z
             )
-
         local result =
             workspace:Raycast(
                 origin,
                 Vector3.new(0, -2000, 0)
             )
-
         if result then
             return CFrame.new(
                 result.Position
@@ -3897,10 +3211,8 @@ local function GetSpawnFallbackCFrame(root)
             )
         end
     end
-
     return nil
 end
-
 local function SetLastSafeCFrame(cframe)
     if IsUsableSafeCFrame(cframe) then
         LastSafeCFrame = cframe
@@ -3908,10 +3220,8 @@ local function SetLastSafeCFrame(cframe)
             cframe
     end
 end
-
 getgenv().SetToxLastSafeCFrame =
     SetLastSafeCFrame
-
 local function RescueFromVoid(
     character,
     humanoid,
@@ -3925,29 +3235,22 @@ local function RescueFromVoid(
     or not root.Parent then
         return false
     end
-
     if tick() - AntiVoidLastRescue < 0.8 then
         return false
     end
-
     AntiVoidLastRescue = tick()
-
     local safe =
         IsUsableSafeCFrame(LastSafeCFrame)
         and LastSafeCFrame
         or GetSpawnFallbackCFrame(root)
-
     if not safe then
         return false
     end
-
     local allow =
         getgenv().AllowToxTeleport
-
     if allow then
         allow(1.5, "Anti Void Restore")
     end
-
     if getgenv().SetNDSNoTPAnchor then
         pcall(function()
             getgenv().SetNDSNoTPAnchor(
@@ -3956,42 +3259,34 @@ local function RescueFromVoid(
             )
         end)
     end
-
     humanoid.Sit = false
     humanoid.PlatformStand = false
-
     root.AssemblyLinearVelocity =
         Vector3.zero
     root.AssemblyAngularVelocity =
         Vector3.zero
     root.CFrame = safe
-
     pcall(function()
         humanoid:ChangeState(
             Enum.HumanoidStateType.GettingUp
         )
     end)
-
     SetLastSafeCFrame(safe)
     return true
 end
-
 local function StopAntiVoid()
     if AntiVoidConnection then
         AntiVoidConnection:Disconnect()
         AntiVoidConnection = nil
     end
-
     if AntiVoidCharacterConnection then
         AntiVoidCharacterConnection:
             Disconnect()
         AntiVoidCharacterConnection = nil
     end
 end
-
 local function StartAntiVoid()
     StopAntiVoid()
-
     AntiVoidCharacterConnection =
         AddConnection(
             Player.CharacterAdded:
@@ -4008,19 +3303,15 @@ local function StartAntiVoid()
                                 FindFirstChildOfClass(
                                     "Humanoid"
                                 )
-
                         if not root
                         or not humanoid then
                             return
                         end
-
                         task.wait(0.45)
-
                         if not Settings.AntiVoid
                         or Destroyed then
                             return
                         end
-
                         if root.Position.Y
                         <= GetVoidThreshold() then
                             RescueFromVoid(
@@ -4032,7 +3323,6 @@ local function StartAntiVoid()
                     end)
                 end)
         )
-
     AntiVoidConnection =
         AddConnection(
             RunService.Heartbeat:
@@ -4042,7 +3332,6 @@ local function StartAntiVoid()
                     or not Settings.AntiVoid then
                         return
                     end
-
                     local character =
                         Player.Character
                     local root =
@@ -4057,16 +3346,13 @@ local function StartAntiVoid()
                             FindFirstChildOfClass(
                                 "Humanoid"
                             )
-
                     if not root
                     or not humanoid
                     or humanoid.Health <= 0 then
                         return
                     end
-
                     local threshold =
                         GetVoidThreshold()
-
                     if humanoid.FloorMaterial
                     ~= Enum.Material.Air
                     and root.Position.Y
@@ -4080,7 +3366,6 @@ local function StartAntiVoid()
                             root.CFrame
                         )
                     end
-
                     if root.Position.Y
                     <= threshold then
                         RescueFromVoid(
@@ -4092,17 +3377,14 @@ local function StartAntiVoid()
                 end)
         )
 end
-
 local WalkFlingGeneration = 0
 local WalkFlingCollisionDefaults =
     setmetatable({}, {__mode = "k"})
 local WalkFlingImpulseActive = false
 local WalkFlingRestoreVelocity = nil
 getgenv().ToxWalkFlingImpulseActive = false
-
 local function RestoreWalkFlingCollisions()
     local character = Player.Character
-
     for part, oldCanCollide in pairs(
         WalkFlingCollisionDefaults
     ) do
@@ -4118,12 +3400,10 @@ local function RestoreWalkFlingCollisions()
             end
         end
     end
-
     ClearToxTable(
         WalkFlingCollisionDefaults
     )
 end
-
 local function ApplyWalkFlingNoclip(
     character
 )
@@ -4136,21 +3416,16 @@ local function ApplyWalkFlingNoclip(
                 WalkFlingCollisionDefaults[part] =
                     part.CanCollide
             end
-
             part.CanCollide = false
         end
     end
 end
-
 local function StopWalkFling()
     WalkFlingGeneration = WalkFlingGeneration + 1
-
     local wasImpulseActive =
         WalkFlingImpulseActive
-
     WalkFlingImpulseActive = false
     getgenv().ToxWalkFlingImpulseActive = false
-
     local character =
         Player.Character
     local root =
@@ -4159,7 +3434,6 @@ local function StopWalkFling()
             FindFirstChild(
                 "HumanoidRootPart"
             )
-
     if wasImpulseActive
     and root
     and WalkFlingRestoreVelocity then
@@ -4168,9 +3442,7 @@ local function StopWalkFling()
         root.AssemblyLinearVelocity =
             WalkFlingRestoreVelocity
     end
-
     WalkFlingRestoreVelocity = nil
-
     if root
     and getgenv().SetNDSNoTPAnchor then
         pcall(function()
@@ -4180,35 +3452,27 @@ local function StopWalkFling()
             )
         end)
     end
-
     RestoreWalkFlingCollisions()
 end
-
 local function StartWalkFling()
     StopWalkFling()
-
     if not Settings.WalkFling
     or Destroyed then
         return
     end
-
     if Settings.AntiFling then
         RestoreAntiFlingDefaults()
     end
-
     local generation =
         WalkFlingGeneration
-
     task.spawn(function()
         local moveLift = 0.1
-
         while Settings.WalkFling
         and not Destroyed
         and ScriptLoaded
         and generation
             == WalkFlingGeneration do
             RunService.Heartbeat:Wait()
-
             local character =
                 Player.Character
             local humanoid =
@@ -4223,7 +3487,6 @@ local function StartWalkFling()
                     FindFirstChild(
                         "HumanoidRootPart"
                     )
-
             if not character
             or not character.Parent
             or not humanoid
@@ -4235,26 +3498,20 @@ local function StartWalkFling()
                 ApplyWalkFlingNoclip(
                     character
                 )
-
                 local velocity =
                     root.Velocity
-
                 WalkFlingRestoreVelocity =
                     velocity
-
                 WalkFlingImpulseActive = true
                 getgenv().ToxWalkFlingImpulseActive = true
-
                 local multiplier =
                     game.PlaceId == NDSPlaceId
                     and 18
                     or 2500
-
                 local verticalBoost =
                     game.PlaceId == NDSPlaceId
                     and 8
                     or 1500
-
                 root.Velocity =
                     velocity * multiplier
                     + Vector3.new(
@@ -4262,9 +3519,7 @@ local function StartWalkFling()
                         verticalBoost,
                         0
                     )
-
                 RunService.RenderStepped:Wait()
-
                 if character.Parent
                 and root.Parent then
                     root.Velocity =
@@ -4272,26 +3527,21 @@ local function StartWalkFling()
                     root.AssemblyLinearVelocity =
                         velocity
                 end
-
                 WalkFlingImpulseActive = false
                 getgenv().ToxWalkFlingImpulseActive = false
                 WalkFlingRestoreVelocity = nil
             end
-
             if generation
                 ~= WalkFlingGeneration
             or not Settings.WalkFling then
                 break
             end
-
             RunService.Stepped:Wait()
-
             if generation
                 ~= WalkFlingGeneration
             or not Settings.WalkFling then
                 break
             end
-
             if character.Parent
             and root.Parent then
                 root.Velocity =
@@ -4301,49 +3551,41 @@ local function StartWalkFling()
                         moveLift,
                         0
                     )
-
                 moveLift =
                     moveLift * -1
             end
         end
-
         WalkFlingImpulseActive = false
         getgenv().ToxWalkFlingImpulseActive = false
         WalkFlingRestoreVelocity = nil
-
         if generation
         == WalkFlingGeneration then
             RestoreWalkFlingCollisions()
         end
     end)
 end
-
 getgenv().SetWalkFling = function(
     Value,
     Silent
 )
     local enabled = Value == true
     Settings.WalkFling = enabled
-
     if enabled then
         StartWalkFling()
     else
         StopWalkFling()
     end
-
     if getgenv().SyncToggleVisuals then
         getgenv().SyncToggleVisuals(
             "WalkFling",
             enabled
         )
     end
-
     if not Silent
     and getgenv().AutoSaveConfiguration then
         getgenv().AutoSaveConfiguration()
     end
 end
-
 local SharedToggleSettingMap = {
     Speed = "Speed",
     Noclip = "Noclip",
@@ -4360,83 +3602,65 @@ local SharedToggleSettingMap = {
     SmoothFly = "SmoothFly",
     NormalFly = "NormalFly"
 }
-
 local SharedValueSettingMap = {
     Speed = "SpeedValue",
     CarFly = "CarFlySpeed",
     SmoothFly = "FlySpeed",
     NormalFly = "FlySpeed"
 }
-
 local function GetGlobalSharedState()
     getgenv().BaseSharedSettings =
         getgenv().BaseSharedSettings or {}
-
     return getgenv().BaseSharedSettings
 end
-
 local function RecordSharedToggle(Key, Value)
     if getgenv().ToxApplyingGameState then
         return
     end
-
     local settingKey = SharedToggleSettingMap[Key]
-
     if not settingKey then
         return
     end
-
     local globalState = GetGlobalSharedState()
     globalState[settingKey] = Value == true
     Settings[settingKey] = Value == true
 end
-
 getgenv().ToxOnSharedValueChanged = function(Key, Value)
     if getgenv().ToxApplyingGameState then
         return
     end
-
     local settingKey = SharedValueSettingMap[Key]
     local number = tonumber(Value)
-
     if not settingKey or not number then
         return
     end
-
     local globalState = GetGlobalSharedState()
     globalState[settingKey] = number
     Settings[settingKey] = number
 end
-
 local CarFlyVelocity = nil
 local CarFlyGyro = nil
 local CarFlySeat = nil
 local CarFlyRoot = nil
 local CarFlyControlModule = nil
-
 local function DestroyCarFlyMovers()
     if CarFlyVelocity then
         pcall(function()
             CarFlyVelocity:
                 Destroy()
         end)
-
         CarFlyVelocity = nil
     end
-
     if CarFlyGyro then
         pcall(function()
             CarFlyGyro:
                 Destroy()
         end)
-
         CarFlyGyro = nil
     end
-
     CarFlySeat = nil
     CarFlyRoot = nil
 end
-
 local function GetCarFlyMoveVector()
     if not CarFlyControlModule then
         pcall(function()
@@ -4446,7 +3670,6 @@ local function GetCarFlyMoveVector()
                         "PlayerModule",
                         2
                     )
-
             local controlModule =
                 playerModule
                 and playerModule:
@@ -4454,7 +3677,6 @@ local function GetCarFlyMoveVector()
                         "ControlModule",
                         2
                     )
-
             if controlModule then
                 CarFlyControlModule =
                     require(
@@ -4463,7 +3685,6 @@ local function GetCarFlyMoveVector()
             end
         end)
     end
-
     if CarFlyControlModule
     and CarFlyControlModule.GetMoveVector then
         local ok, vector =
@@ -4472,48 +3693,40 @@ local function GetCarFlyMoveVector()
                     CarFlyControlModule:
                         GetMoveVector()
             end)
-
         if ok
         and typeof(vector)
             == "Vector3" then
             return vector
         end
     end
-
     local vector =
         Vector3.zero
-
     if UserInputService:
         IsKeyDown(
             Enum.KeyCode.W
         ) then
         vector = vector + Vector3.new(0, 0, -1)
     end
-
     if UserInputService:
         IsKeyDown(
             Enum.KeyCode.S
         ) then
         vector = vector + Vector3.new(0, 0, 1)
     end
-
     if UserInputService:
         IsKeyDown(
             Enum.KeyCode.A
         ) then
         vector = vector + Vector3.new(-1, 0, 0)
     end
-
     if UserInputService:
         IsKeyDown(
             Enum.KeyCode.D
         ) then
         vector = vector + Vector3.new(1, 0, 0)
     end
-
     return vector
 end
-
 local function EnsureCarFlyMovers(
     root,
     seat
@@ -4523,14 +3736,12 @@ local function EnsureCarFlyMovers(
         DestroyCarFlyMovers()
         return false
     end
-
     if CarFlySeat ~= seat
     or CarFlyRoot ~= root then
         DestroyCarFlyMovers()
         CarFlySeat = seat
         CarFlyRoot = root
     end
-
     if not CarFlyVelocity
     or CarFlyVelocity.Parent
         ~= root then
@@ -4538,29 +3749,23 @@ local function EnsureCarFlyMovers(
             CarFlyVelocity:
                 Destroy()
         end
-
         CarFlyVelocity =
             Instance.new(
                 "BodyVelocity"
             )
-
         CarFlyVelocity.Name =
             "ToxCarFlyVelocity"
-
         CarFlyVelocity.MaxForce =
             Vector3.new(
                 9e9,
                 9e9,
                 9e9
             )
-
         CarFlyVelocity.Velocity =
             Vector3.zero
-
         CarFlyVelocity.Parent =
             root
     end
-
     if not CarFlyGyro
     or CarFlyGyro.Parent
         ~= root then
@@ -4568,46 +3773,35 @@ local function EnsureCarFlyMovers(
             CarFlyGyro:
                 Destroy()
         end
-
         CarFlyGyro =
             Instance.new(
                 "BodyGyro"
             )
-
         CarFlyGyro.Name =
             "ToxCarFlyGyro"
-
         CarFlyGyro.MaxTorque =
             Vector3.new(
                 9e9,
                 9e9,
                 9e9
             )
-
         CarFlyGyro.P = 9e4
         CarFlyGyro.CFrame =
             root.CFrame
-
         CarFlyGyro.Parent =
             root
     end
-
     return true
 end
-
 getgenv().ToxSetSharedOption = function(Key, Value)
     local enabled = Value == true
-
     RecordSharedToggle(Key, enabled)
-
     if Key == "Speed" then
         if enabled then
             local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
             GetHumanoidDefaults(hum)
         end
-
         Settings.Speed = enabled
-
         if not enabled then
             RestoreSpeed()
         end
@@ -4615,21 +3809,17 @@ getgenv().ToxSetSharedOption = function(Key, Value)
         if enabled then
             CaptureNoclipDefaults()
         end
-
         Settings.Noclip = enabled
-
         if not enabled then
             RestoreNoclipDefaults()
         end
     elseif Key == "NoFallDamage" then
         Settings.NoFallDamage = enabled
-
         if getgenv().SetNDSNoFall then
             getgenv().SetNDSNoFall(enabled, true)
         end
     elseif Key == "AntiVoid" then
         Settings.AntiVoid = enabled
-
         if enabled then
             StartAntiVoid()
         else
@@ -4637,7 +3827,6 @@ getgenv().ToxSetSharedOption = function(Key, Value)
         end
     elseif Key == "AntiFling" then
         Settings.AntiFling = enabled
-
         if not enabled then
             RestoreAntiFlingDefaults()
         end
@@ -4650,34 +3839,27 @@ getgenv().ToxSetSharedOption = function(Key, Value)
         Settings.CtrlClickTP = enabled
     elseif Key == "CarFly" then
         Settings.CarFly = enabled
-
         if not enabled then
             DestroyCarFlyMovers()
         end
     elseif Key == "SmoothFly" then
         Settings.SmoothFly = enabled
-
         if enabled then
             Settings.NormalFly = false
-
             if getgenv().SyncToggleVisuals then
                 getgenv().SyncToggleVisuals("NormalFly", false)
             end
-
             if getgenv().SetNDSWaterFly then
                 getgenv().SetNDSWaterFly(false, true)
             end
         end
     elseif Key == "NormalFly" then
         Settings.NormalFly = enabled
-
         if enabled then
             Settings.SmoothFly = false
-
             if getgenv().SyncToggleVisuals then
                 getgenv().SyncToggleVisuals("SmoothFly", false)
             end
-
             if getgenv().SetNDSWaterFly then
                 getgenv().SetNDSWaterFly(false, true)
             end
@@ -4685,28 +3867,21 @@ getgenv().ToxSetSharedOption = function(Key, Value)
     else
         Settings[Key] = enabled
     end
-
     if getgenv().SyncToggleVisuals then
         getgenv().SyncToggleVisuals(Key, enabled)
     end
 end
-
 getgenv().ApplyCurrentGameSharedSettings = function()
     local globalState = GetGlobalSharedState()
-
     getgenv().ToxApplyingGameState = true
-
     for Key, settingKey in pairs(SharedValueSettingMap) do
         local value = globalState[settingKey]
-
         if value == nil then
             value = Settings[settingKey]
         end
-
         if value ~= nil then
             Settings[settingKey] = value
             globalState[settingKey] = value
-
             if getgenv().SyncValueVisuals then
                 getgenv().SyncValueVisuals(
                     Key,
@@ -4715,28 +3890,22 @@ getgenv().ApplyCurrentGameSharedSettings = function()
             end
         end
     end
-
     for Key, settingKey in pairs(SharedToggleSettingMap) do
         local value = globalState[settingKey]
-
         if value == nil then
             value = Settings[settingKey]
         end
-
         if value ~= nil then
             globalState[settingKey] =
                 value == true
-
             getgenv().ToxSetSharedOption(
                 Key,
                 value == true
             )
         end
     end
-
     getgenv().ToxApplyingGameState = false
 end
-
 local function IsPartVisible(part)
     if not Settings.AimWallCheck then return true end
     local origin = Camera.CFrame.Position
@@ -4747,7 +3916,6 @@ local function IsPartVisible(part)
     local result = workspace:Raycast(origin, dir, raycastParams)
     return result == nil
 end
-
 local function GetClosestPlayerToMouse()
     local Closest = nil
     local ShortestDistance = Settings.FOVRadius or 120
@@ -4770,7 +3938,6 @@ local function GetClosestPlayerToMouse()
     end
     return Closest
 end
-
 do
     local universal2Url =
         "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Universal2.lua"
@@ -4778,30 +3945,19 @@ do
         .. tostring(os.time())
         .. "_"
         .. tostring(math.random(1000, 999999))
-
     local source = game:HttpGet(universal2Url)
     local chunk, compileError = loadstring(source)
-
     if not chunk then
         error("Universal2 compile error: " .. tostring(compileError))
     end
-
     local ok, runtimeError = pcall(chunk)
-
     if not ok then
         error("Universal2 runtime error: " .. tostring(runtimeError))
     end
 end
-
--- ==============================================================================
--- COMBAT MODULE LOADER (Combat.lua) & RESILIENT FALLBACK
--- ==============================================================================
 do
     local combatLoaded = getgenv().ToxCombatLoaded == true
-
-    -- 1. Attempt to load Combat.lua (local executor file, standard file IO, or GitHub)
     if not combatLoaded then
-        -- 1a. Executor local file (readfile)
         pcall(function()
             if typeof(readfile) == "function" then
                 local paths = {"Combat.lua", "scripts/Combat.lua", "c:/Users/BG_0o/.gemini/antigravity-ide/scratch/scripts/Combat.lua"}
@@ -4820,8 +3976,6 @@ do
                 end
             end
         end)
-
-        -- 1b. Standard Lua io.open (if available in environment)
         if not combatLoaded then
             pcall(function()
                 if io and io.open then
@@ -4841,8 +3995,6 @@ do
                 end
             end)
         end
-
-        -- 1c. Remote GitHub download with cache-buster
         if not combatLoaded then
             pcall(function()
                 local combatUrl = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Combat.lua"
@@ -4860,30 +4012,23 @@ do
             end)
         end
     end
-
-    -- 2. Check if CombatPage has any controls or cards
     local cPage = getgenv().CombatPage or getgenv().UniversalPage
     local hasChildren = cPage and #cPage:GetChildren() > 0
-
-    -- 3. Fail-Safe Fallback: If Combat.lua failed or CombatPage is still empty, populate immediately!
     if not combatLoaded or not hasChildren then
         local Settings = getgenv().Settings or Settings or {}
         local beginSection = getgenv().BeginUniversalSection or (typeof(BeginUniversalSection) == "function" and BeginUniversalSection)
         if typeof(beginSection) == "function" then
             beginSection("Combat")
         end
-
         local createToggle = getgenv().CreateToggle or (typeof(CreateToggle) == "function" and CreateToggle)
         local createToggleWithValue = getgenv().CreateToggleWithValue or (typeof(CreateToggleWithValue) == "function" and CreateToggleWithValue)
         local createDropdown = getgenv().CreateDropdown or (typeof(CreateDropdown) == "function" and CreateDropdown)
-
         if typeof(createToggle) == "function" then
             createToggle("Aimbot (Right Click)", cPage, Settings.Aimbot, function(v)
                 Settings.Aimbot = v == true
                 if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
             end, "Aimbot")
         end
-
         if typeof(createToggleWithValue) == "function" then
             createToggleWithValue("Aim Smoothness", cPage, Settings.AimbotSmoothnessEnabled, Settings.AimbotSmoothness or 2, function(v)
                 Settings.AimbotSmoothnessEnabled = v == true
@@ -4893,21 +4038,18 @@ do
                 if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
             end, "AimbotSmoothnessEnabled")
         end
-
         if typeof(createDropdown) == "function" then
             createDropdown("Aim Part", {"Head", "HumanoidRootPart", "Torso"}, cPage, Settings.AimPart or "Head", function(v)
                 Settings.AimPart = v
                 if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
             end)
         end
-
         if typeof(createToggle) == "function" then
             createToggle("Aim Wall Check", cPage, Settings.AimWallCheck, function(v)
                 Settings.AimWallCheck = v == true
                 if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
             end, "AimWallCheck")
         end
-
         if typeof(createToggleWithValue) == "function" then
             createToggleWithValue("Show FOV Circle", cPage, Settings.ShowFOV, Settings.FOVRadius or 120, function(v)
                 Settings.ShowFOV = v == true
@@ -4917,21 +4059,18 @@ do
                 if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
             end, "ShowFOV")
         end
-
         if typeof(createToggle) == "function" then
             createToggle("Silent Aim", cPage, Settings.SilentAim, function(v)
                 Settings.SilentAim = v == true
                 if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
             end, "SilentAim")
         end
-
         if typeof(createToggle) == "function" then
             createToggle("Triggerbot", cPage, Settings.Triggerbot, function(v)
                 Settings.Triggerbot = v == true
                 if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
             end, "Triggerbot")
         end
-
         if typeof(createToggleWithValue) == "function" then
             createToggleWithValue("Spinbot", cPage, Settings.Spinbot, Settings.SpinSpeed or 50, function(v)
                 Settings.Spinbot = v == true
@@ -4941,7 +4080,6 @@ do
                 if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
             end, "Spinbot")
         end
-
         if typeof(createToggleWithValue) == "function" then
             createToggleWithValue("Hitbox Expander", cPage, Settings.HitboxExpander, Settings.HitboxSize or 10, function(v)
                 Settings.HitboxExpander = v == true
@@ -4954,7 +4092,6 @@ do
                 if getgenv().AutoSaveConfiguration then pcall(getgenv().AutoSaveConfiguration) end
             end, "HitboxExpander")
         end
-
         if typeof(createToggleWithValue) == "function" then
             createToggleWithValue("Kill Aura", cPage, Settings.KillAura, Settings.KillAuraRange or 15, function(v)
                 Settings.KillAura = v == true
@@ -4966,9 +4103,7 @@ do
         end
     end
 end
-
 BeginUniversalSection("Player")
-
 CreateToggleWithValue("Speed", PlayerPage, Settings.Speed, Settings.SpeedValue, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("Speed", v)
@@ -4976,35 +4111,28 @@ CreateToggleWithValue("Speed", PlayerPage, Settings.Speed, Settings.SpeedValue, 
 end, function(val)
     Settings.SpeedValue = val
 end, "Speed")
-
 CreateToggleWithValue("Jump", PlayerPage, Settings.Jump, Settings.JumpValue, function(v)
     if v then
         local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
         GetHumanoidDefaults(hum)
     end
-
     Settings.Jump = v
-
     if not v then
         RestoreJump()
     end
 end, function(val) Settings.JumpValue = val end)
-
 CreateToggle("Noclip", PlayerPage, Settings.Noclip, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("Noclip", v)
     end
 end, "Noclip")
-
 CreateToggle("Infinite Jump", PlayerPage, Settings.InfiniteJump, function(v)
     Settings.InfiniteJump = v
 end)
-
 CreateToggle("Air Walk (E Up / Q Down)", PlayerPage, Settings.AirWalk, function(v)
     Settings.AirWalk = v
     UpdateAirWalk()
 end)
-
 CreateToggleWithValue("Normal Fly", PlayerPage, Settings.NormalFly, Settings.FlySpeed, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("NormalFly", v)
@@ -5013,7 +4141,6 @@ CreateToggleWithValue("Normal Fly", PlayerPage, Settings.NormalFly, Settings.Fly
         if v then Settings.SmoothFly = false end
     end
 end, function(val) Settings.FlySpeed = val end, "NormalFly")
-
 CreateToggleWithValue("Smooth Fly", PlayerPage, Settings.SmoothFly, Settings.FlySpeed, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("SmoothFly", v)
@@ -5022,7 +4149,6 @@ CreateToggleWithValue("Smooth Fly", PlayerPage, Settings.SmoothFly, Settings.Fly
         if v then Settings.NormalFly = false end
     end
 end, function(val) Settings.FlySpeed = val end, "SmoothFly")
-
 CreateToggleWithValue("Bhop (Auto Jump)", PlayerPage, Settings.Bhop, Settings.BhopInterval, function(v)
     Settings.Bhop = v
 end, function(val)
@@ -5032,13 +4158,11 @@ end, function(val)
             val
         )
 end)
-
 CreateToggleWithValue("Car Speed", PlayerPage, Settings.CarSpeed, Settings.CarSpeedValue, function(v)
     Settings.CarSpeed = v
 end, function(val)
     Settings.CarSpeedValue = val
 end)
-
 CreateToggleWithValue("Car Fly", PlayerPage, Settings.CarFly, Settings.CarFlySpeed, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("CarFly", v)
@@ -5048,9 +4172,7 @@ CreateToggleWithValue("Car Fly", PlayerPage, Settings.CarFly, Settings.CarFlySpe
 end, function(val)
     Settings.CarFlySpeed = val
 end, "CarFly")
-
 BeginUniversalSection("ESP")
-
 CreateToggle("ESP", VisualsPage, Settings.ESPEnabled, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("ESPEnabled", v)
@@ -5061,7 +4183,6 @@ CreateToggle("ESP", VisualsPage, Settings.ESPEnabled, function(v)
         ClearAllESPVisuals()
     end
 end, "ESPEnabled")
-
 CreateToggle("Charms", VisualsPage, Settings.Chams, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("Chams", v)
@@ -5069,7 +4190,6 @@ CreateToggle("Charms", VisualsPage, Settings.Chams, function(v)
         Settings.Chams = v
     end
 end, "Chams")
-
 function CreateToggleCycleOption(name, page, enabled, options, currentValue, toggleCallback, cycleCallback, syncKey)
     if getgenv().CreateToggleWithChoice then
         local ctrl = getgenv().CreateToggleWithChoice(name, page, options, enabled == true, currentValue or options[1], toggleCallback, cycleCallback, syncKey)
@@ -5077,13 +4197,11 @@ function CreateToggleCycleOption(name, page, enabled, options, currentValue, tog
         if TrackUniversalControl then TrackUniversalControl(btn, page) end
         return btn
     end
-
     local th = getgenv().Theme or {}
     local accent = th.Accent or Color3.fromRGB(30, 95, 255)
     local panel = th.Panel or Color3.fromRGB(16, 16, 26)
     local element = th.Element or Color3.fromRGB(22, 22, 34)
     local outline = th.Outline or Color3.fromRGB(36, 36, 56)
-
     local box = Instance.new("Frame")
     box.Size = UDim2.new(1, -4, 0, 36)
     box.BackgroundColor3 = element
@@ -5095,7 +4213,6 @@ function CreateToggleCycleOption(name, page, enabled, options, currentValue, tog
     bStroke.Thickness = 1
     bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     bStroke.Parent = box
-
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, -170, 1, 0)
     label.Position = UDim2.new(0, 12, 0, 0)
@@ -5107,7 +4224,6 @@ function CreateToggleCycleOption(name, page, enabled, options, currentValue, tog
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.TextTruncate = Enum.TextTruncate.AtEnd
     label.Parent = box
-
     local modeButton = Instance.new("TextButton")
     modeButton.Size = UDim2.new(0, 84, 0, 22)
     modeButton.Position = UDim2.new(1, -140, 0.5, -11)
@@ -5124,7 +4240,6 @@ function CreateToggleCycleOption(name, page, enabled, options, currentValue, tog
     mStroke.Thickness = 1
     mStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     mStroke.Parent = modeButton
-
     local toggleButton = Instance.new("TextButton")
     toggleButton.Size = UDim2.new(0, 38, 0, 20)
     toggleButton.Position = UDim2.new(1, -48, 0.5, -10)
@@ -5139,7 +4254,6 @@ function CreateToggleCycleOption(name, page, enabled, options, currentValue, tog
     tStroke.Thickness = 1
     tStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     tStroke.Parent = toggleButton
-
     local indicator = Instance.new("Frame")
     indicator.Size = UDim2.new(0, 14, 0, 14)
     indicator.Position = enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
@@ -5149,16 +4263,13 @@ function CreateToggleCycleOption(name, page, enabled, options, currentValue, tog
     local indicatorCorner = Instance.new("UICorner")
     indicatorCorner.CornerRadius = UDim.new(1, 0)
     indicatorCorner.Parent = indicator
-
     local state = enabled == true
-
     local function updateToggle()
         local curAccent = (getgenv().Theme and getgenv().Theme.Accent) or accent
         local curPanel = (getgenv().Theme and getgenv().Theme.Panel) or panel
         toggleButton.BackgroundColor3 = state and curAccent or curPanel
         indicator.Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
     end
-
     if syncKey and RegisterSharedToggle then
         RegisterSharedToggle(syncKey, {
             Button = box,
@@ -5168,7 +4279,6 @@ function CreateToggleCycleOption(name, page, enabled, options, currentValue, tog
             end
         })
     end
-
     toggleButton.MouseButton1Click:Connect(function()
         if getgenv().Destroyed then return end
         state = not state
@@ -5177,7 +4287,6 @@ function CreateToggleCycleOption(name, page, enabled, options, currentValue, tog
         if syncKey and ToxSyncToggleVisuals then ToxSyncToggleVisuals(syncKey, state) end
         AutoSaveConfiguration()
     end)
-
     modeButton.MouseButton1Click:Connect(function()
         if getgenv().Destroyed then return end
         local index = 1
@@ -5190,11 +4299,9 @@ function CreateToggleCycleOption(name, page, enabled, options, currentValue, tog
         if cycleCallback then cycleCallback(options[index]) end
         AutoSaveConfiguration()
     end)
-
     updateToggle()
     return TrackUniversalControl(box, page)
 end
-
 CreateToggleCycleOption("Tracers", VisualsPage, Settings.ESPTracers, {"DOWN", "UP", "MOUSE"}, Settings.TracerOrigin or "DOWN", function(v)
     Settings.ESPTracers = v
     if not v then
@@ -5205,7 +4312,6 @@ CreateToggleCycleOption("Tracers", VisualsPage, Settings.ESPTracers, {"DOWN", "U
 end, function(v)
     Settings.TracerOrigin = v
 end, "ESPTracers")
-
 CreateToggleCycleOption("Names", VisualsPage, Settings.ESPNames, {"Name", "Display", "Name + Display"}, Settings.ESPNameMode or "Display", function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("ESPNames", v)
@@ -5215,19 +4321,15 @@ CreateToggleCycleOption("Names", VisualsPage, Settings.ESPNames, {"Name", "Displ
 end, function(v)
     Settings.ESPNameMode = v
 end, "ESPNames")
-
 CreateToggle("Distance", VisualsPage, Settings.ESPDistance, function(v)
     Settings.ESPDistance = v
 end)
-
 CreateToggle("2D Box ESP", VisualsPage, Settings.ESPBox, function(v)
     Settings.ESPBox = v
 end)
-
 CreateToggle("Head Dot ESP", VisualsPage, Settings.ESPHeadDot, function(v)
     Settings.ESPHeadDot = v
 end)
-
 CreateToggle("Skeleton ESP", VisualsPage, Settings.ESPSkeleton, function(v)
     Settings.ESPSkeleton = v == true
     if not v then
@@ -5236,25 +4338,21 @@ CreateToggle("Skeleton ESP", VisualsPage, Settings.ESPSkeleton, function(v)
         end
     end
 end, "ESPSkeleton")
-
 CreateToggle("Target ESP", VisualsPage, Settings.TargetESP, function(v)
     Settings.TargetESP = v == true
 end, "TargetESP")
-
 CreateToggle("Spectator List", VisualsPage, Settings.SpectatorList, function(v)
     Settings.SpectatorList = v == true
     if getgenv().ToxSpectatorsFrame then
         getgenv().ToxSpectatorsFrame.Visible = Settings.SpectatorList
     end
 end, "SpectatorList")
-
 CreateToggle("Keybinds List", VisualsPage, Settings.KeybindsList, function(v)
     Settings.KeybindsList = v == true
     if getgenv().ToxKeybindsFrame then
         getgenv().ToxKeybindsFrame.Visible = Settings.KeybindsList
     end
 end, "KeybindsList")
-
 CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("ESPTeamColors", v)
@@ -5262,19 +4360,15 @@ CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
         Settings.ESPTeamColors = v
     end
 end, "ESPTeamColors")
-
 CreateToggleWithValue("Camera FOV", VisualsPage, Settings.FOVEnabled, Settings.FOVValue, function(v)
     if v then
         CaptureFOVDefault()
     end
-
     Settings.FOVEnabled = v
-
     if not v then
         RestoreFOVDefault()
     end
 end, function(val) Settings.FOVValue = val end)
-
 CreateToggleWithValue("ESP Max Dist", VisualsPage, false, GetCurrentESPMAX(), function(v) end, function(val)
     SetCurrentESPMAX(val)
 end, "EspMaxDistance")
@@ -5282,11 +4376,6 @@ CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", 
     Settings.EspColorName = v
     Settings.EspColor = ColorMap[v] or Color3.fromRGB(255, 255, 255)
 end)
-
-
--- ==============================================================================
--- UNIVERSAL 3 MODULE LOADER (Universal3.lua - Visuals & ESP Engine)
--- ==============================================================================
 do
     local loaded = false
     pcall(function()
@@ -5314,9 +4403,7 @@ do
         end)
     end
 end
-
 BeginUniversalSection("Lighting")
-
 CreateToggle(
     "Fullbright",
     getgenv().LightingPage or FlingPage,
@@ -5327,20 +4414,16 @@ CreateToggle(
         and type(getgenv().ToxLighting.SetAdjust) == "function" then
             pcall(getgenv().ToxLighting.SetAdjust, false)
             Settings.AdjustLighting = false
-
             if getgenv().SyncToggleVisuals then
                 pcall(getgenv().SyncToggleVisuals, "AdjustLighting", false)
             end
         end
-
         Settings.Fullbright = v == true
         UpdateFullbright()
     end,
     "Fullbright"
 )
-
 BeginUniversalSection("Misc")
-
 CreateToggle("Ctrl Click TP", FlingPage, Settings.CtrlClickTP, function(v)
     if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("CtrlClickTP", v) end
 end, "CtrlClickTP")
@@ -5371,9 +4454,7 @@ CreateToggleCycleOption(
         if v then
             CaptureShiftLockDefaults()
         end
-
         Settings.ForceShiftLock = v == true
-
         if not Settings.ForceShiftLock then
             isShiftLockActive = false
             RestoreShiftLockDefaults()
@@ -5382,16 +4463,13 @@ CreateToggleCycleOption(
     function(v)
         Settings.ShiftLockKey = v == "Ctrl" and "Ctrl" or "Shift"
         isShiftLockActive = false
-
         if Settings.ForceShiftLock then
             UserInputService.MouseBehavior = Enum.MouseBehavior.Default
         end
     end
 )
-
 LoopFlingInput = nil
 LoopFlingGeneration = 0
-
 local function ToggleLoopFling(
     text
 )
@@ -5404,11 +4482,9 @@ local function ToggleLoopFling(
                 "^%s*(.-)%s*$"
             )
         or ""
-
     if cleaned == "" then
         LoopFlingInput = nil
         LoopFlingGeneration = LoopFlingGeneration + 1
-
         CustomNotify(
             "Loop Fling Disabled",
             Color3.fromRGB(
@@ -5417,22 +4493,18 @@ local function ToggleLoopFling(
                 120
             )
         )
-
         return
     end
-
     local normalized =
         string.lower(
             cleaned
         )
-
     if LoopFlingInput
     and string.lower(
         LoopFlingInput
     ) == normalized then
         LoopFlingInput = nil
         LoopFlingGeneration = LoopFlingGeneration + 1
-
         CustomNotify(
             "Loop Fling Disabled",
             Color3.fromRGB(
@@ -5441,18 +4513,13 @@ local function ToggleLoopFling(
                 120
             )
         )
-
         return
     end
-
     LoopFlingInput =
         cleaned
-
     LoopFlingGeneration = LoopFlingGeneration + 1
-
     local generation =
         LoopFlingGeneration
-
     CustomNotify(
         "Loop Fling Enabled • "
         .. cleaned,
@@ -5462,7 +4529,6 @@ local function ToggleLoopFling(
             130
         )
     )
-
     task.spawn(function()
         while LoopFlingInput
         and generation
@@ -5470,20 +4536,16 @@ local function ToggleLoopFling(
         and not getgenv().Destroyed do
             local activeInput =
                 LoopFlingInput
-
             if not activeInput then
                 break
             end
-
             local lower =
                 string.lower(
                     activeInput
                 )
-
             if lower ~= "all"
             and lower ~= "others" then
                 local found = false
-
                 for _, target in ipairs(
                     Players:
                         GetPlayers()
@@ -5511,10 +4573,8 @@ local function ToggleLoopFling(
                         break
                     end
                 end
-
                 if not found then
                     LoopFlingInput = nil
-
                     CustomNotify(
                         "Loop Fling stopped • player left",
                         Color3.fromRGB(
@@ -5523,20 +4583,16 @@ local function ToggleLoopFling(
                             70
                         )
                     )
-
                     break
                 end
             end
-
             ExecuteFling(
                 activeInput
             )
-
             task.wait(1.25)
         end
     end)
 end
-
 CreateInputWithTwoButtons(
     "Fling",
     FlingPage,
@@ -5555,38 +4611,29 @@ CreateInputWithTwoButtons(
         end
     end
 )
-
 CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
 CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
 CreateButton("Tox Waypoints", FlingPage, function() WaypointsGui.Visible = not WaypointsGui.Visible end)
-
 CreateButton("BigFroot", ScriptsPage, function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BigFroot.lua"))()
 end)
-
 CreateButton("FE Emotes", ScriptsPage, function()
     loadstring(game:HttpGet(('https://raw.githubusercontent.com/VenezzaX/Usefulthings/refs/heads/main/FeEmotes.lua'),true))()
 end)
-
 CreateButton("PShade", ScriptsPage, function()
     loadstring(game:HttpGet('https://raw.githubusercontent.com/randomstring0/pshade-ultimate/refs/heads/main/src/cd.lua'))()
 end)
-
 CreateButton("Infinite Yield", ScriptsPage, function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
 end)
-
 CreateButton("Bundle Edit", ScriptsPage, function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/All/refs/heads/main/BundleEdit.lua"))()
 end)
-
 if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Security & Automation", "🛡️") end
-
 CreateToggle("Chat Logs", ConfigPage, Settings.ChatLogs, function(v)
     Settings.ChatLogs = v
     ChatLogGui.Visible = v == true
 end, "ChatLogs")
-
 CreateToggle(
     "Kick Bypass",
     ConfigPage,
@@ -5594,9 +4641,7 @@ CreateToggle(
     function(v)
         Settings.AntiKick =
             v == true
-
         AutoSaveConfiguration()
-
         if Settings.AntiKick then
             CustomNotify(
                 "Kick Bypass Enabled • auto rejoin on disconnect",
@@ -5611,17 +4656,13 @@ CreateToggle(
     end,
     "AntiKick"
 )
-
 CreateToggle("Anti AFK", ConfigPage, Settings.AntiAFK, function(v)
     Settings.AntiAFK = v == true
 end, "AntiAFK")
-
 CreateToggle("Auto Execute", ConfigPage, Settings.AutoExecute, function(v)
     Settings.AutoExecute = v == true
-
     if Settings.AutoExecute then
         local queueFunction = getgenv().QueueToxAutoExecute
-
         if queueFunction and queueFunction() then
             CustomNotify(
                 "Auto Execute Enabled",
@@ -5639,13 +4680,10 @@ CreateToggle("Auto Execute", ConfigPage, Settings.AutoExecute, function(v)
             Color3.fromRGB(255, 180, 70)
         )
     end
-
-    -- O callback tambem roda ao restaurar a configuracao no boot, sem clique manual.
     if getgenv().AutoSaveConfiguration then
         pcall(getgenv().AutoSaveConfiguration)
     end
 end, "AutoExecute")
-
 CreateToggle(
     "FPS Booster",
     ConfigPage,
@@ -5654,13 +4692,10 @@ CreateToggle(
         SetFPSBooster(
             v
         )
-
         AutoSaveConfiguration()
     end,
     "FPSBooster"
 )
-
-
 ServerInfoFrame = nil
 ServerInfoText = nil
 ServerInfoFrameCount = 0
@@ -5676,120 +4711,93 @@ ServerInfoModes = {
     "FPS/Ping/Players",
     "Server"
 }
-
 RunService.RenderStepped:Connect(function()
     ServerInfoFrameCount = ServerInfoFrameCount + 1
-
     local now = os.clock()
-
     if now - ServerInfoLastClock >= 0.5 then
         ServerInfoFPS = math.floor((ServerInfoFrameCount / (now - ServerInfoLastClock)) + 0.5)
         ServerInfoFrameCount = 0
         ServerInfoLastClock = now
     end
 end)
-
 function GetServerPingText()
     local ok, value = pcall(function()
         local network = StatsService and StatsService:FindFirstChild("Network")
         local serverStats = network and network:FindFirstChild("ServerStatsItem")
         local ping = serverStats and serverStats:FindFirstChild("Data Ping")
-
         if ping and ping.GetValueString then
             return ping:GetValueString()
         end
-
         return "N/A"
     end)
-
     if ok and value then
         return tostring(value)
     end
-
     return "N/A"
 end
-
 function GetServerPingNumber()
     local text = GetServerPingText()
     local number = tonumber(tostring(text):match("([%d%.]+)"))
     return number
 end
-
 function GetShortServerId(value)
     value = tostring(value or "")
-
     if value == "" then
         return "N/A"
     end
-
     if #value <= 18 then
         return value
     end
-
     return string.sub(value, 1, 8) .. "..." .. string.sub(value, -6)
 end
-
 function GetLocalCountryCode()
     if ServerInfoCountryChecked then
         return ServerInfoCountryCache or ""
     end
-
     ServerInfoCountryChecked = true
-
     local ok, code = pcall(function()
         local localization = game:GetService("LocalizationService")
         return localization:GetCountryRegionForPlayerAsync(Player)
     end)
-
     if ok and code and code ~= "" then
         ServerInfoCountryCache = tostring(code)
         return ServerInfoCountryCache
     end
-
     ServerInfoCountryCache = ""
     return ""
 end
-
 function GetServerRegionText()
     if ServerInfoRegionCache
     and os.clock() - ServerInfoRegionCacheTime < 8 then
         return ServerInfoRegionCache
     end
-
     local ok, value = pcall(function()
         for _, object in ipairs(StatsService:GetDescendants()) do
             local lower = string.lower(tostring(object.Name or ""))
-
             if string.find(lower, "region", 1, true)
             or string.find(lower, "location", 1, true)
             or string.find(lower, "country", 1, true) then
                 if object.GetValueString then
                     local text = object:GetValueString()
-
                     if text and text ~= "" then
                         return text
                     end
                 end
-
                 if object:IsA("StringValue") and object.Value ~= "" then
                     return object.Value
                 end
             end
         end
-
         return nil
     end)
-
     if ok and value and tostring(value) ~= "" then
         ServerInfoRegionCache = tostring(value)
         ServerInfoRegionCacheTime = os.clock()
         return ServerInfoRegionCache
     end
-
     local country = GetLocalCountryCode()
     local ping = GetServerPingNumber()
     local result = nil
-
     if country == "BR" then
         if ping and ping <= 95 then
             result = "São Paulo / BR"
@@ -5805,20 +4813,16 @@ function GetServerRegionText()
             result = country
         end
     end
-
     ServerInfoRegionCache = result or (country ~= "" and country .. " / Unknown" or "Unknown")
     ServerInfoRegionCacheTime = os.clock()
     return ServerInfoRegionCache
 end
-
 function BuildServerJoinText()
     return tostring(game.JobId ~= "" and game.JobId or "N/A")
 end
-
 function CopyServerJoinId()
     local text = BuildServerJoinText()
     local copied = false
-
     if setclipboard then
         pcall(function()
             setclipboard(text)
@@ -5835,7 +4839,6 @@ function CopyServerJoinId()
             copied = true
         end)
     end
-
     if copied then
         CustomNotify(
             "JoinId copied",
@@ -5850,24 +4853,19 @@ function CopyServerJoinId()
         )
     end
 end
-
 function NormalizeServerInfoMode(value)
     value = tostring(value or "")
-
     for _, mode in ipairs(ServerInfoModes) do
         if value == mode then
             return mode
         end
     end
-
     return "FPS/Ping/Players"
 end
-
 function BuildServerInfoLines()
     local mode = NormalizeServerInfoMode(Settings.ToxServerInfoMode)
     local lines = {}
     local fullJobId = tostring(game.JobId ~= "" and game.JobId or "N/A")
-
     if mode == "Server" then
         table.insert(lines, "Region: " .. GetServerRegionText())
         table.insert(lines, "Players: " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers))
@@ -5876,14 +4874,11 @@ function BuildServerInfoLines()
         table.insert(lines, "JoinId: " .. fullJobId)
         return lines
     end
-
     table.insert(lines, "FPS: " .. tostring(ServerInfoFPS))
-
     if mode == "FPS/Ping"
     or mode == "FPS/Ping/Players" then
         table.insert(lines, "Ping: " .. GetServerPingText())
     end
-
     if mode == "FPS/Ping/Players" then
         table.insert(lines, "Players: " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers))
         table.insert(lines, "Region: " .. GetServerRegionText())
@@ -5891,59 +4886,45 @@ function BuildServerInfoLines()
         table.insert(lines, "JobId: " .. fullJobId)
         table.insert(lines, "JoinId: " .. fullJobId)
     end
-
     return lines
 end
-
 function RefreshServerInfoSize()
     if not ServerInfoFrame then
         return
     end
-
     local mode = NormalizeServerInfoMode(Settings.ToxServerInfoMode)
     local lineCount = #BuildServerInfoLines()
     local width = 250
-
     if mode == "Server"
     or mode == "FPS/Ping/Players" then
         width = 430
     end
-
     local height = math.max(92, 40 + lineCount * 19)
     ServerInfoFrame.Size = UDim2.new(0, width, 0, height)
-
     if ServerInfoText then
         ServerInfoText.Size = UDim2.new(1, -16, 1, -34)
     end
 end
-
 function ServerInfoModeButtonText(mode)
     if mode == "FPS" then
         return "FPS"
     end
-
     if mode == "FPS/Ping" then
         return "PING"
     end
-
     if mode == "Server" then
         return "SERVER"
     end
-
     return "ALL"
 end
-
 function CreateServerInfoFrame()
     if ServerInfoFrame and ServerInfoFrame.Parent then
         return
     end
-
     local gui = getgenv().Gui
-
     if not gui then
         return
     end
-
     ServerInfoFrame = Instance.new("Frame")
     ServerInfoFrame.Name = "ToxServerInfoFrame"
     ServerInfoFrame.Size = UDim2.new(0, 430, 0, 174)
@@ -5954,37 +4935,30 @@ function CreateServerInfoFrame()
     ServerInfoFrame.Active = true
     ServerInfoFrame.Visible = false
     ServerInfoFrame.Parent = gui
-
     if getgenv().RegisterToxLinkedSubGui then
         getgenv().RegisterToxLinkedSubGui("ServerInfo", ServerInfoFrame)
     end
-
     if getgenv().RegisterToxSubGuiMinimize then
         getgenv().RegisterToxSubGuiMinimize(ServerInfoFrame, -52)
     end
-
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 8)
     corner.Parent = ServerInfoFrame
-
     local stroke = Instance.new("UIStroke")
     stroke.Color = MAIN_COLOR
     stroke.Thickness = 1
     stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     stroke.Transparency = 0.2
     stroke.Parent = ServerInfoFrame
-
     local topBar = Instance.new("Frame")
     topBar.Size = UDim2.new(1, 0, 0, 26)
     topBar.BackgroundColor3 = MAIN_COLOR
     topBar.BackgroundTransparency = 0.15
     topBar.BorderSizePixel = 0
     topBar.Parent = ServerInfoFrame
-
     if MakeDraggable then
         MakeDraggable(ServerInfoFrame, topBar)
     end
-
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, -158, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
@@ -5995,7 +4969,6 @@ function CreateServerInfoFrame()
     title.TextSize = 11
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.Parent = topBar
-
     local modeButton = Instance.new("TextButton")
     modeButton.Size = UDim2.new(0, 60, 0, 18)
     modeButton.Position = UDim2.new(1, -148, 0.5, -9)
@@ -6006,11 +4979,9 @@ function CreateServerInfoFrame()
     modeButton.Font = Enum.Font.GothamBold
     modeButton.TextSize = 10
     modeButton.Parent = topBar
-
     local modeCorner = Instance.new("UICorner")
     modeCorner.CornerRadius = UDim.new(0, 4)
     modeCorner.Parent = modeButton
-
     local copyButton = Instance.new("TextButton")
     copyButton.Size = UDim2.new(0, 58, 0, 18)
     copyButton.Position = UDim2.new(1, -84, 0.5, -9)
@@ -6021,11 +4992,9 @@ function CreateServerInfoFrame()
     copyButton.Font = Enum.Font.GothamBold
     copyButton.TextSize = 10
     copyButton.Parent = topBar
-
     local copyCorner = Instance.new("UICorner")
     copyCorner.CornerRadius = UDim.new(0, 4)
     copyCorner.Parent = copyButton
-
     local closeButton = Instance.new("TextButton")
     closeButton.Size = UDim2.new(0, 22, 0, 18)
     closeButton.Position = UDim2.new(1, -25, 0.5, -9)
@@ -6036,11 +5005,9 @@ function CreateServerInfoFrame()
     closeButton.Font = Enum.Font.GothamBold
     closeButton.TextSize = 10
     closeButton.Parent = topBar
-
     local closeCorner = Instance.new("UICorner")
     closeCorner.CornerRadius = UDim.new(0, 4)
     closeCorner.Parent = closeButton
-
     ServerInfoText = Instance.new("TextLabel")
     ServerInfoText.Size = UDim2.new(1, -16, 1, -34)
     ServerInfoText.Position = UDim2.new(0, 8, 0, 31)
@@ -6054,45 +5021,35 @@ function CreateServerInfoFrame()
     ServerInfoText.TextXAlignment = Enum.TextXAlignment.Left
     ServerInfoText.TextYAlignment = Enum.TextYAlignment.Top
     ServerInfoText.Parent = ServerInfoFrame
-
     copyButton.MouseButton1Click:Connect(function()
         CopyServerJoinId()
     end)
-
     closeButton.MouseButton1Click:Connect(function()
         Settings.ToxServerInfoVisible = false
         ServerInfoFrame.Visible = false
-
         if getgenv().SyncToggleVisuals then
             getgenv().SyncToggleVisuals("ToxServerInfoVisible", false)
         end
-
         AutoSaveConfiguration()
     end)
-
     modeButton.MouseButton1Click:Connect(function()
         local mode = NormalizeServerInfoMode(Settings.ToxServerInfoMode)
         local index = 1
-
         for i, item in ipairs(ServerInfoModes) do
             if item == mode then
                 index = i
                 break
             end
         end
-
         index = index + 1
-
         if index > #ServerInfoModes then
             index = 1
         end
-
         Settings.ToxServerInfoMode = ServerInfoModes[index]
         modeButton.Text = ServerInfoModeButtonText(Settings.ToxServerInfoMode)
         RefreshServerInfoSize()
         AutoSaveConfiguration()
     end)
-
     task.spawn(function()
         while ServerInfoFrame and ServerInfoFrame.Parent and not getgenv().Destroyed do
             if ServerInfoFrame.Visible and ServerInfoText then
@@ -6100,42 +5057,31 @@ function CreateServerInfoFrame()
                 ServerInfoText.Text = table.concat(lines, "\n")
                 RefreshServerInfoSize()
             end
-
             task.wait(0.5)
         end
     end)
 end
-
 function SetServerInfoVisible(enabled)
     Settings.ToxServerInfoVisible = enabled == true
     CreateServerInfoFrame()
-
     if ServerInfoFrame then
         ServerInfoFrame.Visible = Settings.ToxServerInfoVisible
         RefreshServerInfoSize()
     end
 end
-
 getgenv().OpenToxServerInfo = function()
     SetServerInfoVisible(not Settings.ToxServerInfoVisible)
-
     if getgenv().SyncToggleVisuals then
         getgenv().SyncToggleVisuals("ToxServerInfoVisible", Settings.ToxServerInfoVisible)
     end
-
     AutoSaveConfiguration()
 end
-
 CreateToggle("Server Info", ConfigPage, Settings.ToxServerInfoVisible, function(v)
     SetServerInfoVisible(v)
     AutoSaveConfiguration()
 end, "ToxServerInfoVisible")
-
-
 if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Rendering & Performance", "⚡") end
-
 SetRender3DEnabled(true)
-
 CreateToggle(
     "3D Rendering",
     ConfigPage,
@@ -6145,12 +5091,10 @@ CreateToggle(
         SetRender3DEnabled(
             not v
         )
-
         AutoSaveConfiguration()
     end,
     "Render3DDisabled"
 )
-
 CreateDropdown(
     "3D Background",
     {
@@ -6165,13 +5109,10 @@ CreateDropdown(
         SetRender3DColor(
             value
         )
-
         AutoSaveConfiguration()
     end
 )
-
 if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Interface & Keybinds", "⚙️") end
-
 CreateDropdown(
     "GUI Color",
     {
@@ -6193,7 +5134,6 @@ CreateDropdown(
     function(value)
         Settings.GUIColorName =
             value
-
         if getgenv().SetToxGuiColor then
             getgenv().SetToxGuiColor(
                 value
@@ -6201,7 +5141,6 @@ CreateDropdown(
         end
     end
 )
-
 CreateDropdown(
     "UI Theme",
     {
@@ -6224,7 +5163,6 @@ CreateDropdown(
         end
     end
 )
-
 CreateDropdown(
     "UI Transparency",
     {
@@ -6258,29 +5196,24 @@ CreateDropdown(
         end
     end
 )
-
 CreateKeybindButton("GUI Keybind", ConfigPage, Settings.GUIKeybind, function(key)
     Settings.GUIKeybind = key
-
     if getgenv().AutoSaveConfiguration then
         getgenv().AutoSaveConfiguration()
     end
 end)
-
 CreateKeybindButton("Panic Key", ConfigPage, Settings.PanicKey, function(key)
     Settings.PanicKey = key
     if getgenv().AutoSaveConfiguration then
         getgenv().AutoSaveConfiguration()
     end
 end)
-
 CreateToggle("Start Hidden", ConfigPage, Settings.StartHidden, function(value)
     Settings.StartHidden = value == true
     if getgenv().AutoSaveConfiguration then
         getgenv().AutoSaveConfiguration()
     end
 end, "StartHidden")
-
 CreateToggle("Unlock Cursor", ConfigPage, Settings.UnlockCursor, function(value)
     Settings.UnlockCursor = value == true
     if getgenv().SetUnlockCursor then
@@ -6290,13 +5223,8 @@ CreateToggle("Unlock Cursor", ConfigPage, Settings.UnlockCursor, function(value)
         getgenv().AutoSaveConfiguration()
     end
 end, "UnlockCursor")
-
--- ==============================================================================
--- GAME CONFIGURATION & SAVES (PER-GAME PROFILE SYSTEM)
--- ==============================================================================
 do
 if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Game Configuration & Profiles", "\xf0\x9f\x92\xbe") end
-
 local placeKeyStr = tostring(game.PlaceId)
 local gameName = (game.GameId == 142823291 or game.PlaceId == 142823291) and "MM2"
     or (game.PlaceId == 189707) and "NDS"
@@ -6305,18 +5233,15 @@ local gameName = (game.GameId == 142823291 or game.PlaceId == 142823291) and "MM
     or (game.PlaceId == 111311599) and "ADMIN"
     or (game.PlaceId == 119925538689885) and "SOD"
     or ("Place " .. placeKeyStr)
-
 local function GetSaveStatusText()
     local hasSave = (getgenv().HasSavedConfigForCurrentPlace and getgenv().HasSavedConfigForCurrentPlace())
         or getgenv().ToxHasPlaceConfig == true
     return hasSave and "[Saved]" or "[Default / Unsaved]"
 end
-
 local saveStatusLabel = nil
 saveStatusLabel = CreateButton("Game: " .. gameName .. " " .. GetSaveStatusText(), ConfigPage, function(btn)
     btn.Text = "Game: " .. gameName .. " " .. GetSaveStatusText()
 end)
-
 CreateButton("\xf0\x9f\x92\xbe Save Game Config", ConfigPage, function(button)
     if getgenv().SavePlaceConfiguration then
         local ok = getgenv().SavePlaceConfiguration()
@@ -6334,7 +5259,6 @@ CreateButton("\xf0\x9f\x92\xbe Save Game Config", ConfigPage, function(button)
         end
     end
 end)
-
 CreateButton("\xf0\x9f\x94\x84 Load Game Config", ConfigPage, function(button)
     if getgenv().LoadPlaceConfiguration then
         local loaded = getgenv().LoadPlaceConfiguration()
@@ -6352,7 +5276,6 @@ CreateButton("\xf0\x9f\x94\x84 Load Game Config", ConfigPage, function(button)
         end
     end
 end)
-
 CreateConfirmButton("\xf0\x9f\x97\x91\xef\xb8\x8f Reset Game Config", ConfigPage, function()
     if getgenv().ResetPlaceConfiguration then
         getgenv().ResetPlaceConfiguration()
@@ -6360,7 +5283,6 @@ CreateConfirmButton("\xf0\x9f\x97\x91\xef\xb8\x8f Reset Game Config", ConfigPage
     end
 end)
 end
-
 CreateToggle("Auto-Save Game Config", ConfigPage, getgenv().ToxAutoSaveEnabled == true, function(val)
     getgenv().ToxAutoSaveEnabled = val == true
     if val and getgenv().AutoSaveConfiguration then
@@ -6368,7 +5290,6 @@ CreateToggle("Auto-Save Game Config", ConfigPage, getgenv().ToxAutoSaveEnabled =
         if saveStatusLabel then saveStatusLabel.Text = "Game: " .. gameName .. " [Saved]" end
     end
 end, "ToxAutoSaveEnabled")
-
 getgenv().SyncAllTogglesToUI = function()
     if getgenv().SyncToggleVisuals then
         for k, v in pairs(Settings) do
@@ -6378,22 +5299,18 @@ getgenv().SyncAllTogglesToUI = function()
         end
     end
 end
-
 if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Server Operations", "🌐") end
 CreateButton("Server Hop", ConfigPage, function(button) ShowServerHopMenu(button) end)
 CreateConfirmButton("Rejoin Server", ConfigPage, function()
 	if #Players:GetPlayers() <= 1 then TeleportService:Teleport(game.PlaceId, Player)
 	else TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player) end
 end)
-
 CreateConfirmButton("DESTROY", ConfigPage, function()
     if AutoSaveConfiguration then
         pcall(AutoSaveConfiguration)
     end
-
     LoopFlingInput = nil
     LoopFlingGeneration = LoopFlingGeneration + 1
-
     if RenderBackdropGui
     and RenderBackdropGui.Parent then
         pcall(function()
@@ -6401,64 +5318,51 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
                 Destroy()
         end)
     end
-
     Destroyed = true
     getgenv().Destroyed = true
     ScriptLoaded = false
     getgenv().ScriptLoaded = false
     getgenv().ToxOptionsReady = false
-
     if getgenv().ToxUniversal2ExtraCleanup then
         pcall(getgenv().ToxUniversal2ExtraCleanup)
     end
-
     if getgenv().ToxUniversal2Cleanup then
         pcall(getgenv().ToxUniversal2Cleanup)
-
     if getgenv().ToxUniversal3Cleanup then
         pcall(getgenv().ToxUniversal3Cleanup)
     end
     end
-
     if getgenv().ToxLightingCleanup then
         pcall(getgenv().ToxLightingCleanup)
     end
-
     if getgenv().ToxChatCleanup then
         pcall(getgenv().ToxChatCleanup)
     end
-
     if getgenv().ToxNDSCleanup then
         pcall(getgenv().ToxNDSCleanup)
     end
-
     if getgenv().ToxMM2Cleanup then
         pcall(getgenv().ToxMM2Cleanup)
     end
-
     if getgenv().SetNDSWaterFly then
         pcall(function()
             getgenv().SetNDSWaterFly(false, true)
         end)
     end
-
     if getgenv().SetNDSNoTP then
         pcall(function()
             getgenv().SetNDSNoTP(false, true)
         end)
     end
-
     SetFPSBooster(
         false,
         true
     )
-
     for key, value in pairs(Settings) do
         if typeof(value) == "boolean" then
             Settings[key] = false
         end
     end
-
     Settings.Render3D = true
     Settings.LoopTPTarget = nil
     Settings.NDSAutoWin = false
@@ -6469,32 +5373,25 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     Settings.MM2KillAllAuto = false
     Settings.MM2ShootMurderAuto = false
     Settings.MM2GrabGunAuto = false
-
     local sharedKeys =
         getgenv().SharedPersistentKeys or {}
     local baseShared =
         getgenv().BaseSharedSettings or {}
-
     for key in pairs(sharedKeys) do
         if typeof(Settings[key]) == "boolean" then
             Settings[key] = false
         end
-
         if typeof(baseShared[key]) == "boolean" then
             baseShared[key] = false
         end
     end
-
     pcall(function()
         RunService:Set3dRenderingEnabled(true)
     end)
-
     Settings.Fullbright = false
     UpdateFullbright()
-
     Settings.AirWalk = false
     UpdateAirWalk()
-
     Settings.Speed = false
     Settings.Jump = false
     Settings.Noclip = false
@@ -6518,7 +5415,6 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     Settings.MusicAutoPlay = false
     Settings.MusicLoop = false
     Settings.AutoExecute = false
-
     RestoreSpeed()
     RestoreJump()
     RestoreNoclipDefaults()
@@ -6526,75 +5422,59 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     RestoreHitboxDefaults()
     RestoreFOVDefault()
     RestoreShiftLockDefaults()
-
     isShiftLockActive = false
     UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-
     if ChatLogGui then
         ChatLogGui.Visible = false
     end
-
     local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
     local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-
     if Hum then
         Hum.PlatformStand = false
         Hum.Sit = false
         Hum.AutoRotate = true
     end
-
     if Root then
         Root.AssemblyLinearVelocity = Vector3.zero
         Root.AssemblyAngularVelocity = Vector3.zero
     end
-
     RunService.Heartbeat:Wait()
     RunService.Heartbeat:Wait()
-
     if getgenv().ActiveSound then
         pcall(function()
             getgenv().ActiveSound:Stop()
             getgenv().ActiveSound:Destroy()
         end)
-
         getgenv().ActiveSound = nil
     end
-
     ClearAllESPVisuals()
-
     if FOVCircle then
         pcall(function()
             FOVCircle:Remove()
         end)
     end
-
     if CrosshairH then
         pcall(function()
             CrosshairH:Remove()
         end)
     end
-
     if CrosshairV then
         pcall(function()
             CrosshairV:Remove()
         end)
     end
-
     for _, conn in ipairs(ScriptConnections) do
         pcall(function()
             conn:Disconnect()
         end)
     end
-
     pcall(function()
         NotifGui:Destroy()
     end)
-
     pcall(function()
         Gui:Destroy()
     end)
 end)
-
 AddConnection(UserInputService.InputBegan:Connect(function(input, gpe)
     if not gpe and Settings.ForceShiftLock then
         local key = Settings.ShiftLockKey
@@ -6610,24 +5490,19 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gpe)
         end
     end
 end))
-
 AddConnection(UserInputService.JumpRequest:Connect(function()
     local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
     if ScriptLoaded and Settings.InfiniteJump and Hum and Hum.Health > 0 then
         Hum:ChangeState(Enum.HumanoidStateType.Jumping)
     end
 end))
-
 SubGuisPreKeyHiddenState = {}
-
 local function IsBadCtrlClickTeleportPart(part)
     if not part
     or not part:IsA("BasePart") then
         return true
     end
-
     local lower = string.lower(tostring(part.Name or "") .. " " .. tostring(part.Parent and part.Parent.Name or ""))
-
     if string.find(lower, "barrier", 1, true)
     or string.find(lower, "invisible", 1, true)
     or string.find(lower, "kill", 1, true)
@@ -6635,15 +5510,12 @@ local function IsBadCtrlClickTeleportPart(part)
     or string.find(lower, "death", 1, true) then
         return true
     end
-
     if part.Transparency >= 0.985
     and not part.CanCollide then
         return true
     end
-
     return false
 end
-
 local function GetCtrlClickTeleportOffset(root, humanoid, normal)
     local standHeight =
         math.max(
@@ -6652,7 +5524,6 @@ local function GetCtrlClickTeleportOffset(root, humanoid, normal)
             + (humanoid and humanoid.HipHeight or 2)
             + 0.15
         )
-
     if normal.Y >= 0.55 then
         return Vector3.new(
             0,
@@ -6660,71 +5531,55 @@ local function GetCtrlClickTeleportOffset(root, humanoid, normal)
             0
         )
     end
-
     local sideClearance =
         math.max(
             root.Size.X,
             root.Size.Z
         ) * 0.5 + 0.65
-
     return normal.Unit * sideClearance
 end
-
 local function GetCtrlClickTeleportCFrame()
     local mouse = Player:GetMouse()
     local character = Player.Character
     local root = character and character:FindFirstChild("HumanoidRootPart")
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-
     if not mouse
     or not root then
         return nil
     end
-
     local excluded = {}
-
     if character then
         table.insert(excluded, character)
     end
-
     if getgenv().Gui then
         table.insert(excluded, getgenv().Gui)
     end
-
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
     params.FilterDescendantsInstances = excluded
     params.IgnoreWater = false
-
     local camera = workspace.CurrentCamera or Camera
-
     if not camera then
         return nil
     end
-
     local ray = camera:ScreenPointToRay(
         mouse.X,
         mouse.Y
     )
-
     local result = workspace:Raycast(
         ray.Origin,
         ray.Direction * 5000,
         params
     )
-
     if not result
     or not result.Instance
     or IsBadCtrlClickTeleportPart(result.Instance) then
         return nil
     end
-
     local normal = result.Normal
-
     if normal.Magnitude <= 0 then
         return nil
     end
-
     local targetPosition =
         result.Position
         + GetCtrlClickTeleportOffset(
@@ -6732,10 +5587,8 @@ local function GetCtrlClickTeleportCFrame()
             humanoid,
             normal
         )
-
     local _, yaw, _ =
         root.CFrame:ToOrientation()
-
     return CFrame.new(
         targetPosition
     ) * CFrame.Angles(
@@ -6744,13 +5597,11 @@ local function GetCtrlClickTeleportCFrame()
         0
     )
 end
-
 AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and Settings.CtrlClickTP and input.UserInputType == Enum.UserInputType.MouseButton1 then
         if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
             local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
             local targetCFrame = GetCtrlClickTeleportCFrame()
-
             if targetCFrame and Root then
                 if getgenv().ToxSafeTeleportToCFrame then
                     getgenv().ToxSafeTeleportToCFrame(
@@ -6762,14 +5613,11 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
                     if getgenv().RecordToxTeleportReturn then
                         getgenv().RecordToxTeleportReturn()
                     end
-
                     if getgenv().AllowToxTeleport then
                         getgenv().AllowToxTeleport(1.25, "Ctrl Click TP")
                     end
-
                     Root.AssemblyLinearVelocity = Vector3.zero
                     Root.AssemblyAngularVelocity = Vector3.zero
-
                     if Player.Character then
                         Player.Character:PivotTo(targetCFrame)
                     else
@@ -6779,7 +5627,6 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
             end
         end
     end
-
     local isGuiKey = false
     if typeof(Settings.GUIKeybind) == "EnumItem" then
         isGuiKey = (input.KeyCode == Settings.GUIKeybind)
@@ -6795,13 +5642,11 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
             SubGuisPreKeyHiddenState.Music = MusicGui.Visible
             SubGuisPreKeyHiddenState.Waypoints = WaypointsGui.Visible
             SubGuisPreKeyHiddenState.QuickJoin = JoinGamesGui and JoinGamesGui.Visible or false
-
             Main.Visible = false
             ChatLogGui.Visible = false
             MusicGui.Visible = false
             WaypointsGui.Visible = false
             if JoinGamesGui then JoinGamesGui.Visible = false end
-
             for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
                 if gui and gui.Parent then
                     SubGuisPreKeyHiddenState["Extra_" .. tostring(key)] = gui.Visible
@@ -6810,7 +5655,6 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
             end
         else
             Main.Visible = true
-
             if Tabs.Visible then
                 if SubGuisPreKeyHiddenState.ChatLog ~= nil then
                     ChatLogGui.Visible = SubGuisPreKeyHiddenState.ChatLog
@@ -6824,10 +5668,8 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 if JoinGamesGui and SubGuisPreKeyHiddenState.QuickJoin ~= nil then
                     JoinGamesGui.Visible = SubGuisPreKeyHiddenState.QuickJoin
                 end
-
                 for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
                     local saved = SubGuisPreKeyHiddenState["Extra_" .. tostring(key)]
-
                     if gui and gui.Parent and saved ~= nil then
                         gui.Visible = saved
                     end
@@ -6841,21 +5683,17 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
         end
     end
 end))
-
 if Settings.WalkFling then
     StartWalkFling()
 end
-
 AddConnection(Player.Idled:Connect(function()
     if ScriptLoaded and Settings.AntiAFK then
         VirtualUser:CaptureController()
         VirtualUser:ClickButton2(Vector2.new())
     end
 end))
-
 AddConnection(RunService.Stepped:Connect(function()
     if Destroyed then return end
-
     if not ScriptLoaded then
         if Settings.AntiFling then
             for _, p in ipairs(
@@ -6874,17 +5712,14 @@ AddConnection(RunService.Stepped:Connect(function()
                                 AntiFlingDefaults[part] =
                                     part.CanCollide
                             end
-
                             part.CanCollide = false
                         end
                     end
                 end
             end
         end
-
         return
     end
-
     if Settings.Noclip and Player.Character then
         for _, part in ipairs(Player.Character:GetDescendants()) do
             if part:IsA("BasePart") then
@@ -6895,7 +5730,6 @@ AddConnection(RunService.Stepped:Connect(function()
             end
         end
     end
-
     if Settings.AntiFling then
         if Settings.WalkFling then
             local root =
@@ -6904,7 +5738,6 @@ AddConnection(RunService.Stepped:Connect(function()
                     FindFirstChild(
                         "HumanoidRootPart"
                     )
-
             if root
             and not WalkFlingImpulseActive
             and root.AssemblyLinearVelocity.Magnitude
@@ -6931,7 +5764,6 @@ AddConnection(RunService.Stepped:Connect(function()
                                 AntiFlingDefaults[part] =
                                     part.CanCollide
                             end
-
                             part.CanCollide = false
                         end
                     end
@@ -6939,45 +5771,35 @@ AddConnection(RunService.Stepped:Connect(function()
             end
         end
     end
-
     local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
     if Settings.NoFallDamage and Root then
         local velocity = Root.AssemblyLinearVelocity
         local triggerVelocity = game.PlaceId == 189707 and -60 or -40
         local safeVelocity = game.PlaceId == 189707 and -45 or -35
-
         if velocity.Y < triggerVelocity then
             Root.AssemblyLinearVelocity = Vector3.new(velocity.X, safeVelocity, velocity.Z)
         end
     end
-
     UpdateAirWalk()
     if Settings.Fullbright then UpdateFullbright() end
 end))
-
 FlyBV = nil
 FlyBG = nil
-
 function DisableNormalFlyPhysics()
     local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
     if FlyBV then FlyBV:Destroy() FlyBV = nil end
     if FlyBG then FlyBG:Destroy() FlyBG = nil end
     if Hum then Hum.PlatformStand = false end
 end
-
 AddConnection(RunService.RenderStepped:Connect(function(delta)
 	if Destroyed or not ScriptLoaded then return end
-
     local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
     local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-
     if Hum and Hum.Health > 0 then
         local defaults = GetHumanoidDefaults(Hum)
-
         if Settings.Speed then
             Hum.WalkSpeed = Settings.SpeedValue
         end
-
         if Settings.Jump then
             Hum.UseJumpPower = true
             Hum.JumpPower = Settings.JumpValue
@@ -6988,7 +5810,6 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 Hum.JumpHeight = defaults.JumpHeight
             end
         end
-
         if Settings.Bhop then
             local interval = math.max(0.05, tonumber(Settings.BhopInterval) or 0.2)
             getgenv().BhopTimer = (getgenv().BhopTimer or 0) + delta
@@ -7000,12 +5821,10 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
             getgenv().BhopTimer = 0
         end
     end
-
     if Settings.FOVEnabled then
         CaptureFOVDefault()
         Camera.FieldOfView = Settings.FOVValue or FOVDefault
     end
-
     if Settings.ForceShiftLock then
         CaptureShiftLockDefaults()
         Player.DevEnableMouseLock = true
@@ -7014,19 +5833,15 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
             Root.CFrame = CFrame.new(Root.Position, Root.Position + Vector3.new(Camera.CFrame.LookVector.X, 0, Camera.CFrame.LookVector.Z))
         end
     end
-
     if Settings.LoopTPTarget and Settings.LoopTPTarget.Character and Settings.LoopTPTarget.Character:FindFirstChild("HumanoidRootPart") and Root then
         if getgenv().AllowToxTeleport then getgenv().AllowToxTeleport(0.2, "Loop TP") end
         Root.CFrame = Settings.LoopTPTarget.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3)
     end
-
     local seat = Hum and Hum.SeatPart
-
     if seat and Settings.CarSpeed and not Settings.CarFly then
         seat.AssemblyLinearVelocity =
             seat.CFrame.LookVector * (Settings.CarSpeedValue or 100)
     end
-
     if Settings.CarFly
     and seat
     and Root then
@@ -7042,17 +5857,12 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                     5,
                     300
                 )
-
             local moveVector =
                 GetCarFlyMoveVector()
-
             local velocity =
                 Vector3.zero
-
             velocity = velocity + (Camera.CFrame.RightVector * (moveVector.X * flySpeed))
-
             velocity = velocity - (Camera.CFrame.LookVector * (moveVector.Z * flySpeed))
-
             if UserInputService:
                 IsKeyDown(
                     Enum.KeyCode.Space
@@ -7063,7 +5873,6 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 ) then
                 velocity = velocity + Vector3.new(0, flySpeed * 2, 0)
             end
-
             if UserInputService:
                 IsKeyDown(
                     Enum.KeyCode.LeftShift
@@ -7074,32 +5883,25 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 ) then
                 velocity = velocity - Vector3.new(0, flySpeed * 2, 0)
             end
-
             CarFlyVelocity.Velocity =
                 velocity
-
             CarFlyGyro.CFrame =
                 Camera.CFrame
-
             Root.AssemblyAngularVelocity =
                 Vector3.zero
         end
     else
         DestroyCarFlyMovers()
     end
-
     if Settings.Spinbot and Root then
         Root.CFrame = Root.CFrame * CFrame.Angles(0, math.rad(Settings.SpinSpeed or 50), 0)
     end
-
     local actualFlySpeed = (Settings.FlySpeed or 10) * 10
-
     if Settings.SmoothFly and Root and Hum and Hum.Health > 0 then
         DisableNormalFlyPhysics()
         Hum.PlatformStand = true
         Root.AssemblyLinearVelocity = Vector3.zero
         Root.AssemblyAngularVelocity = Vector3.zero
-
         local moveDir = Vector3.zero
         if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.LookVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
@@ -7107,7 +5909,6 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.RightVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then moveDir = moveDir + Vector3.new(0, 1, 0) end
         if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then moveDir = moveDir - Vector3.new(0, 1, 0) end
-
         if moveDir.Magnitude > 0 then
             moveDir = moveDir.Unit
             Root.CFrame = Root.CFrame + (moveDir * (actualFlySpeed * delta))
@@ -7119,13 +5920,11 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
             FlyBV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
             FlyBV.Velocity = Vector3.zero
             FlyBV.Parent = Root
-
             FlyBG = Instance.new("BodyGyro")
             FlyBG.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
             FlyBG.CFrame = Root.CFrame
             FlyBG.Parent = Root
         end
-
         Hum.PlatformStand = true
         local dir = Vector3.zero
         if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + Camera.CFrame.LookVector end
@@ -7134,24 +5933,20 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + Camera.CFrame.RightVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then dir = dir + Vector3.new(0, 1, 0) end
         if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then dir = dir - Vector3.new(0, 1, 0) end
-
         FlyBV.Velocity = dir * actualFlySpeed
         FlyBG.CFrame = Camera.CFrame
     else
         DisableNormalFlyPhysics()
     end
-
     if FOVCircle then
         FOVCircle.Visible = Settings.Aimbot and Settings.ShowFOV
         FOVCircle.Radius = Settings.FOVRadius or 120
         FOVCircle.Position = UserInputService:GetMouseLocation()
     end
-
     if CrosshairH and CrosshairV then
         CrosshairH.Visible = false
         CrosshairV.Visible = false
     end
-
     if not getgenv().ToxCombatLoaded then
         if not getgenv().ToxUniversal2OwnsAimbot
         and Settings.Aimbot
@@ -7162,7 +5957,6 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, Target.Position), 1 / Smooth)
             end
         end
-
         if Settings.Triggerbot then
             local mousePos = UserInputService:GetMouseLocation()
             local ray = Camera:ViewportPointToRay(mousePos.X, mousePos.Y)
@@ -7177,8 +5971,6 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
             end
         end
     end
-
-
     if not getgenv().ToxCombatLoaded then
         if Settings.HitboxExpander then
             local hbSize = tonumber(Settings.HitboxSize) or 10
@@ -7196,7 +5988,6 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                                 CustomPhysicalProperties = hrp.CustomPhysicalProperties
                             }
                         end
-
                         hrp.Size = Vector3.new(hbSize, heightLimit, hbSize)
                         hrp.Transparency = 0.7
                         hrp.CanCollide = false
@@ -7208,7 +5999,6 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 end
             end
         end
-
         if Settings.KillAura and Root then
             for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= Player and p.Character then
@@ -7225,12 +6015,10 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         end
     end
 end))
-
 function ShowCenterLoadSequence()
     local blur = Instance.new("BlurEffect")
     blur.Size = 18
     blur.Parent = Lighting
-
     local SplashFrame = Instance.new("Frame")
     SplashFrame.Size = UDim2.new(0, 360, 0, 110)
     SplashFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -7239,17 +6027,14 @@ function ShowCenterLoadSequence()
     SplashFrame.BorderSizePixel = 0
     SplashFrame.ClipsDescendants = true
     SplashFrame.Parent = NotifGui
-
     local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 10) Corner.Parent = SplashFrame
     local Stroke = Instance.new("UIStroke") Stroke.Color = MAIN_COLOR Stroke.Thickness = 2 Stroke.Parent = SplashFrame
-
     local SplashLogo = Instance.new("ImageLabel")
     SplashLogo.Size = UDim2.new(0, 48, 0, 48)
     SplashLogo.Position = UDim2.new(0, 18, 0, 16)
     SplashLogo.BackgroundTransparency = 1
     SplashLogo.Image = LOGO_ID
     SplashLogo.Parent = SplashFrame
-
     local TitleLabel = Instance.new("TextLabel")
     TitleLabel.Size = UDim2.new(1, -85, 0, 24)
     TitleLabel.Position = UDim2.new(0, 78, 0, 16)
@@ -7260,7 +6045,6 @@ function ShowCenterLoadSequence()
     TitleLabel.TextSize = 15
     TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
     TitleLabel.Parent = SplashFrame
-
     local SubLabel = Instance.new("TextLabel")
     SubLabel.Size = UDim2.new(1, -85, 0, 20)
     SubLabel.Position = UDim2.new(0, 78, 0, 40)
@@ -7271,14 +6055,12 @@ function ShowCenterLoadSequence()
     SubLabel.TextSize = 12
     SubLabel.TextXAlignment = Enum.TextXAlignment.Left
     SubLabel.Parent = SplashFrame
-
     local BarBackground = Instance.new("Frame")
     BarBackground.Size = UDim2.new(1, -36, 0, 8)
     BarBackground.Position = UDim2.new(0, 18, 1, -22)
     BarBackground.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
     BarBackground.BorderSizePixel = 0
     BarBackground.Parent = SplashFrame
-
     local BarCorner = Instance.new("UICorner") BarCorner.CornerRadius = UDim.new(0, 4) BarCorner.Parent = BarBackground
     local BarFill = Instance.new("Frame")
     BarFill.Size = UDim2.new(0, 0, 1, 0)
@@ -7286,7 +6068,6 @@ function ShowCenterLoadSequence()
     BarFill.BorderSizePixel = 0
     BarFill.Parent = BarBackground
     local BarFillCorner = Instance.new("UICorner") BarFillCorner.CornerRadius = UDim.new(0, 4) BarFillCorner.Parent = BarFill
-
     local PercentLabel = Instance.new("TextLabel")
     PercentLabel.Size = UDim2.new(0, 40, 0, 18)
     PercentLabel.Position = UDim2.new(1, -58, 0, 16)
@@ -7297,7 +6078,6 @@ function ShowCenterLoadSequence()
     PercentLabel.TextSize = 12
     PercentLabel.TextXAlignment = Enum.TextXAlignment.Right
     PercentLabel.Parent = SplashFrame
-
     local duration = 4.0
     local steps = 50
     for i = 1, steps do
@@ -7307,34 +6087,26 @@ function ShowCenterLoadSequence()
         if i == steps then TitleLabel.Text = "ToxHub Loaded Successfully" end
         task.wait(duration / steps)
     end
-
     if blur then blur:Destroy() end
-
     local fallTween = TweenService:Create(SplashFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
         Position = UDim2.new(0.5, 0, 1.3, 0),
         BackgroundTransparency = 1
     })
     local finished = false
-
     local function FinishLoading()
         if finished then
             return
         end
-
         finished = true
-
         pcall(function()
             if SplashFrame and SplashFrame.Parent then
                 SplashFrame:Destroy()
             end
         end)
-
         ScriptLoaded = true
         getgenv().ScriptLoaded = true
-
         if not Destroyed and not getgenv().Destroyed then
             local finalPosition = (getgenv().GetSavedGuiPosition and getgenv().GetSavedGuiPosition("Main")) or UDim2.new(0.5, -360, 0.5, -240)
-
             local finalSize =
                 (
                     getgenv().GetSavedGuiSize
@@ -7354,11 +6126,9 @@ function ShowCenterLoadSequence()
                     0,
                     480
                 )
-
             Main.Size = UDim2.new(0, 0, 0, 0)
             Main.Position = finalPosition
             Main.Visible = true
-
             Main:TweenSizeAndPosition(
                 finalSize,
                 finalPosition,
@@ -7367,35 +6137,28 @@ function ShowCenterLoadSequence()
                 0.5,
                 true
             )
-
             CustomNotify("ToxHub Revolution Loaded Successfully!", Color3.fromRGB(100, 255, 100))
         end
     end
-
     fallTween.Completed:Connect(FinishLoading)
     fallTween:Play()
-
     task.delay(0.75, function()
         if not finished then
             FinishLoading()
         end
     end)
 end
-
 task.spawn(function()
     local ok, err = pcall(ShowCenterLoadSequence)
-
     if not ok then
         warn("[ToxHub Loading Error]: " .. tostring(err))
         ScriptLoaded = true
         getgenv().ScriptLoaded = true
-
         if Main and Main.Parent and not getgenv().Destroyed then
             Main.Visible = true
         end
     end
 end)
-
 SubGuisPreMinimizedState = {}
 Minimize = getgenv().Minimize
 Minimized = false
@@ -7419,56 +6182,42 @@ MainExpandedSize =
         0,
         480
     )
-
 function CollapseSubGuiWithMain(key, gui)
     if not gui then return end
-
     local control = SubGuiControls[gui]
-
     SubGuisPreMinimizedState[key] = {
         Visible = gui.Visible,
         WasMinimized = control and control.Minimized or false
     }
-
     if gui.Visible and control and not control.Minimized then
         SetSubGuiMinimized(control, true)
     end
 end
-
 function RestoreSubGuiAfterMain(key, gui)
     if not gui then return end
-
     local state = SubGuisPreMinimizedState[key]
     if not state then return end
-
     gui.Visible = state.Visible
-
     local control = SubGuiControls[gui]
     if control then
         SetSubGuiMinimized(control, state.WasMinimized)
     end
 end
-
 if Minimize and not getgenv().SetToxMinimized then
     Minimize.MouseButton1Click:Connect(function()
         Minimized = not Minimized
-
         getgenv().ToxMainMinimized = Minimized
-
         local resizeHandle = Main and Main:FindFirstChild("ToxResizeHandle")
-
         if resizeHandle then
             resizeHandle.Visible = not Minimized
             resizeHandle.Active = not Minimized
         end
-
         if Minimized then
             if Main.Size.Y.Offset > 44 then
                 MainExpandedSize =
                     Main.Size
                 getgenv().ToxMainExpandedSize = MainExpandedSize
             end
-
             Main.Size =
                 UDim2.new(
                     MainExpandedSize.X.Scale,
@@ -7486,24 +6235,19 @@ if Minimize and not getgenv().SetToxMinimized then
                     )
                 )
                 or MainExpandedSize
-
             MainExpandedSize =
                 savedSize
             getgenv().ToxMainExpandedSize = MainExpandedSize
-
             Main.Size =
                 MainExpandedSize
         end
-
         Tabs.Visible = not Minimized
         if getgenv().CurrentPage then getgenv().CurrentPage.Visible = not Minimized end
         Minimize.Text = Minimized and "+" or "-"
-
         if Minimized then
             CollapseSubGuiWithMain("ChatLog", ChatLogGui)
             CollapseSubGuiWithMain("Music", MusicGui)
             CollapseSubGuiWithMain("Waypoints", WaypointsGui)
-
             for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
                 CollapseSubGuiWithMain("Extra_" .. tostring(key), gui)
             end
@@ -7511,36 +6255,30 @@ if Minimize and not getgenv().SetToxMinimized then
             RestoreSubGuiAfterMain("ChatLog", ChatLogGui)
             RestoreSubGuiAfterMain("Music", MusicGui)
             RestoreSubGuiAfterMain("Waypoints", WaypointsGui)
-
             for key, gui in pairs(getgenv().ToxLinkedSubGuis or {}) do
                 RestoreSubGuiAfterMain("Extra_" .. tostring(key), gui)
             end
         end
     end)
 end
-
 local function ApplyUniversalSavedOptionsAfterLoad()
     if Destroyed
     or not ScriptLoaded then
         return
     end
-
     if Settings.AntiVoid then
         StartAntiVoid()
     end
-
     if Settings.FPSBooster then
         SetFPSBooster(
             true,
             true
         )
     end
-
     if Settings.ToxServerInfoVisible then
         SetServerInfoVisible(true)
     end
 end
-
 local function ShowUniversalUpdateAfterLoad()
     if getgenv().ShowToxUpdateGui then
         getgenv().ShowToxUpdateGui(
@@ -7559,33 +6297,20 @@ local function ShowUniversalUpdateAfterLoad()
         )
     end
 end
-
 task.spawn(function()
     while not Destroyed
     and not ScriptLoaded do
         task.wait(0.05)
     end
-
     if Destroyed then
         return
     end
-
     ApplyUniversalSavedOptionsAfterLoad()
-
     task.wait(0.2)
-
     ShowUniversalUpdateAfterLoad()
 end)
-
 getgenv().ToxUniversalLoaded = true
-
-
--- ==============================================================================
--- WASOR PORTED FEATURES (Save Game, No 3D Render, AirWalk Platform, Return By Death)
--- ==============================================================================
-
 task.spawn(function()
-    -- Save Game (Standard & Decompile)
     if getgenv().ScriptsPage then
         local function RunSaveGame(decompile)
             local modeText = decompile and " (Decompiled Scripts)" or " (Standard)"
@@ -7599,7 +6324,6 @@ task.spawn(function()
                             SaveInstance = SaveInstance.Save
                         end
                     end
-
                     if type(SaveInstance) == "function" then
                         if decompile then
                             SaveInstance({Decompile = true, DecompileTimeout = 10})
@@ -7610,7 +6334,6 @@ task.spawn(function()
                         error("saveinstance API not supported by executor")
                     end
                 end)
-
                 if ok then
                     CustomNotify("Save Game completed successfully!", Color3.fromRGB(50, 220, 90))
                 else
@@ -7618,13 +6341,10 @@ task.spawn(function()
                 end
             end)
         end
-
         CreateSection("Save Game & World (WASOR)", getgenv().ScriptsPage)
         CreateButton("Save Place (Standard)", getgenv().ScriptsPage, function() RunSaveGame(false) end)
         CreateButton("Save Place (Decompile Scripts)", getgenv().ScriptsPage, function() RunSaveGame(true) end)
     end
-
-    -- No 3D Rendering (Ultra AFK FPS Boost)
     if getgenv().VisualsPage then
         CreateToggle("No 3D Rendering (AFK Max FPS)", getgenv().VisualsPage, Settings.No3DRender == true, function(v)
             Settings.No3DRender = v
@@ -7638,8 +6358,6 @@ task.spawn(function()
             end
         end, "No3DRender")
     end
-
-    -- Air Walk Platform (Walking platform in the air)
     local airPlatform = nil
     if getgenv().PlayerPage then
         CreateToggle("Air Walk Platform", getgenv().PlayerPage, Settings.AirWalkPlatform == true, function(v)
@@ -7670,8 +6388,6 @@ task.spawn(function()
                 if airPlatform then pcall(function() airPlatform:Destroy() end) airPlatform = nil end
             end
         end, "AirWalkPlatform")
-
-        -- Return By Death
         local lastDeathCFrame = nil
         Player.CharacterAdded:Connect(function(char)
             if Settings.ReturnByDeath and lastDeathCFrame then
@@ -7683,7 +6399,6 @@ task.spawn(function()
                     lastDeathCFrame = nil
                 end
             end
-
             local hum = char:WaitForChild("Humanoid", 5)
             if hum then
                 hum.Died:Connect(function()
@@ -7694,13 +6409,10 @@ task.spawn(function()
                 end)
             end
         end)
-
         CreateToggle("Return By Death", getgenv().PlayerPage, Settings.ReturnByDeath == true, function(v)
             Settings.ReturnByDeath = v
         end, "ReturnByDeath")
     end
-
-    -- Instant Prompts & Tool Magnet in Extras/World
     if getgenv().FlingPage then
         CreateSection("World & Prompts (WASOR)", getgenv().FlingPage)
         CreateToggle("Instant Proximity Prompts", getgenv().FlingPage, Settings.InstantPrompts == true, function(v)
@@ -7713,13 +6425,11 @@ task.spawn(function()
                 end
             end
         end, "InstantPrompts")
-
         workspace.DescendantAdded:Connect(function(desc)
             if Settings.InstantPrompts and desc:IsA("ProximityPrompt") then
                 desc.HoldDuration = 0
             end
         end)
-
         CreateToggle("Tool Magnet", getgenv().FlingPage, Settings.ToolMagnet == true, function(v)
             Settings.ToolMagnet = v
             if v then
