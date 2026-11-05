@@ -314,19 +314,26 @@ local KnownItemRaritiesSorted = {
 local function DetectRarityFromColor(color)
     if not color then return nil end
     local r, g, b = color.R * 255, color.G * 255, color.B * 255
-    if (r > 110 and b > 160 and g < 160) or (r > 140 and b > 190 and g < 180) then
+    -- Purple / Violet / Magenta (Epic)
+    if (r > 90 and b > 140 and g < math.max(r, b) * 0.8)
+    or (b > 160 and r > 105 and g < 170)
+    or (r > 125 and b > 175 and g < 185) then
         return "Epic"
     end
-    if r > 190 and g < 90 and b < 90 then
+    -- Red (Mythic)
+    if r > 180 and g < 100 and b < 100 then
         return "Mythic"
     end
-    if (r > 200 and g > 130 and b < 90) or (r > 230 and g > 180 and b < 60) then
+    -- Gold / Orange / Yellow (Legendary)
+    if (r > 190 and g > 120 and b < 100) or (r > 220 and g > 170 and b < 70) then
         return "Legendary"
     end
-    if (b > 170 and r < 130) or (b > 190 and g > 100 and r < 90) then
+    -- Blue / Cyan (Rare)
+    if (b > 160 and r < 140 and g < 220) or (b > 180 and g > 90 and r < 100) then
         return "Rare"
     end
-    if g > 150 and r < 140 and b < 140 then
+    -- Green (Uncommon)
+    if g > 140 and r < 150 and b < 150 then
         return "Uncommon"
     end
     return nil
@@ -334,11 +341,18 @@ end
 local FilterMinRank = {
     ["All"] = 1,
     ["Common+"] = 1,
+    ["Common"] = 1,
     ["Uncommon+"] = 2,
+    ["Uncommon"] = 2,
     ["Rare+"] = 3,
+    ["Rare"] = 3,
     ["Epic+"] = 4,
+    ["Epic"] = 4,
     ["Legendary+"] = 5,
-    ["Mythic Only"] = 6
+    ["Legendary"] = 5,
+    ["Mythic Only"] = 6,
+    ["Mythic"] = 6,
+    ["Secret"] = 6
 }
 local RarityColors = {
     ["Common"] = Color3.fromRGB(220, 220, 230),
@@ -366,7 +380,17 @@ local GenericNames = {
 local NonLootKeywords = {
     "door", "gate", "vent", "locker", "closet", "wardrobe", "hidespot",
     "exit", "escape", "extract", "evac", "button", "switch",
-    "breaker", "fuse", "elevator", "barrier", "barricade"
+    "breaker", "fuse", "elevator", "barrier", "barricade",
+    "shelf", "shelves", "aisle", "rack", "display", "stand",
+    "hand truck", "handtruck", "dolly", "pallet", "trolley", "shopping cart", "cart",
+    "checkout", "register", "counter", "desk", "table", "chair", "bench", "seat", "stool",
+    "sink", "toilet", "faucet", "mirror", "stall", "urinal",
+    "trash", "bin", "dumpster",
+    "light", "lamp", "bulb", "fixture", "socket", "outlet", "switchboard",
+    "pillar", "column", "wall", "floor", "ceiling", "stair", "stairs", "railing", "ladder",
+    "window", "glass", "cctv", "security camera",
+    "sign", "poster", "board", "billboard", "plaque", "decal", "banner",
+    "fusebox", "electrical", "pipe", "conduit", "duct"
 }
 local NonMonsterKeywords = {
     "door", "gate", "room", "spawn", "barrier", "zone", "prop", "wall", "floor",
@@ -377,7 +401,12 @@ local LootKeywords = {
     "tablet", "camera", "painting", "statue", "jewelry", "console",
     "headphones", "cash", "ring", "drive", "usb", "bag", "purse",
     "loot", "item", "pickup", "diamond", "core", "relic", "skull", "idol",
-    "gpu", "card", "coin", "money", "artifact", "trophy", "ingot"
+    "gpu", "card", "coin", "money", "artifact", "trophy", "ingot",
+    "wine", "champagne", "liquor", "alcohol", "drink", "bottle", "soda",
+    "cereal", "food", "chips", "snack", "caviar", "truffle", "saffron",
+    "perfume", "cologne", "necklace", "bracelet", "earring", "gem", "gemstone",
+    "ruby", "emerald", "sapphire", "amethyst", "topaz", "chalice", "goblet",
+    "scepter", "crown", "tiara", "urn", "vase", "tool", "drill", "radio", "battery"
 }
 local EstimatedValues = {
     ["mythic"] = 3500,
@@ -511,7 +540,7 @@ local function ResolveItemData(prompt, instance, nameLower)
     local guiPrice = nil
     for _, obj in ipairs(hierarchy) do
         if not rawRarity then
-            for _, k in ipairs({ "Rarity", "rarity", "Tier", "tier", "ItemRarity", "Grade", "Quality" }) do
+            for _, k in ipairs({ "Rarity", "rarity", "Tier", "tier", "ItemRarity", "ScrapRarity", "Grade", "Quality", "RarityTier", "ItemTier" }) do
                 local a = obj:GetAttribute(k)
                 if typeof(a) == "string" and a ~= "" then
                     rawRarity = a
@@ -521,12 +550,23 @@ local function ResolveItemData(prompt, instance, nameLower)
                     if tiers[a] then
                         rawRarity = tiers[a]
                         break
+                    elseif a == 0 then
+                        rawRarity = "Common"
+                        break
                     end
                 end
                 local c = obj:FindFirstChild(k)
-                if c and c:IsA("StringValue") and c.Value ~= "" then
-                    rawRarity = c.Value
-                    break
+                if c then
+                    if c:IsA("StringValue") and c.Value ~= "" then
+                        rawRarity = c.Value
+                        break
+                    elseif (c:IsA("NumberValue") or c:IsA("IntValue")) and c.Value > 0 then
+                        local tiers = { [1] = "Common", [2] = "Uncommon", [3] = "Rare", [4] = "Epic", [5] = "Legendary", [6] = "Mythic" }
+                        if tiers[c.Value] then
+                            rawRarity = tiers[c.Value]
+                            break
+                        end
+                    end
                 end
             end
         end
@@ -604,20 +644,45 @@ local function ResolveItemData(prompt, instance, nameLower)
     if guiColorRarity then
         rawRarity = guiColorRarity
     end
-    if not rawRarity or rawRarity == "" then
+    local norm = string.lower(tostring(rawRarity or ""))
+    if string.find(norm, "mythic", 1, true) or string.find(norm, "secret", 1, true) or norm == "6" then
+        rawRarity = "Mythic"
+    elseif string.find(norm, "legendary", 1, true) or norm == "5" then
+        rawRarity = "Legendary"
+    elseif string.find(norm, "epic", 1, true) or norm == "4" or string.find(norm, "t4", 1, true) or string.find(norm, "purple", 1, true) then
+        rawRarity = "Epic"
+    elseif string.find(norm, "rare", 1, true) or norm == "3" or string.find(norm, "t3", 1, true) or string.find(norm, "blue", 1, true) then
+        rawRarity = "Rare"
+    elseif string.find(norm, "uncommon", 1, true) or norm == "2" or string.find(norm, "t2", 1, true) or string.find(norm, "green", 1, true) then
+        rawRarity = "Uncommon"
+    elseif string.find(norm, "common", 1, true) or norm == "1" or string.find(norm, "t1", 1, true) or string.find(norm, "white", 1, true) then
+        rawRarity = "Common"
+    else
+        rawRarity = nil
+    end
+    if not rawRarity then
         rawRarity = InferRarity(nameLower)
     end
-    local norm = string.lower(tostring(rawRarity or "common"))
-    if norm == "common" then rawRarity = "Common"
-    elseif norm == "uncommon" then rawRarity = "Uncommon"
-    elseif norm == "rare" then rawRarity = "Rare"
-    elseif norm == "epic" then rawRarity = "Epic"
-    elseif norm == "legendary" then rawRarity = "Legendary"
-    elseif norm == "mythic" or norm == "secret" then rawRarity = "Mythic"
-    else rawRarity = "Common" end
     if not rawValue or rawValue == 0 then
         rawValue = InferValue(nameLower)
     end
+    -- Fallback de raridade pelo valor do item caso não tenha sido detectado explicitamente
+    if (not rawRarity or rawRarity == "Common") and rawValue and rawValue > 0 then
+        if rawValue >= 2500 then
+            rawRarity = "Mythic"
+        elseif rawValue >= 1200 then
+            rawRarity = "Legendary"
+        elseif rawValue >= 600 then
+            rawRarity = "Epic"
+        elseif rawValue >= 300 then
+            rawRarity = "Rare"
+        elseif rawValue >= 150 then
+            rawRarity = "Uncommon"
+        else
+            rawRarity = "Common"
+        end
+    end
+    rawRarity = rawRarity or "Common"
     return rawRarity, rawValue or 100, rawWeight or 0
 end
 local function FormatCurrency(num)
@@ -1098,51 +1163,81 @@ local function IsLootObject(prompt, instance, nameLower)
     if not prompt or not instance then return false end
     local action = prompt.ActionText and string.lower(prompt.ActionText) or ""
     if action ~= "" then
-        if string.find(action, "door") or string.find(action, "unscrew") or string.find(action, "hide") then
+        if string.find(action, "door") or string.find(action, "unscrew") or string.find(action, "hide")
+        or string.find(action, "escape") or string.find(action, "drive") or string.find(action, "leave")
+        or string.find(action, "sit") or string.find(action, "climb") or string.find(action, "inspect")
+        or string.find(action, "turn on") or string.find(action, "turn off") or string.find(action, "toggle")
+        or string.find(action, "press") or string.find(action, "push") or string.find(action, "pull")
+        or string.find(action, "use") or string.find(action, "open") or string.find(action, "close") then
             return false
         end
-        if string.find(action, "steal")
+    end
+
+    local hasLootAttr = false
+    local attrVal = instance:GetAttribute("Value") or instance:GetAttribute("Price") or instance:GetAttribute("Worth")
+    local attrRarity = instance:GetAttribute("Rarity") or instance:GetAttribute("ItemRarity") or instance:GetAttribute("Tier")
+    local attrWeight = instance:GetAttribute("Weight") or instance:GetAttribute("Mass")
+    if (attrVal and tonumber(attrVal) and tonumber(attrVal) > 0)
+    or (attrRarity and tostring(attrRarity) ~= "")
+    or (attrWeight and tonumber(attrWeight) and tonumber(attrWeight) > 0) then
+        hasLootAttr = true
+    end
+
+    if not hasLootAttr and instance.Parent and instance.Parent ~= Workspace then
+        local p = instance.Parent
+        local pVal = p:GetAttribute("Value") or p:GetAttribute("Price") or p:GetAttribute("Worth")
+        local pRarity = p:GetAttribute("Rarity") or p:GetAttribute("ItemRarity") or p:GetAttribute("Tier")
+        if (pVal and tonumber(pVal) and tonumber(pVal) > 0) or (pRarity and tostring(pRarity) ~= "") then
+            hasLootAttr = true
+        end
+    end
+
+    local hasLootAction = false
+    if action ~= "" and (
+        string.find(action, "steal")
         or string.find(action, "take")
         or string.find(action, "grab")
         or string.find(action, "loot")
         or string.find(action, "pick")
         or string.find(action, "search")
         or string.find(action, "collect")
-        or string.find(action, "bag") then
-            return true
+        or string.find(action, "bag")
+    ) then
+        hasLootAction = true
+    end
+
+    if nameLower and HasSubstring(nameLower, NonLootKeywords) then
+        if not hasLootAttr and not hasLootAction then
+            return false
         end
     end
-    if nameLower and HasSubstring(nameLower, NonLootKeywords) then
-        return false
-    end
+
     if prompt.ObjectText and prompt.ObjectText ~= "" then
         local objLower = string.lower(prompt.ObjectText)
-        if not HasSubstring(objLower, NonLootKeywords) then
+        if HasSubstring(objLower, NonLootKeywords) and not hasLootAttr and not hasLootAction then
+            return false
+        end
+        if HasSubstring(objLower, LootKeywords) then
             return true
         end
     end
-    if instance:GetAttribute("Value") ~= nil
-    or instance:GetAttribute("Price") ~= nil
-    or instance:GetAttribute("Worth") ~= nil
-    or instance:GetAttribute("Rarity") ~= nil then
+
+    if hasLootAttr or hasLootAction then
         return true
     end
+
     if nameLower and HasSubstring(nameLower, LootKeywords) then
         return true
     end
+
     local parent = instance.Parent
     if parent and parent ~= Workspace then
-        if parent:GetAttribute("Value") ~= nil or parent:GetAttribute("Rarity") ~= nil then
-            return true
-        end
         local pName = string.lower(parent.Name)
         if not HasSubstring(pName, NonLootKeywords) and HasSubstring(pName, LootKeywords) then
             return true
         end
     end
-    if not HasSubstring(nameLower, NonLootKeywords) then
-        return true
-    end
+
     return false
 end
 local function IsPartOfLocalPlayer(inst)
@@ -1239,9 +1334,10 @@ local function RegisterPrompt(prompt)
         }
         return
     end
-    if not isSignOrProp and (
+    local isNotHandTruck = not string.find(nameLower, "hand truck") and not string.find(nameLower, "handtruck") and not string.find(nameLower, "dolly")
+    if not isSignOrProp and isNotHandTruck and (
         (prompt.ActionText and (string.find(string.lower(prompt.ActionText), "escape") or string.find(string.lower(prompt.ActionText), "extract") or string.find(string.lower(prompt.ActionText), "leave") or string.find(string.lower(prompt.ActionText), "evac") or string.find(string.lower(prompt.ActionText), "drive")))
-        or string.find(nameLower, "van") or string.find(nameLower, "truck")
+        or string.find(nameLower, "van") or (string.find(nameLower, "truck") and not string.find(nameLower, "hand"))
         or (string.find(nameLower, "exit") and not string.find(nameLower, "sign"))
     ) then
         ExitObjects[instance] = {
@@ -2409,6 +2505,8 @@ local function StartEntityKillLoop()
 end
 local HasVotedThisIntermission = false
 local AutoVoteAttempts = 0
+local LastVoteTime = 0
+local ConsecutiveClosedCount = 0
 local SODAvailableMaps = { "Office", "Supermarket", "Liminal Lucidity", "Facility", "American Dorm", "Random" }
 local function IsGuiTrulyVisible(obj)
     if not obj or not obj:IsA("GuiObject") then return false end
@@ -2544,12 +2642,22 @@ local function ProcessAutoVote()
     if not Settings.SODAutoVote then
         HasVotedThisIntermission = false
         AutoVoteAttempts = 0
+        ConsecutiveClosedCount = 0
         return
     end
     local isOpen, mapCards, entityCards = FindVotingCards()
     if not isOpen then
-        HasVotedThisIntermission = false
-        AutoVoteAttempts = 0
+        ConsecutiveClosedCount = ConsecutiveClosedCount + 1
+        -- Apenas reseta depois da janela de votação ficar fechada por pelo menos 8 checks (~4s) e já terem passado 25s do último voto
+        if ConsecutiveClosedCount >= 8 and (os.clock() - LastVoteTime > 25) then
+            HasVotedThisIntermission = false
+            AutoVoteAttempts = 0
+        end
+        return
+    end
+    ConsecutiveClosedCount = 0
+    -- Se já votou nesta sessão ou nos últimos 25 segundos, não repete votação nem notificação
+    if HasVotedThisIntermission or (os.clock() - LastVoteTime < 25) then
         return
     end
     if AutoVoteAttempts >= 3 then
@@ -2609,12 +2717,11 @@ local function ProcessAutoVote()
         end
     end)
     AutoVoteAttempts = AutoVoteAttempts + 1
-    if not HasVotedThisIntermission then
-        HasVotedThisIntermission = true
-        local mapLabel = chosenMapName and string.upper(chosenMapName) or "MAP"
-        local entLabel = targetEntity == "ai" and "AI" or "PLAYER"
-        CustomNotify("Auto Voted: " .. mapLabel .. " | " .. entLabel, Color3.fromRGB(0, 255, 140), 3)
-    end
+    HasVotedThisIntermission = true
+    LastVoteTime = os.clock()
+    local mapLabel = chosenMapName and string.upper(chosenMapName) or "MAP"
+    local entLabel = targetEntity == "ai" and "AI" or "PLAYER"
+    CustomNotify("Auto Voted: " .. mapLabel .. " | " .. entLabel, Color3.fromRGB(0, 255, 140), 3)
 end
 local AutoVoteThread = nil
 local function StartAutoVoteLoop()
@@ -2625,6 +2732,7 @@ local function StartAutoVoteLoop()
             if not Settings.SODAutoVote then
                 HasVotedThisIntermission = false
                 AutoVoteAttempts = 0
+                ConsecutiveClosedCount = 0
                 break
             end
             pcall(ProcessAutoVote)
@@ -3305,6 +3413,7 @@ SODCreateToggle(
         else
             HasVotedThisIntermission = false
             AutoVoteAttempts = 0
+            ConsecutiveClosedCount = 0
         end
         AutoSaveConfiguration()
     end,
