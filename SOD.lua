@@ -75,6 +75,7 @@ Settings.SODAutoSteal = Settings.SODAutoSteal == true
 Settings.SODAutoStealRange = tonumber(Settings.SODAutoStealRange) or 15
 Settings.SODInstantVent = Settings.SODInstantVent == true
 Settings.SODEntityKill = Settings.SODEntityKill == true
+Settings.SODFastKill = Settings.SODFastKill ~= false
 Settings.SODInfiniteStamina = Settings.SODInfiniteStamina == true
 Settings.SODClickTP = Settings.SODClickTP == true
 Settings.SODAutoVote = Settings.SODAutoVote == true
@@ -387,19 +388,14 @@ local GenericNames = {
     ["proximityprompt"] = true,
 }
 local NonLootKeywords = {
-    "door", "gate", "vent", "locker", "closet", "wardrobe", "hidespot",
-    "exit", "escape", "extract", "evac", "button", "switch",
-    "breaker", "fuse", "elevator", "barrier", "barricade",
-    "shelf", "shelves", "aisle", "rack", "display", "stand",
-    "hand truck", "handtruck", "dolly", "pallet", "trolley", "shopping cart", "cart",
-    "checkout", "register", "counter", "desk", "table", "chair", "bench", "seat", "stool",
-    "sink", "toilet", "faucet", "mirror", "stall", "urinal",
-    "trash", "bin", "dumpster",
-    "light", "lamp", "bulb", "fixture", "socket", "outlet", "switchboard",
-    "pillar", "column", "wall", "floor", "ceiling", "stair", "stairs", "railing", "ladder",
-    "window", "glass", "cctv", "security camera",
-    "sign", "poster", "board", "billboard", "plaque", "decal", "banner",
-    "fusebox", "electrical", "pipe", "conduit", "duct"
+    "door", "gate", "vent", "grate", "airduct",
+    "locker", "closet", "wardrobe", "hidespot",
+    "exit", "escape", "extract", "evac",
+    "button", "lever", "breaker", "fusebox",
+    "elevator", "barrier", "barricade",
+    "hand truck", "handtruck", "dolly",
+    "toilet", "urinal", "dumpster",
+    "sign", "poster", "billboard", "plaque", "placa"
 }
 local NonMonsterKeywords = {
     "door", "gate", "room", "spawn", "barrier", "zone", "prop", "wall", "floor",
@@ -415,49 +411,238 @@ local LootKeywords = {
     "cereal", "food", "chips", "snack", "caviar", "truffle", "saffron",
     "perfume", "cologne", "necklace", "bracelet", "earring", "gem", "gemstone",
     "ruby", "emerald", "sapphire", "amethyst", "topaz", "chalice", "goblet",
-    "scepter", "crown", "tiara", "urn", "vase", "tool", "drill", "radio", "battery"
+    "scepter", "crown", "tiara", "urn", "vase", "tool", "drill", "radio", "battery",
+    "keyboard", "fan", "desk fan", "fridge", "mini fridge", "case", "sample", "textbook", "book"
 }
-local EstimatedValues = {
-    ["mythic"] = 3500,
-    ["secret"] = 5000,
-    ["cursed"] = 4000,
-    ["idol"] = 3000,
-    ["gold bar"] = 1500,
-    ["gold"] = 1200,
-    ["legendary"] = 1800,
-    ["vault"] = 2000,
-    ["diamond case"] = 2200,
-    ["diamond"] = 1200,
-    ["relic"] = 1600,
-    ["statue"] = 900,
-    ["crown"] = 1000,
-    ["safe"] = 750,
-    ["gpu"] = 650,
-    ["painting"] = 550,
-    ["laptop"] = 500,
-    ["console"] = 400,
-    ["rare"] = 450,
-    ["camera"] = 300,
-    ["tablet"] = 280,
-    ["uncommon"] = 250,
-    ["watch"] = 220,
-    ["ring"] = 200,
-    ["headphones"] = 180,
-    ["money"] = 150,
-    ["cash"] = 150,
-    ["phone"] = 150,
-    ["wallet"] = 100,
-    ["coin"] = 80,
+local ItemBaseValues = {
+    -- Small scraps ($40 - $120)
     ["key"] = 50,
+    ["safe key"] = 50,
+    ["cup"] = 40,
+    ["mug"] = 50,
+    ["pen"] = 40,
+    ["soap"] = 40,
+    ["soda"] = 50,
+    ["soda can"] = 50,
+    ["bottle"] = 50,
+    ["water bottle"] = 50,
+    ["energy drink"] = 60,
+    ["coin"] = 60,
+    ["coins"] = 80,
+    ["loose change"] = 80,
+    ["change"] = 80,
+    ["tape"] = 60,
+    ["duct tape"] = 60,
+    ["battery"] = 70,
+    ["batteries"] = 70,
+    ["bandage"] = 50,
+    ["plate"] = 60,
+    ["plates"] = 80,
+    ["bill"] = 80,
+    ["bills"] = 100,
+    ["money"] = 100,
+    ["cash"] = 100,
+    ["wallet"] = 100,
+    ["book"] = 60,
+    ["textbook stack"] = 80,
+    ["textbook"] = 80,
+    ["stack of books"] = 80,
+    ["notebook"] = 90,
+    ["calculator"] = 90,
+    ["charger"] = 80,
+    ["mouse"] = 90,
+    ["earphones"] = 90,
+    ["clock"] = 100,
+    ["desk clock"] = 100,
+    ["wall clock"] = 110,
+    ["desk fan"] = 74,
+    ["fan"] = 74,
+    ["toaster"] = 100,
+    ["iron"] = 110,
+    ["flashlight"] = 100,
+    ["thermostat"] = 100,
+    ["modem"] = 110,
+    ["earbuds"] = 110,
+    ["blender"] = 120,
+    ["wireless mouse"] = 120,
+    ["keyboard"] = 80,
+    ["router"] = 120,
+    ["kettle"] = 120,
+    ["electric kettle"] = 120,
+    ["speaker"] = 130,
+    ["radio"] = 130,
+    ["headphones"] = 140,
+    ["coffee maker"] = 140,
+    ["walkie talkie"] = 140,
+    ["hand drill"] = 140,
+    ["drill"] = 150,
+    ["gaming headset"] = 160,
+    ["power drill"] = 180,
+
+    -- Mid-tier valuables ($200 - $350)
+    ["phone"] = 270,
+    ["cellphone"] = 270,
+    ["smartphone"] = 270,
+    ["ring"] = 200,
+    ["watch"] = 220,
+    ["microwave"] = 220,
+    ["smartwatch"] = 240,
+    ["amplifier"] = 240,
+    ["tablet"] = 250,
+    ["painting"] = 250,
+    ["artwork"] = 250,
+    ["art"] = 250,
+    ["frame"] = 200,
+    ["monitor"] = 250,
+    ["ipad"] = 260,
+    ["camera"] = 315,
+    ["drone"] = 300,
+    ["nintendo"] = 300,
+    ["sound amplifier"] = 280,
+    ["curved monitor"] = 320,
+    ["vr"] = 320,
+    ["vr headset"] = 350,
+    ["dslr camera"] = 350,
+    ["console"] = 350,
+    ["playstation"] = 350,
+    ["ps5"] = 380,
+    ["xbox"] = 350,
+
+    -- High-tier scraps ($400 - $800)
+    ["lab sample case"] = 460,
+    ["sample case"] = 460,
+    ["lab sample"] = 460,
+    ["laptop"] = 400,
+    ["gaming laptop"] = 480,
+    ["macbook"] = 450,
+    ["computer"] = 420,
+    ["desktop"] = 420,
+    ["gaming pc"] = 500,
+    ["pc"] = 420,
+    ["gpu"] = 480,
+    ["video card"] = 480,
+    ["graphics card"] = 480,
+    ["rtx"] = 520,
+    ["projector"] = 450,
+    ["microscope"] = 480,
+    ["telescope"] = 500,
+    ["generator"] = 550,
+    ["safe"] = 600,
+    ["strongbox"] = 650,
+    ["briefcase"] = 700,
+    ["mini fridge"] = 750,
+    ["fridge"] = 750,
+    ["server"] = 600,
+    ["server blade"] = 650,
+    ["plasma cutter"] = 600,
+    ["laser drill"] = 650,
+
+    -- High-end & Relics ($800 - $2500)
+    ["urn"] = 700,
+    ["vase"] = 750,
+    ["ancient vase"] = 1100,
+    ["trophy"] = 750,
+    ["golden trophy"] = 1100,
+    ["goblet"] = 800,
+    ["chalice"] = 850,
+    ["rolex"] = 800,
+    ["statue"] = 800,
+    ["golden statue"] = 1200,
+    ["scepter"] = 900,
+    ["ancient scepter"] = 1200,
+    ["crystal"] = 900,
+    ["crystal ball"] = 950,
+    ["crystal skull"] = 1200,
+    ["tiara"] = 1000,
+    ["crown"] = 1100,
+    ["crown jewels"] = 1600,
+    ["gold"] = 1000,
+    ["gold bar"] = 1200,
+    ["gold ingot"] = 1200,
+    ["bullion"] = 1200,
+    ["gold bullion"] = 1400,
+    ["ingot"] = 1000,
+    ["diamond"] = 1200,
+    ["ruby"] = 1100,
+    ["sapphire"] = 1100,
+    ["emerald"] = 1100,
+    ["blue diamond"] = 1500,
+    ["red diamond"] = 1600,
+    ["diamond case"] = 1800,
+    ["relic"] = 1200,
+    ["ancient relic"] = 1400,
+    ["holy relic"] = 1500,
+    ["idol"] = 1200,
+    ["golden idol"] = 1600,
+    ["vault"] = 1500,
+    ["safe vault"] = 1800,
+    ["briefcase of cash"] = 1500,
+    ["stack of cash"] = 250,
+
+    -- Mythic & Secret ($2500+)
+    ["prototype"] = 2200,
+    ["meteorite"] = 2500,
+    ["plasma rifle"] = 2600,
+    ["quantum laser"] = 2800,
+    ["secret prototype"] = 2800,
+    ["golden skull"] = 3000,
+    ["cursed idol"] = 3000,
+    ["alien artifact"] = 3200,
+    ["secret core"] = 3500,
+    ["dark matter"] = 4000,
+    ["pandora"] = 4500
 }
-local function InferValue(nameLower)
+local EstimatedValues = ItemBaseValues
+local function GetItemBaseValue(nameLower)
     if not nameLower or nameLower == "" then return 100 end
-    for word, val in pairs(EstimatedValues) do
-        if string.find(nameLower, word, 1, true) then
-            return val
+    if ItemBaseValues[nameLower] then
+        return ItemBaseValues[nameLower]
+    end
+    local bestMatch = nil
+    local bestLen = 0
+    for name, val in pairs(ItemBaseValues) do
+        if string.find(nameLower, name, 1, true) then
+            if #name > bestLen then
+                bestLen = #name
+                bestMatch = val
+            end
         end
     end
-    return 100
+    return bestMatch or 100
+end
+local function InferValue(nameLower)
+    return GetItemBaseValue(nameLower)
+end
+local function InferRarityFromValue(nameLower, value)
+    if not value or value <= 0 then
+        return "Common"
+    end
+    local base = GetItemBaseValue(nameLower)
+    if not base or base <= 0 then
+        base = 100
+    end
+    local ratio = value / base
+
+    -- Percentage multiplier over item base value:
+    -- Common:    ~1.0x (base price with variance, ratio < 1.25)
+    -- Uncommon:  ~1.4x (+25% to +65% increase)
+    -- Rare:      ~2.0x (+65% to +135% increase) [Textbook Stack $166 / 80 = 2.07x; Painting $503 / 250 = 2.01x]
+    -- Epic:      ~3.0x (+135% to +280% increase)
+    -- Legendary: ~5.0x to 35x+ (+280%+ increase) [Keyboard $2702 / 80 = 33.7x]
+    -- Mythic:    ~40x+ (extreme rare/secret)
+    if ratio >= 40.0 then
+        return "Mythic"
+    elseif ratio >= 3.8 then
+        return "Legendary"
+    elseif ratio >= 2.35 then
+        return "Epic"
+    elseif ratio >= 1.65 then
+        return "Rare"
+    elseif ratio >= 1.25 then
+        return "Uncommon"
+    else
+        return "Common"
+    end
 end
 local MonsterKeywords = {
     "entity", "monster", "locust", "hollow", "hunter", "creature",
@@ -540,6 +725,30 @@ local function GetItemHierarchy(prompt)
     end
     return list
 end
+local function ParsePromptText(text)
+    if not text or text == "" then return nil end
+    local clean = string.gsub(text, "<[^>]->", " ")
+    local upper = string.upper(clean)
+    local rarity = nil
+    for _, r in ipairs({ "MYTHIC", "LEGENDARY", "EPIC", "RARE", "UNCOMMON", "COMMON" }) do
+        if string.find(upper, r, 1, true) then
+            rarity = r:sub(1,1) .. r:sub(2):lower()
+            break
+        end
+    end
+    local price = nil
+    local pMatch = string.match(clean, "%$([%d%,%.]+)")
+    if pMatch then
+        price = tonumber((pMatch:gsub(",", "")))
+    end
+    local weight = nil
+    local wMatch = string.match(clean, "([%d%.]+)%s*[kK][gG]")
+    if wMatch then
+        weight = tonumber(wMatch)
+    end
+    return rarity, price, weight
+end
+
 local function ResolveItemData(prompt, instance, nameLower)
     local hierarchy = GetItemHierarchy(prompt)
     local rawRarity = nil
@@ -550,19 +759,10 @@ local function ResolveItemData(prompt, instance, nameLower)
 
     if prompt then
         local pText = (prompt.ObjectText or "") .. " " .. (prompt.ActionText or "")
-        local cleanPText = string.gsub(pText, "<[^>]->", "")
-        local rMatch, pMatch, wMatch = string.match(cleanPText, "([%a]+)%s*[%s·%-%|%•]+%s*%$([%d%,%.]+)%s*[%s·%-%|%•]+%s*([%d%.]+)%s*[kK][gG]")
-        if not rMatch then
-            rMatch, pMatch = string.match(cleanPText, "([%a]+)%s*[%s·%-%|%•]+%s*%$([%d%,%.]+)")
-        end
-        if rMatch then
-            local u = string.upper(rMatch)
-            if u == "COMMON" or u == "UNCOMMON" or u == "RARE" or u == "EPIC" or u == "LEGENDARY" or u == "MYTHIC" then
-                rawRarity = u:sub(1,1) .. u:sub(2):lower()
-                if pMatch then rawValue = tonumber((pMatch:gsub(",", ""))) end
-                if wMatch then rawWeight = tonumber(wMatch) end
-            end
-        end
+        local r, p, w = ParsePromptText(pText)
+        if r then rawRarity = r end
+        if p and p > 0 then rawValue = p end
+        if w and w > 0 then rawWeight = w end
     end
 
     for _, obj in ipairs(hierarchy) do
@@ -636,29 +836,15 @@ local function ResolveItemData(prompt, instance, nameLower)
             if child:IsA("BillboardGui") and child.Name ~= "ToxSODItemTag" and child.Name ~= "ToxSOD_ItemBB" then
                 for _, desc in ipairs(child:GetDescendants()) do
                     if desc:IsA("TextLabel") and desc.Text and desc.Text ~= "" then
-                        local cleanDesc = string.gsub(desc.Text, "<[^>]->", "")
-                        local tUpper = string.upper(cleanDesc)
-                        if not guiColorRarity then
-                            for _, rWord in ipairs({ "MYTHIC", "LEGENDARY", "EPIC", "RARE", "UNCOMMON", "COMMON" }) do
-                                if string.find(tUpper, rWord, 1, true) then
-                                    guiColorRarity = rWord:sub(1,1) .. rWord:sub(2):lower()
-                                    break
-                                end
-                            end
-                        end
-                        if not guiPrice and string.find(cleanDesc, "%$") then
-                            local n = tonumber(string.match(cleanDesc, "%$([%d%,%.]+)"))
-                            if n and n > 0 then guiPrice = n end
-                        end
-                        if not rawWeight and (string.find(cleanDesc, "kg") or string.find(cleanDesc, "KG")) then
-                            local w = tonumber(string.match(cleanDesc, "([%d%.]+)%s*[kK][gG]"))
-                            if w and w > 0 then rawWeight = w end
-                        end
-                        if not guiColorRarity and desc.TextColor3 then
+                        local r, p, w = ParsePromptText(desc.Text)
+                        if r and not rawRarity then rawRarity = r end
+                        if p and not rawValue then rawValue = p end
+                        if w and not rawWeight then rawWeight = w end
+                        if not rawRarity and not guiColorRarity and desc.TextColor3 then
                             local detected = DetectRarityFromColor(desc.TextColor3)
                             if detected then guiColorRarity = detected end
                         end
-                    elseif desc:IsA("Frame") and not guiColorRarity then
+                    elseif desc:IsA("Frame") and not rawRarity and not guiColorRarity then
                         local detected = DetectRarityFromColor(desc.BackgroundColor3)
                         if detected then guiColorRarity = detected end
                     end
@@ -666,10 +852,10 @@ local function ResolveItemData(prompt, instance, nameLower)
             end
         end
     end
-    if guiPrice and guiPrice > 0 then
+    if guiPrice and guiPrice > 0 and not rawValue then
         rawValue = guiPrice
     end
-    if guiColorRarity then
+    if not rawRarity and guiColorRarity then
         rawRarity = guiColorRarity
     end
     local norm = string.lower(tostring(rawRarity or ""))
@@ -688,64 +874,20 @@ local function ResolveItemData(prompt, instance, nameLower)
     else
         rawRarity = nil
     end
-    if not rawRarity then
-        rawRarity = InferRarity(nameLower)
-    end
     if not rawValue or rawValue == 0 then
         rawValue = InferValue(nameLower)
+    end
+    if not rawRarity then
+        if rawValue and rawValue > 0 then
+            rawRarity = InferRarityFromValue(nameLower, rawValue)
+        else
+            rawRarity = InferRarity(nameLower)
+        end
     end
     rawRarity = rawRarity or "Common"
     return rawRarity, rawValue or 100, rawWeight or 0
 end
-local function FormatCurrency(num)
-    if not num then return "$0" end
-    local rounded = math.floor(tonumber(num) or 0)
-    local s = tostring(rounded)
-    local formatted = s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
-    return "$" .. formatted
-end
-local function FormatWeight(w)
-    if not w or w <= 0 then return "" end
-    if w >= 10 then
-        return string.format(" | %dkg", math.floor(w + 0.5))
-    end
-    local s = string.format("%.1f", w)
-    if s:sub(-2) == ".0" then
-        s = s:sub(1, -3)
-    end
-    return " | " .. s .. "kg"
-end
-local function GetItemModel(inst, part)
-    if not inst then return nil end
-    local target = inst:IsA("ProximityPrompt") and inst.Parent or inst
-    if not target then return nil end
-    local candidate = nil
-    if target:IsA("Model") and target ~= Workspace then
-        candidate = target
-    elseif target.Parent and target.Parent:IsA("Model") and target.Parent ~= Workspace then
-        candidate = target.Parent
-    elseif part and part.Parent and part.Parent:IsA("Model") and part.Parent ~= Workspace then
-        candidate = part.Parent
-    end
-    if candidate then
-        if candidate:FindFirstChildOfClass("Humanoid") then return nil end
-        local mLower = string.lower(candidate.Name)
-        if mLower == "workspace" or string.find(mLower, "map") or string.find(mLower, "room")
-        or string.find(mLower, "store") or string.find(mLower, "shop") or string.find(mLower, "market")
-        or string.find(mLower, "building") or string.find(mLower, "aisle") or string.find(mLower, "shelf")
-        or string.find(mLower, "shelves") or string.find(mLower, "rack") or string.find(mLower, "spawns")
-        or string.find(mLower, "decor") or string.find(mLower, "props") or string.find(mLower, "environment")
-        or string.find(mLower, "folder") or string.find(mLower, "geometry") then
-            return nil
-        end
-        local children = candidate:GetChildren()
-        if #children > 25 then
-            return nil
-        end
-        return candidate
-    end
-    return nil
-end
+
 local function ExtractGuiItemData(adornee, prompt)
     if not adornee and not prompt then return nil end
     local candidates = {}
@@ -776,25 +918,11 @@ local function ExtractGuiItemData(adornee, prompt)
     for _, gui in ipairs(candidates) do
         for _, desc in ipairs(gui:GetDescendants()) do
             if desc:IsA("TextLabel") and desc.Text and desc.Text ~= "" then
-                local raw = string.gsub(desc.Text, "<[^>]->", "")
-                local rStr, pStr, wStr = string.match(raw, "([%a]+)%s*[%s·%-%|%•]+%s*%$([%d%,%.]+)%s*[%s·%-%|%•]+%s*([%d%.]+)%s*[kK][gG]")
-                if not rStr then
-                    rStr, pStr = string.match(raw, "([%a]+)%s*[%s·%-%|%•]+%s*%$([%d%,%.]+)")
-                end
-                if not rStr then
-                    local cleanWord = string.match(raw, "^%s*([%a]+)%s*$")
-                    if cleanWord then
-                        local u = string.upper(cleanWord)
-                        if u == "COMMON" or u == "UNCOMMON" or u == "RARE" or u == "EPIC" or u == "LEGENDARY" or u == "MYTHIC" then
-                            rStr = u
-                        end
-                    end
-                end
+                local rStr, pStr, wStr = ParsePromptText(desc.Text)
                 if rStr then
-                    local normRarity = string.upper(rStr)
-                    local cleanRarity = normRarity:sub(1,1) .. normRarity:sub(2):lower()
-                    local priceNum = pStr and tonumber((pStr:gsub(",", ""))) or nil
-                    local weightNum = wStr and tonumber(wStr) or nil
+                    local cleanRarity = rStr
+                    local priceNum = pStr
+                    local weightNum = wStr
                     local customColor = RarityColors[cleanRarity]
                     return cleanRarity, priceNum, weightNum, customColor
                 end
@@ -803,6 +931,7 @@ local function ExtractGuiItemData(adornee, prompt)
     end
     return nil
 end
+
 local function ResolveBasePart(inst)
     if not inst then return nil end
     if inst:IsA("BasePart") then return inst end
@@ -1255,21 +1384,13 @@ local function IsLootObject(prompt, instance, nameLower)
         end
     end
 
-    if nameLower and HasSubstring(nameLower, NonLootKeywords) then
-        return false
-    end
-
     local objText = prompt.ObjectText and string.lower(prompt.ObjectText) or ""
     if objText ~= "" and HasSubstring(objText, NonLootKeywords) then
         return false
     end
 
-    local parent = instance.Parent
-    if parent and parent ~= Workspace then
-        local pName = string.lower(parent.Name)
-        if HasSubstring(pName, NonLootKeywords) then
-            return false
-        end
+    if nameLower and HasSubstring(nameLower, NonLootKeywords) then
+        return false
     end
 
     if action ~= "" and (
@@ -1307,6 +1428,7 @@ local function IsLootObject(prompt, instance, nameLower)
 
     return false
 end
+
 local function IsPartOfLocalPlayer(inst)
     if not inst then return false end
     local char = Player.Character
@@ -1376,10 +1498,7 @@ local function RegisterPrompt(prompt)
     if not part or IsDescendantOfAnyPlayer(part) or IsPartOfLocalPlayer(part) then return end
     local name = ResolveItemName(prompt, instance)
     local nameLower = string.lower(name)
-    local isSignOrProp = string.find(nameLower, "sign") or string.find(nameLower, "plaque") or string.find(nameLower, "placa")
-                      or string.find(nameLower, "light") or string.find(nameLower, "lamp") or string.find(nameLower, "poster")
-                      or string.find(nameLower, "decal") or string.find(nameLower, "board") or string.find(nameLower, "frame")
-                      or string.find(nameLower, "billboard") or string.find(nameLower, "texture")
+    local isSignOrProp = string.find(nameLower, "sign") or string.find(nameLower, "plaque") or string.find(nameLower, "placa") or string.find(nameLower, "poster") or string.find(nameLower, "decal") or string.find(nameLower, "billboard") or string.find(nameLower, "banner")
     if string.find(nameLower, "vent") or (prompt.ActionText and string.find(string.lower(prompt.ActionText), "unscrew")) then
         VentObjects[prompt] = {
             Part = part,
@@ -1401,7 +1520,7 @@ local function RegisterPrompt(prompt)
         }
         return
     end
-    local isNotHandTruck = not string.find(nameLower, "hand truck") and not string.find(nameLower, "handtruck") and not string.find(nameLower, "dolly")
+    local isNotHandTruck = not string.find(nameLower, "hand truck") and not string.find(nameLower, "handtruck") and not string.find(nameLower, "dolly") and not (string.find(nameLower, "truck") and string.find(nameLower, "hand"))
     if not isSignOrProp and isNotHandTruck and (
         (prompt.ActionText and (string.find(string.lower(prompt.ActionText), "escape") or string.find(string.lower(prompt.ActionText), "extract") or string.find(string.lower(prompt.ActionText), "leave") or string.find(string.lower(prompt.ActionText), "evac") or string.find(string.lower(prompt.ActionText), "drive")))
         or string.find(nameLower, "van") or (string.find(nameLower, "truck") and not string.find(nameLower, "hand"))
@@ -1793,6 +1912,33 @@ local function CreateOrUpdateBillboard(adornee, name, text, color, offset)
     end
     return bb, label
 end
+local function GetItemParts(mainPart)
+    local parts = { mainPart }
+    local seen = { [mainPart] = true }
+    pcall(function()
+        local connected = mainPart:GetConnectedParts(true)
+        for _, p in ipairs(connected) do
+            if p:IsA("BasePart") and not seen[p] and not p:IsDescendantOf(Player.Character) and p ~= Workspace.Terrain then
+                local size = p.Size
+                local isHuge = size.X > 8 or size.Y > 8 or size.Z > 8 or size.Magnitude > 12
+                local pNameLower = string.lower(p.Name)
+                local isEnvironment = string.find(pNameLower, "floor") or string.find(pNameLower, "wall") 
+                                   or string.find(pNameLower, "ceiling") or string.find(pNameLower, "ground") 
+                                   or string.find(pNameLower, "baseplate") or string.find(pNameLower, "desk") 
+                                   or string.find(pNameLower, "table") or string.find(pNameLower, "shelf")
+                                   or string.find(pNameLower, "stand") or string.find(pNameLower, "counter")
+                local distFromMain = (p.Position - mainPart.Position).Magnitude
+                if not isHuge and not isEnvironment and distFromMain <= 5.5 then
+                    seen[p] = true
+                    table.insert(parts, p)
+                    if #parts >= 6 then break end
+                end
+            end
+        end
+    end)
+    return parts
+end
+
 local function UpdateItemESP(charRoot)
     local style = Settings.SODItemESPStyle or "Name + Value"
     local maxDist = tonumber(Settings.SODESPMaxDistance) or 350
@@ -1825,6 +1971,11 @@ local function UpdateItemESP(charRoot)
                     if ItemESPObjects[prompt].Highlight then
                         ItemESPObjects[prompt].Highlight:Destroy()
                     end
+                    if ItemESPObjects[prompt].Highlights then
+                        for _, h in ipairs(ItemESPObjects[prompt].Highlights) do
+                            pcall(function() h:Destroy() end)
+                        end
+                    end
                     if ItemESPObjects[prompt].Billboard then
                         ItemESPObjects[prompt].Billboard:Destroy()
                     end
@@ -1841,6 +1992,10 @@ local function UpdateItemESP(charRoot)
                     if livePrice and livePrice > 0 then data.Value = livePrice end
                     if liveWeight and liveWeight > 0 then data.Weight = liveWeight end
                     if liveColor then data.CustomColor = liveColor end
+                elseif livePrice and livePrice > 0 and livePrice ~= data.Value then
+                    data.Value = livePrice
+                    data.Rarity = InferRarityFromValue(data.NameLower, livePrice)
+                    data.CustomColor = RarityColors[data.Rarity]
                 end
             end
             local show = Settings.SODItemESP and MatchesRarityFilter(data.Rarity, data.Value) and dist <= maxDist
@@ -1855,6 +2010,11 @@ local function UpdateItemESP(charRoot)
                 if ItemESPObjects[prompt] then
                     if ItemESPObjects[prompt].Highlight then
                         ItemESPObjects[prompt].Highlight.Enabled = false
+                    end
+                    if ItemESPObjects[prompt].Highlights then
+                        for _, h in ipairs(ItemESPObjects[prompt].Highlights) do
+                            pcall(function() h.Enabled = false end)
+                        end
                     end
                     if ItemESPObjects[prompt].Billboard then
                         ItemESPObjects[prompt].Billboard.Enabled = false
@@ -1892,15 +2052,35 @@ local function UpdateItemESP(charRoot)
             adornee = part
         end
 
-        local hl = nil
-        if i <= MAX_ACTIVE_HIGHLIGHTS and style ~= "Value Only" then
-            hl = CreateOrUpdateHighlight(adornee, rColor, "ToxSOD_ItemHL")
-            if hl then
-                hl.Enabled = true
+        local hlList = {}
+        if i <= MAX_ACTIVE_HIGHLIGHTS then
+            if adornee:IsA("Model") then
+                local hl = CreateOrUpdateHighlight(adornee, rColor, "ToxSOD_ItemHL")
+                if hl then
+                    hl.Enabled = true
+                    table.insert(hlList, hl)
+                end
+            else
+                local parts = GetItemParts(adornee)
+                for partIdx, p in ipairs(parts) do
+                    local hName = partIdx == 1 and "ToxSOD_ItemHL" or ("ToxSOD_ItemHL_" .. partIdx)
+                    local hl = CreateOrUpdateHighlight(p, rColor, hName)
+                    if hl then
+                        hl.Enabled = true
+                        table.insert(hlList, hl)
+                    end
+                end
             end
         else
-            if ItemESPObjects[prompt] and ItemESPObjects[prompt].Highlight then
-                ItemESPObjects[prompt].Highlight.Enabled = false
+            if ItemESPObjects[prompt] then
+                if ItemESPObjects[prompt].Highlight then
+                    ItemESPObjects[prompt].Highlight.Enabled = false
+                end
+                if ItemESPObjects[prompt].Highlights then
+                    for _, h in ipairs(ItemESPObjects[prompt].Highlights) do
+                        pcall(function() h.Enabled = false end)
+                    end
+                end
             end
         end
 
@@ -1921,12 +2101,14 @@ local function UpdateItemESP(charRoot)
         end
 
         ItemESPObjects[prompt] = {
-            Highlight = hl or (ItemESPObjects[prompt] and ItemESPObjects[prompt].Highlight),
+            Highlight = hlList[1] or (ItemESPObjects[prompt] and ItemESPObjects[prompt].Highlight),
+            Highlights = hlList,
             Billboard = bb,
             Label = label
         }
     end
 end
+
 local function IsPlayerMonster(plr, char)
     if not plr and not char then return false end
     if char and ActiveMonsters[char] ~= nil then return true end
@@ -2506,6 +2688,75 @@ local function GetAttackRemotes()
     end)
     return AttackRemotesCache
 end
+local VirtualInputManager = (function()
+    local ok, vim = pcall(function() return game:GetService("VirtualInputManager") end)
+    return (ok and vim) or nil
+end)()
+local VirtualUser = (function()
+    local ok, vu = pcall(function() return game:GetService("VirtualUser") end)
+    return (ok and vu) or nil
+end)()
+
+local function SimulateLMBClick()
+    if mouse1click then
+        pcall(mouse1click)
+        return
+    end
+    if VirtualInputManager then
+        pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+            task.wait(0.01)
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+        end)
+        return
+    end
+    if VirtualUser then
+        pcall(function()
+            VirtualUser:Button1Down(Vector2.new(0, 0))
+            task.wait(0.01)
+            VirtualUser:Button1Up(Vector2.new(0, 0))
+        end)
+        return
+    end
+end
+
+local FastKillRunning = false
+local function IsKillSpamActive()
+    local pGui = Player:FindFirstChild("PlayerGui")
+    if not pGui then return false end
+    for _, gui in ipairs(pGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Enabled then
+            for _, desc in ipairs(gui:GetDescendants()) do
+                if desc:IsA("TextLabel") and desc.Visible and desc.Text and desc.Text ~= "" then
+                    local tUpper = string.upper(desc.Text)
+                    if string.find(tUpper, "KILL FASTER", 1, true) or (string.find(tUpper, "SPAM", 1, true) and string.find(tUpper, "LMB", 1, true)) then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function StartFastKillLoop()
+    if FastKillRunning then return end
+    FastKillRunning = true
+    task.spawn(function()
+        local myGen = getgenv().ToxSODGeneration
+        while Settings.SODFastKill and getgenv().ToxSODGeneration == myGen do
+            task.wait(0.04)
+            if not Settings.SODFastKill then break end
+            if IsKillSpamActive() then
+                while Settings.SODFastKill and IsKillSpamActive() and getgenv().ToxSODGeneration == myGen do
+                    SimulateLMBClick()
+                    task.wait(0.015)
+                end
+            end
+        end
+        FastKillRunning = false
+    end)
+end
 local function StartEntityKillLoop()
     if EntityKillRunning then return end
     EntityKillRunning = true
@@ -3035,6 +3286,9 @@ end
 if Settings.SODEntityKill then
     pcall(StartEntityKillLoop)
 end
+if Settings.SODFastKill then
+    pcall(StartFastKillLoop)
+end
 if Settings.SODAntiAFK then
     pcall(function() SetupAntiAFK(true) end)
 end
@@ -3203,6 +3457,11 @@ SODCreateToggle(
             for _, esp in pairs(ItemESPObjects) do
                 if esp.Billboard then esp.Billboard.Enabled = false end
                 if esp.Highlight then esp.Highlight.Enabled = false end
+                if esp.Highlights then
+                    for _, h in ipairs(esp.Highlights) do
+                        pcall(function() h.Enabled = false end)
+                    end
+                end
             end
         end
         AutoSaveConfiguration()
@@ -3218,74 +3477,6 @@ SODCreateDropdown(
         Settings.SODItemESPStyle = tostring(choice)
         AutoSaveConfiguration()
     end
-)
-SODCreateToggle(
-    "Exit ESP",
-    GamePage,
-    Settings.SODExitESP,
-    function(v)
-        Settings.SODExitESP = v == true
-        if not v then
-            for _, esp in pairs(ExitESPObjects) do
-                if esp.Billboard then esp.Billboard.Enabled = false end
-                if esp.Highlight then esp.Highlight.Enabled = false end
-            end
-        end
-        AutoSaveConfiguration()
-    end,
-    "SODExitESP"
-)
-SODCreateToggle(
-    "Monster ESP",
-    GamePage,
-    Settings.SODMonsterESP,
-    function(v)
-        Settings.SODMonsterESP = v == true
-        if not v then
-            for _, esp in pairs(MonsterESPObjects) do
-                if esp.Billboard then esp.Billboard.Enabled = false end
-                if esp.Highlight then esp.Highlight.Enabled = false end
-            end
-        end
-        AutoSaveConfiguration()
-    end,
-    "SODMonsterESP"
-)
-SODCreateToggle(
-    "Player ESP",
-    GamePage,
-    Settings.SODPlayerESP,
-    function(v)
-        Settings.SODPlayerESP = v == true
-        if not v then
-            for _, esp in pairs(PlayerESPObjects) do
-                if esp.Billboard then esp.Billboard.Enabled = false end
-                if esp.Highlight then esp.Highlight.Enabled = false end
-            end
-        end
-        AutoSaveConfiguration()
-    end,
-    "SODPlayerESP"
-)
-SODCreateToggle(
-    "Vents & Closets ESP",
-    GamePage,
-    Settings.SODVentClosetESP,
-    function(v)
-        Settings.SODVentClosetESP = v == true
-        if not v then
-            for _, esp in pairs(VentESPObjects) do
-                if esp.Billboard then esp.Billboard.Enabled = false end
-                if esp.Highlight then esp.Highlight.Enabled = false end
-            end
-            for _, esp in pairs(ClosetESPObjects) do
-                if esp.Billboard then esp.Billboard.Enabled = false end
-                if esp.Highlight then esp.Highlight.Enabled = false end
-            end
-        end
-        AutoSaveConfiguration()
-    end,
-    "SODVentClosetESP"
 )
 SODCreateDropdown(
     "Rarity Filter",
@@ -3313,17 +3504,73 @@ SODCreateToggleWithValue(
     end,
     "SODMinValueEnabled"
 )
-SODCreateToggleWithValue(
-    "ESP Text Size",
+SODCreateToggle(
+    "Player ESP",
     GamePage,
-    true,
-    Settings.SODESPTextSize or 10,
-    function() end,
-    function(val)
-        Settings.SODESPTextSize = math.clamp(tonumber(val) or 10, 7, 18)
+    Settings.SODPlayerESP,
+    function(v)
+        Settings.SODPlayerESP = v == true
+        if not v then
+            for _, esp in pairs(PlayerESPObjects) do
+                if esp.Billboard then esp.Billboard.Enabled = false end
+                if esp.Highlight then esp.Highlight.Enabled = false end
+            end
+        end
         AutoSaveConfiguration()
     end,
-    "SODESPTextSize"
+    "SODPlayerESP"
+)
+SODCreateToggle(
+    "Monster ESP",
+    GamePage,
+    Settings.SODMonsterESP,
+    function(v)
+        Settings.SODMonsterESP = v == true
+        if not v then
+            for _, esp in pairs(MonsterESPObjects) do
+                if esp.Billboard then esp.Billboard.Enabled = false end
+                if esp.Highlight then esp.Highlight.Enabled = false end
+            end
+        end
+        AutoSaveConfiguration()
+    end,
+    "SODMonsterESP"
+)
+SODCreateToggle(
+    "Exit ESP",
+    GamePage,
+    Settings.SODExitESP,
+    function(v)
+        Settings.SODExitESP = v == true
+        if not v then
+            for _, esp in pairs(ExitESPObjects) do
+                if esp.Billboard then esp.Billboard.Enabled = false end
+                if esp.Highlight then esp.Highlight.Enabled = false end
+            end
+        end
+        AutoSaveConfiguration()
+    end,
+    "SODExitESP"
+)
+SODCreateToggle(
+    "Vents & Closets ESP",
+    GamePage,
+    Settings.SODVentClosetESP,
+    function(v)
+        Settings.SODVentClosetESP = v == true
+        if not v then
+            for _, esp in pairs(VentESPObjects) do
+                if esp.Billboard then esp.Billboard.Enabled = false end
+                if esp.Highlight then esp.Highlight.Enabled = false end
+            end
+            for _, esp in pairs(ClosetESPObjects) do
+                if esp.Billboard then esp.Billboard.Enabled = false end
+                if esp.Highlight then esp.Highlight.Enabled = false end
+            end
+        end
+        AutoSaveConfiguration()
+    end,
+    "SODVentClosetESP"
 )
 SODCreateToggle(
     "FullBright",
@@ -3335,6 +3582,18 @@ SODCreateToggle(
         AutoSaveConfiguration()
     end,
     "SODFullBright"
+)
+SODCreateToggleWithValue(
+    "ESP Text Size",
+    GamePage,
+    true,
+    Settings.SODESPTextSize or 10,
+    function() end,
+    function(val)
+        Settings.SODESPTextSize = math.clamp(tonumber(val) or 10, 7, 18)
+        AutoSaveConfiguration()
+    end,
+    "SODESPTextSize"
 )
 CreateSODSection("LOOTING")
 SODCreateToggle(
@@ -3462,10 +3721,24 @@ SODCreateToggle(
         Settings.SODEntityKill = v == true
         if v then
             StartEntityKillLoop()
+            StartFastKillLoop()
         end
         AutoSaveConfiguration()
     end,
     "SODEntityKill"
+)
+SODCreateToggle(
+    "Fast Kill (Auto Click)",
+    GamePage,
+    Settings.SODFastKill,
+    function(v)
+        Settings.SODFastKill = v == true
+        if v then
+            StartFastKillLoop()
+        end
+        AutoSaveConfiguration()
+    end,
+    "SODFastKill"
 )
 SODCreateToggle(
     "Infinite Stamina",
