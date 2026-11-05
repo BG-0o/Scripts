@@ -230,7 +230,7 @@ local KnownItemRaritiesSorted = {
     { "macbook", "Rare" },
     { "desktop", "Rare" },
     { "laptop", "Rare" },
-    { "camera", "Rare" },
+    { "camera", "Common" },
     { "drone", "Rare" },
     { "art", "Rare" },
     { "gpu", "Rare" },
@@ -357,8 +357,8 @@ local FilterMinRank = {
 local RarityColors = {
     ["Common"] = Color3.fromRGB(220, 220, 230),
     ["Uncommon"] = Color3.fromRGB(70, 230, 110),
-    ["Rare"] = Color3.fromRGB(50, 160, 255),
-    ["Epic"] = Color3.fromRGB(180, 75, 255),
+    ["Rare"] = Color3.fromRGB(180, 85, 255),
+    ["Epic"] = Color3.fromRGB(255, 60, 220),
     ["Legendary"] = Color3.fromRGB(255, 190, 30),
     ["Mythic"] = Color3.fromRGB(255, 45, 85),
     ["Secret"] = Color3.fromRGB(255, 45, 85)
@@ -666,22 +666,6 @@ local function ResolveItemData(prompt, instance, nameLower)
     if not rawValue or rawValue == 0 then
         rawValue = InferValue(nameLower)
     end
-    -- Fallback de raridade pelo valor do item caso não tenha sido detectado explicitamente
-    if (not rawRarity or rawRarity == "Common") and rawValue and rawValue > 0 then
-        if rawValue >= 2500 then
-            rawRarity = "Mythic"
-        elseif rawValue >= 1200 then
-            rawRarity = "Legendary"
-        elseif rawValue >= 600 then
-            rawRarity = "Epic"
-        elseif rawValue >= 300 then
-            rawRarity = "Rare"
-        elseif rawValue >= 150 then
-            rawRarity = "Uncommon"
-        else
-            rawRarity = "Common"
-        end
-    end
     rawRarity = rawRarity or "Common"
     return rawRarity, rawValue or 100, rawWeight or 0
 end
@@ -706,18 +690,121 @@ end
 local function GetItemModel(inst)
     if not inst then return nil end
     local curr = inst:IsA("ProximityPrompt") and inst.Parent or inst
-    while curr and curr ~= Workspace and curr ~= game do
+    local cam = Workspace.CurrentCamera or Camera
+    while curr and curr ~= Workspace and curr ~= game and curr ~= cam do
         if curr:IsA("Model") then
             local mLower = string.lower(curr.Name)
             if not curr:FindFirstChildOfClass("Humanoid")
                and mLower ~= "workspace" and mLower ~= "map" and mLower ~= "rooms" 
                and mLower ~= "props" and mLower ~= "items" and mLower ~= "loot" 
                and mLower ~= "folder" and mLower ~= "geometry" and mLower ~= "decor" 
-               and mLower ~= "spawns" and mLower ~= "environment" and mLower ~= "camera" then
+               and mLower ~= "spawns" and mLower ~= "environment" then
                 return curr
             end
         end
         curr = curr.Parent
+    end
+    return nil
+end
+local function GetAllItemParts(prompt, part, model)
+    local parts = {}
+    local seen = {}
+    local function addPart(p)
+        if p and p:IsA("BasePart") and not seen[p] and not IsPartOfLocalPlayer(p) and not IsDescendantOfAnyPlayer(p) then
+            seen[p] = true
+            table.insert(parts, p)
+        end
+    end
+    addPart(part)
+    if model and model:IsA("Model") then
+        local mLower = string.lower(model.Name)
+        if mLower ~= "workspace" and mLower ~= "map" and mLower ~= "rooms" 
+           and mLower ~= "props" and mLower ~= "items" and mLower ~= "loot" 
+           and mLower ~= "geometry" and mLower ~= "spawns" and mLower ~= "environment" then
+            for _, d in ipairs(model:GetDescendants()) do
+                addPart(d)
+            end
+        end
+    end
+    local parent = part and part.Parent
+    if parent and parent ~= Workspace and parent ~= game then
+        local pLower = string.lower(parent.Name)
+        if pLower ~= "workspace" and pLower ~= "map" and pLower ~= "rooms" 
+           and pLower ~= "props" and pLower ~= "items" and pLower ~= "loot" 
+           and pLower ~= "geometry" and pLower ~= "spawns" and pLower ~= "environment" then
+            for _, d in ipairs(parent:GetChildren()) do
+                addPart(d)
+            end
+        end
+    end
+    if part then
+        pcall(function()
+            for _, cp in ipairs(part:GetConnectedParts(true)) do
+                if not cp.Anchored and not cp:IsDescendantOf(Workspace.Terrain) then
+                    local d = (cp.Position - part.Position).Magnitude
+                    if d <= 5.5 then
+                        addPart(cp)
+                    end
+                end
+            end
+        end)
+    end
+    return parts
+end
+local function ExtractGuiItemData(adornee, prompt)
+    if not adornee and not prompt then return nil end
+    local candidates = {}
+    if adornee then
+        for _, child in ipairs(adornee:GetChildren()) do
+            if child:IsA("BillboardGui") and child.Name ~= "ToxSOD_ItemBB" then
+                table.insert(candidates, child)
+            end
+        end
+    end
+    if prompt and prompt.Parent and prompt.Parent ~= adornee then
+        for _, child in ipairs(prompt.Parent:GetChildren()) do
+            if child:IsA("BillboardGui") and child.Name ~= "ToxSOD_ItemBB" then
+                table.insert(candidates, child)
+            end
+        end
+    end
+    local pGui = Player:FindFirstChild("PlayerGui")
+    if pGui then
+        for _, child in ipairs(pGui:GetChildren()) do
+            if child:IsA("BillboardGui") and (child.Adornee == adornee or (prompt and child.Adornee == prompt.Parent)) then
+                table.insert(candidates, child)
+            elseif child:IsA("ScreenGui") and child.Enabled and (child.Name == "ProximityPrompts" or string.find(string.lower(child.Name), "prompt")) then
+                table.insert(candidates, child)
+            end
+        end
+    end
+    for _, gui in ipairs(candidates) do
+        for _, desc in ipairs(gui:GetDescendants()) do
+            if desc:IsA("TextLabel") and desc.Text and desc.Text ~= "" then
+                local raw = desc.Text
+                local rStr, pStr, wStr = string.match(raw, "([%a]+)%s*[%s·%-%|%•]+%s*%$([%d%,%.]+)%s*[%s·%-%|%•]+%s*([%d%.]+)%s*[kK][gG]")
+                if not rStr then
+                    rStr, pStr = string.match(raw, "([%a]+)%s*[%s·%-%|%•]+%s*%$([%d%,%.]+)")
+                end
+                if not rStr then
+                    local cleanWord = string.match(raw, "^%s*([%a]+)%s*$")
+                    if cleanWord then
+                        local u = string.upper(cleanWord)
+                        if u == "COMMON" or u == "UNCOMMON" or u == "RARE" or u == "EPIC" or u == "LEGENDARY" or u == "MYTHIC" then
+                            rStr = u
+                        end
+                    end
+                end
+                if rStr then
+                    local normRarity = string.upper(rStr)
+                    local cleanRarity = normRarity:sub(1,1) .. normRarity:sub(2):lower()
+                    local priceNum = pStr and tonumber((pStr:gsub(",", ""))) or nil
+                    local weightNum = wStr and tonumber(wStr) or nil
+                    local customColor = desc.TextColor3
+                    return cleanRarity, priceNum, weightNum, customColor
+                end
+            end
+        end
     end
     return nil
 end
@@ -1542,14 +1629,15 @@ local function HandleDescendant(obj)
                           or string.find(mName, "frame") or string.find(mName, "billboard") or string.find(mName, "texture")
                           or string.find(mName, "mesh") or string.find(mName, "glass") or string.find(mName, "wall")
                           or string.find(mName, "ceiling")
+        local isHandTruck = string.find(mName, "hand truck") or string.find(mName, "handtruck") or string.find(mName, "dolly") or string.find(mName, "cart")
         if string.find(mName, "closet") or string.find(mName, "locker") or string.find(mName, "wardrobe") or string.find(mName, "hidespot") then
             ClosetObjects[obj] = {
                 Part = ResolveBasePart(obj),
                 Model = obj,
                 Name = obj.Name
             }
-        elseif not isSignOrProp and (
-            string.find(mName, "van") or string.find(mName, "truck")
+        elseif not isSignOrProp and not isHandTruck and (
+            string.find(mName, "van") or (string.find(mName, "truck") and not string.find(mName, "hand"))
             or string.find(mName, "escape") or string.find(mName, "extract") or string.find(mName, "evac")
             or (string.find(mName, "exit") and not isSignOrProp)
         ) then
@@ -1576,6 +1664,17 @@ end))
 TrackConnection(ProximityPromptService.PromptShown:Connect(function(prompt)
     if prompt and not ItemPrompts[prompt] and not VentObjects[prompt] then
         pcall(RegisterPrompt, prompt)
+    end
+    if prompt and ItemPrompts[prompt] then
+        task.defer(function()
+            local liveRarity, livePrice, liveWeight, liveColor = ExtractGuiItemData(ItemPrompts[prompt].Part, prompt)
+            if liveRarity then
+                ItemPrompts[prompt].Rarity = liveRarity
+                if livePrice and livePrice > 0 then ItemPrompts[prompt].Value = livePrice end
+                if liveWeight and liveWeight > 0 then ItemPrompts[prompt].Weight = liveWeight end
+                if liveColor then ItemPrompts[prompt].CustomColor = liveColor end
+            end
+        end)
     end
     if prompt and Settings.SODInstantSteal then
         local act = prompt.ActionText and string.lower(prompt.ActionText) or ""
@@ -1763,6 +1862,11 @@ local function UpdateItemESP(charRoot)
                     if ItemESPObjects[prompt].Highlight then
                         ItemESPObjects[prompt].Highlight.Enabled = false
                     end
+                    if ItemESPObjects[prompt].Highlights then
+                        for _, h in ipairs(ItemESPObjects[prompt].Highlights) do
+                            h.Enabled = false
+                        end
+                    end
                     if ItemESPObjects[prompt].Billboard then
                         ItemESPObjects[prompt].Billboard.Enabled = false
                     end
@@ -1772,12 +1876,31 @@ local function UpdateItemESP(charRoot)
             if targetInst then
                 handledTargets[targetInst] = true
             end
-            local show = Settings.SODItemESP and prompt.Enabled and MatchesRarityFilter(data.Rarity, data.Value)
             local dist = charRoot and (part.Position - charRoot.Position).Magnitude or 0
             local maxDist = tonumber(Settings.SODESPMaxDistance) or 350
+            if dist <= 35 then
+                local liveRarity, livePrice, liveWeight, liveColor = ExtractGuiItemData(part, prompt)
+                if liveRarity then
+                    data.Rarity = liveRarity
+                    if livePrice and livePrice > 0 then data.Value = livePrice end
+                    if liveWeight and liveWeight > 0 then data.Weight = liveWeight end
+                    if liveColor then data.CustomColor = liveColor end
+                end
+            end
+            local show = Settings.SODItemESP and prompt.Enabled and MatchesRarityFilter(data.Rarity, data.Value)
             if show and dist <= maxDist then
-                local rColor = RarityColors[data.Rarity] or Color3.fromRGB(220, 220, 220)
-                local hl = CreateOrUpdateHighlight(targetInst, rColor, "ToxSOD_ItemHL")
+                local rColor = data.CustomColor or RarityColors[data.Rarity] or Color3.fromRGB(220, 220, 220)
+                local hlList = {}
+                if data.Model and data.Model:IsA("Model") and data.Model ~= Workspace then
+                    local hl = CreateOrUpdateHighlight(data.Model, rColor, "ToxSOD_ItemHL")
+                    if hl then table.insert(hlList, hl) end
+                else
+                    local allParts = GetAllItemParts(prompt, part, data.Model)
+                    for _, p in ipairs(allParts) do
+                        local hl = CreateOrUpdateHighlight(p, rColor, "ToxSOD_ItemHL")
+                        if hl then table.insert(hlList, hl) end
+                    end
+                end
                 local bb = nil
                 local label = nil
                 if style == "Chams Only" then
@@ -1793,11 +1916,16 @@ local function UpdateItemESP(charRoot)
                     local offset = dist < 7 and Vector3.new(0, 3.0, 0) or Vector3.new(0, 1.8, 0)
                     bb, label = CreateOrUpdateBillboard(part, "ToxSOD_ItemBB", tagText, rColor, offset)
                 end
-                ItemESPObjects[prompt] = { Highlight = hl, Billboard = bb, Label = label }
+                ItemESPObjects[prompt] = { Highlight = hlList[1], Highlights = hlList, Billboard = bb, Label = label }
             else
                 if ItemESPObjects[prompt] then
                     if ItemESPObjects[prompt].Highlight then
                         ItemESPObjects[prompt].Highlight.Enabled = false
+                    end
+                    if ItemESPObjects[prompt].Highlights then
+                        for _, h in ipairs(ItemESPObjects[prompt].Highlights) do
+                            h.Enabled = false
+                        end
                     end
                     if ItemESPObjects[prompt].Billboard then
                         ItemESPObjects[prompt].Billboard.Enabled = false
@@ -1930,6 +2058,7 @@ local function UpdateExitESP(charRoot)
         local isSign = string.find(labelLower, "sign") or string.find(labelLower, "plaque") or string.find(labelLower, "placa")
                     or string.find(labelLower, "light") or string.find(labelLower, "lamp") or string.find(labelLower, "poster")
                     or string.find(labelLower, "decal") or string.find(labelLower, "arrow")
+                    or string.find(labelLower, "hand truck") or string.find(labelLower, "handtruck") or string.find(labelLower, "dolly")
         if not inst.Parent or not part or not part.Parent or isSign then
             if ExitESPObjects[inst] then
                 pcall(function()
