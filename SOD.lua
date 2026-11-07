@@ -352,13 +352,13 @@ local FilterMinRank = {
     ["Secret"] = 6
 }
 local RarityColors = {
-    ["Common"] = Color3.fromRGB(220, 220, 230),
-    ["Uncommon"] = Color3.fromRGB(70, 230, 110),
-    ["Rare"] = Color3.fromRGB(180, 85, 255),
-    ["Epic"] = Color3.fromRGB(255, 60, 220),
-    ["Legendary"] = Color3.fromRGB(255, 190, 30),
-    ["Mythic"] = Color3.fromRGB(255, 45, 85),
-    ["Secret"] = Color3.fromRGB(255, 45, 85)
+    ["Common"] = Color3.fromRGB(220, 220, 230), ["common"] = Color3.fromRGB(220, 220, 230),
+    ["Uncommon"] = Color3.fromRGB(70, 230, 110), ["uncommon"] = Color3.fromRGB(70, 230, 110),
+    ["Rare"] = Color3.fromRGB(180, 85, 255), ["rare"] = Color3.fromRGB(180, 85, 255),
+    ["Epic"] = Color3.fromRGB(255, 60, 220), ["epic"] = Color3.fromRGB(255, 60, 220),
+    ["Legendary"] = Color3.fromRGB(255, 190, 30), ["legendary"] = Color3.fromRGB(255, 190, 30),
+    ["Mythic"] = Color3.fromRGB(255, 45, 85), ["mythic"] = Color3.fromRGB(255, 45, 85),
+    ["Secret"] = Color3.fromRGB(255, 45, 85), ["secret"] = Color3.fromRGB(255, 45, 85)
 }
 local GenericNames = {
     ["handle"] = true,
@@ -1746,6 +1746,21 @@ local function HandleDescendant(obj)
                 }
             end
         end
+        pcall(function()
+            for _, p in ipairs(obj:GetDescendants()) do
+                if p:IsA("ProximityPrompt") then
+                    pcall(RegisterPrompt, p)
+                end
+            end
+        end)
+    elseif obj:IsA("Folder") then
+        pcall(function()
+            for _, p in ipairs(obj:GetDescendants()) do
+                if p:IsA("ProximityPrompt") then
+                    pcall(RegisterPrompt, p)
+                end
+            end
+        end)
     end
 end
 TrackConnection(Workspace.DescendantAdded:Connect(function(d)
@@ -1811,6 +1826,23 @@ task.spawn(function()
         end
     end
 end)
+task.spawn(function()
+    local myGen = getgenv().ToxSODGeneration
+    while getgenv().ToxSODGeneration == myGen do
+        task.wait(2.0)
+        if Settings.SODItemESP then
+            pcall(function()
+                for _, d in ipairs(Workspace:GetDescendants()) do
+                    if d:IsA("ProximityPrompt") then
+                        if not ItemPrompts[d] and not VentObjects[d] then
+                            pcall(RegisterPrompt, d)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
 local function MatchesRarityFilter(rarity, value)
     local rLower = string.lower(tostring(rarity or "Common"))
     local rank = RarityRank[rLower] or RarityRank[rarity] or 1
@@ -1856,6 +1888,11 @@ local function CreateOrUpdateHighlight(instance, color, name)
     end
     return hl
 end
+local function FormatCurrency(val)
+    local n = tonumber(val) or 0
+    if n <= 0 then return "$0" end
+    return "$" .. tostring(math.floor(n))
+end
 local function CreateOrUpdateBillboard(adornee, name, text, color, offset, existingBB)
     if not adornee or not adornee.Parent then return nil, nil end
     if IsPartOfLocalPlayer(adornee) then
@@ -1890,14 +1927,14 @@ local function CreateOrUpdateBillboard(adornee, name, text, color, offset, exist
         label.TextColor3 = color or Color3.fromRGB(255, 255, 255)
         label.Text = text or ""
         label.Parent = bb
-        local ok = pcall(function() bb.Parent = GetGuiParent() end)
-        if not ok or not bb.Parent then
-            bb.Parent = adornee
-        end
+        bb.Parent = adornee
     else
         label = bb:FindFirstChild("Label")
     end
     if bb then
+        if bb.Parent ~= adornee then
+            bb.Parent = adornee
+        end
         if bb.Adornee ~= adornee then
             bb.Adornee = adornee
         end
@@ -2110,7 +2147,7 @@ local function UpdateItemESP(charRoot)
             local offset = dist < 8 and Vector3.new(0, 3.2, 0) or Vector3.new(0, 1.8, 0)
             bb, label = CreateOrUpdateBillboard(part, "ToxSOD_ItemBB", tagText, rColor, offset, existingBB)
         else
-            local tagText = string.format("[%s] %s\n%s (%dm)", string.upper(data.Rarity or "COMMON"), data.Name, FormatCurrency(data.Value), math.floor(dist))
+            local tagText = string.format("[%s] %s\n%s (%dm)", string.upper(data.Rarity or "COMMON"), data.Name or "Item", FormatCurrency(data.Value), math.floor(dist))
             local offset = dist < 8 and Vector3.new(0, 3.4, 0) or Vector3.new(0, 2.0, 0)
             bb, label = CreateOrUpdateBillboard(part, "ToxSOD_ItemBB", tagText, rColor, offset, existingBB)
         end
