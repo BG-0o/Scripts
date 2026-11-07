@@ -1446,26 +1446,6 @@ local function IsPartOfLocalPlayer(inst)
     if cam and (inst == cam or inst:IsDescendantOf(cam)) then
         return true
     end
-    if char then
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if inst:IsA("BasePart") and root and inst.AssemblyRootPart == root.AssemblyRootPart then
-            return true
-        end
-    end
-    local curr = inst
-    while curr and curr ~= Workspace and curr ~= game do
-        local cName = string.lower(curr.Name)
-        if string.find(cName, "viewmodel") or string.find(cName, "arms") or string.find(cName, "fps") or string.find(cName, "firstperson") then
-            return true
-        end
-        curr = curr.Parent
-    end
-    if cam and (inst:IsA("BasePart") or (inst:IsA("Model") and inst.PrimaryPart)) then
-        local p = inst:IsA("BasePart") and inst or inst.PrimaryPart
-        if p and (p.Position - cam.CFrame.Position).Magnitude <= 3.8 then
-            return true
-        end
-    end
     return false
 end
 local function IsDescendantOfAnyPlayer(inst)
@@ -1808,8 +1788,13 @@ TrackConnection(Workspace.DescendantRemoving:Connect(function(d)
     end
 end))
 task.spawn(function()
-    for _, d in ipairs(Workspace:GetDescendants()) do
-        pcall(HandleDescendant, d)
+    while true do
+        pcall(function()
+            for _, d in ipairs(Workspace:GetDescendants()) do
+                pcall(HandleDescendant, d)
+            end
+        end)
+        task.wait(3.0)
     end
 end)
 local function MatchesRarityFilter(rarity, value)
@@ -2343,6 +2328,50 @@ local function RefillStamina()
         end
     end
 end
+local function GetStaminaLevel()
+    local char, hum = GetCharacterState()
+    local targets = { Player }
+    if char then table.insert(targets, char) end
+    if hum then table.insert(targets, hum) end
+    for _, target in ipairs(targets) do
+        for k, v in pairs(target:GetAttributes()) do
+            local kLower = string.lower(k)
+            if typeof(v) == "number" and string.find(kLower, "stamina") and not string.find(kLower, "max") and not string.find(kLower, "regen") and not string.find(kLower, "cost") then
+                local maxVal = target:GetAttribute("MaxStamina") or 100
+                return v, maxVal
+            end
+        end
+        for _, child in ipairs(target:GetChildren()) do
+            if (child:IsA("NumberValue") or child:IsA("IntValue")) and string.find(string.lower(child.Name), "stamina") and not string.find(string.lower(child.Name), "max") then
+                local maxVal = 100
+                local maxChild = target:FindFirstChild("MaxStamina")
+                if maxChild and (maxChild:IsA("NumberValue") or maxChild:IsA("IntValue")) then
+                    maxVal = maxChild.Value
+                end
+                return child.Value, maxVal
+            end
+        end
+    end
+    local pGui = Player:FindFirstChild("PlayerGui")
+    if pGui then
+        for _, gui in ipairs(pGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Enabled then
+                for _, desc in ipairs(gui:GetDescendants()) do
+                    if desc:IsA("GuiObject") and desc.Visible then
+                        local dName = string.lower(desc.Name)
+                        if string.find(dName, "stamina") and (desc:IsA("ProgressBar") or desc:IsA("Frame")) then
+                            local sizeX = desc.Size.X.Scale
+                            if sizeX and sizeX > 0 and sizeX <= 1 then
+                                return sizeX * 100, 100
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return 100, 100
+end
 local function EnforceSpeed()
     if not Settings.SODSpeedBoost then return end
     local _, hum = GetCharacterState()
@@ -2506,6 +2535,10 @@ local function NavigateAlongFloor(targetPos, myGen, checkAbort)
         rayParams.FilterType = Enum.RaycastFilterType.Exclude
         rayParams.FilterDescendantsInstances = { c }
         local forwardRay = Workspace:Raycast(r.Position, fwdUnit * 4.0, rayParams)
+        if forwardRay and forwardRay.Instance and IsDoorPart(forwardRay.Instance) then
+            forwardRay.Instance.CanCollide = false
+            forwardRay = nil
+        end
         local steerUnit = fwdUnit
         if forwardRay then
             local angles = { 45, -45, 90, -90 }
@@ -2518,6 +2551,10 @@ local function NavigateAlongFloor(targetPos, myGen, checkAbort)
                     fwdUnit.X * math.sin(rad) + fwdUnit.Z * math.cos(rad)
                 ).Unit
                 local sideRay = Workspace:Raycast(r.Position, rotDir * 4.0, rayParams)
+                if sideRay and sideRay.Instance and IsDoorPart(sideRay.Instance) then
+                    sideRay.Instance.CanCollide = false
+                    sideRay = nil
+                end
                 if not sideRay then
                     local score = rotDir:Dot(fwdUnit)
                     if score > bestScore then
@@ -2554,6 +2591,9 @@ local function StartAutoFarmLoop()
     getgenv().ToxSODFarmGen = (tonumber(getgenv().ToxSODFarmGen) or 0) + 1
     local myGen = getgenv().ToxSODFarmGen
     task.spawn(function()
+        pcall(function() ApplyRemoveDoors(true) end)
+        local itemsCollected = 0
+        local lastRestTime = os.clock()
         while Settings.SODAutoFarm and getgenv().ToxSODFarmGen == myGen do
             task.wait(0.05)
             if not Settings.SODAutoFarm then break end
@@ -2562,6 +2602,27 @@ local function StartAutoFarmLoop()
                 task.wait(1)
                 continue
             end
+
+            if IsPlayerBagFull() then
+                local exit = GetBestExit()
+                if exit and exit.Part and exit.Part.Parent then
+                    local exitFloor = GetItemStandPosition(exit.Part) or exit.Part.Position
+                    CustomNotify("Auto Farm: Bag full, walking to exit!", Color3.fromRGB(0, 255, 140), 2)
+                    NavigateAlongFloor(exitFloor, myGen, nil)
+                    local exitDist = (exit.Part.Position - root.Position).Magnitude
+                    if exitDist <= 10 then
+                        hum:Move(Vector3.zero, false)
+                        local exitPrompt = exit.Prompt or exit.Part:FindFirstChildOfClass("ProximityPrompt") or (exit.Model and exit.Model:FindFirstChildOfClass("ProximityPrompt", true))
+                        if exitPrompt then
+                            TriggerPrompt(exitPrompt)
+                        end
+                        task.wait(2)
+                    end
+                end
+                task.wait(0.5)
+                continue
+            end
+
             local dangerDist = tonumber(Settings.SODFarmDangerDist) or 50
             local isDanger = false
             for _, mData in pairs(ActiveMonsters) do
@@ -2578,13 +2639,26 @@ local function StartAutoFarmLoop()
                 task.wait(0.5)
                 continue
             end
+
+            if not Settings.SODInfiniteStamina then
+                local curStam, maxStam = GetStaminaLevel()
+                local needsRest = (curStam and curStam < 35) or (itemsCollected >= 3) or ((os.clock() - lastRestTime) >= 12)
+                if needsRest then
+                    hum:Move(Vector3.zero, false)
+                    local restDuration = math.random(35, 45) / 10
+                    task.wait(restDuration)
+                    itemsCollected = 0
+                    lastRestTime = os.clock()
+                end
+            end
+
             local bestPrompt, bestData, bestScore = nil, nil, -999999
             for prompt, data in pairs(ItemPrompts) do
                 if prompt.Parent and data.Part and data.Part.Parent then
                     if MatchesRarityFilter(data.Rarity, data.Value) then
                         local dist = (data.Part.Position - root.Position).Magnitude
                         local val = data.Value or 100
-                        local score = (val * 2) - dist
+                        local score = -dist + (math.min(val, 1500) * 0.05)
                         if score > bestScore then
                             bestScore = score
                             bestPrompt = prompt
@@ -2617,6 +2691,7 @@ local function StartAutoFarmLoop()
                 if curDist <= (bestPrompt.MaxActivationDistance or 8) + 2.5 then
                     hum:Move(Vector3.zero, false)
                     TriggerPrompt(bestPrompt)
+                    itemsCollected = itemsCollected + 1
                     task.wait(0.18)
                 end
             end
@@ -2884,12 +2959,7 @@ local function IsGuiTrulyVisible(obj)
     if not obj or not obj:IsA("GuiObject") then return false end
     if not obj.Visible then return false end
     local size = obj.AbsoluteSize
-    if size.X <= 4 or size.Y <= 4 then return false end
-    local pos = obj.AbsolutePosition
-    local cam = Workspace.CurrentCamera
-    local vp = cam and cam.ViewportSize or Vector2.new(1920, 1080)
-    if (pos.X + size.X) < 0 or (pos.Y + size.Y) < 0 then return false end
-    if pos.X > vp.X or pos.Y > vp.Y then return false end
+    if size.X <= 2 or size.Y <= 2 then return false end
     local curr = obj.Parent
     while curr and curr ~= game do
         if curr:IsA("ScreenGui") then
@@ -3007,6 +3077,17 @@ local function ClickTargetCard(entry)
                 end
             end)
         end
+    end
+    if VirtualInputManager and card and card:IsA("GuiObject") then
+        pcall(function()
+            local pos = card.AbsolutePosition
+            local sz = card.AbsoluteSize
+            local cx = pos.X + sz.X / 2
+            local cy = pos.Y + sz.Y / 2
+            VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 1)
+            task.wait(0.02)
+            VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
+        end)
     end
     return true
 end
@@ -3446,6 +3527,26 @@ local function StopAutoCaseLoop()
         AutoCaseThread = nil
     end
 end
+local function ApplyDangerStyling(control)
+    if not control or not control:IsA("GuiObject") then return control end
+    pcall(function()
+        for _, desc in ipairs(control:GetDescendants()) do
+            if desc:IsA("TextLabel") and desc.Parent == control then
+                desc.TextColor3 = Color3.fromRGB(255, 65, 75)
+            end
+        end
+        local stroke = control:FindFirstChildOfClass("UIStroke")
+        if not stroke then
+            stroke = Instance.new("UIStroke")
+            stroke.Thickness = 1.0
+            stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            stroke.Parent = control
+        end
+        stroke.Color = Color3.fromRGB(180, 45, 55)
+    end)
+    return control
+end
+
 CreateSODSection("VISUALS")
 SODCreateToggle(
     "Item ESP",
@@ -3478,6 +3579,74 @@ SODCreateDropdown(
         AutoSaveConfiguration()
     end
 )
+SODCreateToggle(
+    "Exit ESP",
+    GamePage,
+    Settings.SODExitESP,
+    function(v)
+        Settings.SODExitESP = v == true
+        if not v then
+            for _, esp in pairs(ExitESPObjects) do
+                if esp.Billboard then esp.Billboard.Enabled = false end
+                if esp.Highlight then esp.Highlight.Enabled = false end
+            end
+        end
+        AutoSaveConfiguration()
+    end,
+    "SODExitESP"
+)
+SODCreateToggle(
+    "Monster ESP",
+    GamePage,
+    Settings.SODMonsterESP,
+    function(v)
+        Settings.SODMonsterESP = v == true
+        if not v then
+            for _, esp in pairs(MonsterESPObjects) do
+                if esp.Billboard then esp.Billboard.Enabled = false end
+                if esp.Highlight then esp.Highlight.Enabled = false end
+            end
+        end
+        AutoSaveConfiguration()
+    end,
+    "SODMonsterESP"
+)
+SODCreateToggle(
+    "Player ESP",
+    GamePage,
+    Settings.SODPlayerESP,
+    function(v)
+        Settings.SODPlayerESP = v == true
+        if not v then
+            for _, esp in pairs(PlayerESPObjects) do
+                if esp.Billboard then esp.Billboard.Enabled = false end
+                if esp.Highlight then esp.Highlight.Enabled = false end
+            end
+        end
+        AutoSaveConfiguration()
+    end,
+    "SODPlayerESP"
+)
+SODCreateToggle(
+    "Vents & Closets ESP",
+    GamePage,
+    Settings.SODVentClosetESP,
+    function(v)
+        Settings.SODVentClosetESP = v == true
+        if not v then
+            for _, esp in pairs(VentESPObjects) do
+                if esp.Billboard then esp.Billboard.Enabled = false end
+                if esp.Highlight then esp.Highlight.Enabled = false end
+            end
+            for _, esp in pairs(ClosetESPObjects) do
+                if esp.Billboard then esp.Billboard.Enabled = false end
+                if esp.Highlight then esp.Highlight.Enabled = false end
+            end
+        end
+        AutoSaveConfiguration()
+    end,
+    "SODVentClosetESP"
+)
 SODCreateDropdown(
     "Rarity Filter",
     { "All", "Common+", "Uncommon+", "Rare+", "Epic+", "Legendary+", "Mythic Only" },
@@ -3504,85 +3673,6 @@ SODCreateToggleWithValue(
     end,
     "SODMinValueEnabled"
 )
-SODCreateToggle(
-    "Player ESP",
-    GamePage,
-    Settings.SODPlayerESP,
-    function(v)
-        Settings.SODPlayerESP = v == true
-        if not v then
-            for _, esp in pairs(PlayerESPObjects) do
-                if esp.Billboard then esp.Billboard.Enabled = false end
-                if esp.Highlight then esp.Highlight.Enabled = false end
-            end
-        end
-        AutoSaveConfiguration()
-    end,
-    "SODPlayerESP"
-)
-SODCreateToggle(
-    "Monster ESP",
-    GamePage,
-    Settings.SODMonsterESP,
-    function(v)
-        Settings.SODMonsterESP = v == true
-        if not v then
-            for _, esp in pairs(MonsterESPObjects) do
-                if esp.Billboard then esp.Billboard.Enabled = false end
-                if esp.Highlight then esp.Highlight.Enabled = false end
-            end
-        end
-        AutoSaveConfiguration()
-    end,
-    "SODMonsterESP"
-)
-SODCreateToggle(
-    "Exit ESP",
-    GamePage,
-    Settings.SODExitESP,
-    function(v)
-        Settings.SODExitESP = v == true
-        if not v then
-            for _, esp in pairs(ExitESPObjects) do
-                if esp.Billboard then esp.Billboard.Enabled = false end
-                if esp.Highlight then esp.Highlight.Enabled = false end
-            end
-        end
-        AutoSaveConfiguration()
-    end,
-    "SODExitESP"
-)
-SODCreateToggle(
-    "Vents & Closets ESP",
-    GamePage,
-    Settings.SODVentClosetESP,
-    function(v)
-        Settings.SODVentClosetESP = v == true
-        if not v then
-            for _, esp in pairs(VentESPObjects) do
-                if esp.Billboard then esp.Billboard.Enabled = false end
-                if esp.Highlight then esp.Highlight.Enabled = false end
-            end
-            for _, esp in pairs(ClosetESPObjects) do
-                if esp.Billboard then esp.Billboard.Enabled = false end
-                if esp.Highlight then esp.Highlight.Enabled = false end
-            end
-        end
-        AutoSaveConfiguration()
-    end,
-    "SODVentClosetESP"
-)
-SODCreateToggle(
-    "FullBright",
-    GamePage,
-    Settings.SODFullBright,
-    function(v)
-        Settings.SODFullBright = v == true
-        if v then ApplyFullBright() else RestoreLighting() end
-        AutoSaveConfiguration()
-    end,
-    "SODFullBright"
-)
 SODCreateToggleWithValue(
     "ESP Text Size",
     GamePage,
@@ -3595,8 +3685,20 @@ SODCreateToggleWithValue(
     end,
     "SODESPTextSize"
 )
-CreateSODSection("LOOTING")
 SODCreateToggle(
+    "FullBright",
+    GamePage,
+    Settings.SODFullBright,
+    function(v)
+        Settings.SODFullBright = v == true
+        if v then ApplyFullBright() else RestoreLighting() end
+        AutoSaveConfiguration()
+    end,
+    "SODFullBright"
+)
+
+CreateSODSection("LOOTING")
+ApplyDangerStyling(SODCreateToggle(
     "Auto Farm",
     GamePage,
     Settings.SODAutoFarm,
@@ -3610,19 +3712,7 @@ SODCreateToggle(
         AutoSaveConfiguration()
     end,
     "SODAutoFarm"
-)
-SODCreateToggleWithValue(
-    "Farm Speed",
-    GamePage,
-    true,
-    Settings.SODFarmSpeed or 40,
-    function() end,
-    function(val)
-        Settings.SODFarmSpeed = math.clamp(tonumber(val) or 40, 25, 55)
-        AutoSaveConfiguration()
-    end,
-    "SODFarmSpeed"
-)
+))
 SODCreateToggle(
     "Auto Escape",
     GamePage,
@@ -3636,7 +3726,7 @@ SODCreateToggle(
     end,
     "SODAutoEscape"
 )
-SODCreateToggle(
+ApplyDangerStyling(SODCreateToggle(
     "Instant Steal",
     GamePage,
     Settings.SODInstantSteal,
@@ -3662,8 +3752,8 @@ SODCreateToggle(
         AutoSaveConfiguration()
     end,
     "SODInstantSteal"
-)
-SODCreateToggleWithValue(
+))
+ApplyDangerStyling(SODCreateToggleWithValue(
     "Auto Steal Aura",
     GamePage,
     Settings.SODAutoSteal,
@@ -3677,7 +3767,18 @@ SODCreateToggleWithValue(
         AutoSaveConfiguration()
     end,
     "SODAutoSteal"
-)
+))
+ApplyDangerStyling(SODCreateToggle(
+    "Infinite Stamina",
+    GamePage,
+    Settings.SODInfiniteStamina,
+    function(v)
+        Settings.SODInfiniteStamina = v == true
+        if v then pcall(RefillStamina) end
+        AutoSaveConfiguration()
+    end,
+    "SODInfiniteStamina"
+))
 SODCreateToggle(
     "Instant Vent",
     GamePage,
@@ -3691,115 +3792,8 @@ SODCreateToggle(
     end,
     "SODInstantVent"
 )
-SODCreateButton("TP to Best Loot", GamePage, function()
-    local bestPrompt = nil
-    local bestVal = -1
-    local bestData = nil
-    for prompt, data in pairs(ItemPrompts) do
-        if prompt.Parent and data.Part and data.Part.Parent then
-            if (data.Value or 0) > bestVal then
-                bestVal = data.Value or 0
-                bestPrompt = prompt
-                bestData = data
-            end
-        end
-    end
-    if bestData and bestData.Part then
-        TeleportTo(bestData.Part.CFrame + Vector3.new(0, 2.5, 0), bestData.Name .. " (" .. FormatCurrency(bestData.Value) .. ")")
-        task.wait(0.15)
-        TriggerPrompt(bestPrompt)
-    else
-        CustomNotify("No loot found on map", Color3.fromRGB(255, 150, 50), 2)
-    end
-end)
-CreateSODSection("SURVIVAL")
-SODCreateToggle(
-    "Auto Kill",
-    GamePage,
-    Settings.SODEntityKill,
-    function(v)
-        Settings.SODEntityKill = v == true
-        if v then
-            StartEntityKillLoop()
-            StartFastKillLoop()
-        end
-        AutoSaveConfiguration()
-    end,
-    "SODEntityKill"
-)
-SODCreateToggle(
-    "Fast Kill (Auto Click)",
-    GamePage,
-    Settings.SODFastKill,
-    function(v)
-        Settings.SODFastKill = v == true
-        if v then
-            StartFastKillLoop()
-        end
-        AutoSaveConfiguration()
-    end,
-    "SODFastKill"
-)
-SODCreateToggle(
-    "Infinite Stamina",
-    GamePage,
-    Settings.SODInfiniteStamina,
-    function(v)
-        Settings.SODInfiniteStamina = v == true
-        if v then pcall(RefillStamina) end
-        AutoSaveConfiguration()
-    end,
-    "SODInfiniteStamina"
-)
-CreateSODSection("TELEPORTS")
-SODCreateButton("TP to Extraction", GamePage, function()
-    local bestExit = GetBestExit()
-    if bestExit and bestExit.Part then
-        TeleportTo(bestExit.Part.CFrame + Vector3.new(0, 3, 0), "Exit")
-    else
-        CustomNotify("Extraction point not detected yet", Color3.fromRGB(255, 150, 50), 2)
-    end
-end)
-SODCreateButton("TP to Nearest Hideout", GamePage, function()
-    local _, _, root = GetCharacterState()
-    if not root then return end
-    local nearest, minDist, label = nil, 99999, "Hideout"
-    for _, data in pairs(ClosetObjects) do
-        if data.Part and data.Part.Parent then
-            local dist = (data.Part.Position - root.Position).Magnitude
-            if dist < minDist then
-                minDist = dist
-                nearest = data.Part
-                label = "Closet"
-            end
-        end
-    end
-    for _, data in pairs(VentObjects) do
-        if data.Part and data.Part.Parent then
-            local dist = (data.Part.Position - root.Position).Magnitude
-            if dist < minDist then
-                minDist = dist
-                nearest = data.Part
-                label = "Vent"
-            end
-        end
-    end
-    if nearest then
-        TeleportTo(nearest.CFrame + Vector3.new(0, 2.5, 0), label .. " (" .. math.floor(minDist) .. "m)")
-    else
-        CustomNotify("No hiding spot found nearby", Color3.fromRGB(255, 150, 50), 2)
-    end
-end)
-SODCreateToggle(
-    "Ctrl Click TP",
-    GamePage,
-    Settings.SODClickTP,
-    function(v)
-        Settings.SODClickTP = v == true
-        AutoSaveConfiguration()
-    end,
-    "SODClickTP"
-)
+
+CreateSODSection("MISC & VOTING")
 SODCreateToggle(
     "Auto Vote",
     GamePage,
@@ -3859,6 +3853,16 @@ SODCreateDropdown(
     end
 )
 SODCreateToggle(
+    "Ctrl Click TP",
+    GamePage,
+    Settings.SODClickTP,
+    function(v)
+        Settings.SODClickTP = v == true
+        AutoSaveConfiguration()
+    end,
+    "SODClickTP"
+)
+SODCreateToggle(
     "Anti AFK",
     GamePage,
     Settings.SODAntiAFK,
@@ -3868,8 +3872,7 @@ SODCreateToggle(
         AutoSaveConfiguration()
     end,
     "SODAntiAFK"
-)
-CreateSODSection("CASES")
+)CreateSODSection("CASES")
 SODCreateToggle(
     "Auto Open Case",
     GamePage,
