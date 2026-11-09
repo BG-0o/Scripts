@@ -3860,8 +3860,19 @@ function IsAutoFarmPlayerEligible()
         return false
     end
 
-    if now - (MM2RoleDataCacheTime or 0) > 0.75
-    and now - (AutoFarmRoleRefreshAttempt or 0) > 0.65 then
+    -- MM2's Game panel is shown during an active round and hidden in the lobby.
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+    local mainGui = playerGui and playerGui:FindFirstChild("MainGUI")
+    local gameGui = mainGui and mainGui:FindFirstChild("Game")
+    local lobbyGui = mainGui and mainGui:FindFirstChild("Lobby")
+
+    if lobbyGui and lobbyGui.Visible
+    and (not gameGui or not gameGui.Visible) then
+        return false
+    end
+
+    if now - (MM2RoleDataCacheTime or 0) > 1.2
+    and now - (AutoFarmRoleRefreshAttempt or 0) > 1.0 then
         AutoFarmRoleRefreshAttempt = now
         pcall(function()
             GetMM2RoleData(true)
@@ -3871,24 +3882,19 @@ function IsAutoFarmPlayerEligible()
     local data = MM2RoleDataCache
     local dataAge = now - (MM2RoleDataCacheTime or 0)
 
-    if typeof(data) ~= "table" or dataAge > 1.5 then
-        return false
-    end
+    if typeof(data) == "table" and dataAge <= 5.0 then
+        local info = data[Player.Name]
+            or data[tostring(Player.UserId)]
+            or data[Player]
 
-    local info = data[Player.Name]
-        or data[tostring(Player.UserId)]
-        or data[Player]
+        if typeof(info) == "table" then
+            local role = NormalizeMM2Role(info.Role or info.role)
 
-    if typeof(info) ~= "table" then
-        return false
-    end
-
-    local role = NormalizeMM2Role(info.Role or info.role)
-
-    if not role
-    or info.Dead == true
-    or info.dead == true then
-        return false
+            if info.Dead == true
+            or info.dead == true then
+                return false
+            end
+        end
     end
 
     -- After a death, wait for fresh server role data before allowing farming again.
@@ -3900,33 +3906,40 @@ function IsAutoFarmPlayerEligible()
         AutoFarmDeathObservedAt = nil
     end
 
-    -- MM2's Game panel is shown during an active round and hidden in the lobby.
-    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
-    local mainGui = playerGui and playerGui:FindFirstChild("MainGUI")
-    local gameGui = mainGui and mainGui:FindFirstChild("Game")
-    local lobbyGui = mainGui and mainGui:FindFirstChild("Lobby")
-
-    if gameGui and not gameGui.Visible then
-        return false
-    end
-
-    if lobbyGui and lobbyGui.Visible
-    and (not gameGui or not gameGui.Visible) then
-        return false
-    end
-
     return true
 end
 
+local CachedCoinBagLabel = nil
+local LastCoinBagScanTime = 0
 
 function ReadCoinBagFromGui()
-    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+    if CachedCoinBagLabel and CachedCoinBagLabel.Parent then
+        local text = tostring(CachedCoinBagLabel.Text or "")
+        local current, maximum = text:match("(%d+)%s*/%s*(%d+)")
+        if current and maximum then
+            local curNum = tonumber(current)
+            local maxNum = tonumber(maximum)
+            if curNum and maxNum and maxNum >= 10 then
+                return curNum, maxNum
+            end
+        end
+    end
 
+    local now = os.clock()
+    if now - LastCoinBagScanTime < 0.5 then
+        return nil, nil
+    end
+    LastCoinBagScanTime = now
+
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
     if not playerGui then
         return nil, nil
     end
 
-    for _, obj in ipairs(playerGui:GetDescendants()) do
+    local mainGui = playerGui:FindFirstChild("MainGUI") or playerGui:FindFirstChild("ScreenGui")
+    local searchRoot = mainGui or playerGui
+
+    for _, obj in ipairs(searchRoot:GetDescendants()) do
         if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
             local text = tostring(obj.Text or "")
             local current, maximum = text:match("(%d+)%s*/%s*(%d+)")
@@ -3948,8 +3961,9 @@ function ReadCoinBagFromGui()
                         parent = parent.Parent
                     end
 
-                    if (string.find(blob, "coin", 1, true) or string.find(blob, "bag", 1, true))
+                    if (string.find(blob, "coin", 1, true) or string.find(blob, "bag", 1, true) or string.find(blob, "cand", 1, true))
                     and not string.find(blob, "inventory", 1, true) then
+                        CachedCoinBagLabel = obj
                         return curNum, maxNum
                     end
                 end
@@ -4063,6 +4077,15 @@ function GetAutoFarmMapRoot(forceRefresh)
 
     AutoFarmMapRootScanTime = now
 
+    local directContainer = workspace:FindFirstChild("CoinContainer")
+        or workspace:FindFirstChild("Coins")
+        or workspace:FindFirstChild("CandyContainer")
+    if directContainer and HasPotentialFarmCoins(directContainer) then
+        AutoFarmMapRootCache = workspace
+        AutoFarmMapContainerCache = directContainer
+        return workspace, directContainer
+    end
+
     local normal = workspace:FindFirstChild("Normal")
         or workspace:FindFirstChild("Zombie")
         or workspace:FindFirstChild("Halloween")
@@ -4142,14 +4165,9 @@ function IsCoinTouchPart(part)
         return false
     end
 
-    if part:FindFirstChild("TouchInterest")
-    or part:FindFirstChildWhichIsA("TouchTransmitter", true) then
-        return true
-    end
-
     local lower = string.lower(tostring(part.Name or ""))
 
-    return lower == "coin_server"
+    local isCoinNamed = lower == "coin_server"
         or lower == "coinserver"
         or lower == "candy_server"
         or lower == "candyserver"
@@ -4162,6 +4180,17 @@ function IsCoinTouchPart(part)
         or string.find(lower, "gingerbread", 1, true) ~= nil
         or string.find(lower, "drop", 1, true) ~= nil
         or string.find(lower, "collectible", 1, true) ~= nil
+
+    local inCoinContainer = false
+    local p = part.Parent
+    if p then
+        local pLower = string.lower(tostring(p.Name or ""))
+        if string.find(pLower, "coin", 1, true) or string.find(pLower, "cand", 1, true) or string.find(pLower, "drop", 1, true) or string.find(pLower, "token", 1, true) then
+            inCoinContainer = true
+        end
+    end
+
+    return isCoinNamed or inCoinContainer
 end
 
 function IsCoinValid(coin)
@@ -4169,7 +4198,12 @@ function IsCoinValid(coin)
     or not coin.Parent
     or not coin:IsA("BasePart")
     or coin:GetAttribute("Collected")
-    or coin:GetAttribute("Delete") then
+    or coin:GetAttribute("Delete")
+    or coin:GetAttribute("Picked") then
+        return false
+    end
+
+    if coin.Transparency >= 0.95 then
         return false
     end
 
@@ -4203,11 +4237,6 @@ function IsCoinValid(coin)
 
     if lobby
     and coin:IsDescendantOf(lobby) then
-        return false
-    end
-
-    if coin.Transparency >= 1
-    and not coin:FindFirstChildWhichIsA("TouchTransmitter", true) then
         return false
     end
 
@@ -4284,7 +4313,7 @@ function IsAutoFarmRoundActive()
         return false
     end
 
-    return #GetMM2Coins(true) > 0
+    return #GetMM2Coins(false) > 0
 end
 
 function GetOtherPlayerCoinPressure(coin)
@@ -4363,27 +4392,14 @@ end
 function ToxMM2GetCoinTouchParts(coin)
     local parts = {}
 
-    if coin
-    and coin.Parent then
+    if coin and coin.Parent then
         if coin:IsA("BasePart") then
             table.insert(parts, coin)
         end
 
-        local parent = coin.Parent
-
-        if parent then
-            for _, object in ipairs(parent:GetDescendants()) do
-                if object:IsA("BasePart")
-                and object ~= coin then
-                    local lower = string.lower(tostring(object.Name or ""))
-
-                    if object:FindFirstChildWhichIsA("TouchTransmitter", true)
-                    or string.find(lower, "coin", 1, true)
-                    or string.find(lower, "touch", 1, true)
-                    or string.find(lower, "hit", 1, true) then
-                        table.insert(parts, object)
-                    end
-                end
+        for _, object in ipairs(coin:GetChildren()) do
+            if object:IsA("BasePart") then
+                table.insert(parts, object)
             end
         end
     end
@@ -4642,9 +4658,9 @@ function ResetAutoFarmFullPause()
 end
 
 function UpdateAutoFarmRoundLifecycle()
-    local currentMap, currentContainer = GetAutoFarmMapRoot(true)
+    local currentMap, currentContainer = GetAutoFarmMapRoot(false)
     local roundActive = currentContainer ~= nil
-        and #GetMM2Coins(true) > 0
+        and #GetMM2Coins(false) > 0
 
     local mapChanged = AutoFarmLastObservedMap ~= nil
         and (
@@ -5726,13 +5742,21 @@ function TweenFarmRoot(targetPosition, duration, coin)
         end
 
         if coin then
-            TouchCoin(coin)
-            if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
-                return true
+            local dist = (coin.Position - position).Magnitude
+            if dist <= 8 then
+                TouchCoin(coin)
+                if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
+                    return true
+                end
             end
         end
 
         if alpha >= 1 then
+            if coin and IsCoinValid(coin) then
+                TouchCoin(coin)
+                task.wait(0.02)
+                RegisterFarmCoinCollected(coin, serialBefore, bagBefore)
+            end
             return true
         end
 
@@ -5748,12 +5772,11 @@ function TouchCoin(coin)
 
     local character, humanoid, root, alive = IsAliveCharacter()
 
-    if not alive or not IsAutoFarmPlayerEligible() then
+    if not alive or not root or not IsAutoFarmPlayerEligible() then
         return false
     end
 
     local coinParts = ToxMM2GetCoinTouchParts(coin)
-    local characterParts = ToxMM2GetCharacterTouchParts(character, root)
     local touched = false
 
     if firetouchinterest then
@@ -5762,22 +5785,12 @@ function TouchCoin(coin)
             and coinPart.Parent then
                 pcall(function()
                     coinPart.CanTouch = true
+                    root.CanTouch = true
+                    firetouchinterest(root, coinPart, 0)
+                    firetouchinterest(root, coinPart, 1)
                 end)
 
-                for _, bodyPart in ipairs(characterParts) do
-                    if bodyPart
-                    and bodyPart.Parent then
-                        pcall(function()
-                            bodyPart.CanTouch = true
-                            firetouchinterest(bodyPart, coinPart, 0)
-                            firetouchinterest(coinPart, bodyPart, 0)
-                            firetouchinterest(bodyPart, coinPart, 1)
-                            firetouchinterest(coinPart, bodyPart, 1)
-                        end)
-
-                        touched = true
-                    end
-                end
+                touched = true
             end
         end
     end
@@ -5996,9 +6009,8 @@ AddConnection(RunService.Heartbeat:Connect(function()
 
     if not AutoFarmHumanoid
     or not AutoFarmHumanoid.Parent
-    or AutoFarmHumanoid.Health <= 0
-    or not IsAutoFarmPlayerEligible() then
-        StopAutoFarm(false)
+    or AutoFarmHumanoid.Health <= 0 then
+        task.spawn(StopAutoFarm, false)
         return
     end
 
@@ -6091,13 +6103,19 @@ task.spawn(function()
                 local coin = GetBestCoin(origin, false)
 
                 if coin then
-                    AutoFarmCoin(coin)
+                    local ok = AutoFarmCoin(coin)
+                    if not ok then
+                        MM2CoinBlacklist[coin] = os.clock() + 0.8
+                        task.wait(0.08)
+                    else
+                        task.wait(0.02)
+                    end
                 else
                     if AutoFarmPrepared then
                         StopAutoFarm(false)
                     end
 
-                    task.wait(0.12)
+                    task.wait(0.15)
                 end
             else
                 task.wait(0.06)
