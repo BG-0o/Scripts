@@ -94,6 +94,13 @@ local FOVDefault = Camera.FieldOfView
 local FOVCaptured = false
 local ShiftLockDefaults = nil
 local isShiftLockActive = false
+local Gui = (getgenv and getgenv().Gui) or Gui
+local Main = (getgenv and getgenv().Main) or Main
+local Tabs = (getgenv and getgenv().Tabs) or Tabs
+local NotifGui = (getgenv and getgenv().NotifGui) or NotifGui
+local DimmerFrame = (getgenv and getgenv().DimmerFrame) or DimmerFrame
+local MAIN_COLOR = (getgenv and getgenv().MAIN_COLOR) or MAIN_COLOR or Color3.fromRGB(0, 170, 255)
+local LOGO_ID = (getgenv and getgenv().LOGO_ID) or LOGO_ID or "rbxassetid://13837920158"
 local ToxChatGui = getgenv().ToxChatGui
 local JoinGamesGui = getgenv().JoinGamesGui
 local JoinGamesScroll = getgenv().JoinGamesScroll
@@ -6028,6 +6035,12 @@ function ShowCenterLoadSequence()
     local blur = Instance.new("BlurEffect")
     blur.Size = 18
     blur.Parent = Lighting
+    if not NotifGui or not pcall(function() return NotifGui.Parent end) or not NotifGui.Parent then
+        NotifGui = (getgenv and getgenv().NotifGui) or (getgenv and getgenv().Gui) or (Player and Player:FindFirstChild("PlayerGui"))
+    end
+    if not Main or not pcall(function() return Main.Parent end) or not Main.Parent then
+        Main = (getgenv and getgenv().Main) or (Gui and Gui:FindFirstChild("Main"))
+    end
     local SplashFrame = Instance.new("Frame")
     SplashFrame.Size = UDim2.new(0, 360, 0, 110)
     SplashFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -6035,7 +6048,7 @@ function ShowCenterLoadSequence()
     SplashFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
     SplashFrame.BorderSizePixel = 0
     SplashFrame.ClipsDescendants = true
-    SplashFrame.Parent = NotifGui
+    pcall(function() SplashFrame.Parent = NotifGui end)
     local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 10) Corner.Parent = SplashFrame
     local Stroke = Instance.new("UIStroke") Stroke.Color = MAIN_COLOR Stroke.Thickness = 2 Stroke.Parent = SplashFrame
     local SplashLogo = Instance.new("ImageLabel")
@@ -6163,8 +6176,14 @@ task.spawn(function()
         warn("[ToxHub Loading Error]: " .. tostring(err))
         ScriptLoaded = true
         getgenv().ScriptLoaded = true
+        if not Main or not Main.Parent then
+            Main = (getgenv and getgenv().Main) or (Gui and Gui:FindFirstChild("Main"))
+        end
         if Main and Main.Parent and not getgenv().Destroyed then
             Main.Visible = true
+        end
+        if getgenv and getgenv().Main and getgenv().Main.Parent then
+            getgenv().Main.Visible = true
         end
     end
 end)

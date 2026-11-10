@@ -34,7 +34,7 @@ or not CreateButton then
 end
 getgenv().ToxSODGeneration = (tonumber(getgenv().ToxSODGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxSODGeneration
-local SODModuleVersion = "2026-11-07-sod-v9"
+local SODModuleVersion = "2026-11-10-sod-v10"
 if getgenv().ToxSODCleanup then
     pcall(getgenv().ToxSODCleanup)
 end
@@ -937,24 +937,39 @@ local function IsInLobby(inst)
         local cName = string.lower(curr.Name)
         if string.find(cName, "lobby")
         or string.find(cName, "hub")
-        or string.find(cName, "spawnarea")
-        or string.find(cName, "spawnroom")
-        or string.find(cName, "waitingroom")
+        or string.find(cName, "spawn")
+        or string.find(cName, "waiting")
         or string.find(cName, "vip")
         or string.find(cName, "donation")
-        or string.find(cName, "tip the dev")
-        or (string.find(cName, "tip") and string.find(cName, "dev")) then
+        or string.find(cName, "donate")
+        or string.find(cName, "tip")
+        or string.find(cName, "gift")
+        or string.find(cName, "reward")
+        or string.find(cName, "claim")
+        or string.find(cName, "booth")
+        or string.find(cName, "stand")
+        or string.find(cName, "store")
+        or string.find(cName, "shop")
+        or string.find(cName, "gamepass")
+        or string.find(cName, "group")
+        or string.find(cName, "like")
+        or string.find(cName, "leaderboard")
+        or string.find(cName, "podium")
+        or string.find(cName, "kiosk")
+        or string.find(cName, "atm")
+        or string.find(cName, "spin")
+        or string.find(cName, "wheel")
+        or string.find(cName, "case")
+        or string.find(cName, "crate") then
             return true
         end
         curr = curr.Parent
     end
-    local lobbyObj = Workspace:FindFirstChild("Lobby")
-        or Workspace:FindFirstChild("LobbyMap")
-        or Workspace:FindFirstChild("LobbyArea")
-        or Workspace:FindFirstChild("Hub")
-        or Workspace:FindFirstChild("SpawnArea")
-    if lobbyObj and inst:IsDescendantOf(lobbyObj) then
-        return true
+    for _, lName in ipairs({"Lobby", "LobbyMap", "LobbyArea", "Hub", "SpawnArea", "Spawn", "WaitingRoom", "Lobby_Map"}) do
+        local lobbyObj = Workspace:FindFirstChild(lName)
+        if lobbyObj and inst:IsDescendantOf(lobbyObj) then
+            return true
+        end
     end
     return false
 end
@@ -1400,6 +1415,8 @@ end)
 local function IsLootObject(prompt, instance, nameLower)
     if not prompt or not instance then return false end
     if IsInLobby(prompt) or IsInLobby(instance) then return false end
+    if prompt.Parent and IsInLobby(prompt.Parent) then return false end
+    if instance.Parent and IsInLobby(instance.Parent) then return false end
 
     local action = prompt.ActionText and string.lower(prompt.ActionText) or ""
     if action ~= "" then
@@ -1413,7 +1430,8 @@ local function IsLootObject(prompt, instance, nameLower)
         or string.find(action, "gift") or string.find(action, "buy") or string.find(action, "purchase")
         or string.find(action, "spin") or string.find(action, "talk") or string.find(action, "view")
         or string.find(action, "join") or string.find(action, "like") or string.find(action, "reward")
-        or string.find(action, "enter") or string.find(action, "teleport") then
+        or string.find(action, "enter") or string.find(action, "teleport") or string.find(action, "play")
+        or string.find(action, "rules") then
             return false
         end
     end
@@ -1429,9 +1447,9 @@ local function IsLootObject(prompt, instance, nameLower)
 
     local part = ResolveBasePart(prompt) or ResolveBasePart(instance)
     if part then
-        if IsInLobby(part) then return false end
+        if IsInLobby(part) or (part.Parent and IsInLobby(part.Parent)) then return false end
         local pSz = part.Size
-        if pSz.Magnitude > 9.5 or pSz.X > 7.0 or pSz.Y > 7.0 or pSz.Z > 7.0 then
+        if pSz.Magnitude > 7.5 or pSz.X > 5.0 or pSz.Y > 5.0 or pSz.Z > 5.0 then
             return false
         end
     end
@@ -1449,10 +1467,12 @@ local function IsLootObject(prompt, instance, nameLower)
         return true
     end
 
-    if instance:GetAttribute("Value") ~= nil
+    if (instance:GetAttribute("Value") ~= nil
     or instance:GetAttribute("Price") ~= nil
     or instance:GetAttribute("Worth") ~= nil
-    or instance:GetAttribute("Rarity") ~= nil then
+    or instance:GetAttribute("Rarity") ~= nil)
+    and not IsInLobby(instance)
+    and not HasSubstring(nameLower or "", NonLootKeywords) then
         return true
     end
 
@@ -2041,15 +2061,20 @@ local function GetItemParts(mainPart)
         for _, p in ipairs(connected) do
             if p:IsA("BasePart") and not seen[p] and not p:IsDescendantOf(Player.Character) and p ~= Workspace.Terrain then
                 local size = p.Size
-                local isHuge = size.X > 8 or size.Y > 8 or size.Z > 8 or size.Magnitude > 12
+                local isHuge = size.X > 5.5 or size.Y > 5.5 or size.Z > 5.5 or size.Magnitude > 8.0
                 local pNameLower = string.lower(p.Name)
                 local isEnvironment = string.find(pNameLower, "floor") or string.find(pNameLower, "wall") 
                                    or string.find(pNameLower, "ceiling") or string.find(pNameLower, "ground") 
                                    or string.find(pNameLower, "baseplate") or string.find(pNameLower, "desk") 
                                    or string.find(pNameLower, "table") or string.find(pNameLower, "shelf")
                                    or string.find(pNameLower, "stand") or string.find(pNameLower, "counter")
+                                   or string.find(pNameLower, "booth") or string.find(pNameLower, "vip")
+                                   or string.find(pNameLower, "room") or string.find(pNameLower, "building")
+                                   or string.find(pNameLower, "glass") or string.find(pNameLower, "door")
+                                   or string.find(pNameLower, "window") or string.find(pNameLower, "roof")
+                                   or IsInLobby(p)
                 local distFromMain = (p.Position - mainPart.Position).Magnitude
-                if not isHuge and not isEnvironment and distFromMain <= 5.5 then
+                if not isHuge and not isEnvironment and distFromMain <= 4.0 then
                     seen[p] = true
                     table.insert(parts, p)
                     if #parts >= 6 then break end
@@ -2186,6 +2211,12 @@ local function UpdateItemESP(charRoot)
 
         local hlList = {}
         if i <= MAX_ACTIVE_HIGHLIGHTS then
+            if adornee:IsA("Model") then
+                local ok, ext = pcall(function() return adornee:GetExtentsSize() end)
+                if not ok or not ext or ext.Magnitude > 8.0 or ext.X > 5.5 or ext.Y > 5.5 or ext.Z > 5.5 or #adornee:GetChildren() > 10 then
+                    adornee = part
+                end
+            end
             if adornee:IsA("Model") then
                 local hl = CreateOrUpdateHighlight(adornee, rColor, "ToxSOD_ItemHL")
                 if hl then
@@ -2609,10 +2640,22 @@ local function TriggerGuiEvents(inst)
         if getconnections then
             if inst:IsA("GuiButton") then
                 pcall(function()
-                    for _, c in ipairs(getconnections(inst.Activated)) do pcall(function() c:Fire() end) end
-                    for _, c in ipairs(getconnections(inst.MouseButton1Click)) do pcall(function() c:Fire() end) end
-                    for _, c in ipairs(getconnections(inst.MouseButton1Down)) do pcall(function() c:Fire() end) end
-                    for _, c in ipairs(getconnections(inst.MouseButton1Up)) do pcall(function() c:Fire() end) end
+                    for _, c in ipairs(getconnections(inst.Activated)) do
+                        pcall(function() c:Fire() end)
+                        pcall(function() if c.Function then c.Function() end end)
+                    end
+                    for _, c in ipairs(getconnections(inst.MouseButton1Click)) do
+                        pcall(function() c:Fire() end)
+                        pcall(function() if c.Function then c.Function() end end)
+                    end
+                    for _, c in ipairs(getconnections(inst.MouseButton1Down)) do
+                        pcall(function() c:Fire() end)
+                        pcall(function() if c.Function then c.Function() end end)
+                    end
+                    for _, c in ipairs(getconnections(inst.MouseButton1Up)) do
+                        pcall(function() c:Fire() end)
+                        pcall(function() if c.Function then c.Function() end end)
+                    end
                 end)
             end
             pcall(function()
@@ -2624,6 +2667,15 @@ local function TriggerGuiEvents(inst)
                             Position = Vector3.new(0, 0, 0)
                         })
                     end)
+                    pcall(function()
+                        if c.Function then
+                            c.Function({
+                                UserInputType = Enum.UserInputType.MouseButton1,
+                                UserInputState = Enum.UserInputState.Begin,
+                                Position = Vector3.new(0, 0, 0)
+                            })
+                        end
+                    end)
                 end
                 for _, c in ipairs(getconnections(inst.InputEnded)) do
                     pcall(function()
@@ -2632,6 +2684,15 @@ local function TriggerGuiEvents(inst)
                             UserInputState = Enum.UserInputState.End,
                             Position = Vector3.new(0, 0, 0)
                         })
+                    end)
+                    pcall(function()
+                        if c.Function then
+                            c.Function({
+                                UserInputType = Enum.UserInputType.MouseButton1,
+                                UserInputState = Enum.UserInputState.End,
+                                Position = Vector3.new(0, 0, 0)
+                            })
+                        end
                     end)
                 end
             end)
@@ -2834,13 +2895,18 @@ local function StartAutoVoteLoop()
                                 for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
                                     if rem:IsA("RemoteEvent") then
                                         local rLower = string.lower(rem.Name)
-                                        if string.find(rLower, "vote") or string.find(rLower, "map") or string.find(rLower, "entity") then
+                                        if string.find(rLower, "vote") or string.find(rLower, "map") or string.find(rLower, "entity") or string.find(rLower, "intermission") then
                                             if mapFormatted then
                                                 pcall(function() rem:FireServer(mapFormatted) end)
                                                 pcall(function() rem:FireServer(chosenMapName) end)
+                                                pcall(function() rem:FireServer("VoteMap", mapFormatted) end)
+                                                pcall(function() rem:FireServer("Map", mapFormatted) end)
+                                                pcall(function() rem:FireServer("Vote", mapFormatted) end)
                                             end
                                             pcall(function() rem:FireServer(entFormatted) end)
                                             pcall(function() rem:FireServer(string.lower(entFormatted)) end)
+                                            pcall(function() rem:FireServer("VoteMonster", entFormatted) end)
+                                            pcall(function() rem:FireServer("VoteEntity", entFormatted) end)
                                         end
                                     elseif rem:IsA("RemoteFunction") then
                                         local rLower = string.lower(rem.Name)

@@ -1,3 +1,8 @@
+if getgenv then
+    getgenv().Destroyed = nil
+    getgenv().__ToxHubBootLock = nil
+end
+
 local function AddCacheBuster(url)
     url = tostring(url or "")
 
@@ -56,3 +61,10 @@ end
 
 -- 3. Sub-Windows & Game Loaders
 SafeLoad("https://raw.githubusercontent.com/BG-0o/Scripts/main/Module3.lua")
+
+if getgenv and getgenv().Main and getgenv().Main.Parent then
+    getgenv().Main.Visible = true
+end
+if getgenv and getgenv().ToggleToxGui then
+    pcall(function() getgenv().ToggleToxGui(true) end)
+end
