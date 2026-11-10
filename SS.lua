@@ -1,95 +1,22 @@
-﻿--[========================================================================[
+--[========================================================================[
     ToxHub Game Module: SS (Saber Simulator)
-    PlaceId: 3823781113
+    Version: 2026-11-10-ss-native-v2
 ]========================================================================]
-local SSPlaceId = 3823781113
-if game.PlaceId ~= SSPlaceId and tostring(game.PlaceId) ~= "3823781113" then
-    return
-end
-
-local Settings = getgenv().Settings
-local GamePage = getgenv().GamePage
-local CreateToggle = getgenv().CreateToggle
-local CreateButton = getgenv().CreateButton
-local CustomNotify = getgenv().CustomNotify or function() end
-
-getgenv().ToxSSGeneration = (tonumber(getgenv().ToxSSGeneration) or 0) + 1
-local CurrentGeneration = getgenv().ToxSSGeneration
-local SSModuleVersion = "2026-11-09-ss-v1"
-
-if getgenv().ToxSSModuleLoadedJobId == game.JobId
-and getgenv().ToxSSModuleVersion == SSModuleVersion
-and getgenv().ToxSSModulePage == GamePage
-and not getgenv().Destroyed then
-    return
-end
-
-if getgenv().ToxSSCleanup then
-    pcall(getgenv().ToxSSCleanup)
-end
-
-if GamePage then
-    for _, child in ipairs(GamePage:GetChildren()) do
-        if child:IsA("GuiObject") then
-            child:Destroy()
-        end
+do
+    local isTarget = (game.PlaceId == 3823781113 or game.PlaceId == 1307638097 or game.GameId == 3823781113 or game.GameId == 1307638097 or tostring(game.PlaceId) == "3823781113")
+    local curMod = getgenv and getgenv().CurrentGameModule
+    if not isTarget and curMod and curMod.ShortName == "SS" then
+        isTarget = true
     end
-
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, -5, 0, 75)
-    card.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-    card.BorderSizePixel = 0
-    card.Parent = GamePage
-
-    local cardCorner = Instance.new("UICorner")
-    cardCorner.CornerRadius = UDim.new(0, 6)
-    cardCorner.Parent = card
-
-    local cardStroke = Instance.new("UIStroke")
-    cardStroke.Color = Color3.fromRGB(9, 0, 136)
-    cardStroke.Thickness = 1.5
-    cardStroke.Parent = card
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -20, 0, 26)
-    title.Position = UDim2.new(0, 12, 0, 10)
-    title.BackgroundTransparency = 1
-    title.Text = "Saber Simulator (SS)"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 14
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = card
-
-    local desc = Instance.new("TextLabel")
-    desc.Size = UDim2.new(1, -20, 0, 26)
-    desc.Position = UDim2.new(0, 12, 0, 36)
-    desc.BackgroundTransparency = 1
-    desc.Text = "Status: Script Running • Features Active"
-    desc.TextColor3 = Color3.fromRGB(120, 255, 120)
-    desc.Font = Enum.Font.Gotham
-    desc.TextSize = 11
-    desc.TextXAlignment = Enum.TextXAlignment.Left
-    desc.Parent = card
-
-    if CreateButton then
-        CreateButton("Recarregar Script (SS)", GamePage, function()
-            CustomNotify("Recarregando Saber Simulator...", Color3.fromRGB(9, 0, 136))
-            pcall(function()
-                if getgenv().ToxSSCleanup then
-                    getgenv().ToxSSCleanup()
-                end
-                loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/SS.lua"))()
-            end)
-        end)
+    if not isTarget then
+        return
     end
 end
 
-getgenv().ToxSSModuleLoadedJobId = game.JobId
-getgenv().ToxSSModuleVersion = SSModuleVersion
-getgenv().ToxSSModulePage = GamePage
-
--- Original Game Script:
+local RunSSCommunityScript = nil
+do
+    local function CommunityEntry(...)
+-- [TOXHUB_ORIGINAL_PAYLOAD_START]
 local fns = {}
 local aCe_34, aCe_36, aCe_37, aCe_38, aCe_39, aCe_40, aCe_42, aCe_44, aCe_45, aCe_46, aCe_47, aCe_48, aCe_50, aCe_51, aCe_52, aCe_53, aCe_54, aCe_56, aCe_57, aCe_58, aCe_59, aCe_60, aCe_62, ClientTool, aCe_65, aCe_66, aCe_67, aCe_68, aCe_70, aCe_71, aCe_72, aCe_73, ClientDataManager, aCe_76, aCe_77, aCe_78, aCe_79, aCe_80, aCe_81, aCe_82, aCe_83, aCe_85, aCe_86, aCe_88, aCe_89, aCe_91, aCe_92, aCe_94, aCe_100
 fns.aCe_1 = nil
@@ -6399,3 +6326,470 @@ aCe_100();
         end
     end)
 end)()
+
+-- [TOXHUB_ORIGINAL_PAYLOAD_END]
+    end
+    RunSSCommunityScript = CommunityEntry
+end
+
+do
+    local env = getgenv()
+    if env.Destroyed then
+        return
+    end
+
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local CollectionService = game:GetService("CollectionService")
+    local Workspace = game:GetService("Workspace")
+    local VirtualUser = game:GetService("VirtualUser")
+
+    local Player = Players.LocalPlayer
+    local Settings = env.Settings
+    if not Settings then
+        return
+    end
+
+    local GamePage = env.GamePage
+    if not GamePage and type(env.EnsureGameTabCreated) == "function" then
+        local okPage, ensured = pcall(env.EnsureGameTabCreated, env.CurrentGameModule)
+        if okPage and ensured then
+            GamePage = ensured
+        end
+    end
+
+    local CreateSection = env.CreateSection
+    local CreateToggle = env.CreateToggle
+    local CreateToggleWithValue = env.CreateToggleWithValue
+    local CreateDropdown = env.CreateDropdown
+    local CreateButton = env.CreateButton
+    local CustomNotify = env.CustomNotify or function() end
+    local AutoSaveConfiguration = env.AutoSaveConfiguration or function() end
+    local SyncToggleVisuals = env.SyncToggleVisuals
+
+    if not GamePage or not CreateToggle or not CreateButton then
+        return
+    end
+
+    local ModuleVersion = "2026-11-10-ss-native-v2"
+    if env.ToxSSModuleLoadedJobId == game.JobId
+    and env.ToxSSModuleVersion == ModuleVersion
+    and env.ToxSSModulePage == GamePage
+    and not env.Destroyed then
+        return
+    end
+
+    if type(env.ToxSSCleanup) == "function" then
+        pcall(env.ToxSSCleanup)
+    end
+
+    env.ToxSSGeneration = (tonumber(env.ToxSSGeneration) or 0) + 1
+    local CurrentGeneration = env.ToxSSGeneration
+
+    for _, child in ipairs(GamePage:GetChildren()) do
+        if child:IsA("GuiObject") then
+            child:Destroy()
+        end
+    end
+    if type(env.ClearActivePageCard) == "function" then
+        pcall(env.ClearActivePageCard, GamePage)
+    end
+
+    local Connections = {}
+    local function TrackConnection(conn)
+        if conn then
+            table.insert(Connections, conn)
+        end
+        return conn
+    end
+
+    local function IsAlive()
+        return not env.Destroyed and env.ToxSSGeneration == CurrentGeneration
+    end
+
+    local function MakeSection(title, icon)
+        if type(CreateSection) == "function" then
+            pcall(CreateSection, GamePage, title, icon)
+        end
+    end
+
+    env.ToxSSCleanup = function()
+        if env.ToxSSGeneration == CurrentGeneration then
+            env.ToxSSGeneration = CurrentGeneration + 1
+        end
+        for _, conn in ipairs(Connections) do
+            pcall(function()
+                conn:Disconnect()
+            end)
+        end
+        Connections = {}
+        env.ToxSSModuleLoadedJobId = nil
+        env.ToxSSModuleVersion = nil
+        env.ToxSSModulePage = nil
+        Settings.SSAutoFarm = false
+        Settings.SSAutofarm = false
+        Settings.SSAutoSwing = false
+        Settings.SSAutoSell = false
+        Settings.SSAutoCrowns = false
+        Settings.SSAutoBoss = false
+        Settings.SSAutoBuySaber = false
+        Settings.SSAutoBuyDNA = false
+        Settings.SSAutoBuyClass = false
+        Settings.SSAutoBuyAuras = false
+        Settings.SSAutoPets = false
+    end
+
+    Settings.SSAutoFarm = Settings.SSAutoFarm == true or Settings.SSAutofarm == true
+    Settings.SSAutofarm = Settings.SSAutoFarm
+    Settings.SSAutoSwing = Settings.SSAutoSwing == true
+    Settings.SSAutoSell = Settings.SSAutoSell == true
+    Settings.SSAutoCrowns = Settings.SSAutoCrowns == true
+    Settings.SSAutoBoss = Settings.SSAutoBoss == true
+    Settings.SSAutoBuySaber = Settings.SSAutoBuySaber == true
+    Settings.SSAutoBuyDNA = Settings.SSAutoBuyDNA == true
+    Settings.SSAutoBuyClass = Settings.SSAutoBuyClass == true
+    Settings.SSAutoBuyAuras = Settings.SSAutoBuyAuras == true
+    Settings.SSAutoPets = Settings.SSAutoPets == true
+
+    local ssDeps = nil
+    local function GetSSDeps()
+        if ssDeps then
+            return ssDeps
+        end
+        local ok, result = pcall(function()
+            local events = ReplicatedStorage:WaitForChild("Events", 5)
+            local modules = ReplicatedStorage:WaitForChild("Modules", 5)
+            local ps = Player and (Player:FindFirstChild("PlayerScripts") or Player:WaitForChild("PlayerScripts", 5))
+            local mainClient = ps and ps:FindFirstChild("MainClient")
+            local clientTool = mainClient and mainClient:FindFirstChild("ClientTool") and require(mainClient.ClientTool) or nil
+            local dataMgr = mainClient and mainClient:FindFirstChild("ClientDataManager") and require(mainClient.ClientDataManager) or nil
+            local itemInfo = modules and modules:FindFirstChild("ItemInfo") and require(modules.ItemInfo) or nil
+            local infMath = modules and modules:FindFirstChild("InfiniteMath") and require(modules.InfiniteMath) or nil
+            return {
+                SwingSaber = events:FindFirstChild("SwingSaber"),
+                SellStrength = events:FindFirstChild("SellStrength"),
+                CollectPickup = events:FindFirstChild("CollectCurrencyPickup"),
+                UIAction = events:FindFirstChild("UIAction"),
+                CheckCode = events:FindFirstChild("CheckCode"),
+                ClientTool = clientTool,
+                DataMgr = dataMgr,
+                ItemInfo = itemInfo,
+                InfMath = infMath
+            }
+        end)
+        if ok and result then
+            ssDeps = result
+            return ssDeps
+        end
+        return nil
+    end
+
+    local function DoSaberSwing()
+        local d = GetSSDeps()
+        if not d then
+            return
+        end
+        local swung = false
+        if d.ClientTool and type(d.ClientTool.Swing) == "function" then
+            local ok = pcall(function()
+                d.ClientTool:Swing()
+            end)
+            swung = ok
+        end
+        if not swung and d.SwingSaber then
+            pcall(function()
+                d.SwingSaber:FireServer()
+            end)
+        end
+    end
+
+    local function CollectCrownsStep()
+        local d = GetSSDeps()
+        local char = Player and Player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not d or not d.CollectPickup or not hrp then
+            return
+        end
+        local batch = {}
+        for _, inst in ipairs(CollectionService:GetTagged("CurrencyPickup")) do
+            if inst and inst.Parent and inst.Name == "Crown" and inst:IsA("BasePart") then
+                pcall(function()
+                    inst.CFrame = hrp.CFrame * CFrame.new(0, 2, -2)
+                end)
+                table.insert(batch, inst)
+                if #batch >= 12 then
+                    break
+                end
+            end
+        end
+        if #batch > 0 then
+            pcall(function()
+                d.CollectPickup:FireServer(batch)
+            end)
+        end
+    end
+
+    local function CanAfford(balance, cost, InfMath)
+        if balance == nil or cost == nil then
+            return false
+        end
+        if InfMath and type(InfMath.new) == "function" then
+            local ok, res = pcall(function()
+                return InfMath.new(balance) >= InfMath.new(cost)
+            end)
+            if ok then
+                return res == true
+            end
+        end
+        local nBal = tonumber(balance)
+        local nCost = tonumber(cost)
+        if nBal and nCost then
+            return nBal >= nCost
+        end
+        return false
+    end
+
+    local function TryBuyNextUpgrade(orderKey, bestIndexKey, infoKey, actionName, defaultCurrency)
+        local d = GetSSDeps()
+        if not d or not d.UIAction or not d.ItemInfo or not d.DataMgr or type(d.DataMgr.Data) ~= "table" then
+            return
+        end
+        local orderList = d.ItemInfo[orderKey]
+        local infoMap = d.ItemInfo[infoKey]
+        if type(orderList) ~= "table" or type(infoMap) ~= "table" then
+            return
+        end
+        local data = d.DataMgr.Data
+        local curIdx = tonumber(data[bestIndexKey]) or 0
+        local nextName = orderList[curIdx + 1]
+        local nextInfo = nextName and infoMap[nextName]
+        if type(nextInfo) ~= "table" then
+            return
+        end
+        local currency = nextInfo.Currency or defaultCurrency
+        if CanAfford(data[currency], nextInfo.Price, d.InfMath) then
+            pcall(function()
+                d.UIAction:FireServer(actionName, nextName)
+            end)
+        end
+    end
+
+    local function DoBossStep()
+        local char = Player and Player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then
+            return
+        end
+        for _, boss in ipairs(CollectionService:GetTagged("Boss")) do
+            if boss and boss.Parent then
+                local hp = tonumber(boss:GetAttribute("Health")) or 0
+                if hp > 0 then
+                    local okPivot, cf = pcall(function()
+                        return boss:GetPivot()
+                    end)
+                    if okPivot and cf then
+                        if type(env.AllowToxTeleport) == "function" then
+                            env.AllowToxTeleport(1.5, "SS_Boss")
+                        end
+                        hrp.CFrame = cf * CFrame.new(0, 0, 7)
+                        DoSaberSwing()
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    local KnownCodes = {
+        "CODE78","WATCH35","ENCHANTER","ABC","RETRO","USA250","TRIDENT","TROUT","SCUBA","RAIN",
+        "HORIZON35","CRISPY","GALAXY","FRIED","FREECHARMS","BRUH","CODEEE","CLASH","DUNGEONS",
+        "BOSS","MASTERY","STPATTY","AWARE","500M","ASLEEP","oioi","VoidGG","PetBoost","EASTERBUNNY",
+        "PLAZA","ISLANDS","JS","mmistaken","calixo","ALIENPLS","DEC25","600MY","HAPPY4TH","release",
+        "Airstudio","CURSED20","HEART26","SANDY","grim","NEWYEAR26","telanthric","prez","weekend",
+        "MIRRAWRXD","CLANS","Legend","SEASHORE","raven","cookieclix","2020","GOLDEN","EASTER26",
+        "VALENTINESDAY26","100M","5000Followers","HAPPY26","SUMMERPT2","robzi","straw","gravy",
+        "defild","WINT3R","mirrorrs","Update100","CLASSIC","BEACH","SABERFEB","Saber","subtoaustin",
+        "GOBBLE","BOMBCYCLONE","PUMPKIN","melihkardes","ELEMENTS","erick","Slayer","BOSSING",
+        "cookie","henrydev","WINTER","razor","SNOWDAY","AUTOCRAFT","LUCKYLUCKY","REVAMP",
+        "DIFFICULTY","Yippee"
+    }
+
+    MakeSection("Farming & Bosses", "⚔")
+    CreateToggle("Auto Farm (SS)", GamePage, Settings.SSAutoFarm, function(v)
+        local state = v == true
+        Settings.SSAutoFarm = state
+        Settings.SSAutofarm = state
+    end, "SSAutoFarm")
+
+    CreateToggle("Auto Swing Saber", GamePage, Settings.SSAutoSwing, function(v)
+        Settings.SSAutoSwing = v == true
+    end, "SSAutoSwing")
+
+    CreateToggle("Auto Sell Strength", GamePage, Settings.SSAutoSell, function(v)
+        Settings.SSAutoSell = v == true
+    end, "SSAutoSell")
+
+    CreateToggle("Auto Collect Crowns", GamePage, Settings.SSAutoCrowns, function(v)
+        Settings.SSAutoCrowns = v == true
+    end, "SSAutoCrowns")
+
+    CreateToggle("Auto Boss Farm", GamePage, Settings.SSAutoBoss, function(v)
+        Settings.SSAutoBoss = v == true
+    end, "SSAutoBoss")
+
+    MakeSection("Upgrades, Pets & Codes", "💎")
+    CreateToggle("Auto Buy Sabers", GamePage, Settings.SSAutoBuySaber, function(v)
+        Settings.SSAutoBuySaber = v == true
+    end, "SSAutoBuySaber")
+
+    CreateToggle("Auto Buy DNA", GamePage, Settings.SSAutoBuyDNA, function(v)
+        Settings.SSAutoBuyDNA = v == true
+    end, "SSAutoBuyDNA")
+
+    CreateToggle("Auto Buy Classes", GamePage, Settings.SSAutoBuyClass, function(v)
+        Settings.SSAutoBuyClass = v == true
+    end, "SSAutoBuyClass")
+
+    CreateToggle("Auto Buy Auras & Boosts", GamePage, Settings.SSAutoBuyAuras, function(v)
+        Settings.SSAutoBuyAuras = v == true
+    end, "SSAutoBuyAuras")
+
+    CreateToggle("Auto Combine & Equip Best Pets", GamePage, Settings.SSAutoPets, function(v)
+        Settings.SSAutoPets = v == true
+    end, "SSAutoPets")
+
+    CreateButton("Equip Best & Combine Pets Agora", GamePage, function()
+        local d = GetSSDeps()
+        if d and d.UIAction then
+            pcall(function() d.UIAction:FireServer("CombineAllPets") end)
+            pcall(function() d.UIAction:FireServer("EquipBestPets") end)
+            CustomNotify("Pets combinados e equipados!", Color3.fromRGB(90, 235, 130), 2)
+        end
+    end)
+
+    CreateButton("Resgatar Todos os Codes (SS)", GamePage, function()
+        task.spawn(function()
+            local d = GetSSDeps()
+            if not d or not d.CheckCode then
+                CustomNotify("Remote CheckCode indisponivel.", Color3.fromRGB(255, 140, 80), 3)
+                return
+            end
+            local used = (d.DataMgr and type(d.DataMgr.Data) == "table" and type(d.DataMgr.Data.CodesUsed) == "table") and d.DataMgr.Data.CodesUsed or {}
+            local redeemed = 0
+            for _, code in ipairs(KnownCodes) do
+                if not used[code] then
+                    pcall(function()
+                        d.CheckCode:InvokeServer(code)
+                    end)
+                    redeemed = redeemed + 1
+                    task.wait(0.15)
+                end
+            end
+            CustomNotify("Verificacao de codes concluida (" .. tostring(redeemed) .. " enviados)", Color3.fromRGB(90, 235, 130), 3)
+        end)
+    end)
+
+    task.spawn(function()
+        local lastSell = 0
+        local lastCrown = 0
+        local lastShop = 0
+        local lastPet = 0
+        while IsAlive() do
+            local d = GetSSDeps()
+            if Settings.SSAutoBoss then
+                DoBossStep()
+            elseif Settings.SSAutoFarm or Settings.SSAutoSwing then
+                DoSaberSwing()
+            end
+            local now = os.clock()
+            if now - lastCrown >= 0.45 then
+                lastCrown = now
+                if Settings.SSAutoFarm or Settings.SSAutoCrowns then
+                    CollectCrownsStep()
+                end
+            end
+            if d and d.SellStrength and (now - lastSell >= 0.65) then
+                lastSell = now
+                if Settings.SSAutoFarm or Settings.SSAutoSell then
+                    pcall(function()
+                        d.SellStrength:FireServer()
+                    end)
+                end
+            end
+            if d and (now - lastShop >= 1.5) then
+                lastShop = now
+                if Settings.SSAutoBuySaber then
+                    TryBuyNextUpgrade("Swords_Order", "Best_Saber_Index", "Swords", "BuyWeapon", "Coins")
+                end
+                if Settings.SSAutoBuyDNA then
+                    TryBuyNextUpgrade("DNAs_Order", "Best_DNA_Index", "DNAs", "BuyDNA", "Coins")
+                end
+                if Settings.SSAutoBuyClass then
+                    TryBuyNextUpgrade("Classes_Order", "Best_Class_Index", "Classes", "BuyClass", "Coins")
+                end
+                if Settings.SSAutoBuyAuras then
+                    TryBuyNextUpgrade("BossBoosts_Order", "Best_BossBoost_Index", "BossBoosts", "BuyBossBoost", "Crowns")
+                    TryBuyNextUpgrade("Auras_Order", "Best_Aura_Index", "Auras", "BuyAura", "Crowns")
+                    TryBuyNextUpgrade("PetAuras_Order", "Best_PetAura_Index", "PetAuras", "BuyPetAura", "Crowns")
+                end
+            end
+            if d and d.UIAction and (now - lastPet >= 3.0) then
+                lastPet = now
+                if Settings.SSAutoPets then
+                    pcall(function() d.UIAction:FireServer("CombineAllPets") end)
+                    pcall(function() d.UIAction:FireServer("EquipBestPets") end)
+                end
+            end
+            task.wait(0.25)
+        end
+    end)
+
+    local communityExecuted = false
+    MakeSection("Community Hub & Extras", "🧰")
+    CreateButton("Executar Community Hub (SS)", GamePage, function()
+        if communityExecuted then
+            CustomNotify("Community Hub (SS) ja esta ativo nesta sessao.", Color3.fromRGB(255, 200, 80), 3)
+            return
+        end
+        communityExecuted = true
+        CustomNotify("Iniciando Community Hub (SS)...", Color3.fromRGB(110, 185, 255), 3)
+        task.spawn(function()
+            local ok, err = pcall(RunSSCommunityScript)
+            if not ok then
+                communityExecuted = false
+                CustomNotify("Erro Community Hub (SS): " .. tostring(err), Color3.fromRGB(255, 95, 95), 5)
+                warn("[ToxHub SS Community Error]: " .. tostring(err))
+            end
+        end)
+    end)
+
+    CreateButton("Recarregar Modulo (SS)", GamePage, function()
+        CustomNotify("Recarregando Saber Simulator (SS)...", Color3.fromRGB(90, 175, 255), 2)
+        task.spawn(function()
+            if type(env.ToxSSCleanup) == "function" then
+                pcall(env.ToxSSCleanup)
+            end
+            local ok, err = pcall(function()
+                local url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/SS.lua?toxv=" .. tostring(os.time()) .. "_" .. tostring(math.random(1000, 999999))
+                local src = game:HttpGet(url)
+                local chunk, compErr = loadstring(src)
+                if not chunk then
+                    error(tostring(compErr or "compile error"))
+                end
+                chunk()
+            end)
+            if not ok then
+                CustomNotify("Falha ao recarregar (SS): " .. tostring(err), Color3.fromRGB(255, 95, 95), 4)
+            end
+        end)
+    end)
+
+    if type(env.ClearActivePageCard) == "function" then
+        pcall(env.ClearActivePageCard, GamePage)
+    end
+
+    env.ToxSSModuleLoadedJobId = game.JobId
+    env.ToxSSModuleVersion = ModuleVersion
+    env.ToxSSModulePage = GamePage
+end

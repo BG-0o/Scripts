@@ -653,6 +653,12 @@ local function BuildCombatUI()
     end
     if not CombatPage then return end
 
+    for _, child in ipairs(CombatPage:GetChildren()) do
+        if child:IsA("GuiObject") then
+            pcall(function() child:Destroy() end)
+        end
+    end
+
     local CreateSection = env.CreateSection or getgenv().CreateSection or function(p, t) return p end
     local CreateToggle = env.CreateToggle or getgenv().CreateToggle
     local CreateToggleWithValue = env.CreateToggleWithValue or getgenv().CreateToggleWithValue
@@ -823,6 +829,10 @@ local function BuildCombatUI()
         Settings.HeadHitboxSize = tonumber(val) or 7
         AutoSaveConfiguration()
     end, "HeadHitboxExpander")
+
+    if type(env.ClearActivePageCard) == "function" then
+        pcall(env.ClearActivePageCard, CombatPage)
+    end
 end
 
 BuildCombatUI()

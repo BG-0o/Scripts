@@ -1474,8 +1474,14 @@ if not getgenv().ToxSystemsLoaded then
         TOX_SYSTEMS_URL
     )
 end
-local detected =
-    getgenv().CurrentGameModule
+local detected = getgenv().CurrentGameModule
+if not detected and getgenv().ResolveCurrentGameModule then
+    detected = getgenv().ResolveCurrentGameModule()
+    getgenv().CurrentGameModule = detected
+end
+if detected and getgenv().EnsureGameTabCreated then
+    pcall(getgenv().EnsureGameTabCreated, detected)
+end
 if detected
 and getgenv().ApplyCurrentGameSharedSettings then
     getgenv().ApplyCurrentGameSharedSettings()

@@ -1,3 +1,13 @@
+if not game:IsLoaded() then
+    pcall(function() game.Loaded:Wait() end)
+end
+
+local waitPlaceTries = 0
+while (not game.PlaceId or game.PlaceId == 0) and waitPlaceTries < 15 do
+    task.wait(0.2)
+    waitPlaceTries = waitPlaceTries + 1
+end
+
 if getgenv then
     getgenv().Destroyed = nil
     getgenv().__ToxHubBootLock = nil

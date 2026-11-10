@@ -224,6 +224,7 @@ local function ClearAllESPVisuals()
     env.ToxESPLabels = ESPLabels
 end
 
+env.ClearAllESPVisuals = ClearAllESPVisuals
 env.ClearAllToxESPVisuals = ClearAllESPVisuals
 env.ToxClearTracers = function()
     for _, grp in pairs(ESPDrawings) do
@@ -905,7 +906,7 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
                 ESPCharacterRefs[p] = char
 
                 local distFromMe = localRoot and (localRoot.Position - hrp.Position).Magnitude or (Camera.CFrame.Position - hrp.Position).Magnitude
-                local maxDist = tonumber(Settings.EspMaxDistance) or 0
+                local maxDist = (Settings.EspMaxDistEnabled == true) and (tonumber(Settings.EspMaxDistance) or 1000) or 0
                 local withinDist = (maxDist <= 0) or (distFromMe <= maxDist)
 
                 if withinDist then

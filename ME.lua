@@ -1,95 +1,22 @@
-﻿--[========================================================================[
+--[========================================================================[
     ToxHub Game Module: ME (+1 Muscle Evolution)
-    PlaceId: 133007106457547
+    Version: 2026-11-10-me-native-v2
 ]========================================================================]
-local MEPlaceId = 133007106457547
-if game.PlaceId ~= MEPlaceId and tostring(game.PlaceId) ~= "133007106457547" then
-    return
-end
-
-local Settings = getgenv().Settings
-local GamePage = getgenv().GamePage
-local CreateToggle = getgenv().CreateToggle
-local CreateButton = getgenv().CreateButton
-local CustomNotify = getgenv().CustomNotify or function() end
-
-getgenv().ToxMEGeneration = (tonumber(getgenv().ToxMEGeneration) or 0) + 1
-local CurrentGeneration = getgenv().ToxMEGeneration
-local MEModuleVersion = "2026-11-09-me-v1"
-
-if getgenv().ToxMEModuleLoadedJobId == game.JobId
-and getgenv().ToxMEModuleVersion == MEModuleVersion
-and getgenv().ToxMEModulePage == GamePage
-and not getgenv().Destroyed then
-    return
-end
-
-if getgenv().ToxMECleanup then
-    pcall(getgenv().ToxMECleanup)
-end
-
-if GamePage then
-    for _, child in ipairs(GamePage:GetChildren()) do
-        if child:IsA("GuiObject") then
-            child:Destroy()
-        end
+do
+    local isTarget = (game.PlaceId == 133007106457547 or game.PlaceId == 10892211425 or game.GameId == 133007106457547 or game.GameId == 10892211425 or tostring(game.PlaceId) == "133007106457547")
+    local curMod = getgenv and getgenv().CurrentGameModule
+    if not isTarget and curMod and curMod.ShortName == "ME" then
+        isTarget = true
     end
-
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, -5, 0, 75)
-    card.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-    card.BorderSizePixel = 0
-    card.Parent = GamePage
-
-    local cardCorner = Instance.new("UICorner")
-    cardCorner.CornerRadius = UDim.new(0, 6)
-    cardCorner.Parent = card
-
-    local cardStroke = Instance.new("UIStroke")
-    cardStroke.Color = Color3.fromRGB(9, 0, 136)
-    cardStroke.Thickness = 1.5
-    cardStroke.Parent = card
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -20, 0, 26)
-    title.Position = UDim2.new(0, 12, 0, 10)
-    title.BackgroundTransparency = 1
-    title.Text = "+1 Muscle Evolution (ME)"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 14
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = card
-
-    local desc = Instance.new("TextLabel")
-    desc.Size = UDim2.new(1, -20, 0, 26)
-    desc.Position = UDim2.new(0, 12, 0, 36)
-    desc.BackgroundTransparency = 1
-    desc.Text = "Status: Script Running • Features Active"
-    desc.TextColor3 = Color3.fromRGB(120, 255, 120)
-    desc.Font = Enum.Font.Gotham
-    desc.TextSize = 11
-    desc.TextXAlignment = Enum.TextXAlignment.Left
-    desc.Parent = card
-
-    if CreateButton then
-        CreateButton("Recarregar Script (ME)", GamePage, function()
-            CustomNotify("Recarregando +1 Muscle Evolution...", Color3.fromRGB(9, 0, 136))
-            pcall(function()
-                if getgenv().ToxMECleanup then
-                    getgenv().ToxMECleanup()
-                end
-                loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ME.lua"))()
-            end)
-        end)
+    if not isTarget then
+        return
     end
 end
 
-getgenv().ToxMEModuleLoadedJobId = game.JobId
-getgenv().ToxMEModuleVersion = MEModuleVersion
-getgenv().ToxMEModulePage = GamePage
-
--- Original Game Script:
+local RunMECommunityScript = nil
+do
+    local function CommunityEntry(...)
+-- [TOXHUB_ORIGINAL_PAYLOAD_START]
 local oN_16
 local jH
 local i5
@@ -1309,3 +1236,452 @@ task.spawn(worker9)
 task.spawn(worker10)
 task.spawn(worker11)
 Library:Notify("Muscle Evolution loaded")
+
+-- [TOXHUB_ORIGINAL_PAYLOAD_END]
+    end
+    RunMECommunityScript = CommunityEntry
+end
+
+do
+    local env = getgenv()
+    if env.Destroyed then
+        return
+    end
+
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local CollectionService = game:GetService("CollectionService")
+    local Workspace = game:GetService("Workspace")
+    local VirtualUser = game:GetService("VirtualUser")
+
+    local Player = Players.LocalPlayer
+    local Settings = env.Settings
+    if not Settings then
+        return
+    end
+
+    local GamePage = env.GamePage
+    if not GamePage and type(env.EnsureGameTabCreated) == "function" then
+        local okPage, ensured = pcall(env.EnsureGameTabCreated, env.CurrentGameModule)
+        if okPage and ensured then
+            GamePage = ensured
+        end
+    end
+
+    local CreateSection = env.CreateSection
+    local CreateToggle = env.CreateToggle
+    local CreateToggleWithValue = env.CreateToggleWithValue
+    local CreateDropdown = env.CreateDropdown
+    local CreateButton = env.CreateButton
+    local CustomNotify = env.CustomNotify or function() end
+    local AutoSaveConfiguration = env.AutoSaveConfiguration or function() end
+    local SyncToggleVisuals = env.SyncToggleVisuals
+
+    if not GamePage or not CreateToggle or not CreateButton then
+        return
+    end
+
+    local ModuleVersion = "2026-11-10-me-native-v2"
+    if env.ToxMEModuleLoadedJobId == game.JobId
+    and env.ToxMEModuleVersion == ModuleVersion
+    and env.ToxMEModulePage == GamePage
+    and not env.Destroyed then
+        return
+    end
+
+    if type(env.ToxMECleanup) == "function" then
+        pcall(env.ToxMECleanup)
+    end
+
+    env.ToxMEGeneration = (tonumber(env.ToxMEGeneration) or 0) + 1
+    local CurrentGeneration = env.ToxMEGeneration
+
+    for _, child in ipairs(GamePage:GetChildren()) do
+        if child:IsA("GuiObject") then
+            child:Destroy()
+        end
+    end
+    if type(env.ClearActivePageCard) == "function" then
+        pcall(env.ClearActivePageCard, GamePage)
+    end
+
+    local Connections = {}
+    local function TrackConnection(conn)
+        if conn then
+            table.insert(Connections, conn)
+        end
+        return conn
+    end
+
+    local function IsAlive()
+        return not env.Destroyed and env.ToxMEGeneration == CurrentGeneration
+    end
+
+    local function MakeSection(title, icon)
+        if type(CreateSection) == "function" then
+            pcall(CreateSection, GamePage, title, icon)
+        end
+    end
+
+    env.ToxMECleanup = function()
+        if env.ToxMEGeneration == CurrentGeneration then
+            env.ToxMEGeneration = CurrentGeneration + 1
+        end
+        for _, conn in ipairs(Connections) do
+            pcall(function()
+                conn:Disconnect()
+            end)
+        end
+        Connections = {}
+        env.ToxMEModuleLoadedJobId = nil
+        env.ToxMEModuleVersion = nil
+        env.ToxMEModulePage = nil
+        Settings.MEAutoFarm = false
+        Settings.MEAutofarm = false
+        Settings.MEAutoClick = false
+        Settings.MEInGameAutoFight = false
+        Settings.MEAutoRebirth = false
+        Settings.MEAutoArena = false
+        Settings.MEAutoEquipBest = false
+        Settings.MEAutoBuyGloves = false
+        Settings.MEAutoOpenEggs = false
+        Settings.MEAutoRewards = false
+        pcall(function()
+            local fnMod = ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("Utils") and ReplicatedStorage.Shared.Utils:FindFirstChild("Functions")
+            if fnMod then
+                local sig = require(fnMod).GetSignal("SetAutoFightEnabled")
+                if sig then
+                    sig:Fire(false)
+                end
+            end
+        end)
+    end
+
+    Settings.MEAutoFarm = Settings.MEAutoFarm == true or Settings.MEAutofarm == true
+    Settings.MEAutofarm = Settings.MEAutoFarm
+    Settings.MEAutoClick = Settings.MEAutoClick == true
+    Settings.MEInGameAutoFight = Settings.MEInGameAutoFight == true
+    Settings.MEAutoRebirth = Settings.MEAutoRebirth == true
+    Settings.MEAutoArena = Settings.MEAutoArena == true
+    Settings.MEAutoEquipBest = Settings.MEAutoEquipBest == true
+    Settings.MEAutoBuyGloves = Settings.MEAutoBuyGloves == true
+    Settings.MEGlovesAmount = math.max(1, tonumber(Settings.MEGlovesAmount) or 1)
+    Settings.MEAutoOpenEggs = Settings.MEAutoOpenEggs == true
+    Settings.MEAutoRewards = Settings.MEAutoRewards == true
+
+    local deps = nil
+    local function GetMEDeps()
+        if deps then
+            return deps
+        end
+        local ok, result = pcall(function()
+            local pktMod = ReplicatedStorage:WaitForChild("Packages", 5):WaitForChild("Packet", 5)
+            local fnMod = ReplicatedStorage:WaitForChild("Shared", 5):WaitForChild("Utils", 5):WaitForChild("Functions", 5)
+            local cdMod = ReplicatedStorage:WaitForChild("Client", 5):WaitForChild("Controllers", 5):WaitForChild("ClientData", 5)
+            local Packet = require(pktMod)
+            local Functions = require(fnMod)
+            local ClientData = require(cdMod)
+            local cfgFolder = ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("Configs")
+            local dailyCfg = cfgFolder and cfgFolder:FindFirstChild("DailyRewards") and require(cfgFolder.DailyRewards) or nil
+            local playCfg = cfgFolder and cfgFolder:FindFirstChild("PlaytimeRewards") and require(cfgFolder.PlaytimeRewards) or nil
+            return {
+                Click = Packet("Click", Packet.Any),
+                Rebirth = Packet("Rebirth"),
+                EquipBest = Packet("EquipBestItems"),
+                BuyGloves = Packet("BuyBoxingGloves", Packet.NumberU16),
+                OpenEgg = Packet("OpenEgg", Packet.Instance),
+                CollectDaily = Packet("CollectDaily", Packet.NumberU8),
+                CollectPlaytime = Packet("CollectPlaytime", Packet.NumberU8),
+                SetAutoFight = Functions.GetSignal("SetAutoFightEnabled"),
+                ClientData = ClientData,
+                DailyCfg = dailyCfg,
+                PlayCfg = playCfg
+            }
+        end)
+        if ok and result then
+            deps = result
+            return deps
+        end
+        return nil
+    end
+
+    local function SetInGameAutoFight(state)
+        local d = GetMEDeps()
+        if d and d.SetAutoFight then
+            pcall(function()
+                d.SetAutoFight:Fire(state == true)
+            end)
+        end
+    end
+
+    local function SafeMoveTo(targetCFrame)
+        local char = Player and Player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp and targetCFrame then
+            if type(env.AllowToxTeleport) == "function" then
+                env.AllowToxTeleport(1.5, "ME_Arena")
+            end
+            hrp.CFrame = targetCFrame
+        end
+    end
+
+    local function DoArenaStep()
+        if not Player then
+            return
+        end
+        local state = Player:GetAttribute("EndlessRunState")
+        if state ~= "WaveActive" and state ~= "Intermission" then
+            pcall(function()
+                local arenas = Workspace:FindFirstChild("EndlessArenas")
+                local arena1 = arenas and arenas:FindFirstChild("Arena_1")
+                local spawnPart = arena1 and (arena1:FindFirstChild("PlayerSpawn") or arena1:FindFirstChild("ArenaZone"))
+                if spawnPart and spawnPart:IsA("BasePart") then
+                    SafeMoveTo(spawnPart.CFrame + Vector3.new(0, 3, 0))
+                end
+            end)
+            return
+        end
+        if state ~= "WaveActive" then
+            return
+        end
+        local char = Player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then
+            return
+        end
+        local runId = Player:GetAttribute("EndlessRunId")
+        local bestMob = nil
+        local bestDist = math.huge
+        for _, mob in ipairs(CollectionService:GetTagged("StageMob")) do
+            if mob and mob.Parent then
+                local ownerId = mob:GetAttribute("OwnerUserId")
+                local mobRunId = mob:GetAttribute("EndlessRunId")
+                local isMine = (mobRunId ~= nil and runId ~= nil and mobRunId == runId) or (ownerId ~= nil and ownerId == Player.UserId)
+                if isMine then
+                    local part = mob:FindFirstChild("HumanoidRootPart") or (mob:IsA("Model") and mob.PrimaryPart)
+                    local hum = mob:FindFirstChildOfClass("Humanoid")
+                    if part and (not hum or hum.Health > 0) then
+                        local dist = (hrp.Position - part.Position).Magnitude
+                        if dist < bestDist then
+                            bestDist = dist
+                            bestMob = part
+                        end
+                    end
+                end
+            end
+        end
+        if bestMob and bestDist > 6 then
+            SafeMoveTo(CFrame.new(bestMob.Position + Vector3.new(0, 3, 0)))
+        end
+    end
+
+    local function ClaimRewardsStep()
+        local d = GetMEDeps()
+        if not d or not d.ClientData then
+            return
+        end
+        local okProf, prof = pcall(function()
+            return d.ClientData:GetProfile()
+        end)
+        if not okProf or not prof then
+            return
+        end
+        if d.DailyCfg then
+            pcall(function()
+                local streak = math.max(math.floor(tonumber(prof.DataAccessor:Get("DailyRewardStreak")) or 1), 1)
+                local lastCol = tonumber(prof.DataAccessor:Get("DailyRewardCollect")) or 0
+                if streak <= #d.DailyCfg and (lastCol <= 0 or (DateTime.now().UnixTimestamp - lastCol) >= 86400) then
+                    d.CollectDaily:Fire(streak)
+                end
+            end)
+        end
+        if d.PlayCfg then
+            pcall(function()
+                local sessStart = tonumber(prof.GameAccessor:Get("SessionStart")) or 0
+                if sessStart > 0 then
+                    local collected = prof.GameAccessor:Get("PlaytimeCollected")
+                    if type(collected) ~= "table" then
+                        collected = {}
+                    end
+                    local nowUnix = DateTime.now().UnixTimestamp
+                    for idx, entry in ipairs(d.PlayCfg) do
+                        local waitSec = tonumber(entry.WaitTime) or 0
+                        if not collected[idx] and nowUnix >= sessStart + waitSec then
+                            d.CollectPlaytime:Fire(idx)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+
+    MakeSection("Farming & Combate", "💪")
+    CreateToggle("Auto Farm (ME)", GamePage, Settings.MEAutoFarm, function(v)
+        local state = v == true
+        Settings.MEAutoFarm = state
+        Settings.MEAutofarm = state
+        SetInGameAutoFight(state or Settings.MEInGameAutoFight)
+    end, "MEAutoFarm")
+
+    CreateToggle("Auto Click / Damage", GamePage, Settings.MEAutoClick, function(v)
+        Settings.MEAutoClick = v == true
+    end, "MEAutoClick")
+
+    CreateToggle("In-Game Auto Fight Signal", GamePage, Settings.MEInGameAutoFight, function(v)
+        Settings.MEInGameAutoFight = v == true
+        SetInGameAutoFight(v == true or Settings.MEAutoFarm)
+    end, "MEInGameAutoFight")
+
+    CreateToggle("Auto Arena Farm", GamePage, Settings.MEAutoArena, function(v)
+        Settings.MEAutoArena = v == true
+    end, "MEAutoArena")
+
+    CreateToggle("Auto Rebirth", GamePage, Settings.MEAutoRebirth, function(v)
+        Settings.MEAutoRebirth = v == true
+    end, "MEAutoRebirth")
+
+    MakeSection("Equipamentos, Ovos & Rewards", "🥚")
+    CreateToggle("Auto Equip Best Items", GamePage, Settings.MEAutoEquipBest, function(v)
+        Settings.MEAutoEquipBest = v == true
+    end, "MEAutoEquipBest")
+
+    if type(CreateToggleWithValue) == "function" then
+        CreateToggleWithValue("Auto Buy Gloves (Qtd)", GamePage, Settings.MEAutoBuyGloves, Settings.MEGlovesAmount, function(v)
+            Settings.MEAutoBuyGloves = v == true
+        end, function(val)
+            Settings.MEGlovesAmount = math.max(1, math.floor(tonumber(val) or 1))
+        end, "MEAutoBuyGloves")
+    else
+        CreateToggle("Auto Buy Boxing Gloves", GamePage, Settings.MEAutoBuyGloves, function(v)
+            Settings.MEAutoBuyGloves = v == true
+        end, "MEAutoBuyGloves")
+    end
+
+    CreateToggle("Auto Open Eggs", GamePage, Settings.MEAutoOpenEggs, function(v)
+        Settings.MEAutoOpenEggs = v == true
+    end, "MEAutoOpenEggs")
+
+    CreateToggle("Auto Collect Daily & Playtime", GamePage, Settings.MEAutoRewards, function(v)
+        Settings.MEAutoRewards = v == true
+    end, "MEAutoRewards")
+
+    CreateButton("Equip Best & Rebirth Agora", GamePage, function()
+        local d = GetMEDeps()
+        if d then
+            pcall(function() d.EquipBest:Fire() end)
+            pcall(function() d.Rebirth:Fire() end)
+            CustomNotify("Equip Best + Rebirth executados!", Color3.fromRGB(90, 235, 130), 2)
+        end
+    end)
+
+    CreateButton("Unlock Body Stands Proximos", GamePage, function()
+        local count = 0
+        for _, stand in ipairs(CollectionService:GetTagged("BodyStand")) do
+            if stand and stand.Parent then
+                local prompt = stand:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if prompt and type(fireproximityprompt) == "function" then
+                    pcall(fireproximityprompt, prompt)
+                    count = count + 1
+                end
+            end
+        end
+        CustomNotify("Prompts disparados: " .. tostring(count), Color3.fromRGB(110, 185, 255), 2)
+    end)
+
+    task.spawn(function()
+        local lastSlow = 0
+        local lastArena = 0
+        while IsAlive() do
+            local d = GetMEDeps()
+            if d and (Settings.MEAutoFarm or Settings.MEAutoClick) then
+                pcall(function()
+                    d.Click:Fire(nil)
+                end)
+            end
+            local now = os.clock()
+            if now - lastArena >= 0.4 then
+                lastArena = now
+                if Settings.MEAutoArena then
+                    DoArenaStep()
+                end
+            end
+            if d and (now - lastSlow >= 1.5) then
+                lastSlow = now
+                if Settings.MEAutoRebirth then
+                    pcall(function() d.Rebirth:Fire() end)
+                end
+                if Settings.MEAutoEquipBest then
+                    pcall(function() d.EquipBest:Fire() end)
+                end
+                if Settings.MEAutoBuyGloves then
+                    local amt = math.max(1, math.floor(tonumber(Settings.MEGlovesAmount) or 1))
+                    pcall(function() d.BuyGloves:Fire(amt) end)
+                end
+                if Settings.MEAutoOpenEggs then
+                    for _, egg in ipairs(CollectionService:GetTagged("Egg")) do
+                        if not Settings.MEAutoOpenEggs or not IsAlive() then
+                            break
+                        end
+                        if egg and egg.Parent then
+                            pcall(function() d.OpenEgg:Fire(egg) end)
+                            task.wait(0.1)
+                        end
+                    end
+                end
+                if Settings.MEAutoRewards then
+                    ClaimRewardsStep()
+                end
+            end
+            task.wait(0.12)
+        end
+    end)
+
+    local communityExecuted = false
+    MakeSection("Community Hub & Extras", "🧰")
+    CreateButton("Executar Community Hub (ME)", GamePage, function()
+        if communityExecuted then
+            CustomNotify("Community Hub (ME) ja esta ativo nesta sessao.", Color3.fromRGB(255, 200, 80), 3)
+            return
+        end
+        communityExecuted = true
+        CustomNotify("Iniciando Community Hub (ME)...", Color3.fromRGB(110, 185, 255), 3)
+        task.spawn(function()
+            local ok, err = pcall(RunMECommunityScript)
+            if not ok then
+                communityExecuted = false
+                CustomNotify("Erro Community Hub (ME): " .. tostring(err), Color3.fromRGB(255, 95, 95), 5)
+                warn("[ToxHub ME Community Error]: " .. tostring(err))
+            end
+        end)
+    end)
+
+    CreateButton("Recarregar Modulo (ME)", GamePage, function()
+        CustomNotify("Recarregando +1 Muscle Evolution (ME)...", Color3.fromRGB(90, 175, 255), 2)
+        task.spawn(function()
+            if type(env.ToxMECleanup) == "function" then
+                pcall(env.ToxMECleanup)
+            end
+            local ok, err = pcall(function()
+                local url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ME.lua?toxv=" .. tostring(os.time()) .. "_" .. tostring(math.random(1000, 999999))
+                local src = game:HttpGet(url)
+                local chunk, compErr = loadstring(src)
+                if not chunk then
+                    error(tostring(compErr or "compile error"))
+                end
+                chunk()
+            end)
+            if not ok then
+                CustomNotify("Falha ao recarregar (ME): " .. tostring(err), Color3.fromRGB(255, 95, 95), 4)
+            end
+        end)
+    end)
+
+    if type(env.ClearActivePageCard) == "function" then
+        pcall(env.ClearActivePageCard, GamePage)
+    end
+
+    env.ToxMEModuleLoadedJobId = game.JobId
+    env.ToxMEModuleVersion = ModuleVersion
+    env.ToxMEModulePage = GamePage
+end

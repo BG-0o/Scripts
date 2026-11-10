@@ -47,6 +47,7 @@ for key, val in pairs(DefaultTheme) do
     end
 end
 local Theme = Settings.Theme
+getgenv().Theme = Theme
 MAIN_COLOR = Theme.Accent
 getgenv().MAIN_COLOR = MAIN_COLOR
 local ThemedObjects = {}
@@ -892,10 +893,10 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     CollapseBtn.Position = UDim2.new(1, -30, 0.5, -12)
     CollapseBtn.BackgroundColor3 = Theme.Element
     CollapseBtn.BorderSizePixel = 0
-    CollapseBtn.Text = "v"
+    CollapseBtn.Text = "▼"
     CollapseBtn.TextColor3 = Theme.DimText
     CollapseBtn.Font = Enum.Font.GothamBold
-    CollapseBtn.TextSize = 11
+    CollapseBtn.TextSize = 10
     CollapseBtn.ZIndex = 9
     CollapseBtn.Parent = Header
     RegisterThemedObject(CollapseBtn, "BackgroundColor3", "Element")
@@ -958,7 +959,7 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     CollapseBtn.MouseButton1Click:Connect(function()
         isCollapsed = not isCollapsed
         Content.Visible = not isCollapsed
-        CollapseBtn.Text = isCollapsed and "^" or "v"
+        CollapseBtn.Text = isCollapsed and "▶" or "▼"
     end)
     ReorderBtn.MouseButton1Click:Connect(function()
         ArrowFrame.Visible = not ArrowFrame.Visible
@@ -1039,6 +1040,12 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
 end
 getgenv().CreateCard = CreateCard
 local ActivePageCards = {}
+local function ClearActivePageCard(Page)
+    if Page then
+        ActivePageCards[Page] = nil
+    end
+end
+getgenv().ClearActivePageCard = ClearActivePageCard
 local function CreateSection(Page, Title, Icon)
     local card = CreateCard(Page, Title, Icon)
     if Page then
@@ -1050,7 +1057,7 @@ getgenv().CreateSection = CreateSection
 local function ResolveElementParent(Page)
     if Page then
         local activeCard = ActivePageCards[Page]
-        if activeCard and activeCard:FindFirstChild("Content") then
+        if activeCard and activeCard.Parent and activeCard:FindFirstChild("Content") then
             return activeCard.Content
         end
     end
@@ -1096,10 +1103,33 @@ local function CreatePage(Name, RawPage)
 end
 getgenv().CreatePage = CreatePage
 local HomePage = CreatePage("HOME")
-local DetectedGameModule = getgenv().CurrentGameModule
+local function GetOrDetectGameModule()
+    if getgenv().CurrentGameModule and getgenv().CurrentGameModule.Ready then
+        return getgenv().CurrentGameModule
+    end
+    if getgenv().ResolveCurrentGameModule then
+        local detected = getgenv().ResolveCurrentGameModule()
+        if detected then
+            getgenv().CurrentGameModule = detected
+            return detected
+        end
+    end
+    local reg = getgenv().GameModuleRegistry or {}
+    local pStr = tostring(game.PlaceId or "")
+    local gStr = tostring(game.GameId or "")
+    for k, v in pairs(reg) do
+        local kStr = tostring(k)
+        if (pStr ~= "" and pStr ~= "0" and kStr == pStr) or (gStr ~= "" and gStr ~= "0" and kStr == gStr) then
+            getgenv().CurrentGameModule = v
+            return v
+        end
+    end
+    return nil
+end
+local DetectedGameModule = GetOrDetectGameModule()
 local GamePage = nil
 if DetectedGameModule and DetectedGameModule.Ready then
-    GamePage = CreatePage(DetectedGameModule.ShortName)
+    GamePage = CreatePage(DetectedGameModule.ShortName or "Game")
 end
 local CombatPage = CreatePage("UNIVERSAL_COMBAT")
 local PlayerPage = CreatePage("UNIVERSAL_PLAYER")
@@ -1233,10 +1263,55 @@ getgenv().CreateTab = function(Name, Page)
     return CreateSidebarNavButton(Name, "📌", Page)
 end
 CreateSidebarNavButton("Home", "🏠", HomePage, 1)
-if GamePage and DetectedGameModule then
-    local gameLabel = DetectedGameModule.ShortName or "Game"
-    CreateSidebarNavButton(gameLabel, "🎮", GamePage, 2)
+local function CreateOrGetGameNavButton(targetModule, targetPage)
+    if not targetModule or not targetPage then return end
+    local gameLabel = targetModule.ShortName or "Game"
+    return CreateSidebarNavButton(gameLabel, "🎮", targetPage, 2)
 end
+
+if GamePage and DetectedGameModule then
+    CreateOrGetGameNavButton(DetectedGameModule, GamePage)
+end
+
+getgenv().ToxPageNamesByPage = getgenv().ToxPageNamesByPage or {}
+getgenv().EnsureGameTabCreated = function(moduleData)
+    moduleData = moduleData or GetOrDetectGameModule()
+    if not moduleData or not moduleData.Ready then return nil end
+    getgenv().CurrentGameModule = moduleData
+    getgenv().ToxPageNamesByPage = getgenv().ToxPageNamesByPage or {}
+    
+    local page = getgenv().GamePage
+    if not page then
+        local shortName = moduleData.ShortName or "Game"
+        page = CreatePage(shortName)
+        getgenv().GamePage = page
+        getgenv().ToxPageNamesByPage[page] = shortName
+    end
+    if page and not SidebarNavButtons[page] then
+        CreateOrGetGameNavButton(moduleData, page)
+    end
+    if getgenv().UpdateHomePinnedGameOption then
+        pcall(getgenv().UpdateHomePinnedGameOption, moduleData)
+    end
+    return getgenv().GamePage
+end
+
+task.spawn(function()
+    for _ = 1, 30 do
+        if getgenv().Destroyed then break end
+        local mod = GetOrDetectGameModule()
+        if mod and mod.Ready then
+            local p = getgenv().GamePage
+            if not p or not SidebarNavButtons[p] then
+                pcall(function()
+                    getgenv().EnsureGameTabCreated(mod)
+                end)
+            end
+            break
+        end
+        task.wait(0.25)
+    end
+end)
 CreateSidebarNavButton("Combat", "⚔️", CombatPage, 3)
 CreateSidebarNavButton("Visuals", "👁️", VisualsPage, 4)
 CreateSidebarNavButton("Player", "👤", PlayerPage, 5)
@@ -1397,7 +1472,7 @@ local function RebuildSearchResults()
                             if parentCard and parentCard:FindFirstChild("Content") then
                                 parentCard.Content.Visible = true
                                 local colBtn = parentCard:FindFirstChild("Header") and parentCard.Header:FindFirstChild("CollapseBtn")
-                                if colBtn then colBtn.Text = "v" end
+                                if colBtn then colBtn.Text = "▼" end
                             end
                             local offset = item.Object.AbsolutePosition.Y - item.Page.AbsolutePosition.Y + item.Page.CanvasPosition.Y - 14
                             item.Page.CanvasPosition = Vector2.new(0, math.max(0, offset))
@@ -1867,24 +1942,97 @@ local function AddPinnedCheckbox(name, defaultVal, isRisky, onToggled)
         if onToggled then onToggled(active) end
         if getgenv().AutoSaveConfiguration then getgenv().AutoSaveConfiguration() end
     end)
-    return SetState
+    return SetState, row, label
 end
-AddPinnedCheckbox("Enable ESP", Settings.ESPEnabled, false, function(v)
-    Settings.ESPEnabled = v
-    if getgenv().SyncToggleVisuals then getgenv().SyncToggleVisuals("ESPEnabled", v) end
+local setEspPinned, espPinnedRow = AddPinnedCheckbox("Enable ESP", Settings.ESPEnabled, false, function(v)
+    if getgenv().ToxSetSharedOption then
+        getgenv().ToxSetSharedOption("ESPEnabled", v)
+    else
+        Settings.ESPEnabled = v
+        if getgenv().SyncToggleVisuals then getgenv().SyncToggleVisuals("ESPEnabled", v) end
+    end
+    if not v then
+        local clr = getgenv().ClearAllESPVisuals or getgenv().ClearAllToxESPVisuals
+        if type(clr) == "function" then
+            pcall(clr)
+        end
+    end
 end)
-AddPinnedCheckbox("Farm Coins", Settings.MM2AutoFarmV2, false, function(v)
-    Settings.MM2AutoFarmV2 = v
-    if getgenv().SyncToggleVisuals then getgenv().SyncToggleVisuals("MM2AutoFarmV2", v) end
+RegisterSharedToggle("ESPEnabled", { Button = espPinnedRow, SetVisual = setEspPinned })
+
+local pinnedGameKey = "Noclip"
+local pinnedGameCallback = nil
+local function ResolvePinnedGameConfig(mod)
+    if game.PlaceId == 142823291 then
+        return "MM2AutoFarmV2", "Farm Coins", Settings.MM2AutoFarmV2 == true, function(v)
+            Settings.MM2AutoFarmV2 = v
+            if getgenv().SyncToggleVisuals then getgenv().SyncToggleVisuals("MM2AutoFarmV2", v) end
+        end
+    elseif mod and mod.ShortName then
+        local short = tostring(mod.ShortName)
+        local key = short .. "AutoFarm"
+        local altKey = short .. "Autofarm"
+        local curVal = (Settings[key] == true) or (Settings[altKey] == true)
+        return key, "Auto Farm (" .. short .. ")", curVal, function(v)
+            Settings[key] = v
+            Settings[altKey] = v
+            if getgenv().SyncToggleVisuals then getgenv().SyncToggleVisuals(key, v) end
+        end
+    end
+    return "Noclip", "Noclip", Settings.Noclip == true, function(v)
+        if getgenv().ToxSetSharedOption then
+            getgenv().ToxSetSharedOption("Noclip", v)
+        else
+            Settings.Noclip = v
+            if getgenv().SyncToggleVisuals then getgenv().SyncToggleVisuals("Noclip", v) end
+        end
+    end
+end
+
+local initGameKey, pinnedActionName, pinnedActionVal, initGameFunc = ResolvePinnedGameConfig(getgenv().CurrentGameModule)
+pinnedGameKey = initGameKey
+pinnedGameCallback = initGameFunc
+local setGamePinned, gamePinnedRow, gamePinnedLabel = AddPinnedCheckbox(pinnedActionName, pinnedActionVal, false, function(v)
+    if pinnedGameCallback then pinnedGameCallback(v) end
 end)
-AddPinnedCheckbox("Kill Aura", Settings.KillAura, true, function(v)
+local registeredGamePinnedKeys = {}
+local function RegisterGamePinnedKey(keyName)
+    if not keyName or registeredGamePinnedKeys[keyName] then return end
+    registeredGamePinnedKeys[keyName] = true
+    RegisterSharedToggle(keyName, {
+        Button = gamePinnedRow,
+        SetVisual = function(v)
+            if pinnedGameKey == keyName then
+                setGamePinned(v)
+            end
+        end
+    })
+end
+RegisterGamePinnedKey(pinnedGameKey)
+getgenv().UpdateHomePinnedGameOption = function(mod)
+    local nextKey, nextName, nextVal, nextFunc = ResolvePinnedGameConfig(mod or getgenv().CurrentGameModule)
+    pinnedGameKey = nextKey
+    pinnedGameCallback = nextFunc
+    if gamePinnedLabel and gamePinnedLabel.Parent then
+        gamePinnedLabel.Text = nextName
+    end
+    if setGamePinned then
+        setGamePinned(nextVal)
+    end
+    RegisterGamePinnedKey(nextKey)
+end
+
+local setKillAuraPinned, killAuraPinnedRow = AddPinnedCheckbox("Kill Aura", Settings.KillAura, true, function(v)
     Settings.KillAura = v
     if getgenv().SyncToggleVisuals then getgenv().SyncToggleVisuals("KillAura", v) end
 end)
-AddPinnedCheckbox("Anti AFK", Settings.AntiAFK ~= false, false, function(v)
+RegisterSharedToggle("KillAura", { Button = killAuraPinnedRow, SetVisual = setKillAuraPinned })
+
+local setAntiAfkPinned, antiAfkPinnedRow = AddPinnedCheckbox("Anti AFK", Settings.AntiAFK ~= false, false, function(v)
     Settings.AntiAFK = v
     if getgenv().SyncToggleVisuals then getgenv().SyncToggleVisuals("AntiAFK", v) end
 end)
+RegisterSharedToggle("AntiAFK", { Button = antiAfkPinnedRow, SetVisual = setAntiAfkPinned })
 local StatusCard = CreateCard(HomePage, "Status", "🕒", 2, "Home_Status")
 local StatusGrid = Instance.new("Frame")
 StatusGrid.Size = UDim2.new(1, 0, 0, 96)
@@ -2013,13 +2161,26 @@ local function CreateStatCard(title, defaultVal)
     RegisterThemedObject(v, "TextColor3", "Text")
     return function(newVal) v.Text = tostring(newVal) end
 end
-local UpdateMurdererStat = CreateStatCard("Murderer", "None")
-local UpdateSheriffStat = CreateStatCard("Sheriff", "None")
-local UpdatePlayersStat = CreateStatCard("Players Alive", tostring(#Players:GetPlayers()))
-local UpdateMapStat = CreateStatCard("Map / Server", tostring(game.PlaceId))
+local UpdateMurdererStat = nil
+local UpdateSheriffStat = nil
+local UpdateGameStat = nil
+local UpdateStatusStat = nil
+local isMM2Game = game.PlaceId == 142823291
+if isMM2Game then
+    UpdateMurdererStat = CreateStatCard("Murderer", "None")
+    UpdateSheriffStat = CreateStatCard("Sheriff", "None")
+else
+    local curMod = getgenv().CurrentGameModule
+    local gameTitle = (curMod and (curMod.GameName or curMod.ShortName)) or "Universal"
+    UpdateGameStat = CreateStatCard("Game", gameTitle)
+    UpdateStatusStat = CreateStatCard("Status", "Online")
+end
+local UpdatePlayersStat = CreateStatCard("Players", tostring(#Players:GetPlayers()))
+local UpdateMapStat = CreateStatCard("Place ID", tostring(game.PlaceId))
 local QuickCard = CreateCard(HomePage, "Quick actions", "⚡", 5, "Home_QuickActions")
 local QuickGrid = Instance.new("Frame")
-QuickGrid.Size = UDim2.new(1, 0, 0, 72)
+QuickGrid.Size = UDim2.new(1, 0, 0, 0)
+QuickGrid.AutomaticSize = Enum.AutomaticSize.Y
 QuickGrid.BackgroundTransparency = 1
 QuickGrid.Parent = QuickCard.Content
 local QuickGridLayout = Instance.new("UIGridLayout")
@@ -2038,6 +2199,14 @@ local function CreateQuickActionBtn(text, onClick)
     local bc = Instance.new("UICorner") bc.CornerRadius = UDim.new(0, 5) bc.Parent = btn
     RegisterThemedObject(btn, "BackgroundColor3", "Element")
     RegisterThemedObject(btn, "TextColor3", "Text")
+    btn.MouseEnter:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(btn, TweenInfo.new(0.12), { BackgroundColor3 = Theme.Hover }):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(btn, TweenInfo.new(0.12), { BackgroundColor3 = Theme.Element }):Play()
+    end)
     btn.MouseButton1Click:Connect(function()
         if getgenv().Destroyed then return end
         if onClick then onClick() end
@@ -2045,7 +2214,7 @@ local function CreateQuickActionBtn(text, onClick)
     return btn
 end
 CreateQuickActionBtn("Copy Discord", function()
-    pcall(function() setclipboard("https://discord.gg/toxhub") end)
+    pcall(function() setclipboard("https://discord.gg/A7tZ9VbVvM") end)
     CustomNotify("Discord link copied to clipboard!", Theme.Accent, 3)
 end)
 CreateQuickActionBtn("Load last config", function()
@@ -2055,7 +2224,14 @@ CreateQuickActionBtn("Load last config", function()
     end
 end)
 CreateQuickActionBtn("Rejoin", function()
-    TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player)
+    pcall(function()
+        if getgenv().AllowToxTeleport then getgenv().AllowToxTeleport(15, "Rejoin") end
+        if #Players:GetPlayers() <= 1 then
+            TeleportService:Teleport(game.PlaceId, Player)
+        else
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player)
+        end
+    end)
 end)
 CreateQuickActionBtn("Server hop", function()
     CustomNotify("Finding server...", Theme.Accent, 2)
@@ -2067,6 +2243,7 @@ CreateQuickActionBtn("Server hop", function()
         if success and result and result.data then
             for _, s in ipairs(result.data) do
                 if s.playing and s.playing < s.maxPlayers and s.id ~= game.JobId then
+                    if getgenv().AllowToxTeleport then getgenv().AllowToxTeleport(15, "Server Hop") end
                     TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, Player)
                     return
                 end
@@ -2075,10 +2252,20 @@ CreateQuickActionBtn("Server hop", function()
         CustomNotify("No alternate server found", Color3.fromRGB(255, 100, 100), 3)
     end)
 end)
+local setWatermarkSettingVisual = nil
 CreateQuickActionBtn("Toggle watermark", function()
     Settings.Watermark = not Settings.Watermark
     WatermarkFrame.Visible = Settings.Watermark == true
+    if setWatermarkSettingVisual then
+        setWatermarkSettingVisual(Settings.Watermark == true)
+    end
     if getgenv().AutoSaveConfiguration then getgenv().AutoSaveConfiguration() end
+end)
+CreateQuickActionBtn("Respawn", function()
+    local plr = Players.LocalPlayer or Player
+    local character = plr and plr.Character
+    local hum = character and character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.Health = 0 end
 end)
 local AccountCard = CreateCard(HomePage, "Account", "🔑", 6, "Home_Account")
 local AccRow = Instance.new("Frame")
@@ -2126,59 +2313,6 @@ ReplaceKeyBtn.MouseButton1Click:Connect(function()
     CustomNotify("Key verified (Lifetime License)", Theme.Accent, 3)
 end)
 local MenuCard = CreateCard(SettingsPage, "Menu", "☰", 1, "Settings_Menu")
-local KeybindRow = Instance.new("Frame")
-KeybindRow.Size = UDim2.new(1, 0, 0, 36)
-KeybindRow.BackgroundColor3 = Theme.Element
-KeybindRow.BorderSizePixel = 0
-KeybindRow.Parent = MenuCard.Content
-local krCorner = Instance.new("UICorner") krCorner.CornerRadius = UDim.new(0, 5) krCorner.Parent = KeybindRow
-RegisterThemedObject(KeybindRow, "BackgroundColor3", "Element")
-local KeybindLabel = Instance.new("TextLabel")
-KeybindLabel.Size = UDim2.new(1, -90, 1, 0)
-KeybindLabel.Position = UDim2.new(0, 10, 0, 0)
-KeybindLabel.BackgroundTransparency = 1
-KeybindLabel.Text = "Toggle menu"
-KeybindLabel.TextColor3 = Theme.Text
-KeybindLabel.Font = Enum.Font.GothamMedium
-KeybindLabel.TextSize = 12
-KeybindLabel.TextXAlignment = Enum.TextXAlignment.Left
-KeybindLabel.Parent = KeybindRow
-RegisterThemedObject(KeybindLabel, "TextColor3", "Text")
-local KeybindButton = Instance.new("TextButton")
-KeybindButton.Size = UDim2.new(0, 75, 0, 24)
-KeybindButton.Position = UDim2.new(1, -85, 0.5, -12)
-KeybindButton.BackgroundColor3 = Theme.Panel
-KeybindButton.BorderSizePixel = 0
-KeybindButton.Text = (typeof(Settings.GUIKeybind) == "EnumItem" and Settings.GUIKeybind.Name) or tostring(Settings.GUIKeybind or "LeftAlt")
-KeybindButton.TextColor3 = Theme.Accent
-KeybindButton.Font = Enum.Font.GothamBold
-KeybindButton.TextSize = 11
-KeybindButton.Parent = KeybindRow
-local kbCorner = Instance.new("UICorner") kbCorner.CornerRadius = UDim.new(0, 4) kbCorner.Parent = KeybindButton
-local kbStroke = Instance.new("UIStroke") kbStroke.Color = Theme.Outline kbStroke.Thickness = 1 kbStroke.Parent = KeybindButton
-RegisterThemedObject(KeybindButton, "BackgroundColor3", "Panel")
-RegisterThemedObject(KeybindButton, "TextColor3", "Accent")
-RegisterThemedObject(kbStroke, "Color", "Outline")
-local isBindingKey = false
-KeybindButton.MouseButton1Click:Connect(function()
-    if isBindingKey then return end
-    isBindingKey = true
-    KeybindButton.Text = "..."
-    local conn
-    conn = UserInputService.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            conn:Disconnect()
-            isBindingKey = false
-            if input.KeyCode == Enum.KeyCode.Escape then
-                Settings.GUIKeybind = Enum.KeyCode.LeftAlt
-            else
-                Settings.GUIKeybind = input.KeyCode
-            end
-            KeybindButton.Text = (typeof(Settings.GUIKeybind) == 'EnumItem' and Settings.GUIKeybind.Name) or tostring(Settings.GUIKeybind or 'LeftAlt')
-            if getgenv().AutoSaveConfiguration then getgenv().AutoSaveConfiguration() end
-        end
-    end)
-end)
 local function AddSettingsToggle(parent, name, defaultVal, callback)
     local row = Instance.new("TextButton")
     row.Size = UDim2.new(1, 0, 0, 34)
@@ -2237,7 +2371,7 @@ end
 AddSettingsToggle(MenuCard.Content, "Auto hide UI after execute", Settings.AutoCloseExecute, function(v)
     Settings.AutoCloseExecute = v
 end)
-AddSettingsToggle(MenuCard.Content, "Watermark", Settings.Watermark ~= false, function(v)
+setWatermarkSettingVisual = AddSettingsToggle(MenuCard.Content, "Watermark", Settings.Watermark ~= false, function(v)
     Settings.Watermark = v
     WatermarkFrame.Visible = v
 end)
@@ -2580,6 +2714,17 @@ ApplyIconBtn.MouseButton1Click:Connect(function()
         CustomNotify("Custom icon applied!", Theme.Accent, 3)
     end
 end)
+local CachedResolvedGameName = nil
+task.spawn(function()
+    pcall(function()
+        if game.PlaceId and game.PlaceId ~= 0 then
+            local info = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+            if info and info.Name and info.Name ~= "" then
+                CachedResolvedGameName = info.Name
+            end
+        end
+    end)
+end)
 task.spawn(function()
     local frameCount = 0
     local lastFpsTime = os.clock()
@@ -2620,8 +2765,19 @@ task.spawn(function()
         if WatermarkFrame and WatermarkFrame.Visible and WatermarkLabel then
             WatermarkLabel.Text = "<b>ToxHub</b> v2.0  |  FPS: " .. tostring(currentFps) .. "  |  Ping: " .. tostring(pingVal) .. "ms"
         end
-        if game.PlaceId == 142823291 then
-            pcall(function()
+        pcall(function()
+            if UpdatePlayersStat then
+                UpdatePlayersStat(tostring(pCount))
+            end
+            if UpdateGameStat then
+                local curMod = getgenv().CurrentGameModule
+                if curMod then
+                    UpdateGameStat(curMod.GameName or curMod.ShortName or "Universal")
+                elseif CachedResolvedGameName then
+                    UpdateGameStat(CachedResolvedGameName)
+                end
+            end
+            if isMM2Game and UpdateMurdererStat and UpdateSheriffStat then
                 local murd, sher = "None", "None"
                 for _, p in ipairs(Players:GetPlayers()) do
                     local char = p.Character
@@ -2635,9 +2791,8 @@ task.spawn(function()
                 end
                 UpdateMurdererStat(murd)
                 UpdateSheriffStat(sher)
-                UpdatePlayersStat(tostring(pCount))
-            end)
-        end
+            end
+        end)
         task.wait(1)
     end
 end)
@@ -2990,6 +3145,14 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     ClickBtn.BackgroundTransparency = 1
     ClickBtn.Text = ""
     ClickBtn.Parent = Container
+    ClickBtn.MouseEnter:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Container, TweenInfo.new(0.12), { BackgroundColor3 = Theme.Hover }):Play()
+    end)
+    ClickBtn.MouseLeave:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Container, TweenInfo.new(0.12), { BackgroundColor3 = Theme.Element }):Play()
+    end)
     local risky = IsFeatureRisky(Name)
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(1, -65, 1, 0)
@@ -3151,15 +3314,6 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
             Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
         }):Play()
     end
-    table.insert(RegisteredToggles, {
-        UpdateColor = function()
-            ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
-            tgStroke.Color = Theme.Outline
-            cStroke.Color = Theme.Outline
-            cbStroke.Color = Theme.Outline
-            ChoiceBtn.TextColor3 = Theme.Accent
-        end
-    })
     table.insert(RegisteredToggles, {
         UpdateColor = function()
             ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
@@ -3397,10 +3551,9 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
             UpdateToggle()
         end,
         SetValue = function(Value)
+            initialChoice = Value
             ChoiceBtn.Text = tostring(Value)
-            for i, opt in ipairs(Options) do
-                if opt == Value then CurrentIdx = i break end
-            end
+            RefreshChoiceButtons()
         end
     }
     RegisterSharedToggle(SyncKey, Controller)
@@ -3767,6 +3920,14 @@ getgenv().CreateButton = function(Name, Page, Callback)
     RegisterThemedObject(Button, "BackgroundColor3", "Element")
     RegisterThemedObject(Button, "TextColor3", "Text")
     RegisterThemedObject(Stroke, "Color", "Outline")
+    Button.MouseEnter:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Button, TweenInfo.new(0.12), { BackgroundColor3 = Theme.Hover }):Play()
+    end)
+    Button.MouseLeave:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Button, TweenInfo.new(0.12), { BackgroundColor3 = Theme.Element }):Play()
+    end)
     Button.MouseButton1Click:Connect(function()
         if getgenv().Destroyed  then return end
         Callback(Button)
@@ -3793,6 +3954,14 @@ getgenv().CreateConfirmButton = function(Name, Page, Callback)
     RegisterThemedObject(Button, "TextColor3", "Text")
     RegisterThemedObject(Stroke, "Color", "Outline")
     local Confirming = false
+    Button.MouseEnter:Connect(function()
+        if getgenv().Destroyed or Confirming then return end
+        TweenService:Create(Button, TweenInfo.new(0.12), { BackgroundColor3 = Theme.Hover }):Play()
+    end)
+    Button.MouseLeave:Connect(function()
+        if getgenv().Destroyed or Confirming then return end
+        TweenService:Create(Button, TweenInfo.new(0.12), { BackgroundColor3 = Theme.Element }):Play()
+    end)
     Button.MouseButton1Click:Connect(function()
         if getgenv().Destroyed  then return end
         if not Confirming then
@@ -4033,12 +4202,12 @@ local function InitializeHomePage()
     local targetPage = (getgenv and getgenv().HomePage) or HomePage
     if not targetPage then return end
     local plr = (Players and Players.LocalPlayer) or Player or (game:GetService("Players").LocalPlayer)
-    CreateSection(targetPage, "Perfil do Usuário", "👤")
+    local profileCard = CreateCard(targetPage, "Perfil do Usuário", "👤", 0, "Home_Profile")
     local bannerFrame = Instance.new("Frame")
     bannerFrame.Size = UDim2.new(1, -4, 0, 72)
     bannerFrame.BackgroundColor3 = Theme.Element
     bannerFrame.BorderSizePixel = 0
-    bannerFrame.Parent = ResolveElementParent(targetPage)
+    bannerFrame.Parent = profileCard.Content
     local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 8) bCorner.Parent = bannerFrame
     local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.Parent = bannerFrame
     RegisterThemedObject(bannerFrame, "BackgroundColor3", "Element")
@@ -4062,6 +4231,7 @@ local function InitializeHomePage()
     welcomeLbl.TextSize = 13
     welcomeLbl.Font = Enum.Font.GothamBold
     welcomeLbl.TextXAlignment = Enum.TextXAlignment.Left
+    welcomeLbl.TextTruncate = Enum.TextTruncate.AtEnd
     welcomeLbl.Parent = bannerFrame
     RegisterThemedObject(welcomeLbl, "TextColor3", "Text")
     local subLbl = Instance.new("TextLabel")
@@ -4073,46 +4243,24 @@ local function InitializeHomePage()
     subLbl.TextSize = 11
     subLbl.Font = Enum.Font.GothamMedium
     subLbl.TextXAlignment = Enum.TextXAlignment.Left
+    subLbl.TextTruncate = Enum.TextTruncate.AtEnd
     subLbl.Parent = bannerFrame
     RegisterThemedObject(subLbl, "TextColor3", "Accent")
-    CreateSection(targetPage, "Loja & Comunidade", "🛒")
+    local supportCard = CreateCard(targetPage, "Loja & Loader", "🛒", 7, "Home_Support")
+    ActivePageCards[targetPage] = supportCard
     CreateButton("Comprar Robux com R$ (BRL)", targetPage, function()
         if setclipboard then
             setclipboard("https://discord.gg/A7tZ9VbVvM")
         end
         CustomNotify("Link copiado! Acesse o Discord no canal #robux para comprar via PIX/BRL.", Color3.fromRGB(0, 230, 120), 6)
     end)
-    CreateButton("Discord Oficial (discord.gg/A7tZ9VbVvM)", targetPage, function()
+    CreateButton("Copiar Loader Oficial (ToxHub)", targetPage, function()
         if setclipboard then
-            setclipboard("https://discord.gg/A7tZ9VbVvM")
+            setclipboard('loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ToxHud.lua"))()')
         end
-        CustomNotify("Convite copiado: discord.gg/A7tZ9VbVvM", Color3.fromRGB(80, 160, 255), 5)
+        CustomNotify("Loader do ToxHub copiado para a área de transferência!", Color3.fromRGB(255, 200, 50), 5)
     end)
-    CreateButton("Copiar Link do Script / Loader", targetPage, function()
-        if setclipboard then
-            setclipboard('loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BigFroot.lua"))()')
-        end
-        CustomNotify("Loadstring copiado para a área de transferência!", Color3.fromRGB(255, 200, 50), 5)
-    end)
-    CreateSection(targetPage, "Operações Rápidas", "⚡")
-    CreateButton("Reconectar ao Servidor (Rejoin)", targetPage, function()
-        pcall(function()
-            if getgenv().AllowToxTeleport then
-                getgenv().AllowToxTeleport(15, "Rejoin")
-            end
-            TeleportService:Teleport(game.PlaceId, plr)
-        end)
-    end)
-    CreateButton("Trocar de Servidor (Server Hop)", targetPage, function(button)
-        if ShowServerHopMenu then
-            ShowServerHopMenu(button)
-        end
-    end)
-    CreateButton("Resetar Personagem (Respawn)", targetPage, function()
-        local character = plr and plr.Character
-        local hum = character and character:FindFirstChildOfClass("Humanoid")
-        if hum then hum.Health = 0 end
-    end)
+    ActivePageCards[targetPage] = nil
 end
 getgenv().InitializeHomePage = InitializeHomePage
 InitializeHomePage()

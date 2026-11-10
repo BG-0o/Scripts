@@ -154,20 +154,37 @@ local function ApplyCameraMovementFreeze()
     end
 end
 
+local SectionIcons = {
+    ESP = "👁️",
+    VISUALS = "👁️",
+    VISUAL = "👁️",
+    PLAYER = "👤",
+    COMBAT = "⚔️",
+    LIGHTING = "💡",
+    MISC = "⚙️",
+    FLING = "⚙️"
+}
+
+local function ResolveTheme()
+    return env.Theme or (env.Settings and env.Settings.Theme) or {}
+end
+
 local function ApplyUniversalSectionState(section)
     if typeof(section) ~= "table" then
         return
     end
 
     local collapsed = Settings.UniversalCollapsedSections[section.Key] == true
+    local th = ResolveTheme()
 
     if section.Header and section.Header.Parent then
-        section.Header.Text = collapsed
-            and "  > " .. section.Name
-            or "  v " .. section.Name
+        local chevron = collapsed and "▶" or "▼"
+        local icon = SectionIcons[section.Key] or "📁"
+        section.Header.Text = string.format("   %s  %s  %s", chevron, icon, section.Name)
+        section.Header.TextColor3 = collapsed and (th.DimText or Color3.fromRGB(165, 165, 185)) or (th.Text or Color3.fromRGB(255, 255, 255))
     end
 
-    for _, object in ipairs(section.Controls) do
+    for _, object in ipairs(section.Controls or {}) do
         if object
         and object.Parent
         and object:IsA("GuiObject") then
@@ -204,20 +221,44 @@ local function BaseBeginUniversalSection(name)
         return nil
     end
 
+    local th = ResolveTheme()
+
     local header = Instance.new("TextButton")
-    header.Size = UDim2.new(1, -5, 0, 30)
-    header.BackgroundColor3 = Color3.fromRGB(13, 13, 21)
+    header.Size = UDim2.new(1, -5, 0, 32)
+    header.LayoutOrder = 1
+    header.BackgroundColor3 = th.Panel or Color3.fromRGB(16, 16, 26)
     header.BorderSizePixel = 0
-    header.TextColor3 = Color3.fromRGB(255, 255, 255)
-    header.Font = Enum.Font.GothamBold
-    header.TextSize = 12
+    header.TextColor3 = th.Text or Color3.fromRGB(255, 255, 255)
+    header.Font = Enum.Font.GothamSemibold
+    header.TextSize = 13
     header.TextXAlignment = Enum.TextXAlignment.Left
     header.AutoButtonColor = false
     header.Parent = page
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 5)
+    corner.CornerRadius = UDim.new(0, 7)
     corner.Parent = header
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = th.Outline or Color3.fromRGB(36, 36, 56)
+    stroke.Transparency = 0.4
+    stroke.Thickness = 1
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Parent = header
+
+    if type(env.RegisterThemedObject) == "function" then
+        env.RegisterThemedObject(header, "BackgroundColor3", "Panel")
+        env.RegisterThemedObject(stroke, "Color", "Outline")
+    end
+
+    header.MouseEnter:Connect(function()
+        local curTh = ResolveTheme()
+        header.BackgroundColor3 = curTh.Hover or curTh.Element or Color3.fromRGB(30, 30, 48)
+    end)
+    header.MouseLeave:Connect(function()
+        local curTh = ResolveTheme()
+        header.BackgroundColor3 = curTh.Panel or Color3.fromRGB(16, 16, 26)
+    end)
 
     local section = {
         Name = tostring(name),
@@ -226,6 +267,14 @@ local function BaseBeginUniversalSection(name)
         Header = header,
         Controls = {}
     }
+
+    if typeof(env.RegisteredToggles) == "table" then
+        table.insert(env.RegisteredToggles, {
+            UpdateColor = function()
+                ApplyUniversalSectionState(section)
+            end
+        })
+    end
 
     table.insert(env.ToxUniversalSections, section)
     env.ToxUniversalCurrentSection = section
@@ -255,6 +304,7 @@ local function TrackUniversalControl(object, page)
     and object
     and object:IsA("GuiObject") then
         table.insert(currentSection.Controls, object)
+        object.LayoutOrder = (currentSection.Header and currentSection.Header.LayoutOrder or 1) + #currentSection.Controls
         ApplyUniversalSectionState(currentSection)
     end
 
@@ -294,7 +344,12 @@ local function CreateToggleCycleControl(name, options, page, defaultToggle, defa
         local ctrl = getgenv().CreateToggleWithChoice(name, page, options, defaultToggle == true, defaultMode or options[1], toggleCallback, modeCallback, syncKey)
         local btn = (type(ctrl) == "table" and rawget(ctrl, "Button")) or ctrl
         TrackUniversalControl(btn, page)
-        return btn, (type(ctrl) == "table" and rawget(ctrl, "SetVisual")) or function() end
+        local setVisualFn = (type(ctrl) == "table" and rawget(ctrl, "SetVisual")) or function(val)
+            if syncKey and type(env.SyncToggleVisuals) == "function" then
+                pcall(env.SyncToggleVisuals, syncKey, val == true)
+            end
+        end
+        return btn, setVisualFn
     end
 
     local th = getgenv().Theme or {}
@@ -416,6 +471,7 @@ end
 local function ApplyRender3DDisabled(disabled)
     disabled = disabled == true
     Settings.Render3DDisabled = disabled
+    Settings.No3DRender = disabled
 
     if type(env.ToxSetRender3DEnabled) == "function" then
         pcall(env.ToxSetRender3DEnabled, not disabled)
@@ -424,6 +480,11 @@ local function ApplyRender3DDisabled(disabled)
         pcall(function()
             RunService:Set3dRenderingEnabled(not disabled)
         end)
+    end
+
+    if type(env.SyncToggleVisuals) == "function" then
+        pcall(env.SyncToggleVisuals, "Render3DDisabled", disabled)
+        pcall(env.SyncToggleVisuals, "No3DRender", disabled)
     end
 end
 
@@ -1077,7 +1138,7 @@ local function UpdateHealthESP()
 
     local localRoot = Player.Character
         and Player.Character:FindFirstChild("HumanoidRootPart")
-    local maxDistance = tonumber(Settings.EspMaxDistance) or 1000
+    local maxDistance = (Settings.EspMaxDistEnabled == true) and (tonumber(Settings.EspMaxDistance) or 1000) or 0
 
     for player, billboard in pairs(healthBillboards) do
         if not player
@@ -2285,7 +2346,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
     end
     
     local function InstallCombatUI()
-        if combatUIInstalled or env.ToxCombatLoaded then
+        if combatUIInstalled or env.ToxCombatLoaded or getgenv().ToxCombatLoaded then
             return
         end
     
@@ -3064,6 +3125,23 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end
         end
 
+        local searchPages = { env.VisualsPage, env.PlayerPage, env.FlingPage, env.CombatPage, env.LightingPage, UniversalPage }
+        for _, page in ipairs(searchPages) do
+            if page and typeof(page) == "Instance" and page:IsA("Instance") then
+                for _, child in ipairs(page:GetChildren()) do
+                    if child:IsA("GuiObject") and not child:IsA("UIListLayout") and not child:IsA("UIPadding") then
+                        local isHeader = false
+                        for _, s in ipairs(env.ToxUniversalSections or {}) do
+                            if s.Header == child then isHeader = true break end
+                        end
+                        if not isHeader and ControlHasName(child, name) then
+                            return child, nil, nil
+                        end
+                    end
+                end
+            end
+        end
+
         return nil, nil, nil
     end
 
@@ -3102,8 +3180,19 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         end
 
         if oldSection ~= targetSection then
-            RemoveControlReference(oldSection, control)
-            table.insert(targetSection.Controls, control)
+            if oldSection then
+                RemoveControlReference(oldSection, control)
+            end
+            local alreadyInTarget = false
+            for _, c in ipairs(targetSection.Controls or {}) do
+                if c == control then
+                    alreadyInTarget = true
+                    break
+                end
+            end
+            if not alreadyInTarget then
+                table.insert(targetSection.Controls, control)
+            end
         end
 
         if targetSection.Page
@@ -3183,8 +3272,12 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         MoveControlToSection("Fullbright", "LIGHTING")
         MoveControlToSection("XRay", "PLAYER")
         MoveControlToSection("Noclip Camera", "PLAYER")
+        MoveControlToSection("Air Walk Platform", "PLAYER")
+        MoveControlToSection("Return By Death", "PLAYER")
+        MoveControlToSection("Instant Proximity Prompts", "MISC")
+        MoveControlToSection("Tool Magnet", "MISC")
 
-        local combatSection = FindSection("COMBAT")
+        local combatSection = (not env.ToxCombatLoaded and not getgenv().ToxCombatLoaded) and FindSection("COMBAT") or nil
         local playerSection = FindSection("PLAYER")
         local visualSection = FindSection("ESP") or FindSection("VISUALS") or FindSection("VISUAL")
         local lightingSection = FindSection("LIGHTING")
@@ -3203,6 +3296,8 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         MoveAfter(playerSection, "XRay", "Freecam")
         MoveAfter(playerSection, "Noclip Camera", "XRay")
         MoveAfter(playerSection, "Max Zoom", "Noclip Camera")
+        MoveAfter(playerSection, "Air Walk Platform", "Max Zoom")
+        MoveAfter(playerSection, "Return By Death", "Air Walk Platform")
 
         MoveAfter(visualSection, "Show Health", "Names")
         MoveBefore(visualSection, "Rainbow", "ESP Color")
@@ -3229,33 +3324,72 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         MoveAfter(miscSection, "Fix Unanchored Parts", "Normalize Animations")
         MoveAfter(miscSection, "Force Jump", "Fix Unanchored Parts")
         MoveAfter(miscSection, "Fake Lag (%)", "Force Shift Lock")
+        MoveAfter(miscSection, "Instant Proximity Prompts", "Anti Fling")
+        MoveAfter(miscSection, "Tool Magnet", "Instant Proximity Prompts")
 
-        for _, section in ipairs(env.ToxUniversalSections or {}) do
-            local layoutOrder = 1
-
-            if section.Header and section.Header.Parent then
-                section.Header.LayoutOrder = layoutOrder
-                layoutOrder = layoutOrder + (1)
-            end
-
-            local validControls = {}
-
-            for _, control in ipairs(section.Controls or {}) do
-                if control and control.Parent and control:IsA("GuiObject") then
-                    if section.Page and control.Parent ~= section.Page then
-                        control.Parent = section.Page
+        local pageToSection = {
+            [env.VisualsPage] = visualSection,
+            [env.PlayerPage] = playerSection,
+            [env.CombatPage] = combatSection,
+            [env.LightingPage] = lightingSection,
+            [env.FlingPage] = miscSection
+        }
+        for page, sec in pairs(pageToSection) do
+            if page and typeof(page) == "Instance" and page:IsA("Instance") and sec then
+                for _, child in ipairs(page:GetChildren()) do
+                    if child:IsA("GuiObject") and not child:IsA("UIListLayout") and not child:IsA("UIPadding") then
+                        local isHeader = false
+                        for _, s in ipairs(env.ToxUniversalSections or {}) do
+                            if s.Header == child then
+                                isHeader = true
+                                break
+                            end
+                        end
+                        if not isHeader then
+                            local alreadyTracked = false
+                            for _, c in ipairs(sec.Controls or {}) do
+                                if c == child then
+                                    alreadyTracked = true
+                                    break
+                                end
+                            end
+                            if not alreadyTracked then
+                                table.insert(sec.Controls, child)
+                            end
+                        end
                     end
-
-                    validControls[#validControls + 1] = control
-                    control.LayoutOrder = layoutOrder
-                    layoutOrder = layoutOrder + (1)
                 end
             end
+        end
 
-            section.Controls = validControls
+        for _, section in ipairs(env.ToxUniversalSections or {}) do
+            if not (section.Key == "COMBAT" and (env.ToxCombatLoaded or getgenv().ToxCombatLoaded)) then
+                local layoutOrder = 1
 
-            if type(env.ApplyUniversalSectionState) == "function" then
-                env.ApplyUniversalSectionState(section)
+                if section.Header and section.Header.Parent then
+                    section.Header.LayoutOrder = layoutOrder
+                    layoutOrder = layoutOrder + (1)
+                end
+
+                local validControls = {}
+
+                for _, control in ipairs(section.Controls or {}) do
+                    if control and control.Parent and control:IsA("GuiObject") then
+                        if section.Page and control.Parent ~= section.Page then
+                            control.Parent = section.Page
+                        end
+
+                        validControls[#validControls + 1] = control
+                        control.LayoutOrder = layoutOrder
+                        layoutOrder = layoutOrder + (1)
+                    end
+                end
+
+                section.Controls = validControls
+
+                if type(env.ApplyUniversalSectionState) == "function" then
+                    env.ApplyUniversalSectionState(section)
+                end
             end
         end
     end
@@ -3274,27 +3408,55 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         end
     end
     
+    local function FindConfigRow(page, nameA, nameB)
+        for _, desc in ipairs(page:GetDescendants()) do
+            if desc:IsA("GuiObject")
+            and desc.Parent
+            and (desc.Parent.Name == "Content" or desc.Parent == page)
+            and not string.find(desc.Name, "Card_", 1, true)
+            and not desc:IsA("TextLabel") then
+                if ControlHasName(desc, nameA) or (nameB and ControlHasName(desc, nameB)) then
+                    return desc
+                end
+            end
+        end
+        return nil
+    end
+
     local function RebuildConfigLayout()
         local page = env.ConfigPage
         if not page then
             return false
         end
 
-        local panic = nil
-        local guiToggle = nil
-
-        for _, desc in ipairs(page:GetDescendants()) do
-            if desc:IsA("GuiObject") then
-                if ControlHasName(desc, "Panic Key") then
-                    panic = desc
-                elseif ControlHasName(desc, "GUI Toggle") or ControlHasName(desc, "GUI Keybind") then
-                    guiToggle = desc
-                end
-            end
-        end
+        local panic = FindConfigRow(page, "Panic Key")
+        local guiToggle = FindConfigRow(page, "GUI Toggle", "GUI Keybind")
 
         if panic and guiToggle and panic.Parent == guiToggle.Parent then
-            panic.LayoutOrder = guiToggle.LayoutOrder + 1
+            local container = panic.Parent
+            local ordered = {}
+            for idx, child in ipairs(container:GetChildren()) do
+                if child:IsA("GuiObject") and child ~= panic then
+                    table.insert(ordered, { Obj = child, Order = child.LayoutOrder, Index = idx })
+                end
+            end
+            table.sort(ordered, function(a, b)
+                if a.Order ~= b.Order then
+                    return a.Order < b.Order
+                end
+                return a.Index < b.Index
+            end)
+            local insertIdx = #ordered + 1
+            for i, entry in ipairs(ordered) do
+                if entry.Obj == guiToggle then
+                    insertIdx = i + 1
+                    break
+                end
+            end
+            table.insert(ordered, insertIdx, { Obj = panic })
+            for i, entry in ipairs(ordered) do
+                entry.Obj.LayoutOrder = i
+            end
             return true
         end
 
@@ -3380,34 +3542,27 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
     end)
 
     task.spawn(function()
-        for _ = 1, 160 do
+        local rebuilt = false
+        for _ = 1, 80 do
             if env.ToxUniversal2ExtraToken ~= instanceToken
             or env.Destroyed then
                 return
             end
 
-            local hasShiftLock = FindControl("Force Shift Lock") ~= nil
-            local hasFullbright = FindControl("Fullbright") ~= nil
-            local hasLighting = FindSection("LIGHTING") ~= nil
-            local hasLightingControls = FindControl("Adjust Lighting") ~= nil
             local hasJump = FindControl("Jump") ~= nil
-            local hasAirWalk = FindControl("Air Walk (E Up / Q Down)") ~= nil
-            local hasCtrlClick = FindControl("Ctrl Click TP") ~= nil
-            local hasMaxZoom = FindControl("Max Zoom") ~= nil
+            local hasFullbright = FindControl("Fullbright") ~= nil
 
-            if hasShiftLock
-            and hasFullbright
-            and hasLighting
-            and hasLightingControls
-            and hasJump
-            and hasAirWalk
-            and hasCtrlClick
-            and hasMaxZoom then
-                RebuildUniversalLayout()
+            if hasJump and hasFullbright then
+                pcall(RebuildUniversalLayout)
+                rebuilt = true
                 break
             end
 
             task.wait(0.05)
+        end
+
+        if not rebuilt and env.ToxUniversal2ExtraToken == instanceToken and not env.Destroyed then
+            pcall(RebuildUniversalLayout)
         end
     end)
     
@@ -3421,6 +3576,8 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         if env.ToxUniversal2ExtraToken == instanceToken
         and not env.Destroyed then
             RenameGuiToggleLabel()
+            pcall(RebuildUniversalLayout)
+            pcall(RebuildConfigLayout)
     
             if Settings.StartHidden and env.Main then
                 task.wait()
@@ -3543,6 +3700,12 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
                 end
             end
     
+            if env.ToxCombatLoaded or getgenv().ToxCombatLoaded then
+                lockedTarget = nil
+                aimbotBindHeld = false
+                return
+            end
+
             local blatant = Settings.AimbotBlatant == true
             local bindActive = Settings.AimbotBindEnabled == true
                 and aimbotBindHeld

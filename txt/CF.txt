@@ -1,95 +1,22 @@
-﻿--[========================================================================[
+--[========================================================================[
     ToxHub Game Module: CF (Chicken Farm)
-    PlaceId: 137233438285284
+    Version: 2026-11-10-cf-native-v2
 ]========================================================================]
-local CFPlaceId = 137233438285284
-if game.PlaceId ~= CFPlaceId and tostring(game.PlaceId) ~= "137233438285284" then
-    return
-end
-
-local Settings = getgenv().Settings
-local GamePage = getgenv().GamePage
-local CreateToggle = getgenv().CreateToggle
-local CreateButton = getgenv().CreateButton
-local CustomNotify = getgenv().CustomNotify or function() end
-
-getgenv().ToxCFGeneration = (tonumber(getgenv().ToxCFGeneration) or 0) + 1
-local CurrentGeneration = getgenv().ToxCFGeneration
-local CFModuleVersion = "2026-11-09-cf-v1"
-
-if getgenv().ToxCFModuleLoadedJobId == game.JobId
-and getgenv().ToxCFModuleVersion == CFModuleVersion
-and getgenv().ToxCFModulePage == GamePage
-and not getgenv().Destroyed then
-    return
-end
-
-if getgenv().ToxCFCleanup then
-    pcall(getgenv().ToxCFCleanup)
-end
-
-if GamePage then
-    for _, child in ipairs(GamePage:GetChildren()) do
-        if child:IsA("GuiObject") then
-            child:Destroy()
-        end
+do
+    local isTarget = (game.PlaceId == 137233438285284 or game.GameId == 137233438285284 or tostring(game.PlaceId) == "137233438285284")
+    local curMod = getgenv and getgenv().CurrentGameModule
+    if not isTarget and curMod and curMod.ShortName == "CF" then
+        isTarget = true
     end
-
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, -5, 0, 75)
-    card.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-    card.BorderSizePixel = 0
-    card.Parent = GamePage
-
-    local cardCorner = Instance.new("UICorner")
-    cardCorner.CornerRadius = UDim.new(0, 6)
-    cardCorner.Parent = card
-
-    local cardStroke = Instance.new("UIStroke")
-    cardStroke.Color = Color3.fromRGB(9, 0, 136)
-    cardStroke.Thickness = 1.5
-    cardStroke.Parent = card
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -20, 0, 26)
-    title.Position = UDim2.new(0, 12, 0, 10)
-    title.BackgroundTransparency = 1
-    title.Text = "Chicken Farm (CF)"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 14
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = card
-
-    local desc = Instance.new("TextLabel")
-    desc.Size = UDim2.new(1, -20, 0, 26)
-    desc.Position = UDim2.new(0, 12, 0, 36)
-    desc.BackgroundTransparency = 1
-    desc.Text = "Status: Script Running • Features Active"
-    desc.TextColor3 = Color3.fromRGB(120, 255, 120)
-    desc.Font = Enum.Font.Gotham
-    desc.TextSize = 11
-    desc.TextXAlignment = Enum.TextXAlignment.Left
-    desc.Parent = card
-
-    if CreateButton then
-        CreateButton("Recarregar Script (CF)", GamePage, function()
-            CustomNotify("Recarregando Chicken Farm...", Color3.fromRGB(9, 0, 136))
-            pcall(function()
-                if getgenv().ToxCFCleanup then
-                    getgenv().ToxCFCleanup()
-                end
-                loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/CF.lua"))()
-            end)
-        end)
+    if not isTarget then
+        return
     end
 end
 
-getgenv().ToxCFModuleLoadedJobId = game.JobId
-getgenv().ToxCFModuleVersion = CFModuleVersion
-getgenv().ToxCFModulePage = GamePage
-
--- Original Game Script:
+local RunCFCommunityScript = nil
+do
+    local function CommunityEntry(...)
+-- [TOXHUB_ORIGINAL_PAYLOAD_START]
 local connection
 local cy
 local cn
@@ -441,3 +368,386 @@ task.spawn(autoCollectCashLoop)
 task.spawn(autoBuyLoop)
 task.spawn(autoMergeLoop)
 task.spawn(autoUpgradeLoop)
+
+-- [TOXHUB_ORIGINAL_PAYLOAD_END]
+    end
+    RunCFCommunityScript = CommunityEntry
+end
+
+do
+    local env = getgenv()
+    if env.Destroyed then
+        return
+    end
+
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local CollectionService = game:GetService("CollectionService")
+    local Workspace = game:GetService("Workspace")
+    local VirtualUser = game:GetService("VirtualUser")
+
+    local Player = Players.LocalPlayer
+    local Settings = env.Settings
+    if not Settings then
+        return
+    end
+
+    local GamePage = env.GamePage
+    if not GamePage and type(env.EnsureGameTabCreated) == "function" then
+        local okPage, ensured = pcall(env.EnsureGameTabCreated, env.CurrentGameModule)
+        if okPage and ensured then
+            GamePage = ensured
+        end
+    end
+
+    local CreateSection = env.CreateSection
+    local CreateToggle = env.CreateToggle
+    local CreateToggleWithValue = env.CreateToggleWithValue
+    local CreateDropdown = env.CreateDropdown
+    local CreateButton = env.CreateButton
+    local CustomNotify = env.CustomNotify or function() end
+    local AutoSaveConfiguration = env.AutoSaveConfiguration or function() end
+    local SyncToggleVisuals = env.SyncToggleVisuals
+
+    if not GamePage or not CreateToggle or not CreateButton then
+        return
+    end
+
+    local ModuleVersion = "2026-11-10-cf-native-v2"
+    if env.ToxCFModuleLoadedJobId == game.JobId
+    and env.ToxCFModuleVersion == ModuleVersion
+    and env.ToxCFModulePage == GamePage
+    and not env.Destroyed then
+        return
+    end
+
+    if type(env.ToxCFCleanup) == "function" then
+        pcall(env.ToxCFCleanup)
+    end
+
+    env.ToxCFGeneration = (tonumber(env.ToxCFGeneration) or 0) + 1
+    local CurrentGeneration = env.ToxCFGeneration
+
+    for _, child in ipairs(GamePage:GetChildren()) do
+        if child:IsA("GuiObject") then
+            child:Destroy()
+        end
+    end
+    if type(env.ClearActivePageCard) == "function" then
+        pcall(env.ClearActivePageCard, GamePage)
+    end
+
+    local Connections = {}
+    local function TrackConnection(conn)
+        if conn then
+            table.insert(Connections, conn)
+        end
+        return conn
+    end
+
+    local function IsAlive()
+        return not env.Destroyed and env.ToxCFGeneration == CurrentGeneration
+    end
+
+    local function MakeSection(title, icon)
+        if type(CreateSection) == "function" then
+            pcall(CreateSection, GamePage, title, icon)
+        end
+    end
+
+    env.ToxCFCleanup = function()
+        if env.ToxCFGeneration == CurrentGeneration then
+            env.ToxCFGeneration = CurrentGeneration + 1
+        end
+        for _, conn in ipairs(Connections) do
+            pcall(function()
+                conn:Disconnect()
+            end)
+        end
+        Connections = {}
+        env.ToxCFModuleLoadedJobId = nil
+        env.ToxCFModuleVersion = nil
+        env.ToxCFModulePage = nil
+        Settings.CFAutoFarm = false
+        Settings.CFAutofarm = false
+        Settings.CFAutoCollectEggs = false
+        Settings.CFAutoDeposit = false
+        Settings.CFAutoCash = false
+        Settings.CFAutoMerge = false
+        Settings.CFAutoBuyChickens = false
+        Settings.CFAutoUpgradeProcess = false
+        Settings.CFAutoUpgradeTier = false
+    end
+
+    Settings.CFAutoFarm = Settings.CFAutoFarm == true or Settings.CFAutofarm == true
+    Settings.CFAutofarm = Settings.CFAutoFarm
+    Settings.CFAutoCollectEggs = Settings.CFAutoCollectEggs == true
+    Settings.CFAutoDeposit = Settings.CFAutoDeposit == true
+    Settings.CFMinMultiplier = tonumber(Settings.CFMinMultiplier) or 1
+    Settings.CFAutoCash = Settings.CFAutoCash == true
+    Settings.CFAutoMerge = Settings.CFAutoMerge == true
+    Settings.CFBuyAmount = tostring(Settings.CFBuyAmount or "1")
+    Settings.CFAutoBuyChickens = Settings.CFAutoBuyChickens == true
+    Settings.CFAutoUpgradeProcess = Settings.CFAutoUpgradeProcess == true
+    Settings.CFAutoUpgradeTier = Settings.CFAutoUpgradeTier == true
+
+    local cachedNetwork = nil
+    local function GetCFNetwork()
+        if cachedNetwork then
+            return cachedNetwork
+        end
+        local ok, net = pcall(function()
+            local paperMod = ReplicatedStorage:FindFirstChild("Paper") or ReplicatedStorage:WaitForChild("Paper", 5)
+            if paperMod then
+                local paper = require(paperMod)
+                return paper and paper.Network
+            end
+            return nil
+        end)
+        if ok and net then
+            cachedNetwork = net
+            return net
+        end
+        return nil
+    end
+
+    local function GetEggMultiplier()
+        local val = 1
+        pcall(function()
+            local mapFolder = Workspace:FindFirstChild("Map")
+            local part = mapFolder and mapFolder:FindFirstChild("EggMultiplierPart")
+            local ui = part and part:FindFirstChild("UI")
+            local multi = ui and ui:FindFirstChild("Multi")
+            if multi and multi.Text then
+                local cleaned = tostring(multi.Text):gsub("[^%d%.]", "")
+                local parsed = tonumber(cleaned)
+                if parsed then
+                    val = parsed
+                end
+            end
+        end)
+        return val
+    end
+
+    local function CollectAllEggs()
+        local net = GetCFNetwork()
+        local eggsFolder = Workspace:FindFirstChild("Eggs")
+        if not net or not eggsFolder then
+            return
+        end
+        for _, egg in ipairs(eggsFolder:GetChildren()) do
+            if not IsAlive() then
+                break
+            end
+            pcall(function()
+                net.FireServer("Collect Egg", egg.Name)
+            end)
+        end
+    end
+
+    local function DepositEggs(respectMin)
+        local net = GetCFNetwork()
+        if not net then
+            return
+        end
+        if respectMin then
+            local minReq = tonumber(Settings.CFMinMultiplier) or 1
+            if GetEggMultiplier() < minReq then
+                return
+            end
+        end
+        pcall(function()
+            net.InvokeServer("Deposit Eggs")
+        end)
+    end
+
+    MakeSection("Farming & Ovos", "🐔")
+    CreateToggle("Auto Farm (CF)", GamePage, Settings.CFAutoFarm, function(v)
+        local state = v == true
+        Settings.CFAutoFarm = state
+        Settings.CFAutofarm = state
+    end, "CFAutoFarm")
+
+    CreateToggle("Auto Collect Eggs", GamePage, Settings.CFAutoCollectEggs, function(v)
+        Settings.CFAutoCollectEggs = v == true
+    end, "CFAutoCollectEggs")
+
+    if type(CreateToggleWithValue) == "function" then
+        CreateToggleWithValue("Auto Deposit Eggs (Min Multi)", GamePage, Settings.CFAutoDeposit, Settings.CFMinMultiplier, function(v)
+            Settings.CFAutoDeposit = v == true
+        end, function(val)
+            Settings.CFMinMultiplier = math.max(0, tonumber(val) or 1)
+        end, "CFAutoDeposit")
+    else
+        CreateToggle("Auto Deposit Eggs", GamePage, Settings.CFAutoDeposit, function(v)
+            Settings.CFAutoDeposit = v == true
+        end, "CFAutoDeposit")
+    end
+
+    CreateToggle("Auto Collect Cash", GamePage, Settings.CFAutoCash, function(v)
+        Settings.CFAutoCash = v == true
+    end, "CFAutoCash")
+
+    CreateButton("Depositar Ovos Agora", GamePage, function()
+        DepositEggs(false)
+        CustomNotify("Ovos depositados!", Color3.fromRGB(90, 235, 130), 2)
+    end)
+
+    CreateButton("Coletar Cash Agora", GamePage, function()
+        local net = GetCFNetwork()
+        if net then
+            pcall(function()
+                net.InvokeServer("Collect Cash")
+            end)
+            CustomNotify("Cash coletado!", Color3.fromRGB(90, 235, 130), 2)
+        end
+    end)
+
+    MakeSection("Galinhas & Upgrades", "🛒")
+    CreateToggle("Auto Merge Chickens", GamePage, Settings.CFAutoMerge, function(v)
+        Settings.CFAutoMerge = v == true
+    end, "CFAutoMerge")
+
+    if type(CreateDropdown) == "function" then
+        CreateDropdown("Quantidade de Galinhas", {"1", "5", "25", "100"}, GamePage, Settings.CFBuyAmount, function(opt)
+            Settings.CFBuyAmount = tostring(opt)
+        end)
+    end
+
+    CreateToggle("Auto Buy Chickens", GamePage, Settings.CFAutoBuyChickens, function(v)
+        Settings.CFAutoBuyChickens = v == true
+    end, "CFAutoBuyChickens")
+
+    CreateButton("Comprar Galinhas Agora", GamePage, function()
+        local net = GetCFNetwork()
+        if net then
+            local amt = tonumber(Settings.CFBuyAmount) or 1
+            pcall(function()
+                net.InvokeServer("Buy Chickens", amt)
+            end)
+            CustomNotify("Compra enviada (" .. tostring(amt) .. "x)", Color3.fromRGB(90, 235, 130), 2)
+        end
+    end)
+
+    CreateToggle("Auto Upgrade Process", GamePage, Settings.CFAutoUpgradeProcess, function(v)
+        Settings.CFAutoUpgradeProcess = v == true
+    end, "CFAutoUpgradeProcess")
+
+    CreateToggle("Auto Upgrade Tier", GamePage, Settings.CFAutoUpgradeTier, function(v)
+        Settings.CFAutoUpgradeTier = v == true
+    end, "CFAutoUpgradeTier")
+
+    CreateButton("Resgatar Group Reward", GamePage, function()
+        local net = GetCFNetwork()
+        if net then
+            pcall(function()
+                net.InvokeServer("Claim Group Reward")
+            end)
+            CustomNotify("Tentativa de Group Reward enviada!", Color3.fromRGB(90, 235, 130), 2)
+        end
+    end)
+
+    task.spawn(function()
+        local lastCashTick = 0
+        local lastShopTick = 0
+        while IsAlive() do
+            if Settings.CFAutoFarm or Settings.CFAutoCollectEggs then
+                CollectAllEggs()
+            end
+            if Settings.CFAutoDeposit then
+                DepositEggs(true)
+            elseif Settings.CFAutoFarm then
+                DepositEggs(false)
+            end
+            local now = os.clock()
+            if now - lastCashTick >= 0.6 then
+                lastCashTick = now
+                if Settings.CFAutoFarm or Settings.CFAutoCash then
+                    local net = GetCFNetwork()
+                    if net then
+                        pcall(function()
+                            net.InvokeServer("Collect Cash")
+                        end)
+                    end
+                end
+            end
+            if now - lastShopTick >= 0.8 then
+                lastShopTick = now
+                local net = GetCFNetwork()
+                if net then
+                    if Settings.CFAutoMerge then
+                        pcall(function()
+                            net.InvokeServer("Merge Chickens")
+                        end)
+                    end
+                    if Settings.CFAutoBuyChickens then
+                        local amt = tonumber(Settings.CFBuyAmount) or 1
+                        pcall(function()
+                            net.InvokeServer("Buy Chickens", amt)
+                        end)
+                    end
+                    if Settings.CFAutoUpgradeProcess then
+                        pcall(function()
+                            net.InvokeServer("Upgrade Process Level")
+                        end)
+                    end
+                    if Settings.CFAutoUpgradeTier then
+                        pcall(function()
+                            net.InvokeServer("Upgrade Buy Tier Level")
+                        end)
+                    end
+                end
+            end
+            task.wait(0.25)
+        end
+    end)
+
+    local communityExecuted = false
+    MakeSection("Community Hub & Extras", "🧰")
+    CreateButton("Executar Community Hub (CF)", GamePage, function()
+        if communityExecuted then
+            CustomNotify("Community Hub (CF) ja esta ativo nesta sessao.", Color3.fromRGB(255, 200, 80), 3)
+            return
+        end
+        communityExecuted = true
+        CustomNotify("Iniciando Community Hub (CF)...", Color3.fromRGB(110, 185, 255), 3)
+        task.spawn(function()
+            local ok, err = pcall(RunCFCommunityScript)
+            if not ok then
+                communityExecuted = false
+                CustomNotify("Erro Community Hub (CF): " .. tostring(err), Color3.fromRGB(255, 95, 95), 5)
+                warn("[ToxHub CF Community Error]: " .. tostring(err))
+            end
+        end)
+    end)
+
+    CreateButton("Recarregar Modulo (CF)", GamePage, function()
+        CustomNotify("Recarregando Chicken Farm (CF)...", Color3.fromRGB(90, 175, 255), 2)
+        task.spawn(function()
+            if type(env.ToxCFCleanup) == "function" then
+                pcall(env.ToxCFCleanup)
+            end
+            local ok, err = pcall(function()
+                local url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/CF.lua?toxv=" .. tostring(os.time()) .. "_" .. tostring(math.random(1000, 999999))
+                local src = game:HttpGet(url)
+                local chunk, compErr = loadstring(src)
+                if not chunk then
+                    error(tostring(compErr or "compile error"))
+                end
+                chunk()
+            end)
+            if not ok then
+                CustomNotify("Falha ao recarregar (CF): " .. tostring(err), Color3.fromRGB(255, 95, 95), 4)
+            end
+        end)
+    end)
+
+    if type(env.ClearActivePageCard) == "function" then
+        pcall(env.ClearActivePageCard, GamePage)
+    end
+
+    env.ToxCFModuleLoadedJobId = game.JobId
+    env.ToxCFModuleVersion = ModuleVersion
+    env.ToxCFModulePage = GamePage
+end

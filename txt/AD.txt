@@ -1,95 +1,22 @@
-﻿--[========================================================================[
+--[========================================================================[
     ToxHub Game Module: AD (Anime Dice)
-    PlaceId: 113290951185459
+    Version: 2026-11-10-ad-native-v2
 ]========================================================================]
-local ADPlaceId = 113290951185459
-if game.PlaceId ~= ADPlaceId and tostring(game.PlaceId) ~= "113290951185459" then
-    return
-end
-
-local Settings = getgenv().Settings
-local GamePage = getgenv().GamePage
-local CreateToggle = getgenv().CreateToggle
-local CreateButton = getgenv().CreateButton
-local CustomNotify = getgenv().CustomNotify or function() end
-
-getgenv().ToxADGeneration = (tonumber(getgenv().ToxADGeneration) or 0) + 1
-local CurrentGeneration = getgenv().ToxADGeneration
-local ADModuleVersion = "2026-11-09-ad-v1"
-
-if getgenv().ToxADModuleLoadedJobId == game.JobId
-and getgenv().ToxADModuleVersion == ADModuleVersion
-and getgenv().ToxADModulePage == GamePage
-and not getgenv().Destroyed then
-    return
-end
-
-if getgenv().ToxADCleanup then
-    pcall(getgenv().ToxADCleanup)
-end
-
-if GamePage then
-    for _, child in ipairs(GamePage:GetChildren()) do
-        if child:IsA("GuiObject") then
-            child:Destroy()
-        end
+do
+    local isTarget = (game.PlaceId == 113290951185459 or game.GameId == 113290951185459 or tostring(game.PlaceId) == "113290951185459")
+    local curMod = getgenv and getgenv().CurrentGameModule
+    if not isTarget and curMod and curMod.ShortName == "AD" then
+        isTarget = true
     end
-
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, -5, 0, 75)
-    card.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-    card.BorderSizePixel = 0
-    card.Parent = GamePage
-
-    local cardCorner = Instance.new("UICorner")
-    cardCorner.CornerRadius = UDim.new(0, 6)
-    cardCorner.Parent = card
-
-    local cardStroke = Instance.new("UIStroke")
-    cardStroke.Color = Color3.fromRGB(9, 0, 136)
-    cardStroke.Thickness = 1.5
-    cardStroke.Parent = card
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -20, 0, 26)
-    title.Position = UDim2.new(0, 12, 0, 10)
-    title.BackgroundTransparency = 1
-    title.Text = "Anime Dice (AD)"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 14
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = card
-
-    local desc = Instance.new("TextLabel")
-    desc.Size = UDim2.new(1, -20, 0, 26)
-    desc.Position = UDim2.new(0, 12, 0, 36)
-    desc.BackgroundTransparency = 1
-    desc.Text = "Status: Script Running • Features Active"
-    desc.TextColor3 = Color3.fromRGB(120, 255, 120)
-    desc.Font = Enum.Font.Gotham
-    desc.TextSize = 11
-    desc.TextXAlignment = Enum.TextXAlignment.Left
-    desc.Parent = card
-
-    if CreateButton then
-        CreateButton("Recarregar Script (AD)", GamePage, function()
-            CustomNotify("Recarregando Anime Dice...", Color3.fromRGB(9, 0, 136))
-            pcall(function()
-                if getgenv().ToxADCleanup then
-                    getgenv().ToxADCleanup()
-                end
-                loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/AD.lua"))()
-            end)
-        end)
+    if not isTarget then
+        return
     end
 end
 
-getgenv().ToxADModuleLoadedJobId = game.JobId
-getgenv().ToxADModuleVersion = ADModuleVersion
-getgenv().ToxADModulePage = GamePage
-
--- Original Game Script:
+local RunADCommunityScript = nil
+do
+    local function CommunityEntry(...)
+-- [TOXHUB_ORIGINAL_PAYLOAD_START]
 local fns = {}
 local abs_20, abs_22, abs_24, abs_25, abs_28, UnitUtil, abs_31, abs_34, abs_36, abs_37, abs_39, abs_40, abs_42, abs_43, PlayerGui, abs_50, abs_53, abs_56, abs_60, abs_63, abs_67, abs_72, abs_76, abs_80, abs_83, abs_85, abs_89, abs_93, abs_96
 fns.abs_1 = nil
@@ -5118,3 +5045,384 @@ abs_72 = function()
     end
 end
 abs_72()
+
+-- [TOXHUB_ORIGINAL_PAYLOAD_END]
+    end
+    RunADCommunityScript = CommunityEntry
+end
+
+do
+    local env = getgenv()
+    if env.Destroyed then
+        return
+    end
+
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local CollectionService = game:GetService("CollectionService")
+    local Workspace = game:GetService("Workspace")
+    local VirtualUser = game:GetService("VirtualUser")
+
+    local Player = Players.LocalPlayer
+    local Settings = env.Settings
+    if not Settings then
+        return
+    end
+
+    local GamePage = env.GamePage
+    if not GamePage and type(env.EnsureGameTabCreated) == "function" then
+        local okPage, ensured = pcall(env.EnsureGameTabCreated, env.CurrentGameModule)
+        if okPage and ensured then
+            GamePage = ensured
+        end
+    end
+
+    local CreateSection = env.CreateSection
+    local CreateToggle = env.CreateToggle
+    local CreateToggleWithValue = env.CreateToggleWithValue
+    local CreateDropdown = env.CreateDropdown
+    local CreateButton = env.CreateButton
+    local CustomNotify = env.CustomNotify or function() end
+    local AutoSaveConfiguration = env.AutoSaveConfiguration or function() end
+    local SyncToggleVisuals = env.SyncToggleVisuals
+
+    if not GamePage or not CreateToggle or not CreateButton then
+        return
+    end
+
+    local ModuleVersion = "2026-11-10-ad-native-v2"
+    if env.ToxADModuleLoadedJobId == game.JobId
+    and env.ToxADModuleVersion == ModuleVersion
+    and env.ToxADModulePage == GamePage
+    and not env.Destroyed then
+        return
+    end
+
+    if type(env.ToxADCleanup) == "function" then
+        pcall(env.ToxADCleanup)
+    end
+
+    env.ToxADGeneration = (tonumber(env.ToxADGeneration) or 0) + 1
+    local CurrentGeneration = env.ToxADGeneration
+
+    for _, child in ipairs(GamePage:GetChildren()) do
+        if child:IsA("GuiObject") then
+            child:Destroy()
+        end
+    end
+    if type(env.ClearActivePageCard) == "function" then
+        pcall(env.ClearActivePageCard, GamePage)
+    end
+
+    local Connections = {}
+    local function TrackConnection(conn)
+        if conn then
+            table.insert(Connections, conn)
+        end
+        return conn
+    end
+
+    local function IsAlive()
+        return not env.Destroyed and env.ToxADGeneration == CurrentGeneration
+    end
+
+    local function MakeSection(title, icon)
+        if type(CreateSection) == "function" then
+            pcall(CreateSection, GamePage, title, icon)
+        end
+    end
+
+    env.ToxADCleanup = function()
+        if env.ToxADGeneration == CurrentGeneration then
+            env.ToxADGeneration = CurrentGeneration + 1
+        end
+        for _, conn in ipairs(Connections) do
+            pcall(function()
+                conn:Disconnect()
+            end)
+        end
+        Connections = {}
+        env.ToxADModuleLoadedJobId = nil
+        env.ToxADModuleVersion = nil
+        env.ToxADModulePage = nil
+        Settings.ADAutoFarm = false
+        Settings.ADAutofarm = false
+        Settings.ADAutoRoll = false
+        Settings.ADAutoCollect = false
+        Settings.ADAutoRebirth = false
+        Settings.ADAutoEquipBest = false
+        Settings.ADAutoLevelSlots = false
+        Settings.ADAutoUpgrades = false
+    end
+
+    Settings.ADAutoFarm = Settings.ADAutoFarm == true or Settings.ADAutofarm == true
+    Settings.ADAutofarm = Settings.ADAutoFarm
+    Settings.ADAutoRoll = Settings.ADAutoRoll == true
+    Settings.ADAutoCollect = Settings.ADAutoCollect == true
+    Settings.ADAutoRebirth = Settings.ADAutoRebirth == true
+    Settings.ADAutoEquipBest = Settings.ADAutoEquipBest == true
+    Settings.ADAutoLevelSlots = Settings.ADAutoLevelSlots == true
+    Settings.ADAutoUpgrades = Settings.ADAutoUpgrades == true
+
+    local adDeps = nil
+    local function GetADDeps()
+        if adDeps then
+            return adDeps
+        end
+        local ok, result = pcall(function()
+            local pkgs = ReplicatedStorage:WaitForChild("Packages", 5)
+            local netMod = pkgs and pkgs:WaitForChild("Network", 5)
+            local netContainer = ReplicatedStorage:WaitForChild("Network", 5)
+            local framework = ReplicatedStorage:WaitForChild("Framework", 5)
+            local features = framework and framework:WaitForChild("Features", 5)
+            local net = require(netMod)
+            local comm = net.ClientComm
+            local rollFn = comm.new(netContainer, false, "RollService"):GetFunction("RollDice")
+            local plotComm = comm.new(netContainer, false, "PlotService")
+            local rebirthComm = comm.new(netContainer, false, "RebirthService")
+            local towerComm = comm.new(netContainer, false, "Towers")
+            local dataMod = features:FindFirstChild("Data") and features.Data:FindFirstChild("DataController")
+            local plotMod = features:FindFirstChild("Plot") and features.Plot:FindFirstChild("PlotConfig")
+            local upgradesFolder = features:FindFirstChild("Upgrades")
+            local upgradesCfg = upgradesFolder and upgradesFolder:FindFirstChild("Upgrades")
+            local treeCfg = upgradesFolder and upgradesFolder:FindFirstChild("TreeStructure")
+            local dataCtrl = dataMod and require(dataMod) or nil
+            local plotCfg = plotMod and require(plotMod) or nil
+            local buyUpgSig = nil
+            pcall(function()
+                buyUpgSig = net.Client.GetSignal(netContainer, "BuyUpgrade")
+            end)
+            return {
+                RollDice = rollFn,
+                CollectBalance = plotComm:GetSignal("CollectBalance"),
+                EquipBest = plotComm:GetSignal("EquipBest"),
+                LevelUpSlot = plotComm:GetSignal("LevelUpSlot"),
+                Rebirth = rebirthComm:GetSignal("Rebirth"),
+                EquipBestTowerTeam = towerComm:GetSignal("EquipBestTowerTeam"),
+                BuyUpgrade = buyUpgSig,
+                DataCtrl = dataCtrl,
+                PlotCfg = plotCfg,
+                Upgrades = upgradesCfg and require(upgradesCfg) or nil,
+                TreeStructure = treeCfg and require(treeCfg) or nil
+            }
+        end)
+        if ok and result then
+            adDeps = result
+            return adDeps
+        end
+        return nil
+    end
+
+    local function GetADRebirths(d)
+        local r = 0
+        if d and d.DataCtrl then
+            pcall(function()
+                if d.DataCtrl.Get and d.DataCtrl.Keys and d.DataCtrl.Keys.Rebirth then
+                    r = tonumber(d.DataCtrl:Get(d.DataCtrl.Keys.Rebirth)) or 0
+                end
+            end)
+        end
+        return r
+    end
+
+    local function GetMaxPlotSlots(d)
+        local mx = 13
+        if d and d.PlotCfg and type(d.PlotCfg.GetMaxSlots) == "function" then
+            local ok, v = pcall(d.PlotCfg.GetMaxSlots)
+            if ok and type(v) == "number" and v >= 1 then
+                mx = v
+            end
+        end
+        return mx
+    end
+
+    local function CollectAllPlotSlots(d)
+        if not d or not d.CollectBalance then
+            return
+        end
+        local reb = GetADRebirths(d)
+        local maxSlots = GetMaxPlotSlots(d)
+        for slot = 1, maxSlots do
+            local req = 0
+            if d.PlotCfg and type(d.PlotCfg.GetSlotRebirthRequirement) == "function" then
+                local ok, r = pcall(d.PlotCfg.GetSlotRebirthRequirement, slot)
+                if ok and tonumber(r) then
+                    req = tonumber(r)
+                end
+            end
+            if reb >= req then
+                pcall(function()
+                    d.CollectBalance:Fire(slot)
+                end)
+            end
+        end
+    end
+
+    local function LevelUpAllPlotSlots(d)
+        if not d or not d.LevelUpSlot then
+            return
+        end
+        local reb = GetADRebirths(d)
+        local maxSlots = GetMaxPlotSlots(d)
+        for slot = 1, maxSlots do
+            local req = 0
+            if d.PlotCfg and type(d.PlotCfg.GetSlotRebirthRequirement) == "function" then
+                local ok, r = pcall(d.PlotCfg.GetSlotRebirthRequirement, slot)
+                if ok and tonumber(r) then
+                    req = tonumber(r)
+                end
+            end
+            if reb >= req then
+                pcall(function()
+                    d.LevelUpSlot:Fire(slot)
+                end)
+            end
+        end
+    end
+
+    MakeSection("Farming, Rolls & Coleta", "🎲")
+    CreateToggle("Auto Farm (AD)", GamePage, Settings.ADAutoFarm, function(v)
+        local state = v == true
+        Settings.ADAutoFarm = state
+        Settings.ADAutofarm = state
+    end, "ADAutoFarm")
+
+    CreateToggle("Auto Roll Dice", GamePage, Settings.ADAutoRoll, function(v)
+        Settings.ADAutoRoll = v == true
+    end, "ADAutoRoll")
+
+    CreateToggle("Auto Collect Plot Cash", GamePage, Settings.ADAutoCollect, function(v)
+        Settings.ADAutoCollect = v == true
+    end, "ADAutoCollect")
+
+    CreateToggle("Auto Rebirth", GamePage, Settings.ADAutoRebirth, function(v)
+        Settings.ADAutoRebirth = v == true
+    end, "ADAutoRebirth")
+
+    MakeSection("Unidades, Slots & Upgrades", "💎")
+    CreateToggle("Auto Equip Best Units", GamePage, Settings.ADAutoEquipBest, function(v)
+        Settings.ADAutoEquipBest = v == true
+    end, "ADAutoEquipBest")
+
+    CreateToggle("Auto Level Up Placed Slots", GamePage, Settings.ADAutoLevelSlots, function(v)
+        Settings.ADAutoLevelSlots = v == true
+    end, "ADAutoLevelSlots")
+
+    CreateToggle("Auto Buy Tree Upgrades", GamePage, Settings.ADAutoUpgrades, function(v)
+        Settings.ADAutoUpgrades = v == true
+    end, "ADAutoUpgrades")
+
+    CreateButton("Coletar Plots & Equip Best Agora", GamePage, function()
+        local d = GetADDeps()
+        if d then
+            CollectAllPlotSlots(d)
+            if d.EquipBest then
+                pcall(function() d.EquipBest:Fire() end)
+            end
+            CustomNotify("Plots coletados e Equip Best enviado!", Color3.fromRGB(90, 235, 130), 2)
+        end
+    end)
+
+    CreateButton("Equip Best Tower Team", GamePage, function()
+        local d = GetADDeps()
+        if d and d.EquipBestTowerTeam then
+            pcall(function() d.EquipBestTowerTeam:Fire() end)
+            CustomNotify("Melhor time de Tower equipado!", Color3.fromRGB(90, 235, 130), 2)
+        end
+    end)
+
+    task.spawn(function()
+        local lastSlow = 0
+        local lastEquip = 0
+        while IsAlive() do
+            local d = GetADDeps()
+            if d then
+                if d.RollDice and (Settings.ADAutoFarm or Settings.ADAutoRoll) then
+                    pcall(d.RollDice)
+                end
+                local now = os.clock()
+                if now - lastSlow >= 0.6 then
+                    lastSlow = now
+                    if Settings.ADAutoFarm or Settings.ADAutoCollect then
+                        CollectAllPlotSlots(d)
+                    end
+                    if Settings.ADAutoRebirth and d.Rebirth then
+                        pcall(function() d.Rebirth:Fire() end)
+                    end
+                    if Settings.ADAutoLevelSlots then
+                        LevelUpAllPlotSlots(d)
+                    end
+                    if Settings.ADAutoUpgrades and d.BuyUpgrade then
+                        local upgList = (type(d.Upgrades) == "table" and d.Upgrades.All) or (type(d.Upgrades) == "table" and d.Upgrades) or d.TreeStructure
+                        if type(upgList) == "table" then
+                            for key, val in pairs(upgList) do
+                                if not Settings.ADAutoUpgrades or not IsAlive() then
+                                    break
+                                end
+                                if type(key) == "string" and type(val) == "table" then
+                                    pcall(function() d.BuyUpgrade:Fire(key) end)
+                                end
+                            end
+                        end
+                    end
+                end
+                if now - lastEquip >= 1.5 then
+                    lastEquip = now
+                    if Settings.ADAutoEquipBest and d.EquipBest then
+                        pcall(function() d.EquipBest:Fire() end)
+                    end
+                end
+            end
+            task.wait(0.18)
+        end
+    end)
+
+    local communityExecuted = false
+    MakeSection("Community Hub & Extras", "🧰")
+    CreateButton("Executar Community Hub (AD)", GamePage, function()
+        if communityExecuted then
+            CustomNotify("Community Hub (AD) ja esta ativo nesta sessao.", Color3.fromRGB(255, 200, 80), 3)
+            return
+        end
+        communityExecuted = true
+        CustomNotify("Iniciando Community Hub (AD)...", Color3.fromRGB(110, 185, 255), 3)
+        task.spawn(function()
+            local ok, err = pcall(RunADCommunityScript)
+            if not ok then
+                communityExecuted = false
+                CustomNotify("Erro Community Hub (AD): " .. tostring(err), Color3.fromRGB(255, 95, 95), 5)
+                warn("[ToxHub AD Community Error]: " .. tostring(err))
+            end
+        end)
+    end)
+
+    CreateButton("Recarregar Modulo (AD)", GamePage, function()
+        CustomNotify("Recarregando Anime Dice (AD)...", Color3.fromRGB(90, 175, 255), 2)
+        task.spawn(function()
+            if type(env.ToxADCleanup) == "function" then
+                pcall(env.ToxADCleanup)
+            end
+            local ok, err = pcall(function()
+                local url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/AD.lua?toxv=" .. tostring(os.time()) .. "_" .. tostring(math.random(1000, 999999))
+                local src = game:HttpGet(url)
+                local chunk, compErr = loadstring(src)
+                if not chunk then
+                    error(tostring(compErr or "compile error"))
+                end
+                chunk()
+            end)
+            if not ok then
+                CustomNotify("Falha ao recarregar (AD): " .. tostring(err), Color3.fromRGB(255, 95, 95), 4)
+            end
+        end)
+    end)
+
+    if type(env.ClearActivePageCard) == "function" then
+        pcall(env.ClearActivePageCard, GamePage)
+    end
+
+    env.ToxADModuleLoadedJobId = game.JobId
+    env.ToxADModuleVersion = ModuleVersion
+    env.ToxADModulePage = GamePage
+end

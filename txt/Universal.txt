@@ -1434,7 +1434,7 @@ local function RefreshQuickJoinGames()
     if getgenv().GameModuleRegistry then
         for pId, data in pairs(getgenv().GameModuleRegistry) do
             local numId = tonumber(pId)
-            if numId and not knownPlaceIds[numId] then
+            if numId and not knownPlaceIds[numId] and not (data and data.IsAlias) then
                 local resolvedName = (ResolvePlaceName and ResolvePlaceName(numId)) or ("Place " .. tostring(numId))
                 table.insert(SupportedToxGames, {
                     Name = resolvedName,
@@ -4029,7 +4029,15 @@ do
         end
     end
     local cPage = getgenv().CombatPage or getgenv().UniversalPage
-    local hasChildren = cPage and #cPage:GetChildren() > 0
+    local hasChildren = false
+    if cPage then
+        for _, ch in ipairs(cPage:GetChildren()) do
+            if ch:IsA("GuiObject") and not ch:IsA("UIListLayout") and not ch:IsA("UIPadding") then
+                hasChildren = true
+                break
+            end
+        end
+    end
     if not combatLoaded or not hasChildren then
         local Settings = getgenv().Settings or Settings or {}
         local beginSection = getgenv().BeginUniversalSection or (typeof(BeginUniversalSection) == "function" and BeginUniversalSection)
@@ -4188,6 +4196,63 @@ CreateToggleWithValue("Car Fly", PlayerPage, Settings.CarFly, Settings.CarFlySpe
 end, function(val)
     Settings.CarFlySpeed = val
 end, "CarFly")
+
+local airPlatform = nil
+CreateToggle("Air Walk Platform", PlayerPage, Settings.AirWalkPlatform == true, function(v)
+    Settings.AirWalkPlatform = v
+    if v then
+        task.spawn(function()
+            while Settings.AirWalkPlatform and not getgenv().Destroyed do
+                local char = Player.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    if not airPlatform or not airPlatform.Parent then
+                        airPlatform = Instance.new("Part")
+                        airPlatform.Name = "ToxAirPlatform"
+                        airPlatform.Size = Vector3.new(6, 1, 6)
+                        airPlatform.Anchored = true
+                        airPlatform.Transparency = 0.8
+                        airPlatform.CanCollide = true
+                        local activeTheme = getgenv().Theme
+                        airPlatform.Color = (activeTheme and activeTheme.Accent) or Color3.fromRGB(45, 95, 255)
+                        airPlatform.Parent = workspace
+                    end
+                    airPlatform.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y - 3.4, hrp.Position.Z)
+                end
+                task.wait(0.03)
+            end
+            if airPlatform then pcall(function() airPlatform:Destroy() end) airPlatform = nil end
+        end)
+    else
+        if airPlatform then pcall(function() airPlatform:Destroy() end) airPlatform = nil end
+    end
+end, "AirWalkPlatform")
+
+local lastDeathCFrame = nil
+Player.CharacterAdded:Connect(function(char)
+    if Settings.ReturnByDeath and lastDeathCFrame then
+        task.wait(0.5)
+        local hrp = char:WaitForChild("HumanoidRootPart", 5)
+        if hrp and lastDeathCFrame then
+            hrp.CFrame = lastDeathCFrame
+            CustomNotify("Returned to death location!", Color3.fromRGB(80, 255, 140))
+            lastDeathCFrame = nil
+        end
+    end
+    local hum = char:WaitForChild("Humanoid", 5)
+    if hum then
+        hum.Died:Connect(function()
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                lastDeathCFrame = hrp.CFrame
+            end
+        end)
+    end
+end)
+CreateToggle("Return By Death", PlayerPage, Settings.ReturnByDeath == true, function(v)
+    Settings.ReturnByDeath = v
+end, "ReturnByDeath")
+
 BeginUniversalSection("ESP")
 CreateToggle("ESP", VisualsPage, Settings.ESPEnabled, function(v)
     if getgenv().ToxSetSharedOption then
@@ -4196,7 +4261,10 @@ CreateToggle("ESP", VisualsPage, Settings.ESPEnabled, function(v)
         Settings.ESPEnabled = v
     end
     if not v then
-        ClearAllESPVisuals()
+        local clr = getgenv().ClearAllESPVisuals or getgenv().ClearAllToxESPVisuals
+        if type(clr) == "function" then
+            pcall(clr)
+        end
     end
 end, "ESPEnabled")
 CreateToggle("Charms", VisualsPage, Settings.Chams, function(v)
@@ -4210,7 +4278,8 @@ function CreateToggleCycleOption(name, page, enabled, options, currentValue, tog
     if getgenv().CreateToggleWithChoice then
         local ctrl = getgenv().CreateToggleWithChoice(name, page, options, enabled == true, currentValue or options[1], toggleCallback, cycleCallback, syncKey)
         local btn = (type(ctrl) == "table" and rawget(ctrl, "Button")) or ctrl
-        if TrackUniversalControl then TrackUniversalControl(btn, page) end
+        local trackFn = getgenv().TrackUniversalControl or TrackUniversalControl
+        if trackFn then trackFn(btn, page) end
         return btn
     end
     local th = getgenv().Theme or {}
@@ -4286,8 +4355,9 @@ function CreateToggleCycleOption(name, page, enabled, options, currentValue, tog
         toggleButton.BackgroundColor3 = state and curAccent or curPanel
         indicator.Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
     end
-    if syncKey and RegisterSharedToggle then
-        RegisterSharedToggle(syncKey, {
+    local registerFn = getgenv().RegisterSharedToggle or RegisterSharedToggle
+    if syncKey and registerFn then
+        registerFn(syncKey, {
             Button = box,
             SetVisual = function(value)
                 state = value == true
@@ -4300,7 +4370,8 @@ function CreateToggleCycleOption(name, page, enabled, options, currentValue, tog
         state = not state
         updateToggle()
         if toggleCallback then toggleCallback(state) end
-        if syncKey and ToxSyncToggleVisuals then ToxSyncToggleVisuals(syncKey, state) end
+        local syncFn = getgenv().SyncToggleVisuals or SyncToggleVisuals
+        if syncKey and syncFn then syncFn(syncKey, state) end
         AutoSaveConfiguration()
     end)
     modeButton.MouseButton1Click:Connect(function()
@@ -4316,7 +4387,11 @@ function CreateToggleCycleOption(name, page, enabled, options, currentValue, tog
         AutoSaveConfiguration()
     end)
     updateToggle()
-    return TrackUniversalControl(box, page)
+    local trackFn = getgenv().TrackUniversalControl or TrackUniversalControl
+    if trackFn then
+        return trackFn(box, page)
+    end
+    return box
 end
 CreateToggleCycleOption("Tracers", VisualsPage, Settings.ESPTracers, {"DOWN", "UP", "MOUSE"}, Settings.TracerOrigin or "DOWN", function(v)
     Settings.ESPTracers = v
@@ -4385,9 +4460,11 @@ CreateToggleWithValue("Camera FOV", VisualsPage, Settings.FOVEnabled, Settings.F
         RestoreFOVDefault()
     end
 end, function(val) Settings.FOVValue = val end)
-CreateToggleWithValue("ESP Max Dist", VisualsPage, false, GetCurrentESPMAX(), function(v) end, function(val)
+CreateToggleWithValue("ESP Max Dist", VisualsPage, Settings.EspMaxDistEnabled == true, GetCurrentESPMAX(), function(v)
+    Settings.EspMaxDistEnabled = v == true
+end, function(val)
     SetCurrentESPMAX(val)
-end, "EspMaxDistance")
+end, "EspMaxDistEnabled")
 CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", "Magenta", "Orange", "Purple", "Lime", "Pink", "Gold"}, VisualsPage, Settings.EspColorName, function(v)
     Settings.EspColorName = v
     Settings.EspColor = ColorMap[v] or Color3.fromRGB(255, 255, 255)
@@ -4460,6 +4537,43 @@ end, "AntiVoid")
 CreateToggle("Anti Fling", FlingPage, Settings.AntiFling, function(v)
     if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("AntiFling", v) end
 end, "AntiFling")
+CreateToggle("Instant Proximity Prompts", FlingPage, Settings.InstantPrompts == true, function(v)
+    Settings.InstantPrompts = v
+    if v then
+        for _, prompt in ipairs(workspace:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") then
+                prompt.HoldDuration = 0
+            end
+        end
+    end
+end, "InstantPrompts")
+AddConnection(workspace.DescendantAdded:Connect(function(desc)
+    if Settings.InstantPrompts and not getgenv().Destroyed and desc:IsA("ProximityPrompt") then
+        desc.HoldDuration = 0
+    end
+end))
+CreateToggle("Tool Magnet", FlingPage, Settings.ToolMagnet == true, function(v)
+    Settings.ToolMagnet = v
+    if v then
+        task.spawn(function()
+            while Settings.ToolMagnet and not getgenv().Destroyed do
+                local char = Player.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    for _, item in ipairs(workspace:GetChildren()) do
+                        if item:IsA("BackpackItem") or item:IsA("Tool") then
+                            local handle = item:FindFirstChild("Handle")
+                            if handle then
+                                handle.CFrame = hrp.CFrame
+                            end
+                        end
+                    end
+                end
+                task.wait(0.5)
+            end
+        end)
+    end
+end, "ToolMagnet")
 CreateToggleCycleOption(
     "Force Shift Lock",
     FlingPage,
@@ -4630,6 +4744,7 @@ CreateInputWithTwoButtons(
 CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
 CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
 CreateButton("Tox Waypoints", FlingPage, function() WaypointsGui.Visible = not WaypointsGui.Visible end)
+if getgenv().CreateSection then getgenv().CreateSection(ScriptsPage, "Community Scripts", "📜") end
 CreateButton("BigFroot", ScriptsPage, function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BigFroot.lua"))()
 end)
@@ -4645,6 +4760,9 @@ end)
 CreateButton("Bundle Edit", ScriptsPage, function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/All/refs/heads/main/BundleEdit.lua"))()
 end)
+if getgenv().ClearActivePageCard then
+    pcall(getgenv().ClearActivePageCard, ScriptsPage)
+end
 if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Security & Automation", "🛡️") end
 CreateToggle("Chat Logs", ConfigPage, Settings.ChatLogs, function(v)
     Settings.ChatLogs = v
@@ -5092,10 +5210,6 @@ getgenv().OpenToxServerInfo = function()
     end
     AutoSaveConfiguration()
 end
-CreateToggle("Server Info", ConfigPage, Settings.ToxServerInfoVisible, function(v)
-    SetServerInfoVisible(v)
-    AutoSaveConfiguration()
-end, "ToxServerInfoVisible")
 if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Rendering & Performance", "⚡") end
 SetRender3DEnabled(true)
 CreateToggle(
@@ -5103,10 +5217,15 @@ CreateToggle(
     ConfigPage,
     Settings.Render3DDisabled == true,
     function(v)
-        Settings.Render3DDisabled = v == true
+        local disabled = v == true
+        Settings.Render3DDisabled = disabled
+        Settings.No3DRender = disabled
         SetRender3DEnabled(
-            not v
+            not disabled
         )
+        if getgenv().SyncToggleVisuals then
+            pcall(getgenv().SyncToggleVisuals, "No3DRender", disabled)
+        end
         AutoSaveConfiguration()
     end,
     "Render3DDisabled"
@@ -5242,12 +5361,27 @@ end, "UnlockCursor")
 do
 if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Game Configuration & Profiles", "\xf0\x9f\x92\xbe") end
 local placeKeyStr = tostring(game.PlaceId)
-local gameName = (game.GameId == 142823291 or game.PlaceId == 142823291) and "MM2"
-    or (game.PlaceId == 189707) and "NDS"
-    or (game.PlaceId == 537413528) and "BABFT"
-    or (game.PlaceId == 3851622793) and "WID"
-    or (game.PlaceId == 111311599) and "ADMIN"
-    or (game.PlaceId == 119925538689885) and "SOD"
+local resolvedMod = getgenv().CurrentGameModule
+if not resolvedMod and type(getgenv().ResolveCurrentGameModule) == "function" then
+    local okMod, mod = pcall(getgenv().ResolveCurrentGameModule)
+    if okMod and mod then
+        resolvedMod = mod
+    end
+end
+local gameName = (resolvedMod and resolvedMod.GameName and resolvedMod.ShortName and (resolvedMod.GameName .. " (" .. resolvedMod.ShortName .. ")"))
+    or (resolvedMod and (resolvedMod.ShortName or resolvedMod.GameName))
+    or ((game.GameId == 142823291 or game.PlaceId == 142823291) and "MM2")
+    or (game.PlaceId == 189707 and "NDS")
+    or (game.PlaceId == 537413528 and "BABFT")
+    or (game.PlaceId == 3851622793 and "WID")
+    or (game.PlaceId == 111311599 and "ADMIN")
+    or (game.PlaceId == 119925538689885 and "SOD")
+    or (game.PlaceId == 115681808123944 and "Throw a Coin (TAC)")
+    or ((game.PlaceId == 3823781113 or game.GameId == 1307638097) and "Saber Simulator (SS)")
+    or ((game.PlaceId == 133007106457547 or game.GameId == 10892211425) and "+1 Muscle Evolution (ME)")
+    or (game.PlaceId == 131479356121251 and "50 Player BINGO! (BINGO)")
+    or (game.PlaceId == 137233438285284 and "Chicken Farm (CF)")
+    or (game.PlaceId == 113290951185459 and "Anime Dice (AD)")
     or ("Place " .. placeKeyStr)
 local function GetSaveStatusText()
     local hasSave = (getgenv().HasSavedConfigForCurrentPlace and getgenv().HasSavedConfigForCurrentPlace())
@@ -5258,6 +5392,19 @@ local saveStatusLabel = nil
 saveStatusLabel = CreateButton("Game: " .. gameName .. " " .. GetSaveStatusText(), ConfigPage, function(btn)
     btn.Text = "Game: " .. gameName .. " " .. GetSaveStatusText()
 end)
+if not resolvedMod and string.sub(gameName, 1, 6) == "Place " then
+    task.spawn(function()
+        pcall(function()
+            local info = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+            if info and info.Name and info.Name ~= "" then
+                gameName = info.Name
+                if saveStatusLabel and saveStatusLabel.Parent then
+                    saveStatusLabel.Text = "Game: " .. gameName .. " " .. GetSaveStatusText()
+                end
+            end
+        end)
+    end)
+end
 CreateButton("\xf0\x9f\x92\xbe Save Game Config", ConfigPage, function(button)
     if getgenv().SavePlaceConfiguration then
         local ok = getgenv().SavePlaceConfiguration()
@@ -5298,7 +5445,6 @@ CreateConfirmButton("\xf0\x9f\x97\x91\xef\xb8\x8f Reset Game Config", ConfigPage
         if saveStatusLabel then saveStatusLabel.Text = "Game: " .. gameName .. " [Default / Unsaved]" end
     end
 end)
-end
 CreateToggle("Auto-Save Game Config", ConfigPage, getgenv().ToxAutoSaveEnabled == true, function(val)
     getgenv().ToxAutoSaveEnabled = val == true
     if val and getgenv().AutoSaveConfiguration then
@@ -5306,6 +5452,7 @@ CreateToggle("Auto-Save Game Config", ConfigPage, getgenv().ToxAutoSaveEnabled =
         if saveStatusLabel then saveStatusLabel.Text = "Game: " .. gameName .. " [Saved]" end
     end
 end, "ToxAutoSaveEnabled")
+end
 getgenv().SyncAllTogglesToUI = function()
     if getgenv().SyncToggleVisuals then
         for k, v in pairs(Settings) do
@@ -5316,8 +5463,15 @@ getgenv().SyncAllTogglesToUI = function()
     end
 end
 if getgenv().CreateSection then getgenv().CreateSection(ConfigPage, "Server Operations", "🌐") end
+CreateToggle("Server Info", ConfigPage, Settings.ToxServerInfoVisible, function(v)
+    SetServerInfoVisible(v)
+    AutoSaveConfiguration()
+end, "ToxServerInfoVisible")
 CreateButton("Server Hop", ConfigPage, function(button) ShowServerHopMenu(button) end)
 CreateConfirmButton("Rejoin Server", ConfigPage, function()
+    if getgenv().AllowToxTeleport then
+        getgenv().AllowToxTeleport(15, "Rejoin")
+    end
 	if #Players:GetPlayers() <= 1 then TeleportService:Teleport(game.PlaceId, Player)
 	else TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player) end
 end)
@@ -5339,14 +5493,17 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     ScriptLoaded = false
     getgenv().ScriptLoaded = false
     getgenv().ToxOptionsReady = false
+    if getgenv().ToxCombatCleanup then
+        pcall(getgenv().ToxCombatCleanup)
+    end
     if getgenv().ToxUniversal2ExtraCleanup then
         pcall(getgenv().ToxUniversal2ExtraCleanup)
     end
     if getgenv().ToxUniversal2Cleanup then
         pcall(getgenv().ToxUniversal2Cleanup)
+    end
     if getgenv().ToxUniversal3Cleanup then
         pcall(getgenv().ToxUniversal3Cleanup)
-    end
     end
     if getgenv().ToxLightingCleanup then
         pcall(getgenv().ToxLightingCleanup)
@@ -5359,6 +5516,24 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     end
     if getgenv().ToxMM2Cleanup then
         pcall(getgenv().ToxMM2Cleanup)
+    end
+    if getgenv().ToxTACCleanup then
+        pcall(getgenv().ToxTACCleanup)
+    end
+    if getgenv().ToxSSCleanup then
+        pcall(getgenv().ToxSSCleanup)
+    end
+    if getgenv().ToxMECleanup then
+        pcall(getgenv().ToxMECleanup)
+    end
+    if getgenv().ToxBINGOCleanup then
+        pcall(getgenv().ToxBINGOCleanup)
+    end
+    if getgenv().ToxCFCleanup then
+        pcall(getgenv().ToxCFCleanup)
+    end
+    if getgenv().ToxADCleanup then
+        pcall(getgenv().ToxADCleanup)
     end
     if getgenv().SetNDSWaterFly then
         pcall(function()
@@ -5407,6 +5582,11 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     Settings.Fullbright = false
     UpdateFullbright()
     Settings.AirWalk = false
+    Settings.AirWalkPlatform = false
+    pcall(function()
+        local p = workspace:FindFirstChild("ToxAirPlatform")
+        if p then p:Destroy() end
+    end)
     UpdateAirWalk()
     Settings.Speed = false
     Settings.Jump = false
@@ -5463,7 +5643,10 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
         end)
         getgenv().ActiveSound = nil
     end
-    ClearAllESPVisuals()
+    local clr = getgenv().ClearAllESPVisuals or getgenv().ClearAllToxESPVisuals
+    if type(clr) == "function" then
+        pcall(clr)
+    end
     if FOVCircle then
         pcall(function()
             FOVCircle:Remove()
@@ -5491,6 +5674,9 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
         Gui:Destroy()
     end)
 end)
+if getgenv().ClearActivePageCard then
+    pcall(getgenv().ClearActivePageCard, ConfigPage)
+end
 AddConnection(UserInputService.InputBegan:Connect(function(input, gpe)
     if not gpe and Settings.ForceShiftLock then
         local key = Settings.ShiftLockKey
@@ -6369,116 +6555,11 @@ task.spawn(function()
                 end
             end)
         end
-        CreateSection(getgenv().ScriptsPage, "Save Game & World", "")
+        CreateSection(getgenv().ScriptsPage, "Save Game & World", "💾")
         CreateButton("Save Place (Standard)", getgenv().ScriptsPage, function() RunSaveGame(false) end)
         CreateButton("Save Place (Decompile Scripts)", getgenv().ScriptsPage, function() RunSaveGame(true) end)
-    end
-    if getgenv().VisualsPage then
-        CreateToggle("No 3D Rendering (AFK Max FPS)", getgenv().VisualsPage, Settings.No3DRender == true, function(v)
-            Settings.No3DRender = v
-            pcall(function()
-                RunService:Set3dRenderingEnabled(not v)
-            end)
-            if v then
-                CustomNotify("3D Rendering Disabled (Max FPS)", Color3.fromRGB(80, 255, 120))
-            else
-                CustomNotify("3D Rendering Restored", Color3.fromRGB(100, 200, 255))
-            end
-        end, "No3DRender")
-    end
-    local airPlatform = nil
-    if getgenv().PlayerPage then
-        CreateToggle("Air Walk Platform", getgenv().PlayerPage, Settings.AirWalkPlatform == true, function(v)
-            Settings.AirWalkPlatform = v
-            if v then
-                task.spawn(function()
-                    while Settings.AirWalkPlatform and not getgenv().Destroyed do
-                        local char = Player.Character
-                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                        if hrp then
-                            if not airPlatform or not airPlatform.Parent then
-                                airPlatform = Instance.new("Part")
-                                airPlatform.Name = "ToxAirPlatform"
-                                airPlatform.Size = Vector3.new(6, 1, 6)
-                                airPlatform.Anchored = true
-                                airPlatform.Transparency = 0.8
-                                airPlatform.CanCollide = true
-                                airPlatform.Color = Theme and Theme.Accent or Color3.fromRGB(45, 95, 255)
-                                airPlatform.Parent = workspace
-                            end
-                            airPlatform.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y - 3.4, hrp.Position.Z)
-                        end
-                        task.wait(0.03)
-                    end
-                    if airPlatform then pcall(function() airPlatform:Destroy() end) airPlatform = nil end
-                end)
-            else
-                if airPlatform then pcall(function() airPlatform:Destroy() end) airPlatform = nil end
-            end
-        end, "AirWalkPlatform")
-        local lastDeathCFrame = nil
-        Player.CharacterAdded:Connect(function(char)
-            if Settings.ReturnByDeath and lastDeathCFrame then
-                task.wait(0.5)
-                local hrp = char:WaitForChild("HumanoidRootPart", 5)
-                if hrp and lastDeathCFrame then
-                    hrp.CFrame = lastDeathCFrame
-                    CustomNotify("Returned to death location!", Color3.fromRGB(80, 255, 140))
-                    lastDeathCFrame = nil
-                end
-            end
-            local hum = char:WaitForChild("Humanoid", 5)
-            if hum then
-                hum.Died:Connect(function()
-                    local hrp = char:FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        lastDeathCFrame = hrp.CFrame
-                    end
-                end)
-            end
-        end)
-        CreateToggle("Return By Death", getgenv().PlayerPage, Settings.ReturnByDeath == true, function(v)
-            Settings.ReturnByDeath = v
-        end, "ReturnByDeath")
-    end
-    if getgenv().FlingPage then
-        CreateSection(getgenv().FlingPage, "World & Prompts", "")
-        CreateToggle("Instant Proximity Prompts", getgenv().FlingPage, Settings.InstantPrompts == true, function(v)
-            Settings.InstantPrompts = v
-            if v then
-                for _, prompt in ipairs(workspace:GetDescendants()) do
-                    if prompt:IsA("ProximityPrompt") then
-                        prompt.HoldDuration = 0
-                    end
-                end
-            end
-        end, "InstantPrompts")
-        workspace.DescendantAdded:Connect(function(desc)
-            if Settings.InstantPrompts and desc:IsA("ProximityPrompt") then
-                desc.HoldDuration = 0
-            end
-        end)
-        CreateToggle("Tool Magnet", getgenv().FlingPage, Settings.ToolMagnet == true, function(v)
-            Settings.ToolMagnet = v
-            if v then
-                task.spawn(function()
-                    while Settings.ToolMagnet and not getgenv().Destroyed do
-                        local char = Player.Character
-                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                        if hrp then
-                            for _, item in ipairs(workspace:GetChildren()) do
-                                if item:IsA("BackpackItem") or item:IsA("Tool") then
-                                    local handle = item:FindFirstChild("Handle")
-                                    if handle then
-                                        handle.CFrame = hrp.CFrame
-                                    end
-                                end
-                            end
-                        end
-                        task.wait(0.5)
-                    end
-                end)
-            end
-        end, "ToolMagnet")
+        if getgenv().ClearActivePageCard then
+            pcall(getgenv().ClearActivePageCard, getgenv().ScriptsPage)
+        end
     end
 end)

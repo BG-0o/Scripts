@@ -160,6 +160,7 @@ if HasRunningToxHub() then
     getgenv().ToxStartupOptionsApplied = nil
     getgenv().ToxHubActive = false
     getgenv().ToxUniversalLoaded = nil
+    getgenv().ToxCombatLoaded = nil
     getgenv().ToxChatLoaded = nil
     getgenv().ToxSystemsLoaded = nil
     getgenv().ToxControlGui = nil
@@ -187,15 +188,39 @@ if HasRunningToxHub() then
     getgenv().ToxMM2LoaderJobId = nil
     getgenv().ToxMM2LoaderVersion = nil
     getgenv().ToxMM2LoaderPage = nil
+    getgenv().ToxTACModuleLoadedJobId = nil
+    getgenv().ToxTACModuleVersion = nil
+    getgenv().ToxTACModulePage = nil
+    getgenv().ToxSSModuleLoadedJobId = nil
+    getgenv().ToxSSModuleVersion = nil
+    getgenv().ToxSSModulePage = nil
+    getgenv().ToxMEModuleLoadedJobId = nil
+    getgenv().ToxMEModuleVersion = nil
+    getgenv().ToxMEModulePage = nil
+    getgenv().ToxBINGOModuleLoadedJobId = nil
+    getgenv().ToxBINGOModuleVersion = nil
+    getgenv().ToxBINGOModulePage = nil
+    getgenv().ToxCFModuleLoadedJobId = nil
+    getgenv().ToxCFModuleVersion = nil
+    getgenv().ToxCFModulePage = nil
+    getgenv().ToxADModuleLoadedJobId = nil
+    getgenv().ToxADModuleVersion = nil
+    getgenv().ToxADModulePage = nil
     getgenv().ToxGameModuleLoadedUrl = nil
     getgenv().ToxGameModuleLoadedPage = nil
     getgenv().ToxGameModuleLoadingUrl = nil
     getgenv().ToxGameModuleLoadingPage = nil
+    if getgenv().ToxCombatCleanup then
+        pcall(getgenv().ToxCombatCleanup)
+    end
     if getgenv().ToxUniversal2ExtraCleanup then
         pcall(getgenv().ToxUniversal2ExtraCleanup)
     end
     if getgenv().ToxUniversal2Cleanup then
         pcall(getgenv().ToxUniversal2Cleanup)
+    end
+    if getgenv().ToxUniversal3Cleanup then
+        pcall(getgenv().ToxUniversal3Cleanup)
     end
     if getgenv().ToxLightingCleanup then
         pcall(getgenv().ToxLightingCleanup)
@@ -235,6 +260,24 @@ if HasRunningToxHub() then
     end
     if getgenv().ToxSODCleanup then
         pcall(getgenv().ToxSODCleanup)
+    end
+    if getgenv().ToxTACCleanup then
+        pcall(getgenv().ToxTACCleanup)
+    end
+    if getgenv().ToxSSCleanup then
+        pcall(getgenv().ToxSSCleanup)
+    end
+    if getgenv().ToxMECleanup then
+        pcall(getgenv().ToxMECleanup)
+    end
+    if getgenv().ToxBINGOCleanup then
+        pcall(getgenv().ToxBINGOCleanup)
+    end
+    if getgenv().ToxCFCleanup then
+        pcall(getgenv().ToxCFCleanup)
+    end
+    if getgenv().ToxADCleanup then
+        pcall(getgenv().ToxADCleanup)
     end
     if getgenv().ScriptConnections then
         for _, conn in ipairs(getgenv().ScriptConnections) do
@@ -290,95 +333,189 @@ getgenv().ColorMap = ColorMap
 getgenv().GUIColorMap = GUIColorMap
 getgenv().LOGO_ID = LOGO_ID
 getgenv().MAIN_COLOR = MAIN_COLOR
-getgenv().GameModuleRegistry = {
+local GameModuleRegistry = {
     [189707] = {
         ShortName = "NDS",
+        GameName = "Natural Disaster Survival",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/NDS.lua",
         Ready = true
     },
     [142823291] = {
         ShortName = "MM2",
+        GameName = "Murder Mystery 2",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/MM2.lua?toxv=2026-09-13-mm2-split-loader-config-fix",
         CoreUrl = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ModuleMM2.lua?toxv=2026-09-13-mm2-split-loader-config-fix",
         Ready = true
     },
     [4522347649] = {
         ShortName = "ADMIN",
+        GameName = "Kohls Admin House",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ADMIN.lua",
         Ready = true
     },
     [662417684] = {
         ShortName = "LBB",
+        GameName = "Lucky Block Battleground",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/LBB.lua",
         Ready = true
     },
     [893973440] = {
         ShortName = "FTF",
+        GameName = "Flee the Facility",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/FTF.lua",
         Ready = true
     },
     [155615604] = {
         ShortName = "PL",
+        GameName = "Prison Life",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/PL.lua",
         Ready = true
     },
     [537413528] = {
         ShortName = "BABFT",
+        GameName = "Build A Boat For Treasure",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BABFT.lua",
         Ready = true
     },
     [119925538689885] = {
         ShortName = "SOD",
+        GameName = "Steal Or Die",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/SOD.lua",
         Ready = true
     },
-    [109440000000000 + 485612336] = {
+    [109440485612336] = {
         ShortName = "WID",
+        GameName = "When In Disgrace",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/WID.lua",
         Ready = true
     },
     [70650894743738] = {
         ShortName = "BE",
+        GameName = "Bug Evolution",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BE.lua",
         Ready = true
     },
     [93660722909304] = {
         ShortName = "SBR",
+        GameName = "Scary Baboon Reimagined",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/SBR.lua",
         Ready = true
     },
     [3823781113] = {
         ShortName = "SS",
+        GameName = "Saber Simulator",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/SS.lua",
-        Ready = true
+        Ready = true,
+        PlaceIds = { 3823781113, 1307638097 }
+    },
+    [1307638097] = {
+        ShortName = "SS",
+        GameName = "Saber Simulator",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/SS.lua",
+        Ready = true,
+        IsAlias = true,
+        PlaceIds = { 3823781113, 1307638097 }
     },
     [115681808123944] = {
         ShortName = "TAC",
+        GameName = "Throw a Coin",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/TAC.lua",
-        Ready = true
+        Ready = true,
+        PlaceIds = { 115681808123944, 10131390815 }
+    },
+    [10131390815] = {
+        ShortName = "TAC",
+        GameName = "Throw a Coin",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/TAC.lua",
+        Ready = true,
+        IsAlias = true,
+        PlaceIds = { 115681808123944, 10131390815 }
     },
     [133007106457547] = {
         ShortName = "ME",
+        GameName = "+1 Muscle Evolution",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ME.lua",
-        Ready = true
+        Ready = true,
+        PlaceIds = { 133007106457547, 10892211425 }
+    },
+    [10892211425] = {
+        ShortName = "ME",
+        GameName = "+1 Muscle Evolution",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ME.lua",
+        Ready = true,
+        IsAlias = true,
+        PlaceIds = { 133007106457547, 10892211425 }
     },
     [131479356121251] = {
         ShortName = "BINGO",
+        GameName = "50 Player BINGO!",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BINGO.lua",
         Ready = true
     },
     [137233438285284] = {
         ShortName = "CF",
+        GameName = "Chicken Farm",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/CF.lua",
         Ready = true
     },
     [113290951185459] = {
         ShortName = "AD",
+        GameName = "Anime Dice",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/AD.lua",
         Ready = true
     }
 }
-getgenv().CurrentGameModule = getgenv().GameModuleRegistry[game.PlaceId]
+
+-- Mirror string keys into registry for robust executor type-matching
+local stringKeyMirrors = {}
+for k, v in pairs(GameModuleRegistry) do
+    stringKeyMirrors[tostring(k)] = v
+end
+for k, v in pairs(stringKeyMirrors) do
+    GameModuleRegistry[k] = v
+end
+
+getgenv().GameModuleRegistry = GameModuleRegistry
+
+local function ResolveCurrentGameModule()
+    local reg = getgenv().GameModuleRegistry or GameModuleRegistry or {}
+    local pId = game.PlaceId
+    local gId = game.GameId
+
+    if pId and reg[pId] then return reg[pId] end
+    if pId and reg[tostring(pId)] then return reg[tostring(pId)] end
+    local pNum = tonumber(pId)
+    if pNum and reg[pNum] then return reg[pNum] end
+
+    if gId and gId ~= 0 then
+        if reg[gId] then return reg[gId] end
+        if reg[tostring(gId)] then return reg[tostring(gId)] end
+        local gNum = tonumber(gId)
+        if gNum and reg[gNum] then return reg[gNum] end
+    end
+
+    local pStr = tostring(pId or "")
+    local gStr = tostring(gId or "")
+    for k, v in pairs(reg) do
+        local kStr = tostring(k)
+        if (pStr ~= "" and pStr ~= "0" and kStr == pStr) or (gStr ~= "" and gStr ~= "0" and kStr == gStr) then
+            return v
+        end
+        if type(v) == "table" and v.PlaceIds then
+            for _, id in ipairs(v.PlaceIds) do
+                local idStr = tostring(id)
+                if idStr == pStr or (gStr ~= "" and gStr ~= "0" and idStr == gStr) then
+                    return v
+                end
+            end
+        end
+    end
+    return nil
+end
+
+getgenv().ResolveCurrentGameModule = ResolveCurrentGameModule
+getgenv().DetectGameModule = ResolveCurrentGameModule
+getgenv().CurrentGameModule = ResolveCurrentGameModule()
 getgenv().ToxTeleportBypassUntil = 0
 getgenv().ToxTeleportWhitelistUntil = 0
 getgenv().ToxTeleportWhitelistReason = nil
@@ -594,7 +731,19 @@ getgenv().Settings = {
     ADMINKickTarget = "",
     ToxLastChangelogVersion = "",
     ToxServerInfoVisible = false,
-    ToxServerInfoMode = "FPS/Ping/Players"
+    ToxServerInfoMode = "FPS/Ping/Players",
+    EspMaxDistEnabled = false,
+    No3DRender = false,
+    AirWalkPlatform = false,
+    ReturnByDeath = false,
+    InstantPrompts = false,
+    ToolMagnet = false,
+    TACAutoFarm = false,
+    SSAutoFarm = false,
+    MEAutoFarm = false,
+    BINGOAutoFarm = false,
+    CFAutoFarm = false,
+    ADAutoFarm = false
 }
 local PersistedSettingKeys = {}
 for key in pairs(getgenv().Settings) do

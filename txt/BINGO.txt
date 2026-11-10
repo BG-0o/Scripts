@@ -1,95 +1,22 @@
-﻿--[========================================================================[
+--[========================================================================[
     ToxHub Game Module: BINGO (50 Player BINGO!)
-    PlaceId: 131479356121251
+    Version: 2026-11-10-bingo-native-v2
 ]========================================================================]
-local BINGOPlaceId = 131479356121251
-if game.PlaceId ~= BINGOPlaceId and tostring(game.PlaceId) ~= "131479356121251" then
-    return
-end
-
-local Settings = getgenv().Settings
-local GamePage = getgenv().GamePage
-local CreateToggle = getgenv().CreateToggle
-local CreateButton = getgenv().CreateButton
-local CustomNotify = getgenv().CustomNotify or function() end
-
-getgenv().ToxBINGOGeneration = (tonumber(getgenv().ToxBINGOGeneration) or 0) + 1
-local CurrentGeneration = getgenv().ToxBINGOGeneration
-local BINGOModuleVersion = "2026-11-09-bingo-v1"
-
-if getgenv().ToxBINGOModuleLoadedJobId == game.JobId
-and getgenv().ToxBINGOModuleVersion == BINGOModuleVersion
-and getgenv().ToxBINGOModulePage == GamePage
-and not getgenv().Destroyed then
-    return
-end
-
-if getgenv().ToxBINGOCleanup then
-    pcall(getgenv().ToxBINGOCleanup)
-end
-
-if GamePage then
-    for _, child in ipairs(GamePage:GetChildren()) do
-        if child:IsA("GuiObject") then
-            child:Destroy()
-        end
+do
+    local isTarget = (game.PlaceId == 131479356121251 or game.GameId == 131479356121251 or tostring(game.PlaceId) == "131479356121251")
+    local curMod = getgenv and getgenv().CurrentGameModule
+    if not isTarget and curMod and curMod.ShortName == "BINGO" then
+        isTarget = true
     end
-
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, -5, 0, 75)
-    card.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-    card.BorderSizePixel = 0
-    card.Parent = GamePage
-
-    local cardCorner = Instance.new("UICorner")
-    cardCorner.CornerRadius = UDim.new(0, 6)
-    cardCorner.Parent = card
-
-    local cardStroke = Instance.new("UIStroke")
-    cardStroke.Color = Color3.fromRGB(9, 0, 136)
-    cardStroke.Thickness = 1.5
-    cardStroke.Parent = card
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -20, 0, 26)
-    title.Position = UDim2.new(0, 12, 0, 10)
-    title.BackgroundTransparency = 1
-    title.Text = "50 Player BINGO! (BINGO)"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 14
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = card
-
-    local desc = Instance.new("TextLabel")
-    desc.Size = UDim2.new(1, -20, 0, 26)
-    desc.Position = UDim2.new(0, 12, 0, 36)
-    desc.BackgroundTransparency = 1
-    desc.Text = "Status: Script Running • Features Active"
-    desc.TextColor3 = Color3.fromRGB(120, 255, 120)
-    desc.Font = Enum.Font.Gotham
-    desc.TextSize = 11
-    desc.TextXAlignment = Enum.TextXAlignment.Left
-    desc.Parent = card
-
-    if CreateButton then
-        CreateButton("Recarregar Script (BINGO)", GamePage, function()
-            CustomNotify("Recarregando 50 Player BINGO!...", Color3.fromRGB(9, 0, 136))
-            pcall(function()
-                if getgenv().ToxBINGOCleanup then
-                    getgenv().ToxBINGOCleanup()
-                end
-                loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BINGO.lua"))()
-            end)
-        end)
+    if not isTarget then
+        return
     end
 end
 
-getgenv().ToxBINGOModuleLoadedJobId = game.JobId
-getgenv().ToxBINGOModuleVersion = BINGOModuleVersion
-getgenv().ToxBINGOModulePage = GamePage
-
--- Original Game Script:
+local RunBINGOCommunityScript = nil
+do
+    local function CommunityEntry(...)
+-- [TOXHUB_ORIGINAL_PAYLOAD_START]
 local gJ
 local gn
 local VirtualUser
@@ -1022,3 +949,359 @@ g6_4:AddButton("Export Config to Clipboard", onExportConfigToClipboard)
 g6_4:AddButton("Import Config from Clipboard Text", onImportConfigFromClipboardTex)
 gV:LoadAutoloadConfig()
 gm(gQ.AntiGameplayPause.Value)
+
+-- [TOXHUB_ORIGINAL_PAYLOAD_END]
+    end
+    RunBINGOCommunityScript = CommunityEntry
+end
+
+do
+    local env = getgenv()
+    if env.Destroyed then
+        return
+    end
+
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local CollectionService = game:GetService("CollectionService")
+    local Workspace = game:GetService("Workspace")
+    local VirtualUser = game:GetService("VirtualUser")
+
+    local Player = Players.LocalPlayer
+    local Settings = env.Settings
+    if not Settings then
+        return
+    end
+
+    local GamePage = env.GamePage
+    if not GamePage and type(env.EnsureGameTabCreated) == "function" then
+        local okPage, ensured = pcall(env.EnsureGameTabCreated, env.CurrentGameModule)
+        if okPage and ensured then
+            GamePage = ensured
+        end
+    end
+
+    local CreateSection = env.CreateSection
+    local CreateToggle = env.CreateToggle
+    local CreateToggleWithValue = env.CreateToggleWithValue
+    local CreateDropdown = env.CreateDropdown
+    local CreateButton = env.CreateButton
+    local CustomNotify = env.CustomNotify or function() end
+    local AutoSaveConfiguration = env.AutoSaveConfiguration or function() end
+    local SyncToggleVisuals = env.SyncToggleVisuals
+
+    if not GamePage or not CreateToggle or not CreateButton then
+        return
+    end
+
+    local ModuleVersion = "2026-11-10-bingo-native-v2"
+    if env.ToxBINGOModuleLoadedJobId == game.JobId
+    and env.ToxBINGOModuleVersion == ModuleVersion
+    and env.ToxBINGOModulePage == GamePage
+    and not env.Destroyed then
+        return
+    end
+
+    if type(env.ToxBINGOCleanup) == "function" then
+        pcall(env.ToxBINGOCleanup)
+    end
+
+    env.ToxBINGOGeneration = (tonumber(env.ToxBINGOGeneration) or 0) + 1
+    local CurrentGeneration = env.ToxBINGOGeneration
+
+    for _, child in ipairs(GamePage:GetChildren()) do
+        if child:IsA("GuiObject") then
+            child:Destroy()
+        end
+    end
+    if type(env.ClearActivePageCard) == "function" then
+        pcall(env.ClearActivePageCard, GamePage)
+    end
+
+    local Connections = {}
+    local function TrackConnection(conn)
+        if conn then
+            table.insert(Connections, conn)
+        end
+        return conn
+    end
+
+    local function IsAlive()
+        return not env.Destroyed and env.ToxBINGOGeneration == CurrentGeneration
+    end
+
+    local function MakeSection(title, icon)
+        if type(CreateSection) == "function" then
+            pcall(CreateSection, GamePage, title, icon)
+        end
+    end
+
+    env.ToxBINGOCleanup = function()
+        if env.ToxBINGOGeneration == CurrentGeneration then
+            env.ToxBINGOGeneration = CurrentGeneration + 1
+        end
+        for _, conn in ipairs(Connections) do
+            pcall(function()
+                conn:Disconnect()
+            end)
+        end
+        Connections = {}
+        env.ToxBINGOModuleLoadedJobId = nil
+        env.ToxBINGOModuleVersion = nil
+        env.ToxBINGOModulePage = nil
+        Settings.BINGOAutoFarm = false
+        Settings.BINGOAutofarm = false
+        Settings.BINGOAutoStamp = false
+        Settings.BINGOAutoClaim = false
+        Settings.BINGOBuyCards = false
+        Settings.BINGOBuyChairs = false
+        Settings.BINGOBuyDances = false
+        Settings.BINGOBuyStamps = false
+        if Player then
+            pcall(function()
+                Player:SetAttribute("GoldenMarker", false)
+                Player:SetAttribute("AutoBingo", false)
+            end)
+        end
+    end
+
+    Settings.BINGOAutoFarm = Settings.BINGOAutoFarm == true or Settings.BINGOAutofarm == true
+    Settings.BINGOAutofarm = Settings.BINGOAutoFarm
+    Settings.BINGOAutoStamp = Settings.BINGOAutoStamp == true
+    Settings.BINGOAutoClaim = Settings.BINGOAutoClaim == true
+    Settings.BINGOBuyCards = Settings.BINGOBuyCards == true
+    Settings.BINGOBuyChairs = Settings.BINGOBuyChairs == true
+    Settings.BINGOBuyDances = Settings.BINGOBuyDances == true
+    Settings.BINGOBuyStamps = Settings.BINGOBuyStamps == true
+
+    local function SyncBingoAttributes()
+        if not Player then
+            return
+        end
+        local stampOn = (Settings.BINGOAutoFarm == true) or (Settings.BINGOAutoStamp == true)
+        local claimOn = (Settings.BINGOAutoFarm == true) or (Settings.BINGOAutoClaim == true)
+        pcall(function()
+            Player:SetAttribute("GoldenMarker", stampOn)
+            Player:SetAttribute("AutoBingo", claimOn)
+        end)
+    end
+
+    local function GetBingoShopDeps()
+        local config = nil
+        local buySkin = nil
+        pcall(function()
+            local shared = ReplicatedStorage:FindFirstChild("BingoShared")
+            local cfgMod = shared and shared:FindFirstChild("Config")
+            if cfgMod then
+                config = require(cfgMod)
+            end
+            local remotes = ReplicatedStorage:FindFirstChild("BingoRemotes")
+            if remotes then
+                buySkin = remotes:FindFirstChild("BuySkin")
+            end
+        end)
+        return config, buySkin
+    end
+
+    local function GetPlayerCash()
+        local cash = 0
+        pcall(function()
+            local ls = Player and Player:FindFirstChild("leaderstats")
+            local cashVal = ls and ls:FindFirstChild("Cash")
+            if cashVal and cashVal.Value then
+                cash = tonumber(cashVal.Value) or 0
+            end
+        end)
+        return cash
+    end
+
+    local function IsSkinOwned(ownedAttrName, skinId)
+        if not Player then
+            return false
+        end
+        local attr = Player:GetAttribute(ownedAttrName)
+        if type(attr) == "table" then
+            for _, v in pairs(attr) do
+                if tostring(v) == tostring(skinId) then
+                    return true
+                end
+            end
+            return attr[skinId] == true
+        elseif type(attr) == "string" then
+            if attr == tostring(skinId) then
+                return true
+            end
+            if string.find(attr, '"' .. tostring(skinId) .. '"', 1, true) then
+                return true
+            end
+            for token in string.gmatch(attr, "[^,%[%]{}\" ]+") do
+                if token == tostring(skinId) then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
+    local function BuyCategory(categoryKey, ownedAttrName, catalog)
+        local _, buySkin = GetBingoShopDeps()
+        if not buySkin or type(catalog) ~= "table" then
+            return 0
+        end
+        local bought = 0
+        for _, item in ipairs(catalog) do
+            if not IsAlive() then
+                break
+            end
+            local cost = tonumber(item.cost) or 0
+            if cost > 0
+            and not item.plusOnly
+            and not item.codeOnly
+            and not item.reward
+            and not item.bundleOnly
+            and not IsSkinOwned(ownedAttrName, item.id)
+            and GetPlayerCash() >= cost then
+                pcall(function()
+                    buySkin:FireServer(categoryKey, item.id)
+                end)
+                bought = bought + 1
+                task.wait(0.35)
+            end
+        end
+        return bought
+    end
+
+    MakeSection("Auto Bingo & Marcacao", "🎱")
+    CreateToggle("Auto Farm (BINGO)", GamePage, Settings.BINGOAutoFarm, function(v)
+        local state = v == true
+        Settings.BINGOAutoFarm = state
+        Settings.BINGOAutofarm = state
+        SyncBingoAttributes()
+    end, "BINGOAutoFarm")
+
+    CreateToggle("Auto Stamp (GoldenMarker)", GamePage, Settings.BINGOAutoStamp, function(v)
+        Settings.BINGOAutoStamp = v == true
+        SyncBingoAttributes()
+    end, "BINGOAutoStamp")
+
+    CreateToggle("Auto Claim Bingo", GamePage, Settings.BINGOAutoClaim, function(v)
+        Settings.BINGOAutoClaim = v == true
+        SyncBingoAttributes()
+    end, "BINGOAutoClaim")
+
+    CreateButton("Sincronizar Atributos BINGO", GamePage, function()
+        SyncBingoAttributes()
+        CustomNotify("Atributos aplicados (Cash: " .. tostring(GetPlayerCash()) .. ")", Color3.fromRGB(90, 235, 130), 2)
+    end)
+
+    MakeSection("Loja & Cosmeticos", "🛍")
+    CreateToggle("Auto Buy Card Skins", GamePage, Settings.BINGOBuyCards, function(v)
+        Settings.BINGOBuyCards = v == true
+    end, "BINGOBuyCards")
+
+    CreateToggle("Auto Buy Chair Skins", GamePage, Settings.BINGOBuyChairs, function(v)
+        Settings.BINGOBuyChairs = v == true
+    end, "BINGOBuyChairs")
+
+    CreateToggle("Auto Buy Dances", GamePage, Settings.BINGOBuyDances, function(v)
+        Settings.BINGOBuyDances = v == true
+    end, "BINGOBuyDances")
+
+    CreateToggle("Auto Buy Stamps", GamePage, Settings.BINGOBuyStamps, function(v)
+        Settings.BINGOBuyStamps = v == true
+    end, "BINGOBuyStamps")
+
+    CreateButton("Comprar Itens Acessiveis Agora", GamePage, function()
+        task.spawn(function()
+            local cfg = GetBingoShopDeps()
+            if not cfg then
+                CustomNotify("Config de BINGO nao encontrada!", Color3.fromRGB(255, 160, 70), 3)
+                return
+            end
+            local total = 0
+            total = total + BuyCategory("card", "OwnedCardSkins", cfg.CARD_SKINS)
+            total = total + BuyCategory("chair", "OwnedChairSkins", cfg.CHAIR_SKINS)
+            total = total + BuyCategory("dance", "OwnedDances", cfg.DANCES)
+            total = total + BuyCategory("stamp", "OwnedStamps", cfg.STAMPS)
+            CustomNotify("Compras concluidas (" .. tostring(total) .. " itens)", Color3.fromRGB(90, 235, 130), 3)
+        end)
+    end)
+
+    task.spawn(function()
+        local lastShopTick = 0
+        while IsAlive() do
+            SyncBingoAttributes()
+            local now = os.clock()
+            if now - lastShopTick >= 2.5 then
+                lastShopTick = now
+                if Settings.BINGOBuyCards or Settings.BINGOBuyChairs or Settings.BINGOBuyDances or Settings.BINGOBuyStamps then
+                    local cfg = GetBingoShopDeps()
+                    if cfg then
+                        if Settings.BINGOBuyCards then
+                            BuyCategory("card", "OwnedCardSkins", cfg.CARD_SKINS)
+                        end
+                        if Settings.BINGOBuyChairs then
+                            BuyCategory("chair", "OwnedChairSkins", cfg.CHAIR_SKINS)
+                        end
+                        if Settings.BINGOBuyDances then
+                            BuyCategory("dance", "OwnedDances", cfg.DANCES)
+                        end
+                        if Settings.BINGOBuyStamps then
+                            BuyCategory("stamp", "OwnedStamps", cfg.STAMPS)
+                        end
+                    end
+                end
+            end
+            task.wait(0.75)
+        end
+    end)
+
+    local communityExecuted = false
+    MakeSection("Community Hub & Extras", "🧰")
+    CreateButton("Executar Community Hub (BINGO)", GamePage, function()
+        if communityExecuted then
+            CustomNotify("Community Hub (BINGO) ja esta ativo nesta sessao.", Color3.fromRGB(255, 200, 80), 3)
+            return
+        end
+        communityExecuted = true
+        CustomNotify("Iniciando Community Hub (BINGO)...", Color3.fromRGB(110, 185, 255), 3)
+        task.spawn(function()
+            local ok, err = pcall(RunBINGOCommunityScript)
+            if not ok then
+                communityExecuted = false
+                CustomNotify("Erro Community Hub (BINGO): " .. tostring(err), Color3.fromRGB(255, 95, 95), 5)
+                warn("[ToxHub BINGO Community Error]: " .. tostring(err))
+            end
+        end)
+    end)
+
+    CreateButton("Recarregar Modulo (BINGO)", GamePage, function()
+        CustomNotify("Recarregando 50 Player BINGO! (BINGO)...", Color3.fromRGB(90, 175, 255), 2)
+        task.spawn(function()
+            if type(env.ToxBINGOCleanup) == "function" then
+                pcall(env.ToxBINGOCleanup)
+            end
+            local ok, err = pcall(function()
+                local url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BINGO.lua?toxv=" .. tostring(os.time()) .. "_" .. tostring(math.random(1000, 999999))
+                local src = game:HttpGet(url)
+                local chunk, compErr = loadstring(src)
+                if not chunk then
+                    error(tostring(compErr or "compile error"))
+                end
+                chunk()
+            end)
+            if not ok then
+                CustomNotify("Falha ao recarregar (BINGO): " .. tostring(err), Color3.fromRGB(255, 95, 95), 4)
+            end
+        end)
+    end)
+
+    if type(env.ClearActivePageCard) == "function" then
+        pcall(env.ClearActivePageCard, GamePage)
+    end
+
+    env.ToxBINGOModuleLoadedJobId = game.JobId
+    env.ToxBINGOModuleVersion = ModuleVersion
+    env.ToxBINGOModulePage = GamePage
+end
