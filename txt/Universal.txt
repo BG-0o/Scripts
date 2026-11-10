@@ -1390,6 +1390,7 @@ local function ResolvePlaceName(placeId)
     end
     return "Place " .. tostring(placeId)
 end
+local ResolveGameName = ResolvePlaceName
 local SupportedToxGames = {
     { Name = "Murder Mystery 2", PlaceId = 142823291, Code = "MM2", Status = "online" },
     { Name = "Natural Disaster Survival", PlaceId = 189707, Code = "NDS", Status = "online" },
@@ -1401,7 +1402,13 @@ local SupportedToxGames = {
     { Name = "Steal Or Die", PlaceId = 119925538689885, Code = "SOD", Status = "online" },
     { Name = "Bug Evolution", PlaceId = 70650894743738, Code = "BE", Status = "online" },
     { Name = "When In Disgrace", PlaceId = 109440000000000 + 485612336, Code = "WID", Status = "online" },
-    { Name = "Scary Baboon Reimagined", PlaceId = 93660722909304, Code = "SBR", Status = "online" }
+    { Name = "Scary Baboon Reimagined", PlaceId = 93660722909304, Code = "SBR", Status = "online" },
+    { Name = "Saber Simulator", PlaceId = 3823781113, Code = "SS", Status = "online" },
+    { Name = "Throw a Coin", PlaceId = 115681808123944, Code = "TAC", Status = "online" },
+    { Name = "+1 Muscle Evolution", PlaceId = 133007106457547, Code = "ME", Status = "online" },
+    { Name = "50 Player BINGO!", PlaceId = 131479356121251, Code = "BINGO", Status = "online" },
+    { Name = "Chicken Farm", PlaceId = 137233438285284, Code = "CF", Status = "online" },
+    { Name = "Anime Dice", PlaceId = 113290951185459, Code = "AD", Status = "online" }
 }
 local function RefreshQuickJoinGames()
     local scroll = (getgenv and getgenv().JoinGamesScroll) or JoinGamesScroll
@@ -1421,10 +1428,11 @@ local function RefreshQuickJoinGames()
         for pId, data in pairs(getgenv().GameModuleRegistry) do
             local numId = tonumber(pId)
             if numId and not knownPlaceIds[numId] then
+                local resolvedName = (ResolvePlaceName and ResolvePlaceName(numId)) or ("Place " .. tostring(numId))
                 table.insert(SupportedToxGames, {
-                    Name = ResolveGameName(numId),
+                    Name = resolvedName,
                     PlaceId = numId,
-                    Code = data.ShortName or "GAME",
+                    Code = (data and data.ShortName) or "GAME",
                     Status = "online"
                 })
                 knownPlaceIds[numId] = true
