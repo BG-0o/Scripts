@@ -34,7 +34,7 @@ or not CreateButton then
 end
 getgenv().ToxSODGeneration = (tonumber(getgenv().ToxSODGeneration) or 0) + 1
 local CurrentGeneration = getgenv().ToxSODGeneration
-local SODModuleVersion = "2026-11-07-sod-v8"
+local SODModuleVersion = "2026-11-07-sod-v9"
 if getgenv().ToxSODCleanup then
     pcall(getgenv().ToxSODCleanup)
 end
@@ -382,7 +382,16 @@ local NonLootKeywords = {
     "elevator", "barrier", "barricade",
     "hand truck", "handtruck", "dolly",
     "toilet", "urinal", "dumpster",
-    "sign", "poster", "billboard", "plaque", "placa"
+    "sign", "poster", "billboard", "plaque", "placa",
+    "tip", "dev", "donate", "donation", "tip the dev",
+    "vip", "daily", "gift", "daily gift", "reward", "claim",
+    "group", "like", "gamepass", "shop", "store", "booth", "stand",
+    "lemonade", "portal", "teleport", "leaderboard", "podium",
+    "spin", "wheel", "lucky", "case open", "crate open",
+    "rules", "tutorial", "merchant", "npc", "kiosk", "atm",
+    "bench", "chair", "sofa", "couch", "table", "desk", "shelf",
+    "counter", "trashcan", "trash can", "bin", "sink", "mirror",
+    "spawn", "lobby", "hub", "pedestal"
 }
 local NonMonsterKeywords = {
     "door", "gate", "room", "spawn", "barrier", "zone", "prop", "wall", "floor",
@@ -921,6 +930,35 @@ local function ExtractGuiItemData(adornee, prompt)
     return nil
 end
 
+local function IsInLobby(inst)
+    if not inst then return false end
+    local curr = inst
+    while curr and curr ~= Workspace and curr ~= game do
+        local cName = string.lower(curr.Name)
+        if string.find(cName, "lobby")
+        or string.find(cName, "hub")
+        or string.find(cName, "spawnarea")
+        or string.find(cName, "spawnroom")
+        or string.find(cName, "waitingroom")
+        or string.find(cName, "vip")
+        or string.find(cName, "donation")
+        or string.find(cName, "tip the dev")
+        or (string.find(cName, "tip") and string.find(cName, "dev")) then
+            return true
+        end
+        curr = curr.Parent
+    end
+    local lobbyObj = Workspace:FindFirstChild("Lobby")
+        or Workspace:FindFirstChild("LobbyMap")
+        or Workspace:FindFirstChild("LobbyArea")
+        or Workspace:FindFirstChild("Hub")
+        or Workspace:FindFirstChild("SpawnArea")
+    if lobbyObj and inst:IsDescendantOf(lobbyObj) then
+        return true
+    end
+    return false
+end
+
 local function ResolveBasePart(inst)
     if not inst then return nil end
     if inst:IsA("BasePart") then return inst end
@@ -1361,6 +1399,8 @@ pcall(function()
 end)
 local function IsLootObject(prompt, instance, nameLower)
     if not prompt or not instance then return false end
+    if IsInLobby(prompt) or IsInLobby(instance) then return false end
+
     local action = prompt.ActionText and string.lower(prompt.ActionText) or ""
     if action ~= "" then
         if string.find(action, "door") or string.find(action, "unscrew") or string.find(action, "hide")
@@ -1368,7 +1408,12 @@ local function IsLootObject(prompt, instance, nameLower)
         or string.find(action, "sit") or string.find(action, "climb") or string.find(action, "inspect")
         or string.find(action, "turn on") or string.find(action, "turn off") or string.find(action, "toggle")
         or string.find(action, "press") or string.find(action, "push") or string.find(action, "pull")
-        or string.find(action, "open") or string.find(action, "close") then
+        or string.find(action, "open") or string.find(action, "close")
+        or string.find(action, "tip") or string.find(action, "donate") or string.find(action, "claim")
+        or string.find(action, "gift") or string.find(action, "buy") or string.find(action, "purchase")
+        or string.find(action, "spin") or string.find(action, "talk") or string.find(action, "view")
+        or string.find(action, "join") or string.find(action, "like") or string.find(action, "reward")
+        or string.find(action, "enter") or string.find(action, "teleport") then
             return false
         end
     end
@@ -1382,6 +1427,15 @@ local function IsLootObject(prompt, instance, nameLower)
         return false
     end
 
+    local part = ResolveBasePart(prompt) or ResolveBasePart(instance)
+    if part then
+        if IsInLobby(part) then return false end
+        local pSz = part.Size
+        if pSz.Magnitude > 9.5 or pSz.X > 7.0 or pSz.Y > 7.0 or pSz.Z > 7.0 then
+            return false
+        end
+    end
+
     if action ~= "" and (
         string.find(action, "steal")
         or string.find(action, "take")
@@ -1391,7 +1445,6 @@ local function IsLootObject(prompt, instance, nameLower)
         or string.find(action, "search")
         or string.find(action, "collect")
         or string.find(action, "bag")
-        or string.find(action, "hold e")
     ) then
         return true
     end
@@ -1403,7 +1456,11 @@ local function IsLootObject(prompt, instance, nameLower)
         return true
     end
 
-    if objText ~= "" and not HasSubstring(objText, NonLootKeywords) then
+    if (nameLower and ItemBaseValues[nameLower]) or (objText ~= "" and ItemBaseValues[objText]) then
+        return true
+    end
+
+    if objText ~= "" and HasSubstring(objText, LootKeywords) then
         return true
     end
 
@@ -1411,7 +1468,7 @@ local function IsLootObject(prompt, instance, nameLower)
         return true
     end
 
-    if not HasSubstring(nameLower, NonLootKeywords) then
+    if action ~= "" and string.find(action, "hold e") and objText ~= "" and not HasSubstring(objText, NonLootKeywords) then
         return true
     end
 
@@ -1463,17 +1520,26 @@ local function GetItemModel(inst, part)
     while curr and curr ~= Workspace and curr ~= game do
         if curr:IsA("Model") and not curr:FindFirstChildOfClass("Humanoid") then
             local pLower = string.lower(curr.Name)
-            if not HasSubstring(pLower, NonLootKeywords) and #curr:GetChildren() <= 35 then
-                return curr
+            if not HasSubstring(pLower, NonLootKeywords) and not IsInLobby(curr) then
+                local ok, ext = pcall(function() return curr:GetExtentsSize() end)
+                if ok and ext and ext.Magnitude <= 9.0 and ext.X <= 6.5 and ext.Y <= 6.5 and ext.Z <= 6.5 and #curr:GetChildren() <= 15 then
+                    return curr
+                end
             end
         end
         curr = curr.Parent
     end
-    if inst and inst:IsA("Model") and not inst:FindFirstChildOfClass("Humanoid") then
-        return inst
+    if inst and inst:IsA("Model") and not inst:FindFirstChildOfClass("Humanoid") and not IsInLobby(inst) then
+        local ok, ext = pcall(function() return inst:GetExtentsSize() end)
+        if ok and ext and ext.Magnitude <= 9.0 and ext.X <= 6.5 and ext.Y <= 6.5 and ext.Z <= 6.5 and #inst:GetChildren() <= 15 then
+            return inst
+        end
     end
-    if part and part.Parent and part.Parent:IsA("Model") and not part.Parent:FindFirstChildOfClass("Humanoid") then
-        return part.Parent
+    if part and part.Parent and part.Parent:IsA("Model") and not part.Parent:FindFirstChildOfClass("Humanoid") and not IsInLobby(part.Parent) then
+        local ok, ext = pcall(function() return part.Parent:GetExtentsSize() end)
+        if ok and ext and ext.Magnitude <= 9.0 and ext.X <= 6.5 and ext.Y <= 6.5 and ext.Z <= 6.5 and #part.Parent:GetChildren() <= 15 then
+            return part.Parent
+        end
     end
     return nil
 end
@@ -1483,9 +1549,15 @@ local function RegisterPrompt(prompt)
     if IsDescendantOfAnyPlayer(prompt) or IsDescendantOfAnyPlayer(prompt.Parent) or IsPartOfLocalPlayer(prompt) or IsPartOfLocalPlayer(prompt.Parent) then
         return
     end
+    if IsInLobby(prompt) or IsInLobby(prompt.Parent) then
+        return
+    end
     local instance = prompt.Parent
     local part = ResolveBasePart(prompt) or ResolveBasePart(instance)
-    if not part or IsDescendantOfAnyPlayer(part) or IsPartOfLocalPlayer(part) then return end
+    if not part or IsDescendantOfAnyPlayer(part) or IsPartOfLocalPlayer(part) or IsInLobby(part) then return end
+    if part.Size.Magnitude > 9.5 or part.Size.X > 7.0 or part.Size.Y > 7.0 or part.Size.Z > 7.0 then
+        return
+    end
     local name = ResolveItemName(prompt, instance)
     local nameLower = string.lower(name)
     local isSignOrProp = string.find(nameLower, "sign") or string.find(nameLower, "plaque") or string.find(nameLower, "placa") or string.find(nameLower, "poster") or string.find(nameLower, "decal") or string.find(nameLower, "billboard") or string.find(nameLower, "banner")
@@ -1525,7 +1597,7 @@ local function RegisterPrompt(prompt)
     end
     if IsLootObject(prompt, instance, nameLower) then
         local rarity, val, weight = ResolveItemData(prompt, instance, nameLower)
-        local itemModel = GetItemModel(prompt, part) or GetItemModel(instance, part) or (instance:IsA("Model") and instance or nil)
+        local itemModel = GetItemModel(prompt, part) or GetItemModel(instance, part)
         ItemPrompts[prompt] = {
             Object = instance,
             Model = itemModel,
@@ -2014,6 +2086,9 @@ local function UpdateItemESP(charRoot)
             or IsDescendantOfAnyPlayer(part)
             or IsPartOfLocalPlayer(part)
             or IsPartOfLocalPlayer(prompt)
+            or IsInLobby(part)
+            or IsInLobby(prompt)
+            or (part.Size.Magnitude > 9.5 or part.Size.X > 7.0 or part.Size.Y > 7.0 or part.Size.Z > 7.0)
         if isInvalid then
             if ItemESPObjects[prompt] then
                 pcall(function()
@@ -2091,10 +2166,16 @@ local function UpdateItemESP(charRoot)
 
         local adornee = nil
         if data.Model and data.Model:IsA("Model") and data.Model ~= Workspace and not data.Model:FindFirstChildOfClass("Humanoid") then
-            adornee = data.Model
+            local ok, ext = pcall(function() return data.Model:GetExtentsSize() end)
+            if ok and ext and ext.Magnitude <= 9.0 and ext.X <= 6.5 and ext.Y <= 6.5 and ext.Z <= 6.5 and not IsInLobby(data.Model) then
+                adornee = data.Model
+            else
+                adornee = part
+            end
         elseif part.Parent and part.Parent:IsA("Model") and part.Parent ~= Workspace and not part.Parent:FindFirstChildOfClass("Humanoid") then
             local pLower = string.lower(part.Parent.Name)
-            if not HasSubstring(pLower, NonLootKeywords) and #part.Parent:GetChildren() <= 20 then
+            local ok, ext = pcall(function() return part.Parent:GetExtentsSize() end)
+            if not HasSubstring(pLower, NonLootKeywords) and not IsInLobby(part.Parent) and ok and ext and ext.Magnitude <= 9.0 and ext.X <= 6.5 and ext.Y <= 6.5 and ext.Z <= 6.5 and #part.Parent:GetChildren() <= 15 then
                 adornee = part.Parent
             else
                 adornee = part
@@ -2470,8 +2551,6 @@ local ClosedTicks = 0
 local function IsGuiTrulyVisible(obj)
     if not obj or not obj:IsA("GuiObject") then return false end
     if not obj.Visible then return false end
-    local size = obj.AbsoluteSize
-    if size.X <= 2 or size.Y <= 2 then return false end
     local curr = obj.Parent
     while curr and curr ~= game do
         if curr:IsA("ScreenGui") then
@@ -2500,6 +2579,64 @@ local function FindClickableButton(element)
         curr = curr.Parent
     end
     return nil
+end
+
+local function TriggerGuiEvents(inst)
+    if not inst or not inst:IsA("GuiObject") then return end
+    pcall(function()
+        if firesignal then
+            if inst:IsA("GuiButton") then
+                pcall(function() firesignal(inst.Activated) end)
+                pcall(function() firesignal(inst.MouseButton1Click) end)
+                pcall(function() firesignal(inst.MouseButton1Down) end)
+                pcall(function() firesignal(inst.MouseButton1Up) end)
+            end
+            pcall(function()
+                firesignal(inst.InputBegan, {
+                    UserInputType = Enum.UserInputType.MouseButton1,
+                    UserInputState = Enum.UserInputState.Begin,
+                    Position = Vector3.new(0, 0, 0)
+                })
+            end)
+            pcall(function()
+                firesignal(inst.InputEnded, {
+                    UserInputType = Enum.UserInputType.MouseButton1,
+                    UserInputState = Enum.UserInputState.End,
+                    Position = Vector3.new(0, 0, 0)
+                })
+            end)
+        end
+        if getconnections then
+            if inst:IsA("GuiButton") then
+                pcall(function()
+                    for _, c in ipairs(getconnections(inst.Activated)) do pcall(function() c:Fire() end) end
+                    for _, c in ipairs(getconnections(inst.MouseButton1Click)) do pcall(function() c:Fire() end) end
+                    for _, c in ipairs(getconnections(inst.MouseButton1Down)) do pcall(function() c:Fire() end) end
+                    for _, c in ipairs(getconnections(inst.MouseButton1Up)) do pcall(function() c:Fire() end) end
+                end)
+            end
+            pcall(function()
+                for _, c in ipairs(getconnections(inst.InputBegan)) do
+                    pcall(function()
+                        c:Fire({
+                            UserInputType = Enum.UserInputType.MouseButton1,
+                            UserInputState = Enum.UserInputState.Begin,
+                            Position = Vector3.new(0, 0, 0)
+                        })
+                    end)
+                end
+                for _, c in ipairs(getconnections(inst.InputEnded)) do
+                    pcall(function()
+                        c:Fire({
+                            UserInputType = Enum.UserInputType.MouseButton1,
+                            UserInputState = Enum.UserInputState.End,
+                            Position = Vector3.new(0, 0, 0)
+                        })
+                    end)
+                end
+            end)
+        end
+    end)
 end
 
 local function FindVotingCards()
@@ -2565,53 +2702,51 @@ local function ClickTargetCard(entry)
     if not entry then return false end
     local label = entry.Label
     local card = entry.Card or label
-    local btn = FindClickableButton(label) or FindClickableButton(card)
-    local targetObj = btn or card or label
 
-    if btn then
-        pcall(function()
-            if firesignal then
-                firesignal(btn.MouseButton1Click)
-                firesignal(btn.Activated)
-                firesignal(btn.MouseButton1Down)
-                firesignal(btn.MouseButton1Up)
-            end
-            if getconnections then
-                for _, c in ipairs(getconnections(btn.MouseButton1Click)) do pcall(function() c:Fire() end) end
-                for _, c in ipairs(getconnections(btn.Activated)) do pcall(function() c:Fire() end) end
-                for _, c in ipairs(getconnections(btn.MouseButton1Down)) do pcall(function() c:Fire() end) end
-            end
-        end)
-    end
-
-    if targetObj and targetObj:IsA("GuiObject") then
-        local pos = targetObj.AbsolutePosition
-        local sz = targetObj.AbsoluteSize
-        if sz.X > 0 and sz.Y > 0 then
-            local cx = pos.X + sz.X / 2
-            local cy = pos.Y + sz.Y / 2
-            if VirtualInputManager then
-                pcall(function()
-                    VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 0)
-                    task.wait(0.02)
-                    VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, false, game, 0)
-                end)
-            end
-            if getconnections then
-                pcall(function()
-                    for _, c in ipairs(getconnections(targetObj.InputBegan)) do
-                        c:Fire({
-                            UserInputType = Enum.UserInputType.MouseButton1,
-                            UserInputState = Enum.UserInputState.Begin,
-                            Position = Vector3.new(cx, cy, 0)
-                        })
-                    end
-                end)
+    -- Direct signal invocation across card hierarchy (works unfocused / minimized in background)
+    TriggerGuiEvents(label)
+    TriggerGuiEvents(card)
+    if card and card:IsA("GuiObject") then
+        for _, desc in ipairs(card:GetDescendants()) do
+            if desc:IsA("GuiObject") then
+                TriggerGuiEvents(desc)
             end
         end
     end
+    if label and label.Parent and label.Parent:IsA("GuiObject") and label.Parent ~= card then
+        TriggerGuiEvents(label.Parent)
+    end
+
+    local btn = FindClickableButton(label) or FindClickableButton(card)
+    if btn then
+        TriggerGuiEvents(btn)
+    end
+
+    -- Virtual mouse click fallback if window has active size
+    pcall(function()
+        local targetObj = btn or card or label
+        if targetObj and targetObj:IsA("GuiObject") then
+            local pos = targetObj.AbsolutePosition
+            local sz = targetObj.AbsoluteSize
+            if sz.X > 2 and sz.Y > 2 and VirtualInputManager then
+                local cx = pos.X + sz.X / 2
+                local cy = pos.Y + sz.Y / 2
+                VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 0)
+                task.wait(0.02)
+                VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, false, game, 0)
+            end
+        end
+    end)
     return true
 end
+
+local MapTitleNames = {
+    ["office"] = "Office",
+    ["supermarket"] = "Supermarket",
+    ["liminal lucidity"] = "Liminal Lucidity",
+    ["facility"] = "Facility",
+    ["american dorm"] = "American Dorm"
+}
 
 local AutoVoteThread = nil
 local function StartAutoVoteLoop()
@@ -2619,7 +2754,7 @@ local function StartAutoVoteLoop()
     AutoVoteThread = task.spawn(function()
         local myGen = getgenv().ToxSODGeneration
         while Settings.SODAutoVote and getgenv().ToxSODGeneration == myGen do
-            task.wait(0.8)
+            task.wait(0.6)
             if not Settings.SODAutoVote then break end
 
             local isOpen, mapCards, entityCards = FindVotingCards()
@@ -2636,9 +2771,9 @@ local function StartAutoVoteLoop()
                     local thisSession = LastVoteSessionId
 
                     task.spawn(function()
-                        task.wait(0.4)
+                        task.wait(0.3)
                         local notified = false
-                        for attempt = 1, 3 do
+                        for attempt = 1, 4 do
                             if not Settings.SODAutoVote or not VotingSessionActive or LastVoteSessionId ~= thisSession then
                                 break
                             end
@@ -2677,7 +2812,7 @@ local function StartAutoVoteLoop()
                                 ClickTargetCard(chosenEntry)
                             end
 
-                            task.wait(0.15)
+                            task.wait(0.12)
 
                             local targetEntity = "ai"
                             if string.find(userEntity, "player") then
@@ -2692,11 +2827,30 @@ local function StartAutoVoteLoop()
                                 ClickTargetCard(entityEntry)
                             end
 
+                            -- Direct remote RPC backup (works completely headless / alt-tabbed)
                             pcall(function()
+                                local mapFormatted = MapTitleNames[chosenMapName] or chosenMapName
+                                local entFormatted = (targetEntity == "ai") and "AI" or "Player"
                                 for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
-                                    if rem:IsA("RemoteEvent") and string.find(string.lower(rem.Name), "vote") then
-                                        if chosenMapName then rem:FireServer(chosenMapName) end
-                                        rem:FireServer(targetEntity == "ai" and "AI" or "Player")
+                                    if rem:IsA("RemoteEvent") then
+                                        local rLower = string.lower(rem.Name)
+                                        if string.find(rLower, "vote") or string.find(rLower, "map") or string.find(rLower, "entity") then
+                                            if mapFormatted then
+                                                pcall(function() rem:FireServer(mapFormatted) end)
+                                                pcall(function() rem:FireServer(chosenMapName) end)
+                                            end
+                                            pcall(function() rem:FireServer(entFormatted) end)
+                                            pcall(function() rem:FireServer(string.lower(entFormatted)) end)
+                                        end
+                                    elseif rem:IsA("RemoteFunction") then
+                                        local rLower = string.lower(rem.Name)
+                                        if string.find(rLower, "vote") or string.find(rLower, "map") or string.find(rLower, "entity") then
+                                            if mapFormatted then
+                                                pcall(function() rem:InvokeServer(mapFormatted) end)
+                                                pcall(function() rem:InvokeServer(chosenMapName) end)
+                                            end
+                                            pcall(function() rem:InvokeServer(entFormatted) end)
+                                        end
                                     end
                                 end
                             end)
@@ -2708,7 +2862,7 @@ local function StartAutoVoteLoop()
                                 CustomNotify("Auto Voted: " .. mapLabel .. " | " .. entLabel, Color3.fromRGB(0, 255, 140), 3)
                             end
 
-                            task.wait(0.8)
+                            task.wait(0.6)
                         end
                     end)
                 end
@@ -3291,6 +3445,8 @@ SODCreateToggle(
         if v then
             StartAutoVoteLoop()
         else
+            VotingSessionActive = false
+            ClosedTicks = 0
             HasVotedThisIntermission = false
             AutoVoteAttempts = 0
             ConsecutiveClosedCount = 0

@@ -346,6 +346,36 @@ getgenv().GameModuleRegistry = {
         ShortName = "SBR",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/SBR.lua",
         Ready = true
+    },
+    [3823781113] = {
+        ShortName = "SS",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/SS.lua",
+        Ready = true
+    },
+    [115681808123944] = {
+        ShortName = "TAC",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/TAC.lua",
+        Ready = true
+    },
+    [133007106457547] = {
+        ShortName = "ME",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ME.lua",
+        Ready = true
+    },
+    [131479356121251] = {
+        ShortName = "BINGO",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/BINGO.lua",
+        Ready = true
+    },
+    [137233438285284] = {
+        ShortName = "CF",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/CF.lua",
+        Ready = true
+    },
+    [113290951185459] = {
+        ShortName = "AD",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/AD.lua",
+        Ready = true
     }
 }
 getgenv().CurrentGameModule = getgenv().GameModuleRegistry[game.PlaceId]
