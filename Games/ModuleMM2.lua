@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 MM2ModuleVersion =
-    "2026-10-19-mm2-autofarm-alive-round-2"
+    "2026-11-11-mm2-farm-modes-v2"
 
 Players = game:GetService("Players")
 UserInputService = game:GetService("UserInputService")
@@ -135,11 +135,20 @@ end
 Settings.MM2AutoWin =
     Settings.MM2AutoWin == true
 
+ValidAutoFarmModes = {
+    Underground = true,
+    Tween = true,
+    Sky = true,
+    Teleport = true,
+}
+
 Settings.MM2SafeLobby = Settings.MM2SafeLobby == true
 Settings.MM2AutoFarmMode = tostring(Settings.MM2AutoFarmMode or "Tween")
-if Settings.MM2AutoFarmMode ~= "Tween" and Settings.MM2AutoFarmMode ~= "Teleport" then
+if not ValidAutoFarmModes[Settings.MM2AutoFarmMode] then
     Settings.MM2AutoFarmMode = "Tween"
 end
+Settings.MM2AutoFarmAvoidMurderer = Settings.MM2AutoFarmAvoidMurderer ~= false
+Settings.MM2AutoFarmDepth = math.clamp(tonumber(Settings.MM2AutoFarmDepth) or 6, 3, 15)
 Settings.MM2AutoFarmTeleportDelay = tonumber(Settings.MM2AutoFarmTeleportDelay) or 1.2
 if Settings.MM2AutoFarmTeleportDelay < 0.2 then
     Settings.MM2AutoFarmTeleportDelay = 0.2
@@ -3841,6 +3850,10 @@ AutoFarmLastTravelY = nil
 AutoFarmRandomNextCoin = false
 AutoFarmDeathObservedAt = nil
 AutoFarmRoleRefreshAttempt = 0
+AutoFarmWaitHoldPosition = nil
+AutoFarmActivelyTweening = false
+AutoVoteBusy = false
+AutoFarmWasEnabled = Settings.MM2AutoFarmV2 == true
 getgenv().ToxMM2AutoWinBusy = false
 getgenv().ToxMM2AutoWinGeneration = getgenv().ToxMM2AutoWinGeneration or 0
 
@@ -4356,12 +4369,180 @@ function GetOtherPlayerCoinPressure(coin)
     return bestDistance, incoming
 end
 
+SafeLobbyPosition = Vector3.new(-108, -60, -10)
+AutoFarmSkyHeight = 20
+
+ValidAutoFarmModes = ValidAutoFarmModes or {
+    Underground = true,
+    Tween = true,
+    Sky = true,
+    Teleport = true,
+}
+
+function GetActiveAutoFarmMode()
+    local mode = tostring(Settings.MM2AutoFarmMode or "Tween")
+    if not ValidAutoFarmModes[mode] then
+        return "Tween"
+    end
+    return mode
+end
+
+function GetAutoFarmUndergroundDepth()
+    return math.clamp(tonumber(Settings.MM2AutoFarmDepth) or 6, 3, 15)
+end
+
+function IsInSafeLobbyArea(pos)
+    if typeof(pos) ~= "Vector3" then
+        return false
+    end
+    return pos.Y < -30 or (pos - SafeLobbyPosition).Magnitude < 48
+end
+
+function IsInNormalLobbyArea(pos)
+    if typeof(pos) ~= "Vector3" then
+        return false
+    end
+    return pos.Y > 70
+end
+
+function GetLoadedMM2MapModel()
+    local normal = workspace:FindFirstChild("Normal")
+    if normal and normal.Parent then
+        return normal
+    end
+
+    if AutoFarmMapRootCache and AutoFarmMapRootCache.Parent and AutoFarmMapRootCache ~= workspace then
+        return AutoFarmMapRootCache
+    end
+
+    for _, candidate in ipairs(workspace:GetChildren()) do
+        if candidate ~= Player.Character
+        and candidate.Name ~= "Lobby"
+        and candidate.Name ~= "ToxMM2SafeLobby"
+        and candidate:IsA("Model")
+        and not Players:GetPlayerFromCharacter(candidate) then
+            if candidate:FindFirstChild("Spawns", true)
+            or candidate:FindFirstChild("CoinContainer", true)
+            or candidate:FindFirstChild("CandyContainer", true) then
+                return candidate
+            end
+        end
+    end
+
+    return nil
+end
+
+function FindSafeMapSpawnPosition(mapRoot)
+    mapRoot = mapRoot or select(1, GetAutoFarmMapRoot(false)) or GetLoadedMM2MapModel()
+    if not mapRoot or not mapRoot.Parent then
+        return nil
+    end
+
+    local spawnsFolder = mapRoot:FindFirstChild("Spawns", true)
+    if spawnsFolder then
+        local spawnParts = {}
+        if spawnsFolder:IsA("BasePart") then
+            table.insert(spawnParts, spawnsFolder)
+        end
+        for _, child in ipairs(spawnsFolder:GetDescendants()) do
+            if child:IsA("BasePart") then
+                table.insert(spawnParts, child)
+            end
+        end
+        if #spawnParts > 0 then
+            local pick = spawnParts[math.random(1, #spawnParts)]
+            return pick.Position + Vector3.new(0, pick.Size.Y * 0.5 + 3.5, 0)
+        end
+    end
+
+    local spawnLoc = mapRoot:FindFirstChildWhichIsA("SpawnLocation", true)
+    if spawnLoc and spawnLoc:IsA("BasePart") then
+        return spawnLoc.Position + Vector3.new(0, spawnLoc.Size.Y * 0.5 + 3.5, 0)
+    end
+
+    if mapRoot:IsA("Model") then
+        local ok, cf, size = pcall(function()
+            return mapRoot:GetBoundingBox()
+        end)
+        if ok and typeof(cf) == "CFrame" and typeof(size) == "Vector3" then
+            local params = RaycastParams.new()
+            params.FilterType = Enum.RaycastFilterType.Include
+            params.FilterDescendantsInstances = { mapRoot }
+            local origin = cf.Position + Vector3.new(0, size.Y * 0.5 + 25, 0)
+            local result = workspace:Raycast(origin, Vector3.new(0, -(size.Y + 60), 0), params)
+            if result and result.Position then
+                return result.Position + Vector3.new(0, 4, 0)
+            end
+        end
+    end
+
+    return nil
+end
+
+function FindSafeFloorAbovePosition(pos)
+    local mapRoot = select(1, GetAutoFarmMapRoot(false)) or GetLoadedMM2MapModel()
+    if not mapRoot then
+        return nil
+    end
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Include
+    params.FilterDescendantsInstances = { mapRoot }
+
+    local nearCast = workspace:Raycast(pos + Vector3.new(0, 14, 0), Vector3.new(0, -24, 0), params)
+    if nearCast and nearCast.Position then
+        return nearCast.Position + Vector3.new(0, 3.5, 0)
+    end
+
+    local highCast = workspace:Raycast(pos + Vector3.new(0, 45, 0), Vector3.new(0, -70, 0), params)
+    if highCast and highCast.Position then
+        return highCast.Position + Vector3.new(0, 3.5, 0)
+    end
+
+    return FindSafeMapSpawnPosition(mapRoot)
+end
+
+function GetLiveMurdererRoot()
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= Player and target.Character then
+            local tHum = target.Character:FindFirstChildOfClass("Humanoid")
+            local tRoot = target.Character:FindFirstChild("HumanoidRootPart") or target.Character:FindFirstChild("Torso")
+            if tHum and tHum.Health > 0 and tRoot then
+                local backpack = target:FindFirstChildOfClass("Backpack")
+                if target.Character:FindFirstChild("Knife") or (backpack and backpack:FindFirstChild("Knife")) then
+                    return tRoot, target
+                end
+            end
+        end
+    end
+
+    local data = MM2RoleDataCache
+    if typeof(data) == "table" then
+        for _, target in ipairs(Players:GetPlayers()) do
+            if target ~= Player and target.Character then
+                local info = data[target.Name] or data[tostring(target.UserId)] or data[target]
+                if typeof(info) == "table" and NormalizeMM2Role(info.Role or info.role) == "Murderer" and not (info.Dead or info.dead) then
+                    local tHum = target.Character:FindFirstChildOfClass("Humanoid")
+                    local tRoot = target.Character:FindFirstChild("HumanoidRootPart") or target.Character:FindFirstChild("Torso")
+                    if tHum and tHum.Health > 0 and tRoot then
+                        return tRoot, target
+                    end
+                end
+            end
+        end
+    end
+
+    return nil, nil
+end
+
 function GetBestCoin(origin, competitionAware)
     local coins = GetMM2Coins(false)
-    local candidates = {}
     local bestCoin = nil
-    local bestDistance = math.huge
+    local bestScore = math.huge
+    local bestMurderDist = math.huge
     local now = os.clock()
+    local avoidMurderer = Settings.MM2AutoFarmAvoidMurderer ~= false
+    local murderRoot = avoidMurderer and GetLiveMurdererRoot() or nil
 
     for coin, expiry in pairs(MM2CoinBlacklist) do
         if not coin.Parent or now >= expiry then
@@ -4371,23 +4552,30 @@ function GetBestCoin(origin, competitionAware)
 
     for _, coin in ipairs(coins) do
         if IsCoinValid(coin) and not MM2CoinBlacklist[coin] then
-            table.insert(candidates, coin)
-
             local distance = 0
-
             if typeof(origin) == "Vector3" then
                 distance = (origin - coin.Position).Magnitude
             end
 
-            if distance < bestDistance then
-                bestDistance = distance
+            local score = distance
+            local mDist = math.huge
+            if murderRoot and murderRoot.Parent then
+                mDist = (coin.Position - murderRoot.Position).Magnitude
+                if mDist < 22 then
+                    score = score + 260 + (22 - mDist) * 14
+                end
+            end
+
+            if score < bestScore then
+                bestScore = score
                 bestCoin = coin
+                bestMurderDist = mDist
             end
         end
     end
 
     AutoFarmRandomNextCoin = false
-    return bestCoin
+    return bestCoin, bestMurderDist
 end
 function ToxMM2GetCoinTouchParts(coin)
     local parts = {}
@@ -4540,15 +4728,26 @@ function SetFarmPosition(position, hold)
 end
 
 function RestoreAutoFarmPosition()
-    if not AutoFarmReturnCFrame then
-        return
-    end
-
     local character = Player.Character
     local root = character and character:FindFirstChild("HumanoidRootPart")
 
     if not character or not root then
         return
+    end
+
+    local targetCFrame = AutoFarmReturnCFrame
+    if not targetCFrame
+    or IsInSafeLobbyArea(targetCFrame.Position)
+    or IsInNormalLobbyArea(targetCFrame.Position) then
+        if IsInSafeLobbyArea(root.Position) or IsInNormalLobbyArea(root.Position) then
+            return
+        end
+        local floorPos = FindSafeFloorAbovePosition(root.Position) or FindSafeMapSpawnPosition()
+        if floorPos then
+            targetCFrame = CFrame.new(floorPos)
+        else
+            return
+        end
     end
 
     local allow = getgenv().AllowToxTeleport
@@ -4558,7 +4757,7 @@ function RestoreAutoFarmPosition()
     end
 
     root.Anchored = false
-    character:PivotTo(AutoFarmReturnCFrame)
+    character:PivotTo(targetCFrame)
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 end
@@ -4567,6 +4766,8 @@ function StopAutoFarm(restore)
     AutoFarmGeneration = AutoFarmGeneration + 1
     AutoFarmAtCoin = false
     AutoFarmHoldPosition = nil
+    AutoFarmWaitHoldPosition = nil
+    AutoFarmActivelyTweening = false
     AutoFarmLastTravelY = nil
 
     if AutoFarmTween then
@@ -4594,6 +4795,14 @@ function StopAutoFarm(restore)
     if restore then
         RestoreAutoFarmPosition()
         RunService.Heartbeat:Wait()
+    elseif root and IsAutoFarmRoundActive() and not IsInSafeLobbyArea(root.Position) then
+        local safePos = FindSafeFloorAbovePosition(root.Position)
+        if safePos and safePos.Y > root.Position.Y + 2 and (safePos.Y - root.Position.Y) < 20 then
+            local allow = getgenv().AllowToxTeleport
+            if allow then allow(0.4, "MM2 Farm Surface") end
+            root.CFrame = CFrame.new(safePos)
+            root.AssemblyLinearVelocity = Vector3.zero
+        end
     end
 
     SetFarmCollision(true)
@@ -4659,8 +4868,9 @@ end
 
 function UpdateAutoFarmRoundLifecycle()
     local currentMap, currentContainer = GetAutoFarmMapRoot(false)
+    local coinCount = currentContainer ~= nil and #GetMM2Coins(false) or 0
     local roundActive = currentContainer ~= nil
-        and #GetMM2Coins(false) > 0
+        and coinCount > 0
 
     local mapChanged = AutoFarmLastObservedMap ~= nil
         and (
@@ -4668,7 +4878,11 @@ function UpdateAutoFarmRoundLifecycle()
             or currentContainer ~= AutoFarmLastObservedContainer
         )
 
-    if not roundActive then
+    local genuineRoundEnd = (currentContainer == nil)
+        or mapChanged
+        or not IsAutoFarmPlayerEligible()
+
+    if genuineRoundEnd then
         if AutoFarmRoundWasActive or mapChanged then
             AutoFarmSawRoundEnd = true
             if getgenv().ToxClearMM2Roles then
@@ -4679,7 +4893,7 @@ function UpdateAutoFarmRoundLifecycle()
         AutoFarmRoundWasActive = false
         AutoFarmBagCoins = 0
         AutoFarmBagKnown = false
-    else
+    elseif roundActive then
         if not AutoFarmRoundWasActive or mapChanged then
             ResetAutoFarmFullPause()
             AutoFarmBagKnown = false
@@ -5268,7 +5482,12 @@ function PrepareAutoFarm()
     AutoFarmGeneration = AutoFarmGeneration + 1
     AutoFarmRoot = root
     AutoFarmHumanoid = humanoid
-    AutoFarmReturnCFrame = character:GetPivot()
+    local currentPivot = character:GetPivot()
+    if not IsInSafeLobbyArea(currentPivot.Position) and not IsInNormalLobbyArea(currentPivot.Position) then
+        AutoFarmReturnCFrame = currentPivot
+    else
+        AutoFarmReturnCFrame = nil
+    end
     AutoFarmRotation = CFrame.new()
     AutoFarmOriginalAnchored = root.Anchored
     AutoFarmOriginalAutoRotate = humanoid.AutoRotate
@@ -5279,6 +5498,8 @@ function PrepareAutoFarm()
     AutoFarmPrepared = true
     AutoFarmAtCoin = false
     AutoFarmHoldPosition = nil
+    AutoFarmWaitHoldPosition = nil
+    AutoFarmActivelyTweening = false
     AutoFarmLastTravelY = nil
     AutoFarmSessionCollected = 0
 
@@ -5337,7 +5558,6 @@ end
 -- SAFE LOBBY SYSTEM
 -- ==============================================================================
 local SafeLobbyPlatform = nil
-local SafeLobbyPosition = Vector3.new(-108, -60, -10)
 
 local function EnsureSafeLobbyPlatform()
     if SafeLobbyPlatform and SafeLobbyPlatform.Parent then
@@ -5537,7 +5757,10 @@ task.spawn(function()
                 if alive and humanoid and humanoid.Health > 0 and root then
                     local pad = GetTargetVotingPad()
                     if pad and pad.Part then
+                        AutoVoteBusy = true
                         local padPos = pad.Part.Position
+                        local allow = getgenv().AllowToxTeleport
+                        if allow then allow(0.35, "MM2 Auto Vote") end
                         root.CFrame = CFrame.new(padPos + Vector3.new(0, 2.2, 0))
                         root.AssemblyLinearVelocity = Vector3.zero
                         if firetouchinterest then
@@ -5549,6 +5772,7 @@ task.spawn(function()
                             end)
                         end
                         task.wait(0.12)
+                        AutoVoteBusy = false
                         -- Infinite reset loop
                         if Settings.MM2AutoVote and humanoid and humanoid.Health > 0 and (Settings.MM2VoteInfinite ~= false) then
                             humanoid.Health = 0
@@ -5561,27 +5785,80 @@ task.spawn(function()
                             task.wait(0.5)
                         end
                     else
+                        AutoVoteBusy = false
                         task.wait(0.5)
                     end
                 else
+                    AutoVoteBusy = false
                     task.wait(0.2)
                 end
             else
+                AutoVoteBusy = false
                 task.wait(1)
             end
         else
+            AutoVoteBusy = false
             task.wait(0.5)
         end
     end
 end)
+
+function GetSafeLobbyPlayerState()
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+    local mainGui = playerGui and playerGui:FindFirstChild("MainGUI")
+    local gameGui = mainGui and mainGui:FindFirstChild("Game")
+    local lobbyGui = mainGui and mainGui:FindFirstChild("Lobby")
+
+    local lobbyVisible = lobbyGui and lobbyGui.Visible == true
+    local gameVisible = gameGui and gameGui.Visible == true
+
+    local data = GetMM2RoleData(false)
+    local info = nil
+    local dataPopulated = false
+    if typeof(data) == "table" then
+        dataPopulated = next(data) ~= nil
+        info = data[Player.Name] or data[tostring(Player.UserId)] or data[Player]
+    end
+
+    local isServerDead = (typeof(info) == "table") and (info.Dead == true or info.dead == true)
+    if isServerDead and gameVisible and not lobbyVisible then
+        local fresh = GetMM2RoleData(true)
+        if typeof(fresh) == "table" then
+            dataPopulated = next(fresh) ~= nil
+            info = fresh[Player.Name] or fresh[tostring(Player.UserId)] or fresh[Player]
+            isServerDead = (typeof(info) == "table") and (info.Dead == true or info.dead == true)
+        end
+    end
+
+    local hasServerLiveRole = (typeof(info) == "table") and not isServerDead
+    local hasWeapon = FindNamedTool({"knife", "gun", "revolver"}) ~= nil
+    local isRoundCoins = IsAutoFarmRoundActive()
+    local mapRoot = select(1, GetAutoFarmMapRoot(false)) or GetLoadedMM2MapModel()
+
+    local notParticipating = isServerDead
+        or (lobbyVisible and not gameVisible)
+        or (dataPopulated and not info and not hasWeapon and not gameVisible)
+
+    local isMatchLiveForPlayer = (not notParticipating)
+        and (mapRoot ~= nil)
+        and (isRoundCoins or gameVisible or hasServerLiveRole or hasWeapon)
+
+    return not isMatchLiveForPlayer, isMatchLiveForPlayer, mapRoot, isRoundCoins
+end
 
 getgenv().SetSafeLobbyEnabled = function(enabled)
     Settings.MM2SafeLobby = (enabled == true)
     if not Settings.MM2SafeLobby then
         DestroySafeLobbyPlatform()
         local character, _, root, alive = IsAliveCharacter()
-        if alive and root and root.Position.Y < 0 then
-            root.CFrame = CFrame.new(-108, 140, -10)
+        if alive and root and IsInSafeLobbyArea(root.Position) then
+            local _, isMatchLive, mapRoot = GetSafeLobbyPlayerState()
+            local allow = getgenv().AllowToxTeleport
+            if allow then allow(0.45, "MM2 Safe Lobby Disable") end
+            local exitPos = isMatchLive and FindSafeMapSpawnPosition(mapRoot) or Vector3.new(-108, 140, -10)
+            root.CFrame = CFrame.new(exitPos or Vector3.new(-108, 140, -10))
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
         end
     else
         EnsureSafeLobbyPlatform()
@@ -5591,48 +5868,75 @@ end
 task.spawn(function()
     while not getgenv().Destroyed and game.PlaceId == 142823291 do
         if Settings.MM2SafeLobby then
-            local mapRoot, _ = GetAutoFarmMapRoot(false)
-            local isRoundActive = IsAutoFarmRoundActive()
-            local isEligible = IsAutoFarmPlayerEligible()
-            local playerRole = GetRole(Player)
-
-            local playerGui = Player:FindFirstChildOfClass("PlayerGui")
-            local mainGui = playerGui and playerGui:FindFirstChild("MainGUI")
-            local gameGui = mainGui and mainGui:FindFirstChild("Game")
-            local lobbyGui = mainGui and mainGui:FindFirstChild("Lobby")
-
-            local inLobby = (lobbyGui and lobbyGui.Visible == true) and (not gameGui or not gameGui.Visible) and not isRoundActive and not playerRole
-            local isMatchLive = not inLobby and (isRoundActive or isEligible or (playerRole ~= nil) or (gameGui and gameGui.Visible == true))
-
-            local character, humanoid, root, alive = IsAliveCharacter()
+            local _, _, root, alive = IsAliveCharacter()
+            local character = Player.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 
             if alive and root and humanoid and humanoid.Health > 0 then
-                if isMatchLive then
-                    -- Match is active! Move player out of safe lobby into match area
-                    if root.Position.Y < -30 then
-                        local spawnPart = mapRoot and mapRoot:FindFirstChild("Spawns", true)
-                        local targetPos = (spawnPart and spawnPart:FindFirstChildWhichIsA("BasePart") and spawnPart:FindFirstChildWhichIsA("BasePart").Position)
-                            or (mapRoot and mapRoot:GetPivot().Position)
-                            or Vector3.new(0, 15, 0)
+                local inLobby, isMatchLive, mapRoot, isRoundCoins = GetSafeLobbyPlayerState()
 
-                        root.CFrame = CFrame.new(targetPos + Vector3.new(0, 4, 0))
-                        root.AssemblyLinearVelocity = Vector3.zero
-                        root.AssemblyAngularVelocity = Vector3.zero
+                if isMatchLive then
+                    if IsInSafeLobbyArea(root.Position) then
+                        -- If AutoFarm is already active with coins ready and not paused, warp straight to first coin entry!
+                        if Settings.MM2AutoFarmV2 and isRoundCoins and not AutoFarmPausedFull and not ActionBusy then
+                            local coin = GetBestCoin(root.Position, false)
+                            if coin and IsCoinValid(coin) then
+                                local entryPos = GetMethodEntryPosition(coin)
+                                if entryPos then
+                                    local allow = getgenv().AllowToxTeleport
+                                    if allow then allow(0.45, "MM2 Safe Lobby Coin Entry") end
+                                    root.CFrame = CFrame.new(entryPos)
+                                    root.AssemblyLinearVelocity = Vector3.zero
+                                    root.AssemblyAngularVelocity = Vector3.zero
+                                end
+                            end
+                        else
+                            local spawnPos = FindSafeMapSpawnPosition(mapRoot)
+                            if spawnPos then
+                                local allow = getgenv().AllowToxTeleport
+                                if allow then allow(0.45, "MM2 Safe Lobby Exit") end
+                                root.CFrame = CFrame.new(spawnPos)
+                                root.AssemblyLinearVelocity = Vector3.zero
+                                root.AssemblyAngularVelocity = Vector3.zero
+                            end
+                        end
                     end
-                else
-                    -- We are truly in the lobby!
+                elseif inLobby and not AutoVoteBusy and not AutoFarmPrepared then
                     EnsureSafeLobbyPlatform()
-                    if root.Position.Y > 0 then
-                        root.CFrame = CFrame.new(SafeLobbyPosition + Vector3.new(0, 4, 0))
+                    local safeSpot = SafeLobbyPosition + Vector3.new(0, 4, 0)
+                    if (root.Position - safeSpot).Magnitude > 14 then
+                        local allow = getgenv().AllowToxTeleport
+                        if allow then allow(0.35, "MM2 Safe Lobby Hold") end
+                        root.CFrame = CFrame.new(safeSpot)
                         root.AssemblyLinearVelocity = Vector3.zero
                         root.AssemblyAngularVelocity = Vector3.zero
                     end
                 end
             end
+            task.wait(0.12)
+        else
+            task.wait(0.4)
         end
-        task.wait(0.5)
     end
 end)
+
+function GetMethodEntryPosition(coin, mode)
+    local coinPos = GetCoinFarmPosition(coin)
+    if not coinPos then
+        return nil
+    end
+
+    mode = mode or GetActiveAutoFarmMode()
+    if mode == "Underground" then
+        return coinPos - Vector3.new(0, GetAutoFarmUndergroundDepth(), 0)
+    elseif mode == "Sky" then
+        return coinPos + Vector3.new(0, AutoFarmSkyHeight, 0)
+    elseif mode == "Teleport" then
+        return coinPos - Vector3.new(0, 3.8, 0)
+    else
+        return coinPos + Vector3.new(0, 2.5, 0)
+    end
+end
 
 function SetAutoFarmCoinPosition(position, velocity, direction)
     if not AutoFarmRoot
@@ -5651,11 +5955,7 @@ function SetAutoFarmCoinPosition(position, velocity, direction)
 
     AutoFarmHoldPosition = position
     AutoFarmRoot.Anchored = false
-    if velocity then
-        AutoFarmRoot.AssemblyLinearVelocity = velocity
-    else
-        AutoFarmRoot.AssemblyLinearVelocity = Vector3.new(0, 0.05, 0)
-    end
+    AutoFarmRoot.AssemblyLinearVelocity = velocity or Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
 
     if direction and direction.Magnitude > 0.05 then
@@ -5672,46 +5972,33 @@ function SetAutoFarmCoinPosition(position, velocity, direction)
     AutoFarmHumanoid.PlatformStand = false
     AutoFarmHumanoid.Sit = false
     AutoFarmHumanoid.AutoRotate = true
-    pcall(function()
-        AutoFarmHumanoid:ChangeState(Enum.HumanoidStateType.Running)
-    end)
 
     return true
 end
 
-function TweenFarmRoot(targetPosition, duration, coin)
+function TweenSegment(startPosition, targetPosition, speed, coin)
     if not AutoFarmRoot
     or not AutoFarmRoot.Parent then
         return false
     end
 
     local generation = AutoFarmGeneration
-    local startPosition = AutoFarmRoot.Position
     local delta = targetPosition - startPosition
     local distance = delta.Magnitude
-    local direction = distance > 0.01 and delta.Unit or Vector3.zero
-    local startTime = os.clock()
+    if distance < 0.2 then
+        SetAutoFarmCoinPosition(targetPosition, Vector3.zero, delta)
+        return true
+    end
 
-    duration = math.max(duration, 0.05)
-    local moveSpeed = math.max(5, distance / duration)
-    local velocity = direction * math.min(moveSpeed, 45)
+    local direction = delta.Unit
+    local duration = math.max(distance / math.max(speed, 1), 0.02)
+    local startTime = os.clock()
 
     local serialBefore = AutoFarmCoinSerial
     local bagBefore = AutoFarmBagCoins
 
-    if AutoFarmTween then
-        pcall(function()
-            AutoFarmTween:Cancel()
-        end)
-
-        AutoFarmTween = nil
-    end
-
-    if AutoFarmHumanoid then
-        AutoFarmHumanoid.PlatformStand = false
-        AutoFarmHumanoid.Sit = false
-        AutoFarmHumanoid.AutoRotate = true
-    end
+    AutoFarmActivelyTweening = true
+    AutoFarmWaitHoldPosition = nil
 
     while Settings.MM2AutoFarmV2
     and AutoFarmPrepared
@@ -5722,10 +6009,12 @@ function TweenFarmRoot(targetPosition, duration, coin)
     and AutoFarmHumanoid.Health > 0
     and IsAutoFarmPlayerEligible() do
         if coin and not IsCoinValid(coin) then
+            AutoFarmActivelyTweening = false
             return true
         end
 
         if IsFarmBagFull() then
+            AutoFarmActivelyTweening = false
             return false
         end
 
@@ -5737,34 +6026,112 @@ function TweenFarmRoot(targetPosition, duration, coin)
 
         local position = startPosition + delta * alpha
 
-        if not SetAutoFarmCoinPosition(position, velocity, direction) then
+        if not SetAutoFarmCoinPosition(position, Vector3.zero, direction) then
+            AutoFarmActivelyTweening = false
             return false
         end
 
         if coin then
             local dist = (coin.Position - position).Magnitude
-            if dist <= 8 then
+            if dist <= 10 then
                 TouchCoin(coin)
                 if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
+                    AutoFarmActivelyTweening = false
                     return true
                 end
             end
         end
 
         if alpha >= 1 then
-            if coin and IsCoinValid(coin) then
-                TouchCoin(coin)
-                task.wait(0.02)
-                RegisterFarmCoinCollected(coin, serialBefore, bagBefore)
-            end
+            AutoFarmActivelyTweening = false
             return true
         end
 
         RunService.Heartbeat:Wait()
     end
 
+    AutoFarmActivelyTweening = false
     return false
 end
+
+function TweenToCoinByMethod(coin, speed, mode)
+    if not AutoFarmRoot
+    or not AutoFarmRoot.Parent
+    or not IsCoinValid(coin) then
+        return false
+    end
+
+    local coinPos = GetCoinFarmPosition(coin)
+    if not coinPos then
+        return false
+    end
+
+    mode = mode or GetActiveAutoFarmMode()
+    local startPos = AutoFarmRoot.Position
+
+    if mode == "Underground" then
+        local depth = GetAutoFarmUndergroundDepth()
+        local underPos = Vector3.new(coinPos.X, coinPos.Y - depth, coinPos.Z)
+        local horizDist = Vector3.new(underPos.X - startPos.X, 0, underPos.Z - startPos.Z).Magnitude
+        local dy = underPos.Y - startPos.Y
+
+        if dy > 3.5 and horizDist > 10 then
+            local flatPos = Vector3.new(underPos.X, startPos.Y, underPos.Z)
+            if not TweenSegment(startPos, flatPos, speed, coin) then
+                return false
+            end
+            if not IsCoinValid(coin) then
+                return true
+            end
+            return TweenSegment(AutoFarmRoot.Position, underPos, speed, coin)
+        elseif dy < -3.5 and horizDist > 10 then
+            local dropPos = Vector3.new(startPos.X, underPos.Y, startPos.Z)
+            if not TweenSegment(startPos, dropPos, speed, coin) then
+                return false
+            end
+            if not IsCoinValid(coin) then
+                return true
+            end
+            return TweenSegment(AutoFarmRoot.Position, underPos, speed, coin)
+        else
+            return TweenSegment(startPos, underPos, speed, coin)
+        end
+    elseif mode == "Sky" then
+        local travelY = math.max(startPos.Y, coinPos.Y + AutoFarmSkyHeight)
+        local horizDist = Vector3.new(coinPos.X - startPos.X, 0, coinPos.Z - startPos.Z).Magnitude
+
+        if startPos.Y < travelY - 2.5 then
+            local upPos = Vector3.new(startPos.X, travelY, startPos.Z)
+            if not TweenSegment(startPos, upPos, speed, coin) then
+                return false
+            end
+            if not IsCoinValid(coin) then
+                return true
+            end
+        end
+
+        if horizDist > 2 then
+            local flyPos = Vector3.new(coinPos.X, travelY, coinPos.Z)
+            if not TweenSegment(AutoFarmRoot.Position, flyPos, speed, coin) then
+                return false
+            end
+            if not IsCoinValid(coin) then
+                return true
+            end
+        end
+
+        return TweenSegment(AutoFarmRoot.Position, coinPos + Vector3.new(0, 0.5, 0), speed, coin)
+    else
+        return TweenSegment(startPos, coinPos, speed, coin)
+    end
+end
+
+function TweenFarmRoot(targetPosition, duration, coin)
+    local dist = (AutoFarmRoot and AutoFarmRoot.Parent) and (targetPosition - AutoFarmRoot.Position).Magnitude or 20
+    local speed = dist / math.max(duration or 0.1, 0.05)
+    return TweenSegment(AutoFarmRoot.Position, targetPosition, speed, coin)
+end
+
 function TouchCoin(coin)
     if not IsCoinValid(coin) then
         return false
@@ -5777,19 +6144,31 @@ function TouchCoin(coin)
     end
 
     local coinParts = ToxMM2GetCoinTouchParts(coin)
+    local touchSources = { root }
+    local headPart = character and character:FindFirstChild("Head")
+    local torsoPart = character and (character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso"))
+    if headPart and headPart:IsA("BasePart") then table.insert(touchSources, headPart) end
+    if torsoPart and torsoPart:IsA("BasePart") then table.insert(touchSources, torsoPart) end
+
     local touched = false
 
     if firetouchinterest then
         for _, coinPart in ipairs(coinParts) do
-            if coinPart
-            and coinPart.Parent then
+            if coinPart and coinPart.Parent then
                 pcall(function()
                     coinPart.CanTouch = true
-                    root.CanTouch = true
-                    firetouchinterest(root, coinPart, 0)
-                    firetouchinterest(root, coinPart, 1)
                 end)
-
+                for _, charPart in ipairs(touchSources) do
+                    if charPart and charPart.Parent then
+                        pcall(function()
+                            charPart.CanTouch = true
+                            firetouchinterest(charPart, coinPart, 0)
+                            firetouchinterest(coinPart, charPart, 0)
+                            firetouchinterest(charPart, coinPart, 1)
+                            firetouchinterest(coinPart, charPart, 1)
+                        end)
+                    end
+                end
                 touched = true
             end
         end
@@ -5828,26 +6207,34 @@ function RegisterFarmCoinCollected(coin, serialBefore, bagBefore)
     return false
 end
 
-function CollectFarmCoin(coin)
+function CollectFarmCoin(coin, mode)
     if not IsCoinValid(coin)
     or not AutoFarmRoot
     or not AutoFarmRoot.Parent then
         return true
     end
 
+    mode = mode or GetActiveAutoFarmMode()
     local generation = AutoFarmGeneration
     local serialBefore = AutoFarmCoinSerial
     local bagBefore = AutoFarmBagCoins
-    local farmPosition = GetCoinFarmPosition(coin)
+    local coinPos = GetCoinFarmPosition(coin)
 
-    if not farmPosition then
+    if not coinPos then
         return false
     end
 
-    AutoFarmAtCoin = true
-    SetAutoFarmCoinPosition(farmPosition, Vector3.new(0, 0.1, 0))
+    local holdPos = coinPos
+    if mode == "Underground" then
+        holdPos = coinPos - Vector3.new(0, GetAutoFarmUndergroundDepth(), 0)
+    elseif mode == "Sky" then
+        holdPos = coinPos + Vector3.new(0, 0.5, 0)
+    end
 
-    local holdUntil = os.clock() + 0.06
+    AutoFarmAtCoin = true
+    SetAutoFarmCoinPosition(holdPos, Vector3.zero)
+
+    local holdUntil = os.clock() + 0.07
 
     while Settings.MM2AutoFarmV2
     and generation == AutoFarmGeneration
@@ -5859,6 +6246,7 @@ function CollectFarmCoin(coin)
     and AutoFarmHumanoid.Health > 0
     and IsAutoFarmPlayerEligible()
     and os.clock() <= holdUntil do
+        SetAutoFarmCoinPosition(holdPos, Vector3.zero)
         TouchCoin(coin)
 
         if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
@@ -5868,6 +6256,37 @@ function CollectFarmCoin(coin)
         end
 
         RunService.Heartbeat:Wait()
+    end
+
+    -- Underground micro-peek fallback only if touch from below did not collect yet
+    if mode == "Underground"
+    and Settings.MM2AutoFarmV2
+    and generation == AutoFarmGeneration
+    and not IsFarmBagFull()
+    and IsCoinValid(coin)
+    and AutoFarmRoot
+    and AutoFarmRoot.Parent
+    and IsAutoFarmPlayerEligible() then
+        local peekPos = coinPos - Vector3.new(0, 1.8, 0)
+        local peekUntil = os.clock() + 0.06
+        while Settings.MM2AutoFarmV2
+        and generation == AutoFarmGeneration
+        and not IsFarmBagFull()
+        and IsCoinValid(coin)
+        and AutoFarmRoot
+        and AutoFarmRoot.Parent
+        and IsAutoFarmPlayerEligible()
+        and os.clock() <= peekUntil do
+            SetAutoFarmCoinPosition(peekPos, Vector3.zero)
+            TouchCoin(coin)
+            if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
+                break
+            end
+            RunService.Heartbeat:Wait()
+        end
+        if AutoFarmRoot and AutoFarmRoot.Parent and IsAutoFarmPlayerEligible() then
+            SetAutoFarmCoinPosition(holdPos, Vector3.zero)
+        end
     end
 
     AutoFarmAtCoin = false
@@ -5895,9 +6314,14 @@ function AutoFarmCoin(coin)
         return false
     end
 
+    local mode = GetActiveAutoFarmMode()
+    AutoFarmWaitHoldPosition = nil
+
     -- TELEPORT MODE
-    if tostring(Settings.MM2AutoFarmMode) == "Teleport" then
+    if mode == "Teleport" then
         local tpPos = travelPosition - Vector3.new(0, 3.8, 0)
+        local allow = getgenv().AllowToxTeleport
+        if allow then allow(0.4, "MM2 Farm Teleport") end
         EnsureAutoFarmStandPlatform(tpPos)
         AutoFarmRoot.CFrame = CFrame.new(tpPos)
         AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
@@ -5932,33 +6356,30 @@ function AutoFarmCoin(coin)
         return true
     end
 
-    -- TWEEN MODE
+    -- ENTRY FROM LOBBY (Y > 70) OR SAFE LOBBY (Y < -30 / SafeLobbyArea)
+    local currentPosition = AutoFarmRoot.Position
+    if IsInNormalLobbyArea(currentPosition) or IsInSafeLobbyArea(currentPosition) then
+        local entryPos = GetMethodEntryPosition(coin, mode)
+        if entryPos then
+            local allow = getgenv().AllowToxTeleport
+            if allow then allow(0.45, "MM2 Farm Map Entry") end
+            AutoFarmRoot.CFrame = CFrame.new(entryPos)
+            AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+            AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+            RunService.Heartbeat:Wait()
+            currentPosition = AutoFarmRoot.Position
+        end
+    end
+
+    -- TWEEN / UNDERGROUND / SKY MOVEMENT
     local speedValue = math.clamp(
         tonumber(Settings.MM2AutoFarmSpeed) or 5,
         1,
         250
     )
 
-    local currentPosition = AutoFarmRoot.Position
-    local distance = (travelPosition - currentPosition).Magnitude
-
-    -- Initial entry from lobby to map: ONLY if character is in the lobby high above (Y > 70)
-    -- and target coin is on the map below (Y < 50). Between coins on the map, NEVER teleport!
-    if currentPosition.Y > 70 and travelPosition.Y < 50 then
-        AutoFarmRoot.CFrame = CFrame.new(travelPosition + Vector3.new(0, 3, 0))
-        AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
-        AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
-        task.wait(0.08)
-        currentPosition = AutoFarmRoot.Position
-        distance = (travelPosition - currentPosition).Magnitude
-    end
-
     local speed = math.clamp(speedValue * 4, AutoFarmMinTweenSpeed, 120)
-    local arrived = TweenFarmRoot(
-        travelPosition,
-        distance / speed,
-        coin
-    )
+    local arrived = TweenToCoinByMethod(coin, speed, mode)
 
     if not Settings.MM2AutoFarmV2 then
         return false
@@ -5982,7 +6403,7 @@ function AutoFarmCoin(coin)
         return false
     end
 
-    local collected = CollectFarmCoin(coin)
+    local collected = CollectFarmCoin(coin, mode)
 
     if collected then
         MM2CoinBlacklist[coin] = os.clock() + 0.02
@@ -5998,6 +6419,29 @@ function AutoFarmCoin(coin)
 
     return collected
 end
+
+AddConnection(RunService.Stepped:Connect(function()
+    if not Settings.MM2AutoFarmV2
+    or not AutoFarmPrepared
+    or not AutoFarmRoot
+    or not AutoFarmRoot.Parent
+    or not AutoFarmHumanoid
+    or AutoFarmHumanoid.Health <= 0 then
+        return
+    end
+
+    local character = Player.Character
+    if character then
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+
+    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+    AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
+end))
 
 AddConnection(RunService.Heartbeat:Connect(function()
     if not Settings.MM2AutoFarmV2
@@ -6015,14 +6459,28 @@ AddConnection(RunService.Heartbeat:Connect(function()
     end
 
     AutoFarmRoot.Anchored = false
+    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
     AutoFarmHumanoid.PlatformStand = false
     AutoFarmHumanoid.Sit = false
     AutoFarmHumanoid.AutoRotate = true
+
+    if AutoFarmWaitHoldPosition and not AutoFarmActivelyTweening then
+        AutoFarmRoot.CFrame = CFrame.new(AutoFarmWaitHoldPosition)
+    end
 end))
 
 task.spawn(function()
     while not getgenv().Destroyed and game.PlaceId == 142823291 do
+        local enabledNow = Settings.MM2AutoFarmV2 == true
+        if enabledNow and not AutoFarmWasEnabled then
+            ResetAutoFarmFullPause()
+            AutoFarmBagKnown = false
+            AutoFarmBagCoins = 0
+            RefreshFarmBagState()
+        end
+        AutoFarmWasEnabled = enabledNow
+
         if not ToxScriptReady() then
             if AutoFarmPrepared then
                 StopAutoFarm(false)
@@ -6084,11 +6542,14 @@ task.spawn(function()
 
                 task.wait(0.15)
             elseif not roundActive then
-                if AutoFarmPrepared then
+                local mode = GetActiveAutoFarmMode()
+                if AutoFarmPrepared and currentContainer ~= nil and (mode == "Underground" or mode == "Sky") and root and not IsInSafeLobbyArea(root.Position) then
+                    AutoFarmWaitHoldPosition = AutoFarmWaitHoldPosition or root.Position
+                elseif AutoFarmPrepared then
                     StopAutoFarm(false)
                 end
 
-                task.wait(0.25)
+                task.wait(0.2)
             elseif IsFarmBagFull() then
                 CompleteAutoFarm()
                 task.wait(0.2)
@@ -6100,13 +6561,20 @@ task.spawn(function()
                     origin = AutoFarmRoot.Position
                 end
 
-                local coin = GetBestCoin(origin, false)
+                local coin, bestMurderDist = GetBestCoin(origin, false)
+                local mode = GetActiveAutoFarmMode()
 
-                if coin then
+                if coin and Settings.MM2AutoFarmAvoidMurderer ~= false and mode == "Tween" and bestMurderDist < 12 and root then
+                    if AutoFarmPrepared then
+                        AutoFarmWaitHoldPosition = AutoFarmWaitHoldPosition or root.Position
+                    end
+                    task.wait(0.15)
+                elseif coin then
+                    AutoFarmWaitHoldPosition = nil
                     local ok = AutoFarmCoin(coin)
                     if not ok then
                         MM2CoinBlacklist[coin] = os.clock() + 0.8
-                        task.wait(0.08)
+                        task.wait(0.06)
                     else
                         task.wait(0.02)
                     end

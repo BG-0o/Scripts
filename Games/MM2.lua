@@ -3,7 +3,7 @@ if game.PlaceId ~= 142823291 then
 end
 
 local env = getgenv()
-local loaderVersion = "2026-09-18-mm2-ui-restored-1"
+local loaderVersion = "2026-11-11-mm2-farm-modes-v2"
 local coreUrl = tostring(
     env.ToxMM2CoreURL
     or "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Games/ModuleMM2.lua"
@@ -200,13 +200,26 @@ end, function(value)
     if Settings.MM2AutoFarmMode == "Teleport" then
         Settings.MM2AutoFarmTeleportDelay = math.clamp(num or 1.2, 0.2, 10)
     else
-        Settings.MM2AutoFarmSpeed = math.clamp(num or 5, 5, 250)
+        Settings.MM2AutoFarmSpeed = math.clamp(num or 5, 1, 250)
         WarnAutoFarmSpeed(Settings.MM2AutoFarmSpeed)
     end
     AutoSaveConfiguration()
 end, "MM2AutoFarmV2")
 
-CreateDropdown("Farm Mode", {"Tween", "Teleport"}, GamePage, Settings.MM2AutoFarmMode or "Tween", function(choice)
+local ValidMM2FarmModes = {
+    Underground = true,
+    Tween = true,
+    Sky = true,
+    Teleport = true,
+}
+
+local currentFarmMode = tostring(Settings.MM2AutoFarmMode or "Tween")
+if not ValidMM2FarmModes[currentFarmMode] then
+    currentFarmMode = "Tween"
+    Settings.MM2AutoFarmMode = currentFarmMode
+end
+
+CreateDropdown("Farm Mode", {"Underground", "Tween", "Sky", "Teleport"}, GamePage, currentFarmMode, function(choice)
     Settings.MM2AutoFarmMode = choice
     if getgenv().SyncValueVisuals then
         local currentVal = choice == "Teleport" and (Settings.MM2AutoFarmTeleportDelay or 1.2) or (Settings.MM2AutoFarmSpeed or 5)
@@ -214,6 +227,23 @@ CreateDropdown("Farm Mode", {"Tween", "Teleport"}, GamePage, Settings.MM2AutoFar
     end
     AutoSaveConfiguration()
 end)
+
+CreateTextBox("Underground Depth", GamePage, tostring(Settings.MM2AutoFarmDepth or 6), function(txt)
+    local num = math.clamp(tonumber(txt) or 6, 3, 15)
+    Settings.MM2AutoFarmDepth = num
+    AutoSaveConfiguration()
+end, "6 (3-15)")
+
+CreateToggle(
+    "Avoid Murderer",
+    GamePage,
+    Settings.MM2AutoFarmAvoidMurderer ~= false,
+    function(v)
+        Settings.MM2AutoFarmAvoidMurderer = v == true
+        AutoSaveConfiguration()
+    end,
+    "MM2AutoFarmAvoidMurderer"
+)
 
 CreateToggle(
     "Safe Lobby",
