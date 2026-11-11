@@ -283,7 +283,7 @@ pcall(function() ToxSpectatorsFrame.Parent = hudTargetParent end)
 env.ToxSpectatorsFrame = ToxSpectatorsFrame
 
 local sfCorner = Instance.new("UICorner") sfCorner.CornerRadius = UDim.new(0, 6) sfCorner.Parent = ToxSpectatorsFrame
-local sfStroke = Instance.new("UIStroke") sfStroke.Color = Theme_Outline sfStroke.Thickness = 1 sfStroke.Parent = ToxSpectatorsFrame
+local sfStroke = Instance.new("UIStroke") sfStroke.Color = Theme_Outline sfStroke.Thickness = 1 sfStroke.Transparency = 0.3 sfStroke.Parent = ToxSpectatorsFrame
 
 local sfAccent = Instance.new("Frame")
 sfAccent.Size = UDim2.new(1, 0, 0, 2)
@@ -304,6 +304,15 @@ SpectatorsTitleLabel.Text = "Spectators (0)"
 SpectatorsTitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 SpectatorsTitleLabel.ZIndex = 999991
 SpectatorsTitleLabel.Parent = ToxSpectatorsFrame
+
+if env.RegisterThemedObject then
+    env.RegisterThemedObject(ToxSpectatorsFrame, "BackgroundColor3", "Panel")
+    env.RegisterThemedObject(sfStroke, "Color", "Outline")
+    env.RegisterThemedObject(sfAccent, "BackgroundColor3", "Accent")
+    env.RegisterThemedObject(SpectatorsTitleLabel, "TextColor3", "Text")
+end
+if env.ApplySavedGuiPosition then env.ApplySavedGuiPosition("Spectators", ToxSpectatorsFrame) end
+if env.TrackGuiPosition then env.TrackGuiPosition("Spectators", ToxSpectatorsFrame) end
 
 local SpectatorsContainer = Instance.new("ScrollingFrame")
 SpectatorsContainer.Name = "Container"
@@ -339,7 +348,7 @@ pcall(function() ToxKeybindsFrame.Parent = hudTargetParent end)
 env.ToxKeybindsFrame = ToxKeybindsFrame
 
 local kfCorner = Instance.new("UICorner") kfCorner.CornerRadius = UDim.new(0, 6) kfCorner.Parent = ToxKeybindsFrame
-local kfStroke = Instance.new("UIStroke") kfStroke.Color = Theme_Outline kfStroke.Thickness = 1 kfStroke.Parent = ToxKeybindsFrame
+local kfStroke = Instance.new("UIStroke") kfStroke.Color = Theme_Outline kfStroke.Thickness = 1 kfStroke.Transparency = 0.3 kfStroke.Parent = ToxKeybindsFrame
 
 local kfAccent = Instance.new("Frame")
 kfAccent.Size = UDim2.new(1, 0, 0, 2)
@@ -360,6 +369,15 @@ KeybindsTitleLabel.Text = "Keybinds"
 KeybindsTitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 KeybindsTitleLabel.ZIndex = 999991
 KeybindsTitleLabel.Parent = ToxKeybindsFrame
+
+if env.RegisterThemedObject then
+    env.RegisterThemedObject(ToxKeybindsFrame, "BackgroundColor3", "Panel")
+    env.RegisterThemedObject(kfStroke, "Color", "Outline")
+    env.RegisterThemedObject(kfAccent, "BackgroundColor3", "Accent")
+    env.RegisterThemedObject(KeybindsTitleLabel, "TextColor3", "Text")
+end
+if env.ApplySavedGuiPosition then env.ApplySavedGuiPosition("Keybinds", ToxKeybindsFrame) end
+if env.TrackGuiPosition then env.TrackGuiPosition("Keybinds", ToxKeybindsFrame) end
 
 local KeybindsContainer = Instance.new("ScrollingFrame")
 KeybindsContainer.Name = "Container"
@@ -836,6 +854,12 @@ end
 local function GetESPVisualInfo(p)
     local defaultColor = Settings.EspColor or Color3.fromRGB(255, 255, 255)
     local mm2RoleESPActive = (game.GameId == MM2GameId or game.PlaceId == MM2PlaceId) and Settings.MM2RoleESP == true
+
+    if Settings.VisualRainbow == true and not mm2RoleESPActive then
+        local speed = math.clamp(tonumber(Settings.RainbowSpeed) or 25, 1, 100)
+        local hue = (os.clock() * (speed / 140)) % 1
+        return Color3.fromHSV(hue, 0.98, 1), nil
+    end
 
     if not Settings.ESPTeamColors and not mm2RoleESPActive then
         return defaultColor, nil

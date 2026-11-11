@@ -69,20 +69,22 @@ getgenv().CustomNotify = function(text, color, customTime)
     end
     getgenv().ToxLastNotificationText = message
     getgenv().ToxLastNotificationTime = now
+    local uiTheme = env.Theme
+    local uiTransp = math.clamp(tonumber(Settings and Settings.ToxUITransparency) or 0, 0, 0.85)
     local Frame = Instance.new("Frame")
     Frame.Size = UDim2.new(1, 0, 0, 38)
-    Frame.BackgroundColor3 = Color3.fromRGB(12, 12, 20)
+    Frame.BackgroundColor3 = (uiTheme and uiTheme.Panel) or Color3.fromRGB(16, 16, 26)
     Frame.BorderSizePixel = 0
     Frame.ClipsDescendants = true
     Frame.Parent = NotifContainer
     local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 6) Corner.Parent = Frame
-    local Stroke = Instance.new("UIStroke") Stroke.Color = MAIN_COLOR Stroke.Thickness = 1.5 Stroke.Parent = Frame
+    local Stroke = Instance.new("UIStroke") Stroke.Color = (uiTheme and uiTheme.Accent) or MAIN_COLOR Stroke.Thickness = 1 Stroke.Transparency = 0.25 Stroke.Parent = Frame
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(1, -16, 1, 0)
     Label.Position = UDim2.new(0, 10, 0, 0)
     Label.BackgroundTransparency = 1
     Label.Text = text
-    Label.TextColor3 = color or Color3.fromRGB(240, 240, 240)
+    Label.TextColor3 = color or (uiTheme and uiTheme.Text) or Color3.fromRGB(240, 240, 240)
     Label.Font = Enum.Font.GothamMedium
     Label.TextSize = 13
     Label.TextXAlignment = Enum.TextXAlignment.Left
@@ -90,9 +92,9 @@ getgenv().CustomNotify = function(text, color, customTime)
     Label.Parent = Frame
     Frame.BackgroundTransparency = 1 Label.TextTransparency = 1 Stroke.Transparency = 1
     local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-    TweenService:Create(Frame, tweenInfo, {BackgroundTransparency = 0}):Play()
+    TweenService:Create(Frame, tweenInfo, {BackgroundTransparency = uiTransp}):Play()
     TweenService:Create(Label, tweenInfo, {TextTransparency = 0}):Play()
-    TweenService:Create(Stroke, tweenInfo, {Transparency = 0}):Play()
+    TweenService:Create(Stroke, tweenInfo, {Transparency = 0.25}):Play()
     task.delay(customTime or 3, function()
         if Frame and Frame.Parent then
             local tweenOut = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
@@ -161,11 +163,14 @@ getgenv().ShowToxChatPopup =
         frame.AutomaticSize =
             Enum.AutomaticSize.Y
         frame.BackgroundColor3 =
-            Color3.fromRGB(
-                12,
-                12,
-                20
+            (env.Theme and env.Theme.Panel)
+            or Color3.fromRGB(
+                16,
+                16,
+                26
             )
+        frame.BackgroundTransparency =
+            math.clamp(tonumber(Settings and Settings.ToxUITransparency) or 0, 0, 0.85)
         frame.BorderSizePixel = 0
         frame.ClipsDescendants = true
         frame.Parent =
@@ -180,8 +185,9 @@ getgenv().ShowToxChatPopup =
         corner.Parent = frame
         local stroke =
             Instance.new("UIStroke")
-        stroke.Color = MAIN_COLOR
-        stroke.Thickness = 2
+        stroke.Color = (env.Theme and env.Theme.Accent) or MAIN_COLOR
+        stroke.Thickness = 1
+        stroke.Transparency = 0.25
         stroke.Parent = frame
         local title =
             Instance.new("TextLabel")
@@ -394,9 +400,17 @@ getgenv().MakeDraggable = function(Frame, DragHandle)
     local Dragging, DragInput, DragStart, StartPos
     DragHandle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if getgenv().CloseToxDropdownOverlay then
+                pcall(getgenv().CloseToxDropdownOverlay)
+            end
             Dragging = true DragStart = input.Position StartPos = Frame.Position
             input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then Dragging = false end
+                if input.UserInputState == Enum.UserInputState.End then
+                    Dragging = false
+                    if getgenv().ScriptLoaded then
+                        AutoSaveConfiguration()
+                    end
+                end
             end)
         end
     end)
@@ -406,7 +420,7 @@ getgenv().MakeDraggable = function(Frame, DragHandle)
         end
     end)
     AddConnection(UserInputService.InputChanged:Connect(function(input)
-        if input == DragInput and Dragging and DragStart and StartPos then
+        if Dragging and DragStart and StartPos and (input == DragInput or input.UserInputType == Enum.UserInputType.MouseMovement) then
             local Delta = input.Position - DragStart
             Frame.Position = UDim2.new(StartPos.X.Scale, StartPos.X.Offset + Delta.X, StartPos.Y.Scale, StartPos.Y.Offset + Delta.Y)
         end
@@ -444,8 +458,8 @@ getgenv().GetSavedGuiSize =
                 )
             if width
             and height
-            and width >= 140
-            and height >= 80 then
+            and width >= 100
+            and height >= 60 then
                 return
                     UDim2.new(
                         0,
@@ -502,16 +516,16 @@ getgenv().MakeResizable =
         if initialHeight <= 0 then
             initialHeight = 395
         end
-        local minWidth = 140
-        local minHeight = 80
-        local maxWidth = 3840
-        local maxHeight = 2160
+        local minWidth = 120
+        local minHeight = 60
+        local maxWidth = 8192
+        local maxHeight = 8192
         if typeof(minRatio) == "Vector2" then
             minWidth = minRatio.X
             minHeight = minRatio.Y
         elseif typeof(minRatio) == "number" then
-            minWidth = math.max(140, math.floor(initialWidth * minRatio))
-            minHeight = math.max(80, math.floor(initialHeight * minRatio))
+            minWidth = math.max(100, math.floor(initialWidth * minRatio))
+            minHeight = math.max(50, math.floor(initialHeight * minRatio))
         end
         if typeof(maxRatio) == "Vector2" then
             maxWidth = maxRatio.X
@@ -676,7 +690,11 @@ getgenv().MakeResizable =
                     resizing = false
                     return
                 end
+                if getgenv().CloseToxDropdownOverlay then
+                    pcall(getgenv().CloseToxDropdownOverlay)
+                end
                 resizing = true
+                resizeInput = input
                 dragStart =
                     input.Position
                 local currentSize =
@@ -708,9 +726,11 @@ getgenv().MakeResizable =
             UserInputService.InputChanged:
                 Connect(function(input)
                     if not resizing
-                    or input
-                        ~= resizeInput
                     or not dragStart then
+                        return
+                    end
+                    if input.UserInputType ~= Enum.UserInputType.MouseMovement
+                    and input ~= resizeInput then
                         return
                     end
                     if isFrameMinimized() then
@@ -720,26 +740,6 @@ getgenv().MakeResizable =
                     local delta =
                         input.Position
                         - dragStart
-                    local viewport =
-                        Camera.ViewportSize
-                    local viewportMaxWidth =
-                        math.max(
-                            minWidth,
-                            math.min(
-                                maxWidth,
-                                viewport.X
-                                - 24
-                            )
-                        )
-                    local viewportMaxHeight =
-                        math.max(
-                            minHeight,
-                            math.min(
-                                maxHeight,
-                                viewport.Y
-                                - 24
-                            )
-                        )
                     local newWidth =
                         math.clamp(
                             math.floor(
@@ -748,7 +748,7 @@ getgenv().MakeResizable =
                                 + 0.5
                             ),
                             minWidth,
-                            viewportMaxWidth
+                            maxWidth
                         )
                     local newHeight =
                         math.clamp(
@@ -758,7 +758,7 @@ getgenv().MakeResizable =
                                 + 0.5
                             ),
                             minHeight,
-                            viewportMaxHeight
+                            maxHeight
                         )
                     frame.Size =
                         UDim2.new(
@@ -810,6 +810,9 @@ getgenv().TrackGuiPosition = function(key, gui)
         return
     end
     AddConnection(gui:GetPropertyChangedSignal("Position"):Connect(function()
+        if not getgenv().ScriptLoaded or gui:GetAttribute("ToxIgnorePosTrack") == true then
+            return
+        end
         getgenv().UIPositions[key] = getgenv().EncodeGuiPosition(gui.Position)
         GuiPositionSaveTokens[key] = (GuiPositionSaveTokens[key] or 0) + 1
         local token = GuiPositionSaveTokens[key]

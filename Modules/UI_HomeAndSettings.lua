@@ -607,7 +607,7 @@ end
 AddSettingsToggle(MenuCard.Content, "Auto hide UI after execute", Settings.AutoCloseExecute, function(v)
     Settings.AutoCloseExecute = v
 end)
-setWatermarkSettingVisual = AddSettingsToggle(MenuCard.Content, "Watermark", Settings.Watermark ~= false, function(v)
+setWatermarkSettingVisual = AddSettingsToggle(MenuCard.Content, "Watermark", Settings.Watermark == true, function(v)
     Settings.Watermark = v
     WatermarkFrame.Visible = v
 end)
@@ -642,30 +642,34 @@ local function AddSettingsDropdown(parent, name, options, defaultOption, callbac
     label.Parent = row
     RegisterThemedObject(label, "TextColor3", "Text")
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 95, 0, 24)
-    btn.Position = UDim2.new(1, -105, 0.5, -12)
+    btn.Size = UDim2.new(0, 108, 0, 24)
+    btn.Position = UDim2.new(1, -118, 0.5, -12)
     btn.BackgroundColor3 = Theme.Panel
     btn.BorderSizePixel = 0
-    btn.Text = tostring(defaultOption) .. "  ▼"
+    btn.Text = tostring(defaultOption) .. "  ▾"
     btn.TextColor3 = Theme.Accent
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 11
+    btn.TextTruncate = Enum.TextTruncate.AtEnd
     btn.Parent = row
     local bc = Instance.new("UICorner") bc.CornerRadius = UDim.new(0, 4) bc.Parent = btn
     local bs = Instance.new("UIStroke") bs.Color = Theme.Outline bs.Thickness = 1 bs.Parent = btn
     RegisterThemedObject(btn, "BackgroundColor3", "Panel")
     RegisterThemedObject(btn, "TextColor3", "Accent")
     RegisterThemedObject(bs, "Color", "Outline")
-    local currentIdx = 1
-    for i, opt in ipairs(options) do
-        if opt == defaultOption then currentIdx = i break end
-    end
+    local currentOpt = defaultOption
     btn.MouseButton1Click:Connect(function()
-        currentIdx = currentIdx + 1
-        if currentIdx > #options then currentIdx = 1 end
-        btn.Text = tostring(options[currentIdx]) .. "  ▼"
-        if callback then callback(options[currentIdx]) end
-        if getgenv().AutoSaveConfiguration then getgenv().AutoSaveConfiguration() end
+        if getgenv().ShowToxDropdownOverlay then
+            btn.Text = tostring(currentOpt) .. "  ▴"
+            getgenv().ShowToxDropdownOverlay(btn, options, currentOpt, function(opt)
+                currentOpt = opt
+                btn.Text = tostring(opt) .. "  ▾"
+                if callback then callback(opt) end
+                if getgenv().AutoSaveConfiguration then getgenv().AutoSaveConfiguration() end
+            end, function()
+                btn.Text = tostring(currentOpt) .. "  ▾"
+            end)
+        end
     end)
 end
 AddSettingsDropdown(WeatherCard.Content, "Weather style", {"Off", "Snow", "Rain", "Stars"}, Settings.Weather or "Off", function(v)
@@ -710,33 +714,53 @@ local function AddSettingsSlider(parent, name, minVal, maxVal, defaultVal, suffi
     valLabel.TextXAlignment = Enum.TextXAlignment.Right
     valLabel.Parent = row
     RegisterThemedObject(valLabel, "TextColor3", "DimText")
-    local bar = Instance.new("TextButton")
-    bar.Size = UDim2.new(1, -20, 0, 8)
-    bar.Position = UDim2.new(0, 10, 0, 26)
+    local barWrap = Instance.new("TextButton")
+    barWrap.Size = UDim2.new(1, -20, 0, 14)
+    barWrap.Position = UDim2.new(0, 10, 0, 24)
+    barWrap.BackgroundTransparency = 1
+    barWrap.BorderSizePixel = 0
+    barWrap.Text = ""
+    barWrap.AutoButtonColor = false
+    barWrap.Parent = row
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.new(1, 0, 0, 6)
+    bar.Position = UDim2.new(0, 0, 0.5, -3)
     bar.BackgroundColor3 = Theme.Panel
     bar.BorderSizePixel = 0
-    bar.Text = ""
-    bar.AutoButtonColor = false
-    bar.Parent = row
+    bar.Parent = barWrap
     local bc = Instance.new("UICorner") bc.CornerRadius = UDim.new(1, 0) bc.Parent = bar
     RegisterThemedObject(bar, "BackgroundColor3", "Panel")
+    local initRel = math.clamp((defaultVal - minVal) / (maxVal - minVal), 0, 1)
     local fill = Instance.new("Frame")
-    fill.Size = UDim2.new(math.clamp((defaultVal - minVal) / (maxVal - minVal), 0, 1), 0, 1, 0)
+    fill.Size = UDim2.new(initRel, 0, 1, 0)
     fill.BackgroundColor3 = Theme.Accent
     fill.BorderSizePixel = 0
     fill.Parent = bar
     local fc = Instance.new("UICorner") fc.CornerRadius = UDim.new(1, 0) fc.Parent = fill
     RegisterThemedObject(fill, "BackgroundColor3", "Accent")
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 13, 0, 13)
+    knob.AnchorPoint = Vector2.new(0.5, 0.5)
+    knob.Position = UDim2.new(initRel, 0, 0.5, 0)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.BorderSizePixel = 0
+    knob.ZIndex = bar.ZIndex + 2
+    knob.Parent = barWrap
+    local kc = Instance.new("UICorner") kc.CornerRadius = UDim.new(1, 0) kc.Parent = knob
+    local ks = Instance.new("UIStroke") ks.Color = Theme.Accent ks.Thickness = 1.5 ks.Parent = knob
+    RegisterThemedObject(ks, "Color", "Accent")
     local currentVal = defaultVal
     local function Update(inpX)
-        local rel = math.clamp((inpX - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-        currentVal = math.floor(minVal + rel * (maxVal - minVal))
+        local rel = math.clamp((inpX - barWrap.AbsolutePosition.X) / math.max(barWrap.AbsoluteSize.X, 1), 0, 1)
+        currentVal = math.floor(minVal + rel * (maxVal - minVal) + 0.5)
         valLabel.Text = tostring(currentVal) .. (suffix or "")
         fill.Size = UDim2.new(rel, 0, 1, 0)
-        if callback then callback(currentVal) end
+        knob.Position = UDim2.new(rel, 0, 0.5, 0)
+        if callback then callback(currentVal, true) end
     end
-    bar.InputBegan:Connect(function(inp)
+    barWrap.InputBegan:Connect(function(inp)
         if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+            TweenService:Create(knob, TweenInfo.new(0.1), {Size = UDim2.new(0, 15, 0, 15)}):Play()
             Update(inp.Position.X)
             local moveConn, endConn
             moveConn = UserInputService.InputChanged:Connect(function(change)
@@ -746,8 +770,10 @@ local function AddSettingsSlider(parent, name, minVal, maxVal, defaultVal, suffi
             end)
             endConn = UserInputService.InputEnded:Connect(function(ended)
                 if ended.UserInputType == Enum.UserInputType.MouseButton1 or ended.UserInputType == Enum.UserInputType.Touch then
-                    if moveConn then moveConn:Disconnect() end
-                    if endConn then endConn:Disconnect() end
+                    TweenService:Create(knob, TweenInfo.new(0.1), {Size = UDim2.new(0, 13, 0, 13)}):Play()
+                    if moveConn then pcall(function() moveConn:Disconnect() end) end
+                    if endConn then pcall(function() endConn:Disconnect() end) end
+                    if callback then callback(currentVal, false) end
                     if getgenv().AutoSaveConfiguration then getgenv().AutoSaveConfiguration() end
                 end
             end)
@@ -817,6 +843,23 @@ AddSettingsToggle(ColorsCard.Content, "Window gradient", Settings.WindowGradient
     Settings.WindowGradient = v
     MainGradient.Enabled = v
 end)
+AddSettingsToggle(ColorsCard.Content, "UI Rainbow (All Colors)", Settings.UIRainbow == true, function(v)
+    Settings.UIRainbow = v
+    if not v and getgenv().ApplyToxTheme then
+        getgenv().ApplyToxTheme()
+    end
+end)
+AddSettingsSlider(ColorsCard.Content, "UI Rainbow speed", 1, 100, math.floor(tonumber(Settings.UIRainbowSpeed) or 35), "%", function(v)
+    Settings.UIRainbowSpeed = v
+end)
+AddSettingsSlider(ColorsCard.Content, "UI Transparency", 0, 100, math.floor((tonumber(Settings.ToxUITransparency) or 0) * 100 + 0.5), "%", function(v, isDragging)
+    if getgenv().SetToxUITransparency then
+        getgenv().SetToxUITransparency(v / 100, isDragging == true)
+    end
+    if getgenv().SyncValueVisuals then
+        getgenv().SyncValueVisuals("UITransparencyPct", v)
+    end
+end)
 local function AddColorSwatchRow(name, colorKey)
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, 0, 0, 34)
@@ -847,6 +890,7 @@ local function AddColorSwatchRow(name, colorKey)
     local sc = Instance.new("UICorner") sc.CornerRadius = UDim.new(0, 4) sc.Parent = swatch
     local ss = Instance.new("UIStroke") ss.Color = Theme.Outline ss.Thickness = 1 ss.Parent = swatch
     RegisterThemedObject(ss, "Color", "Outline")
+    RegisterThemedObject(swatch, "BackgroundColor3", colorKey)
     swatch.MouseButton1Click:Connect(function()
         OpenColorPicker(colorKey, swatch)
     end)
@@ -1022,6 +1066,12 @@ task.spawn(function()
                 and k ~= "WindowGradient"
                 and k ~= "Render3D"
                 and k ~= "MobileToggle"
+                and k ~= "Watermark"
+                and k ~= "UIRainbow"
+                and k ~= "CustomAccentActive"
+                and k ~= "CollapseSidebar"
+                and k ~= "DimBackground"
+                and k ~= "AutoCloseExecute"
                 and k ~= "MM2AutoFarmAvoidMurderer"
                 and k ~= "MM2VoteInfinite" then
                     activeFeatures = activeFeatures + 1
@@ -1078,6 +1128,9 @@ do
 local SubGuisPreKeyHiddenState = getgenv().SubGuisPreKeyHiddenState or {}
 getgenv().SubGuisPreKeyHiddenState = SubGuisPreKeyHiddenState
 local function ToggleToxGui(forceVisible)
+    if getgenv().CloseToxDropdownOverlay then
+        pcall(getgenv().CloseToxDropdownOverlay)
+    end
     local targetVisible = forceVisible
     if targetVisible == nil then
         targetVisible = not Main.Visible

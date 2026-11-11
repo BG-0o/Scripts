@@ -233,10 +233,37 @@ CreateToggleWithValue("ESP Max Dist", VisualsPage, Settings.EspMaxDistEnabled ==
 end, function(val)
     SetCurrentESPMAX(val)
 end, "EspMaxDistEnabled")
-CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", "Magenta", "Orange", "Purple", "Lime", "Pink", "Gold"}, VisualsPage, Settings.EspColorName, function(v)
+CreateDropdown("ESP Color", {"White", "Red", "Green", "Blue", "Yellow", "Cyan", "Magenta", "Orange", "Purple", "Lime", "Pink", "Gold", "Custom"}, VisualsPage, Settings.EspColorName or "White", function(v)
     Settings.EspColorName = v
-    Settings.EspColor = ColorMap[v] or Color3.fromRGB(255, 255, 255)
+    if v ~= "Custom" then
+        Settings.EspColor = ColorMap[v] or Color3.fromRGB(255, 255, 255)
+    end
 end)
+if env.CreateButton then
+    env.CreateButton("🎨 Pick Custom ESP Color (HSV)", VisualsPage, function()
+        local ui = getgenv().ToxUI
+        local opener = (ui and ui.OpenColorPicker) or getgenv().OpenToxColorPicker
+        if opener then
+            opener({
+                Title = "ESP Color (HSV)",
+                InitialColor = Settings.EspColor or Color3.fromRGB(255, 255, 255),
+                OnChanged = function(col, isFinal)
+                    Settings.EspColor = col
+                    Settings.EspColorName = "Custom"
+                    if Settings.VisualRainbow then
+                        Settings.VisualRainbow = false
+                        if getgenv().SyncToggleVisuals then
+                            getgenv().SyncToggleVisuals("VisualRainbow", false)
+                        end
+                    end
+                    if isFinal then
+                        AutoSaveConfiguration()
+                    end
+                end
+            })
+        end
+    end)
+end
 BeginUniversalSection("Lighting")
 CreateToggle(
     "Fullbright",

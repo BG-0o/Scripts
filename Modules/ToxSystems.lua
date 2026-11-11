@@ -1653,21 +1653,23 @@ local function InitToxControlGui()
             0
         )
 
+    local uiTheme = env.Theme
     controlGui.BackgroundColor3 =
-        Color3.fromRGB(
-            12,
-            12,
-            20
-        )
+        (uiTheme and uiTheme.Panel)
+        or Color3.fromRGB(16, 16, 26)
 
     controlGui.BorderSizePixel = 0
     controlGui.ClipsDescendants = true
     controlGui.Visible = true
     controlGui.ScrollBarThickness = 4
-    controlGui.ScrollBarImageColor3 = MAIN_COLOR
+    controlGui.ScrollBarImageColor3 = (uiTheme and uiTheme.Accent) or MAIN_COLOR
     controlGui.CanvasSize = UDim2.new(0, 0, 0, 418)
     controlGui.ScrollingDirection = Enum.ScrollingDirection.Y
     controlGui.Parent = ControlPage
+    if env.RegisterThemedObject then
+        env.RegisterThemedObject(controlGui, "BackgroundColor3", "Panel")
+        env.RegisterThemedObject(controlGui, "ScrollBarImageColor3", "Accent")
+    end
 
     MakeCorner(
         controlGui,
@@ -1677,9 +1679,13 @@ local function InitToxControlGui()
     local stroke =
         Instance.new("UIStroke")
 
-    stroke.Color = MAIN_COLOR
-    stroke.Thickness = 2
+    stroke.Color = (uiTheme and uiTheme.Outline) or MAIN_COLOR
+    stroke.Thickness = 1
+    stroke.Transparency = 0.32
     stroke.Parent = controlGui
+    if env.RegisterThemedObject then
+        env.RegisterThemedObject(stroke, "Color", "Outline")
+    end
 
     local topBar =
         Instance.new("Frame")
@@ -1693,10 +1699,14 @@ local function InitToxControlGui()
         )
 
     topBar.BackgroundColor3 =
-        Color3.fromRGB(16, 16, 26)
+        (uiTheme and uiTheme.Element)
+        or Color3.fromRGB(22, 22, 34)
 
     topBar.BorderSizePixel = 0
     topBar.Parent = controlGui
+    if env.RegisterThemedObject then
+        env.RegisterThemedObject(topBar, "BackgroundColor3", "Element")
+    end
 
     local title =
         Instance.new("TextLabel")
@@ -1720,11 +1730,11 @@ local function InitToxControlGui()
     title.BackgroundTransparency = 1
     title.Text = "CONTROL"
     title.TextColor3 =
-        Color3.fromRGB(
-            255,
-            255,
-            255
-        )
+        (uiTheme and uiTheme.Text)
+        or Color3.fromRGB(255, 255, 255)
+    if env.RegisterThemedObject then
+        env.RegisterThemedObject(title, "TextColor3", "Text")
+    end
 
     title.Font =
         Enum.Font.GothamBold

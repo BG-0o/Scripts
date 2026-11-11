@@ -1866,16 +1866,21 @@ function CreatePlayerSelector()
         return
     end
 
+    local uiTheme = getgenv().Theme
+    local regTheme = getgenv().RegisterThemedObject or function() end
     PlayerSelectorFrame = Instance.new("Frame")
     PlayerSelectorFrame.Name = "ToxMM2PlayerSelector"
     PlayerSelectorFrame.Size = UDim2.new(0, 350, 0, 300)
     PlayerSelectorFrame.Position = UDim2.new(0.5, -175, 0.5, -150)
-    PlayerSelectorFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+    PlayerSelectorFrame.BackgroundColor3 = (uiTheme and uiTheme.Panel) or Color3.fromRGB(16, 16, 26)
     PlayerSelectorFrame.BorderSizePixel = 0
     PlayerSelectorFrame.Visible = false
     PlayerSelectorFrame.Active = true
     PlayerSelectorFrame.ClipsDescendants = true
     PlayerSelectorFrame.Parent = gui
+    regTheme(PlayerSelectorFrame, "BackgroundColor3", "Panel")
+    if getgenv().ApplySavedGuiPosition then getgenv().ApplySavedGuiPosition("MM2PlayerSelector", PlayerSelectorFrame) end
+    if getgenv().TrackGuiPosition then getgenv().TrackGuiPosition("MM2PlayerSelector", PlayerSelectorFrame) end
 
     if getgenv().RegisterToxLinkedSubGui then
         getgenv().RegisterToxLinkedSubGui(
@@ -1889,15 +1894,18 @@ function CreatePlayerSelector()
     frameCorner.Parent = PlayerSelectorFrame
 
     local frameStroke = Instance.new("UIStroke")
-    frameStroke.Color = MAIN_COLOR
-    frameStroke.Thickness = 2
+    frameStroke.Color = (uiTheme and uiTheme.Accent) or MAIN_COLOR
+    frameStroke.Thickness = 1
+    frameStroke.Transparency = 0.25
     frameStroke.Parent = PlayerSelectorFrame
+    regTheme(frameStroke, "Color", "Accent")
 
     local topBar = Instance.new("Frame")
     topBar.Size = UDim2.new(1, 0, 0, 32)
-    topBar.BackgroundColor3 = MAIN_COLOR
+    topBar.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(22, 22, 34)
     topBar.BorderSizePixel = 0
     topBar.Parent = PlayerSelectorFrame
+    regTheme(topBar, "BackgroundColor3", "Element")
 
     if getgenv().RegisterToxSubGuiMinimize then
         getgenv().RegisterToxSubGuiMinimize(
@@ -1915,22 +1923,25 @@ function CreatePlayerSelector()
     PlayerSelectorTitle.Position = UDim2.new(0, 10, 0, 0)
     PlayerSelectorTitle.BackgroundTransparency = 1
     PlayerSelectorTitle.Text = "Target"
-    PlayerSelectorTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    PlayerSelectorTitle.TextColor3 = (uiTheme and uiTheme.Text) or Color3.fromRGB(255, 255, 255)
     PlayerSelectorTitle.Font = Enum.Font.GothamBold
     PlayerSelectorTitle.TextSize = 13
     PlayerSelectorTitle.TextXAlignment = Enum.TextXAlignment.Left
     PlayerSelectorTitle.Parent = topBar
+    regTheme(PlayerSelectorTitle, "TextColor3", "Text")
 
     local closeButton = Instance.new("TextButton")
     closeButton.Size = UDim2.new(0, 22, 0, 20)
     closeButton.Position = UDim2.new(1, -26, 0.5, -10)
-    closeButton.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
+    closeButton.BackgroundColor3 = (uiTheme and uiTheme.Panel) or Color3.fromRGB(16, 16, 26)
     closeButton.BorderSizePixel = 0
     closeButton.Text = "X"
-    closeButton.TextColor3 = Color3.fromRGB(210, 210, 220)
+    closeButton.TextColor3 = (uiTheme and uiTheme.DimText) or Color3.fromRGB(180, 180, 200)
     closeButton.Font = Enum.Font.GothamBold
     closeButton.TextSize = 11
     closeButton.Parent = topBar
+    regTheme(closeButton, "BackgroundColor3", "Panel")
+    regTheme(closeButton, "TextColor3", "DimText")
 
     local closeCorner = Instance.new("UICorner")
     closeCorner.CornerRadius = UDim.new(0, 4)
@@ -1939,16 +1950,19 @@ function CreatePlayerSelector()
     PlayerSelectorInput = Instance.new("TextBox")
     PlayerSelectorInput.Size = UDim2.new(1, -108, 0, 30)
     PlayerSelectorInput.Position = UDim2.new(0, 8, 0, 40)
-    PlayerSelectorInput.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+    PlayerSelectorInput.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(22, 22, 34)
     PlayerSelectorInput.BorderSizePixel = 0
     PlayerSelectorInput.Text = ""
     PlayerSelectorInput.PlaceholderText = "Username / DisplayName / UserId"
-    PlayerSelectorInput.TextColor3 = Color3.fromRGB(245, 245, 245)
-    PlayerSelectorInput.PlaceholderColor3 = Color3.fromRGB(125, 125, 145)
+    PlayerSelectorInput.TextColor3 = (uiTheme and uiTheme.Text) or Color3.fromRGB(245, 245, 245)
+    PlayerSelectorInput.PlaceholderColor3 = (uiTheme and uiTheme.DimText) or Color3.fromRGB(125, 125, 145)
     PlayerSelectorInput.Font = Enum.Font.Gotham
     PlayerSelectorInput.TextSize = 11
     PlayerSelectorInput.ClearTextOnFocus = false
     PlayerSelectorInput.Parent = PlayerSelectorFrame
+    regTheme(PlayerSelectorInput, "BackgroundColor3", "Element")
+    regTheme(PlayerSelectorInput, "TextColor3", "Text")
+    regTheme(PlayerSelectorInput, "PlaceholderColor3", "DimText")
 
     local inputCorner = Instance.new("UICorner")
     inputCorner.CornerRadius = UDim.new(0, 4)
@@ -1957,13 +1971,14 @@ function CreatePlayerSelector()
     local addButton = Instance.new("TextButton")
     addButton.Size = UDim2.new(0, 92, 0, 30)
     addButton.Position = UDim2.new(1, -100, 0, 40)
-    addButton.BackgroundColor3 = MAIN_COLOR
+    addButton.BackgroundColor3 = (uiTheme and uiTheme.Accent) or MAIN_COLOR
     addButton.BorderSizePixel = 0
     addButton.Text = "Add"
     addButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     addButton.Font = Enum.Font.GothamBold
     addButton.TextSize = 11
     addButton.Parent = PlayerSelectorFrame
+    regTheme(addButton, "BackgroundColor3", "Accent")
 
     local addCorner = Instance.new("UICorner")
     addCorner.CornerRadius = UDim.new(0, 4)
@@ -1975,9 +1990,10 @@ function CreatePlayerSelector()
     PlayerSelectorScroll.BackgroundTransparency = 1
     PlayerSelectorScroll.BorderSizePixel = 0
     PlayerSelectorScroll.ScrollBarThickness = 3
-    PlayerSelectorScroll.ScrollBarImageColor3 = MAIN_COLOR
+    PlayerSelectorScroll.ScrollBarImageColor3 = (uiTheme and uiTheme.Accent) or MAIN_COLOR
     PlayerSelectorScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
     PlayerSelectorScroll.Parent = PlayerSelectorFrame
+    regTheme(PlayerSelectorScroll, "ScrollBarImageColor3", "Accent")
 
     local layout = Instance.new("UIListLayout")
     layout.Padding = UDim.new(0, 5)
@@ -1992,13 +2008,14 @@ function CreatePlayerSelector()
     PlayerSelectorAction = Instance.new("TextButton")
     PlayerSelectorAction.Size = UDim2.new(1, -16, 0, 30)
     PlayerSelectorAction.Position = UDim2.new(0, 8, 1, -36)
-    PlayerSelectorAction.BackgroundColor3 = MAIN_COLOR
+    PlayerSelectorAction.BackgroundColor3 = (uiTheme and uiTheme.Accent) or MAIN_COLOR
     PlayerSelectorAction.BorderSizePixel = 0
     PlayerSelectorAction.Text = "Kill Selected (0)"
     PlayerSelectorAction.TextColor3 = Color3.fromRGB(255, 255, 255)
     PlayerSelectorAction.Font = Enum.Font.GothamBold
     PlayerSelectorAction.TextSize = 11
     PlayerSelectorAction.Parent = PlayerSelectorFrame
+    regTheme(PlayerSelectorAction, "BackgroundColor3", "Accent")
 
     local actionCorner = Instance.new("UICorner")
     actionCorner.CornerRadius = UDim.new(0, 4)
@@ -2404,16 +2421,21 @@ function CreateRoundTimerFrame()
         return
     end
 
+    local uiTheme = getgenv().Theme
+    local regTheme = getgenv().RegisterThemedObject or function() end
     RoundTimerFrame = Instance.new("Frame")
     RoundTimerFrame.Name = "ToxMM2RoundTimerFrame"
     RoundTimerFrame.Size = UDim2.new(0, 150, 0, 38)
     RoundTimerFrame.Position = UDim2.new(0.5, -75, 0, 84)
-    RoundTimerFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
-    RoundTimerFrame.BackgroundTransparency = 0.25
+    RoundTimerFrame.BackgroundColor3 = (uiTheme and uiTheme.Panel) or Color3.fromRGB(16, 16, 26)
+    RoundTimerFrame.BackgroundTransparency = math.clamp(tonumber(Settings.ToxUITransparency) or 0, 0, 0.9)
     RoundTimerFrame.BorderSizePixel = 0
     RoundTimerFrame.Active = true
     RoundTimerFrame.Visible = false
     RoundTimerFrame.Parent = gui
+    regTheme(RoundTimerFrame, "BackgroundColor3", "Panel")
+    if getgenv().ApplySavedGuiPosition then getgenv().ApplySavedGuiPosition("MM2RoundTimer", RoundTimerFrame) end
+    if getgenv().TrackGuiPosition then getgenv().TrackGuiPosition("MM2RoundTimer", RoundTimerFrame) end
 
     if getgenv().RegisterToxLinkedSubGui then
         getgenv().RegisterToxLinkedSubGui("MM2RoundTimer", RoundTimerFrame)
@@ -2428,10 +2450,11 @@ function CreateRoundTimerFrame()
     corner.Parent = RoundTimerFrame
 
     local stroke = Instance.new("UIStroke")
-    stroke.Color = MAIN_COLOR
+    stroke.Color = (uiTheme and uiTheme.Accent) or MAIN_COLOR
     stroke.Thickness = 1
     stroke.Transparency = 0.25
     stroke.Parent = RoundTimerFrame
+    regTheme(stroke, "Color", "Accent")
 
     if MakeDraggable then
         MakeDraggable(RoundTimerFrame, RoundTimerFrame)
@@ -2442,10 +2465,11 @@ function CreateRoundTimerFrame()
     RoundTimerLabel.Position = UDim2.new(0, 6, 0, 0)
     RoundTimerLabel.BackgroundTransparency = 1
     RoundTimerLabel.Text = "Round: N/A"
-    RoundTimerLabel.TextColor3 = Color3.fromRGB(245, 245, 245)
+    RoundTimerLabel.TextColor3 = (uiTheme and uiTheme.Text) or Color3.fromRGB(245, 245, 245)
     RoundTimerLabel.Font = Enum.Font.GothamBold
     RoundTimerLabel.TextSize = 12
     RoundTimerLabel.Parent = RoundTimerFrame
+    regTheme(RoundTimerLabel, "TextColor3", "Text")
 end
 
 function SetRoundTimerVisible(enabled)
@@ -4411,7 +4435,22 @@ function IsInNormalLobbyArea(pos)
     if typeof(pos) ~= "Vector3" then
         return false
     end
-    return pos.Y > 70
+    local lobby = workspace:FindFirstChild("Lobby")
+    if lobby and lobby:IsA("Model") then
+        local ok, cf, size = pcall(function()
+            return lobby:GetBoundingBox()
+        end)
+        if ok and typeof(cf) == "CFrame" and typeof(size) == "Vector3" then
+            local rel = cf:PointToObjectSpace(pos)
+            local hx = size.X * 0.5 + 12
+            local hy = size.Y * 0.5 + 18
+            local hz = size.Z * 0.5 + 12
+            if math.abs(rel.X) <= hx and math.abs(rel.Y) <= hy and math.abs(rel.Z) <= hz then
+                return true
+            end
+        end
+    end
+    return pos.Y > 105 and math.abs(pos.X + 108) < 130 and math.abs(pos.Z + 10) < 130
 end
 
 function GetLoadedMM2MapModel()
@@ -4804,14 +4843,6 @@ function StopAutoFarm(restore)
     if restore then
         RestoreAutoFarmPosition()
         RunService.Heartbeat:Wait()
-    elseif root and IsAutoFarmRoundActive() and not IsInSafeLobbyArea(root.Position) then
-        local safePos = FindSafeFloorAbovePosition(root.Position)
-        if safePos and safePos.Y > root.Position.Y + 2 and (safePos.Y - root.Position.Y) < 20 then
-            local allow = getgenv().AllowToxTeleport
-            if allow then allow(0.4, "MM2 Farm Surface") end
-            root.CFrame = CFrame.new(safePos)
-            root.AssemblyLinearVelocity = Vector3.zero
-        end
     end
 
     SetFarmCollision(true)
@@ -6040,8 +6071,14 @@ function TweenSegment(startPosition, targetPosition, speed, coin)
     end
 
     local direction = delta.Unit
-    local duration = math.max(distance / math.max(speed, 1), 0.02)
+    local moveSpeed = math.max(speed, 1)
+    local duration = math.max(distance / moveSpeed, 0.02)
     local startTime = os.clock()
+    local moveVelocity = Vector3.new(
+        direction.X * moveSpeed,
+        math.clamp(direction.Y * moveSpeed, -45, 45),
+        direction.Z * moveSpeed
+    )
 
     local serialBefore = AutoFarmCoinSerial
     local bagBefore = AutoFarmBagCoins
@@ -6075,14 +6112,14 @@ function TweenSegment(startPosition, targetPosition, speed, coin)
 
         local position = startPosition + delta * alpha
 
-        if not SetAutoFarmCoinPosition(position, Vector3.zero, direction) then
+        if not SetAutoFarmCoinPosition(position, moveVelocity, direction) then
             AutoFarmActivelyTweening = false
             return false
         end
 
         if coin then
             local dist = (coin.Position - position).Magnitude
-            if dist <= 10 then
+            if dist <= 8.5 then
                 TouchCoin(coin)
                 if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
                     AutoFarmActivelyTweening = false
@@ -6092,6 +6129,10 @@ function TweenSegment(startPosition, targetPosition, speed, coin)
         end
 
         if alpha >= 1 then
+            if coin and IsCoinValid(coin) then
+                TouchCoin(coin)
+                RegisterFarmCoinCollected(coin, serialBefore, bagBefore)
+            end
             AutoFarmActivelyTweening = false
             return true
         end
@@ -6279,9 +6320,9 @@ function CollectFarmCoin(coin, mode)
     end
 
     AutoFarmAtCoin = true
-    SetAutoFarmCoinPosition(holdPos, Vector3.zero)
+    SetAutoFarmCoinPosition(holdPos, Vector3.new(0, 0.1, 0))
 
-    local holdUntil = os.clock() + 0.09
+    local holdUntil = os.clock() + 0.06
 
     while Settings.MM2AutoFarmV2
     and generation == AutoFarmGeneration
@@ -6293,7 +6334,6 @@ function CollectFarmCoin(coin, mode)
     and AutoFarmHumanoid.Health > 0
     and IsAutoFarmPlayerEligible()
     and os.clock() <= holdUntil do
-        SetAutoFarmCoinPosition(holdPos, Vector3.zero)
         TouchCoin(coin)
 
         if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
@@ -6314,23 +6354,15 @@ function CollectFarmCoin(coin, mode)
     and AutoFarmRoot
     and AutoFarmRoot.Parent
     and IsAutoFarmPlayerEligible() then
-        local closePos = coinPos - Vector3.new(0, 2.5, 0)
+        local closePos = coinPos - Vector3.new(0, 3.0, 0)
         local speedValue = math.clamp(tonumber(Settings.MM2AutoFarmSpeed) or 5, 1, 250)
-        local nudgeSpeed = math.clamp(math.max(speedValue * 4, 28), AutoFarmMinTweenSpeed, 120)
+        local nudgeSpeed = math.clamp(math.max(speedValue * 4, 24), AutoFarmMinTweenSpeed, 120)
         if AutoFarmRoot.Position.Y < closePos.Y - 0.5 then
             TweenSegment(AutoFarmRoot.Position, closePos, nudgeSpeed, coin)
         end
         if IsCoinValid(coin) and not IsFarmBagFull() and AutoFarmRoot and AutoFarmRoot.Parent and IsAutoFarmPlayerEligible() then
             TouchCoin(coin)
             RegisterFarmCoinCollected(coin, serialBefore, bagBefore)
-        end
-        if Settings.MM2AutoFarmV2
-        and not IsFarmBagFull()
-        and AutoFarmRoot
-        and AutoFarmRoot.Parent
-        and IsAutoFarmPlayerEligible()
-        and AutoFarmRoot.Position.Y > holdPos.Y + 0.5 then
-            TweenSegment(AutoFarmRoot.Position, holdPos, nudgeSpeed, nil)
         end
     end
 
@@ -6401,9 +6433,10 @@ function AutoFarmCoin(coin)
         return true
     end
 
-    -- ENTRY FROM LOBBY (Y > 70) OR SAFE LOBBY (Y < -30 / SafeLobbyArea)
+    -- ENTRY FROM LOBBY (inside Lobby model / Y > 105) OR SAFE LOBBY (Y < -30 / SafeLobbyArea)
     local currentPosition = AutoFarmRoot.Position
-    if IsInNormalLobbyArea(currentPosition) or IsInSafeLobbyArea(currentPosition) then
+    if IsInSafeLobbyArea(currentPosition)
+    or (IsInNormalLobbyArea(currentPosition) and travelPosition.Y < currentPosition.Y - 12) then
         local entryPos = GetMethodEntryPosition(coin, mode)
         if entryPos then
             local allow = getgenv().AllowToxTeleport
@@ -6483,9 +6516,6 @@ AddConnection(RunService.Stepped:Connect(function()
             end
         end
     end
-
-    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
-    AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
 end))
 
 AddConnection(RunService.Heartbeat:Connect(function()
@@ -6504,14 +6534,16 @@ AddConnection(RunService.Heartbeat:Connect(function()
     end
 
     AutoFarmRoot.Anchored = false
-    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
     AutoFarmHumanoid.PlatformStand = false
     AutoFarmHumanoid.Sit = false
     AutoFarmHumanoid.AutoRotate = true
 
-    if AutoFarmWaitHoldPosition and not AutoFarmActivelyTweening then
-        AutoFarmRoot.CFrame = CFrame.new(AutoFarmWaitHoldPosition)
+    if not AutoFarmActivelyTweening and not AutoFarmAtCoin then
+        local vel = AutoFarmRoot.AssemblyLinearVelocity
+        if vel.Y < -0.5 then
+            AutoFarmRoot.AssemblyLinearVelocity = Vector3.new(vel.X, 0, vel.Z)
+        end
     end
 end))
 
@@ -6587,10 +6619,7 @@ task.spawn(function()
 
                 task.wait(0.15)
             elseif not roundActive then
-                local mode = GetActiveAutoFarmMode()
-                if AutoFarmPrepared and currentContainer ~= nil and (mode == "Underground" or mode == "Sky") and root and not IsInSafeLobbyArea(root.Position) then
-                    AutoFarmWaitHoldPosition = AutoFarmWaitHoldPosition or root.Position
-                elseif AutoFarmPrepared then
+                if AutoFarmPrepared then
                     StopAutoFarm(false)
                 end
 
@@ -6609,11 +6638,8 @@ task.spawn(function()
                 local coin, bestMurderDist = GetBestCoin(origin, false)
                 local mode = GetActiveAutoFarmMode()
 
-                if coin and Settings.MM2AutoFarmAvoidMurderer ~= false and mode == "Tween" and bestMurderDist < 12 and root then
-                    if AutoFarmPrepared then
-                        AutoFarmWaitHoldPosition = AutoFarmWaitHoldPosition or root.Position
-                    end
-                    task.wait(0.15)
+                if coin and Settings.MM2AutoFarmAvoidMurderer ~= false and mode == "Tween" and bestMurderDist < 9 and root then
+                    task.wait(0.12)
                 elseif coin then
                     AutoFarmWaitHoldPosition = nil
                     local ok = AutoFarmCoin(coin)

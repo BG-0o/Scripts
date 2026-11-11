@@ -195,6 +195,26 @@ getgenv().Settings = {
     MM2VoteInfinite = true,
     ToxUITheme = "Dark Neon",
     ToxUITransparency = 0,
+    Theme = nil,
+    CustomAccentActive = false,
+    UIRainbow = false,
+    UIRainbowSpeed = 35,
+    SidebarExpandedWidth = 175,
+    Watermark = true,
+    DimBackground = false,
+    AutoCloseExecute = false,
+    WindowGradient = false,
+    AutoScaleScreen = true,
+    DraggableCards = true,
+    CardLayoutOrder = {},
+    Weather = "Off",
+    WeatherArea = "Full",
+    WeatherAmount = 100,
+    WeatherSize = 100,
+    WallpaperUrl = "",
+    WallpaperDim = 0.25,
+    CustomIconUrl = "",
+    PinnedOrder = nil,
     ADMINPrefix = ".",
     ADMINKillTarget = "",
     ADMINKillAll = false,
@@ -217,8 +237,45 @@ getgenv().Settings = {
     CFAutoFarm = false,
     ADAutoFarm = false
 }
+local UIPreferenceKeys = {
+    Theme = true,
+    ToxUITheme = true,
+    ToxUITransparency = true,
+    GUIColorName = true,
+    CustomAccentActive = true,
+    UIRainbow = true,
+    UIRainbowSpeed = true,
+    GUISizes = true,
+    GUIScales = true,
+    GUIKeybind = true,
+    MobileToggle = true,
+    CollapseSidebar = true,
+    SidebarExpandedWidth = true,
+    Watermark = true,
+    DimBackground = true,
+    AutoCloseExecute = true,
+    WindowGradient = true,
+    AutoScaleScreen = true,
+    DraggableCards = true,
+    CardLayoutOrder = true,
+    Weather = true,
+    WeatherArea = true,
+    WeatherAmount = true,
+    WeatherSize = true,
+    WallpaperUrl = true,
+    WallpaperDim = true,
+    CustomIconUrl = true,
+    MusicVolume = true,
+    PinnedOrder = true,
+    ToxServerInfoVisible = true,
+    ToxServerInfoMode = true,
+    AutoExecute = true
+}
 local PersistedSettingKeys = {}
 for key in pairs(getgenv().Settings) do
+    PersistedSettingKeys[key] = true
+end
+for key in pairs(UIPreferenceKeys) do
     PersistedSettingKeys[key] = true
 end
 getgenv().SavedIDs = {}
@@ -306,6 +363,11 @@ local MusicIDsFilePath =
 local JoinGamesFilePath =
     FolderName
     .. "/saved_join_games.json"
+local UIProfileFilePath =
+    FolderName
+    .. "/ui_profile_"
+    .. tostring(Player.UserId)
+    .. ".json"
 local LegacyConfigFilePath =
     FolderName
     .. "/config.json"
@@ -971,9 +1033,9 @@ local function ApplyLoadedSetting(key, savedValue)
     end
     if key == "EspColorName" then
         Settings.EspColorName = value
-        Settings.EspColor =
-            ColorMap[value]
-            or Settings.EspColor
+        if value ~= "Custom" and ColorMap[value] then
+            Settings.EspColor = ColorMap[value]
+        end
     elseif key == "EspColor"
     and typeof(value) == "Color3" then
         Settings.EspColor = value
@@ -1082,12 +1144,86 @@ local function HasSavedConfigForCurrentPlace()
     end
     return false, nil, false
 end
+local function SaveSharedUIProfile(savedTimestamp)
+    EnsureFolder()
+    if not writefile then
+        return false
+    end
+    local uiSettings = {}
+    for key in pairs(UIPreferenceKeys) do
+        if Settings[key] ~= nil then
+            uiSettings[key] = SerializeConfigValue(Settings[key])
+        end
+    end
+    local guiKeyName = "NONE"
+    if Settings.GUIKeybind and typeof(Settings.GUIKeybind) == "EnumItem" then
+        guiKeyName = Settings.GUIKeybind.Name
+    end
+    local payload = {
+        Version = 1,
+        SavedAt = tonumber(savedTimestamp) or os.time(),
+        GlobalGUIKeybind = guiKeyName,
+        UISettings = uiSettings,
+        UIPositions = SerializeConfigValue(getgenv().UIPositions or {})
+    }
+    return pcall(function()
+        writefile(UIProfileFilePath, HttpService:JSONEncode(payload))
+    end)
+end
+local function LoadSharedUIProfile(placeSavedAt)
+    if not isfile or not readfile or not isfile(UIProfileFilePath) then
+        return false
+    end
+    local applied = false
+    pcall(function()
+        local raw = readfile(UIProfileFilePath)
+        if not raw or raw == "" then
+            return
+        end
+        local data = HttpService:JSONDecode(raw)
+        if typeof(data) ~= "table" then
+            return
+        end
+        local profileTime = tonumber(data.SavedAt) or 0
+        if placeSavedAt and placeSavedAt > profileTime then
+            return
+        end
+        if typeof(data.UISettings) == "table" then
+            for key, savedValue in pairs(data.UISettings) do
+                if UIPreferenceKeys[key] then
+                    ApplyLoadedSetting(key, savedValue)
+                end
+            end
+        end
+        if data.GlobalGUIKeybind ~= nil then
+            local keyName = tostring(data.GlobalGUIKeybind)
+            if keyName == "NONE" or keyName == "" then
+                Settings.GUIKeybind = nil
+            else
+                local ok, enumItem = pcall(function()
+                    return Enum.KeyCode[keyName]
+                end)
+                if ok and enumItem then
+                    Settings.GUIKeybind = enumItem
+                end
+            end
+        end
+        if data.UIPositions ~= nil then
+            local decodedPos = DeserializeConfigValue(data.UIPositions)
+            if typeof(decodedPos) == "table" then
+                getgenv().UIPositions = decodedPos
+            end
+        end
+        applied = true
+    end)
+    return applied
+end
 getgenv().HasSavedConfigForCurrentPlace = HasSavedConfigForCurrentPlace
 getgenv().AutoSaveConfiguration = function(force)
     if getgenv().Destroyed then
         return false
     end
-    if getgenv().ToxOptionsReady == false then
+    if not force and getgenv().ToxOptionsReady == false then
         return false
     end
     if not force and getgenv().ToxAutoSaveEnabled ~= true then
@@ -1195,23 +1331,26 @@ getgenv().AutoSaveConfiguration = function(force)
         or getgenv().ToxConfigLastSavedAt
     SaveSharedMusicIDs()
     SaveSharedJoinGames()
+    SaveSharedUIProfile(data.SavedAt)
     return primaryOK
 end
 local function LoadConfiguration()
     if not readfile then
+        getgenv().ToxAutoSaveEnabled = true
         return
     end
     local hasSave, sourcePath, migratedFromLegacy = HasSavedConfigForCurrentPlace()
     if not hasSave or not sourcePath then
         getgenv().ToxHasPlaceConfig = false
-        getgenv().ToxAutoSaveEnabled = false
+        getgenv().ToxAutoSaveEnabled = true
         for key, value in pairs(Settings) do
-            if typeof(value) == "boolean" and key ~= "Render3D" then
+            if typeof(value) == "boolean" and key ~= "Render3D" and not UIPreferenceKeys[key] then
                 Settings[key] = false
             end
         end
         Settings.Render3D = true
         Settings.Render3DDisabled = false
+        LoadSharedUIProfile(nil)
         return
     end
     getgenv().ToxHasPlaceConfig = true
@@ -1343,6 +1482,7 @@ local function LoadConfiguration()
             end
         end
         loaded = true
+        LoadSharedUIProfile(tonumber(data.SavedAt) or 0)
     end)
     if loaded
     and (migratedFromLegacy or strictPlaceMigration) then
@@ -1358,7 +1498,7 @@ local function DisableUnsupportedGameActions()
         return
     end
     for key, value in pairs(Settings) do
-        if typeof(value) == "boolean" then
+        if typeof(value) == "boolean" and not UIPreferenceKeys[key] then
             Settings[key] = false
         end
     end
@@ -1460,6 +1600,7 @@ end
 if typeof(Settings.GUISizes) ~= "table" then
     Settings.GUISizes = {}
 end
+Settings.ToxUITransparency = math.clamp(tonumber(Settings.ToxUITransparency) or 0, 0, 1)
 local LoadedGUIColor =
     GUIColorMap[
         tostring(
@@ -1467,7 +1608,12 @@ local LoadedGUIColor =
             or "Blue"
         )
     ]
-if LoadedGUIColor then
+if Settings.CustomAccentActive == true
+and typeof(Settings.Theme) == "table"
+and typeof(Settings.Theme.Accent) == "Color3" then
+    MAIN_COLOR = Settings.Theme.Accent
+    getgenv().MAIN_COLOR = MAIN_COLOR
+elseif LoadedGUIColor then
     MAIN_COLOR = LoadedGUIColor
     getgenv().MAIN_COLOR = MAIN_COLOR
 else

@@ -15,6 +15,8 @@ getgenv().ToxModule2SplitVersion = "2026-09-16-lighting-controller-2"
 local Players = game:GetService("Players")
 local TextChatService = game:GetService("TextChatService")
 local SoundService = game:GetService("SoundService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local Player = Players.LocalPlayer
 local env = getgenv()
 if env.Destroyed then
@@ -43,29 +45,39 @@ local ChatLogGui = Instance.new("Frame")
 ChatLogGui.Name = "ChatLogFrame"
 ChatLogGui.Size = UDim2.new(0, 360, 0, 240)
 ChatLogGui.Position = UDim2.new(0.5, 180, 0.5, -120)
-ChatLogGui.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+ChatLogGui.BackgroundColor3 = Theme.Panel
 ChatLogGui.BorderSizePixel = 0
 ChatLogGui.ClipsDescendants = true
 ChatLogGui.Visible = false
 ChatLogGui.Parent = Gui
 getgenv().ChatLogGui = ChatLogGui
+ApplySavedGuiPosition("ChatLogs", ChatLogGui)
+TrackGuiPosition("ChatLogs", ChatLogGui)
 local ChatLogCorner = Instance.new("UICorner") ChatLogCorner.CornerRadius = UDim.new(0, 8) ChatLogCorner.Parent = ChatLogGui
-local ChatLogStroke = Instance.new("UIStroke") ChatLogStroke.Color = MAIN_COLOR ChatLogStroke.Thickness = 2 ChatLogStroke.Parent = ChatLogGui
+local ChatLogStroke = Instance.new("UIStroke") ChatLogStroke.Color = Theme.Accent ChatLogStroke.Thickness = 1 ChatLogStroke.Transparency = 0.25 ChatLogStroke.Parent = ChatLogGui
 RegisterThemedObject(ChatLogStroke, "Color", "Accent")
 RegisterThemedObject(ChatLogGui, "BackgroundColor3", "Panel")
 local ChatLogTopBar = Instance.new("Frame")
 ChatLogTopBar.Size = UDim2.new(1, 0, 0, 32)
-ChatLogTopBar.BackgroundColor3 = MAIN_COLOR
-RegisterThemedObject(ChatLogTopBar, "BackgroundColor3", "Accent")
+ChatLogTopBar.BackgroundColor3 = Theme.Element
+RegisterThemedObject(ChatLogTopBar, "BackgroundColor3", "Element")
 ChatLogTopBar.BorderSizePixel = 0
 ChatLogTopBar.Parent = ChatLogGui
+local ChatLogTopBorder = Instance.new("Frame")
+ChatLogTopBorder.Size = UDim2.new(1, 0, 0, 1)
+ChatLogTopBorder.Position = UDim2.new(0, 0, 1, -1)
+ChatLogTopBorder.BackgroundColor3 = Theme.Outline
+ChatLogTopBorder.BorderSizePixel = 0
+ChatLogTopBorder.Parent = ChatLogTopBar
+RegisterThemedObject(ChatLogTopBorder, "BackgroundColor3", "Outline")
 MakeDraggable(ChatLogGui, ChatLogTopBar)
 local ChatLogTitle = Instance.new("TextLabel")
 ChatLogTitle.Size = UDim2.new(1, -110, 1, 0)
 ChatLogTitle.Position = UDim2.new(0, 10, 0, 0)
 ChatLogTitle.BackgroundTransparency = 1
 ChatLogTitle.Text = "Chat Logs"
-ChatLogTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+ChatLogTitle.TextColor3 = Theme.Text
+RegisterThemedObject(ChatLogTitle, "TextColor3", "Text")
 ChatLogTitle.Font = Enum.Font.GothamBold
 ChatLogTitle.TextSize = 13
 ChatLogTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -73,10 +85,12 @@ ChatLogTitle.Parent = ChatLogTopBar
 local ChatLogMinBtn = Instance.new("TextButton")
 ChatLogMinBtn.Size = UDim2.new(0, 24, 0, 22)
 ChatLogMinBtn.Position = UDim2.new(1, -88, 0.5, -11)
-ChatLogMinBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 35)
+ChatLogMinBtn.BackgroundColor3 = Theme.Panel
+RegisterThemedObject(ChatLogMinBtn, "BackgroundColor3", "Panel")
 ChatLogMinBtn.BorderSizePixel = 0
 ChatLogMinBtn.Text = "-"
-ChatLogMinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ChatLogMinBtn.TextColor3 = Theme.Text
+RegisterThemedObject(ChatLogMinBtn, "TextColor3", "Text")
 ChatLogMinBtn.Font = Enum.Font.GothamBold
 ChatLogMinBtn.TextSize = 14
 ChatLogMinBtn.Parent = ChatLogTopBar
@@ -84,10 +98,12 @@ local ChatLogMinCorner = Instance.new("UICorner") ChatLogMinCorner.CornerRadius 
 local ClearBtn = Instance.new("TextButton")
 ClearBtn.Size = UDim2.new(0, 52, 0, 22)
 ClearBtn.Position = UDim2.new(1, -60, 0.5, -11)
-ClearBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 35)
+ClearBtn.BackgroundColor3 = Theme.Panel
+RegisterThemedObject(ClearBtn, "BackgroundColor3", "Panel")
 ClearBtn.BorderSizePixel = 0
 ClearBtn.Text = "Clear"
-ClearBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ClearBtn.TextColor3 = Theme.Text
+RegisterThemedObject(ClearBtn, "TextColor3", "Text")
 ClearBtn.Font = Enum.Font.GothamBold
 ClearBtn.TextSize = 11
 ClearBtn.Parent = ChatLogTopBar
@@ -116,7 +132,8 @@ local function AddChatLog(sender, text)
     msgLabel.Size = UDim2.new(1, 0, 0, 18)
     msgLabel.BackgroundTransparency = 1
     msgLabel.Text = timeStr .. "[" .. sender .. "]: " .. text
-    msgLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+    msgLabel.TextColor3 = Theme.Text
+    RegisterThemedObject(msgLabel, "TextColor3", "Text")
     msgLabel.Font = Enum.Font.Gotham
     msgLabel.TextSize = 12
     msgLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -146,29 +163,39 @@ local WaypointsGui = Instance.new("Frame")
 WaypointsGui.Name = "ToxWaypointsFrame"
 WaypointsGui.Size = UDim2.new(0, 360, 0, 320)
 WaypointsGui.Position = UDim2.new(0.5, -180, 0.5, -160)
-WaypointsGui.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+WaypointsGui.BackgroundColor3 = Theme.Panel
 WaypointsGui.BorderSizePixel = 0
 WaypointsGui.ClipsDescendants = true
 WaypointsGui.Visible = false
 WaypointsGui.Parent = Gui
 getgenv().WaypointsGui = WaypointsGui
+ApplySavedGuiPosition("Waypoints", WaypointsGui)
+TrackGuiPosition("Waypoints", WaypointsGui)
 local WayCorner = Instance.new("UICorner") WayCorner.CornerRadius = UDim.new(0, 8) WayCorner.Parent = WaypointsGui
-local WayStroke = Instance.new("UIStroke") WayStroke.Color = MAIN_COLOR WayStroke.Thickness = 2 WayStroke.Parent = WaypointsGui
+local WayStroke = Instance.new("UIStroke") WayStroke.Color = Theme.Accent WayStroke.Thickness = 1 WayStroke.Transparency = 0.25 WayStroke.Parent = WaypointsGui
 RegisterThemedObject(WayStroke, "Color", "Accent")
 RegisterThemedObject(WaypointsGui, "BackgroundColor3", "Panel")
 local WayTopBar = Instance.new("Frame")
 WayTopBar.Size = UDim2.new(1, 0, 0, 32)
-WayTopBar.BackgroundColor3 = MAIN_COLOR
-RegisterThemedObject(WayTopBar, "BackgroundColor3", "Accent")
+WayTopBar.BackgroundColor3 = Theme.Element
+RegisterThemedObject(WayTopBar, "BackgroundColor3", "Element")
 WayTopBar.BorderSizePixel = 0
 WayTopBar.Parent = WaypointsGui
+local WayTopBorder = Instance.new("Frame")
+WayTopBorder.Size = UDim2.new(1, 0, 0, 1)
+WayTopBorder.Position = UDim2.new(0, 0, 1, -1)
+WayTopBorder.BackgroundColor3 = Theme.Outline
+WayTopBorder.BorderSizePixel = 0
+WayTopBorder.Parent = WayTopBar
+RegisterThemedObject(WayTopBorder, "BackgroundColor3", "Outline")
 MakeDraggable(WaypointsGui, WayTopBar)
 local WayTitle = Instance.new("TextLabel")
 WayTitle.Size = UDim2.new(1, -40, 1, 0)
 WayTitle.Position = UDim2.new(0, 10, 0, 0)
 WayTitle.BackgroundTransparency = 1
 WayTitle.Text = "Tox Waypoints"
-WayTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+WayTitle.TextColor3 = Theme.Text
+RegisterThemedObject(WayTitle, "TextColor3", "Text")
 WayTitle.Font = Enum.Font.GothamBold
 WayTitle.TextSize = 13
 WayTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -176,10 +203,12 @@ WayTitle.Parent = WayTopBar
 local WayCloseBtn = Instance.new("TextButton")
 WayCloseBtn.Size = UDim2.new(0, 22, 0, 20)
 WayCloseBtn.Position = UDim2.new(1, -26, 0.5, -10)
-WayCloseBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
+WayCloseBtn.BackgroundColor3 = Theme.Panel
+RegisterThemedObject(WayCloseBtn, "BackgroundColor3", "Panel")
 WayCloseBtn.BorderSizePixel = 0
 WayCloseBtn.Text = "X"
-WayCloseBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+WayCloseBtn.TextColor3 = Theme.DimText
+RegisterThemedObject(WayCloseBtn, "TextColor3", "DimText")
 WayCloseBtn.Font = Enum.Font.GothamBold
 WayCloseBtn.TextSize = 11
 WayCloseBtn.Parent = WayTopBar
@@ -193,14 +222,18 @@ local function CreateDarkBtn(text, pos, size, parent)
     local b = Instance.new("TextButton")
     b.Size = size
     b.Position = pos
-    b.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+    b.BackgroundColor3 = Theme.Element
     b.BorderSizePixel = 0
     b.Text = text
-    b.TextColor3 = Color3.fromRGB(255, 255, 255)
+    b.TextColor3 = Theme.Text
     b.Font = Enum.Font.GothamBold
     b.TextSize = 10
     b.Parent = parent
     local c = Instance.new("UICorner") c.CornerRadius = UDim.new(0, 4) c.Parent = b
+    local bs = Instance.new("UIStroke") bs.Color = Theme.Outline bs.Thickness = 1 bs.Transparency = 0.35 bs.Parent = b
+    RegisterThemedObject(b, "BackgroundColor3", "Element")
+    RegisterThemedObject(b, "TextColor3", "Text")
+    RegisterThemedObject(bs, "Color", "Outline")
     return b
 end
 getgenv().CreateDarkBtn = CreateDarkBtn
@@ -208,11 +241,12 @@ local function CreateWayCoordInput(placeholder, position)
     local box = Instance.new("TextBox")
     box.Size = UDim2.new(0.21, 0, 0, 26)
     box.Position = position
-    box.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    box.BackgroundColor3 = Theme.Element
     box.BorderSizePixel = 0
     box.PlaceholderText = placeholder
     box.Text = ""
-    box.TextColor3 = Color3.fromRGB(240, 240, 240)
+    box.TextColor3 = Theme.Text
+    box.PlaceholderColor3 = Theme.DimText
     box.Font = Enum.Font.Gotham
     box.TextSize = 10
     box.ClearTextOnFocus = false
@@ -220,6 +254,11 @@ local function CreateWayCoordInput(placeholder, position)
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 4)
     corner.Parent = box
+    local bs = Instance.new("UIStroke") bs.Color = Theme.Outline bs.Thickness = 1 bs.Transparency = 0.35 bs.Parent = box
+    RegisterThemedObject(box, "BackgroundColor3", "Element")
+    RegisterThemedObject(box, "TextColor3", "Text")
+    RegisterThemedObject(box, "PlaceholderColor3", "DimText")
+    RegisterThemedObject(bs, "Color", "Outline")
     return box
 end
 local WayInputArea = Instance.new("Frame")
@@ -230,10 +269,14 @@ WayInputArea.Parent = WayContent
 local WayNameInput = Instance.new("TextBox")
 WayNameInput.Size = UDim2.new(0.70, 0, 1, 0)
 WayNameInput.Position = UDim2.new(0, 0, 0, 0)
-WayNameInput.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+WayNameInput.BackgroundColor3 = Theme.Element
 WayNameInput.PlaceholderText = "Waypoint Name"
 WayNameInput.Text = ""
-WayNameInput.TextColor3 = Color3.fromRGB(240, 240, 240)
+WayNameInput.TextColor3 = Theme.Text
+WayNameInput.PlaceholderColor3 = Theme.DimText
+RegisterThemedObject(WayNameInput, "BackgroundColor3", "Element")
+RegisterThemedObject(WayNameInput, "TextColor3", "Text")
+RegisterThemedObject(WayNameInput, "PlaceholderColor3", "DimText")
 WayNameInput.Font = Enum.Font.Gotham
 WayNameInput.TextSize = 11
 WayNameInput.Parent = WayInputArea
@@ -250,7 +293,8 @@ WayScroll.Position = UDim2.new(0, 0, 0, 94)
 WayScroll.BackgroundTransparency = 1
 WayScroll.BorderSizePixel = 0
 WayScroll.ScrollBarThickness = 3
-WayScroll.ScrollBarImageColor3 = MAIN_COLOR
+WayScroll.ScrollBarImageColor3 = Theme.Accent
+RegisterThemedObject(WayScroll, "ScrollBarImageColor3", "Accent")
 WayScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 WayScroll.Parent = WayContent
 local WayLayout = Instance.new("UIListLayout")
@@ -290,16 +334,18 @@ RefreshWaypointsUI = function()
     for idx, wp in ipairs(SavedWaypoints) do
         local item = Instance.new("Frame")
         item.Size = UDim2.new(1, -4, 0, 28)
-        item.BackgroundColor3 = Color3.fromRGB(16, 16, 24)
+        item.BackgroundColor3 = Theme.Element
         item.BorderSizePixel = 0
         item.Parent = WayScroll
         local c = Instance.new("UICorner") c.CornerRadius = UDim.new(0, 4) c.Parent = item
+        RegisterThemedObject(item, "BackgroundColor3", "Element")
         local lbl = Instance.new("TextLabel")
         lbl.Size = UDim2.new(0.42, -4, 1, 0)
         lbl.Position = UDim2.new(0, 6, 0, 0)
         lbl.BackgroundTransparency = 1
         lbl.Text = wp.name
-        lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+        lbl.TextColor3 = Theme.Text
+        RegisterThemedObject(lbl, "TextColor3", "Text")
         lbl.Font = Enum.Font.Gotham
         lbl.TextSize = 11
         lbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -396,29 +442,39 @@ local MusicGui = Instance.new("Frame")
 MusicGui.Name = "ToxMusicPlayerFrame"
 MusicGui.Size = UDim2.new(0, 370, 0, 310)
 MusicGui.Position = UDim2.new(0.5, -185, 0.5, -155)
-MusicGui.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+MusicGui.BackgroundColor3 = Theme.Panel
 MusicGui.BorderSizePixel = 0
 MusicGui.ClipsDescendants = true
 MusicGui.Visible = false
 MusicGui.Parent = Gui
 getgenv().MusicGui = MusicGui
+ApplySavedGuiPosition("Music", MusicGui)
+TrackGuiPosition("Music", MusicGui)
 local MusicCorner = Instance.new("UICorner") MusicCorner.CornerRadius = UDim.new(0, 8) MusicCorner.Parent = MusicGui
-local MusicStroke = Instance.new("UIStroke") MusicStroke.Color = MAIN_COLOR MusicStroke.Thickness = 2 MusicStroke.Parent = MusicGui
+local MusicStroke = Instance.new("UIStroke") MusicStroke.Color = Theme.Accent MusicStroke.Thickness = 1 MusicStroke.Transparency = 0.25 MusicStroke.Parent = MusicGui
 RegisterThemedObject(MusicStroke, "Color", "Accent")
 RegisterThemedObject(MusicGui, "BackgroundColor3", "Panel")
 local MusicTopBar = Instance.new("Frame")
 MusicTopBar.Size = UDim2.new(1, 0, 0, 32)
-MusicTopBar.BackgroundColor3 = MAIN_COLOR
-RegisterThemedObject(MusicTopBar, "BackgroundColor3", "Accent")
+MusicTopBar.BackgroundColor3 = Theme.Element
+RegisterThemedObject(MusicTopBar, "BackgroundColor3", "Element")
 MusicTopBar.BorderSizePixel = 0
 MusicTopBar.Parent = MusicGui
+local MusicTopBorder = Instance.new("Frame")
+MusicTopBorder.Size = UDim2.new(1, 0, 0, 1)
+MusicTopBorder.Position = UDim2.new(0, 0, 1, -1)
+MusicTopBorder.BackgroundColor3 = Theme.Outline
+MusicTopBorder.BorderSizePixel = 0
+MusicTopBorder.Parent = MusicTopBar
+RegisterThemedObject(MusicTopBorder, "BackgroundColor3", "Outline")
 MakeDraggable(MusicGui, MusicTopBar)
 local MusicTitle = Instance.new("TextLabel")
 MusicTitle.Size = UDim2.new(1, -40, 1, 0)
 MusicTitle.Position = UDim2.new(0, 10, 0, 0)
 MusicTitle.BackgroundTransparency = 1
 MusicTitle.Text = "Tox Music Player"
-MusicTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+MusicTitle.TextColor3 = Theme.Text
+RegisterThemedObject(MusicTitle, "TextColor3", "Text")
 MusicTitle.Font = Enum.Font.GothamBold
 MusicTitle.TextSize = 13
 MusicTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -426,10 +482,12 @@ MusicTitle.Parent = MusicTopBar
 local MusicCloseBtn = Instance.new("TextButton")
 MusicCloseBtn.Size = UDim2.new(0, 22, 0, 20)
 MusicCloseBtn.Position = UDim2.new(1, -26, 0.5, -10)
-MusicCloseBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
+MusicCloseBtn.BackgroundColor3 = Theme.Panel
+RegisterThemedObject(MusicCloseBtn, "BackgroundColor3", "Panel")
 MusicCloseBtn.BorderSizePixel = 0
 MusicCloseBtn.Text = "X"
-MusicCloseBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+MusicCloseBtn.TextColor3 = Theme.DimText
+RegisterThemedObject(MusicCloseBtn, "TextColor3", "DimText")
 MusicCloseBtn.Font = Enum.Font.GothamBold
 MusicCloseBtn.TextSize = 11
 MusicCloseBtn.Parent = MusicTopBar
@@ -447,10 +505,14 @@ InputArea.Parent = MusicContent
 local SoundInput = Instance.new("TextBox")
 SoundInput.Size = UDim2.new(0.42, 0, 1, 0)
 SoundInput.Position = UDim2.new(0, 0, 0, 0)
-SoundInput.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+SoundInput.BackgroundColor3 = Theme.Element
 SoundInput.PlaceholderText = "ID"
 SoundInput.Text = ""
-SoundInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+SoundInput.TextColor3 = Theme.Text
+SoundInput.PlaceholderColor3 = Theme.DimText
+RegisterThemedObject(SoundInput, "BackgroundColor3", "Element")
+RegisterThemedObject(SoundInput, "TextColor3", "Text")
+RegisterThemedObject(SoundInput, "PlaceholderColor3", "DimText")
 SoundInput.Font = Enum.Font.Gotham
 SoundInput.TextSize = 11
 SoundInput.Parent = InputArea
@@ -458,10 +520,14 @@ local SoundInputCorner = Instance.new("UICorner") SoundInputCorner.CornerRadius 
 local SongNameInput = Instance.new("TextBox")
 SongNameInput.Size = UDim2.new(0.42, 0, 1, 0)
 SongNameInput.Position = UDim2.new(0.43, 0, 0, 0)
-SongNameInput.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+SongNameInput.BackgroundColor3 = Theme.Element
 SongNameInput.PlaceholderText = "Name"
 SongNameInput.Text = ""
-SongNameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+SongNameInput.TextColor3 = Theme.Text
+SongNameInput.PlaceholderColor3 = Theme.DimText
+RegisterThemedObject(SongNameInput, "BackgroundColor3", "Element")
+RegisterThemedObject(SongNameInput, "TextColor3", "Text")
+RegisterThemedObject(SongNameInput, "PlaceholderColor3", "DimText")
 SongNameInput.Font = Enum.Font.Gotham
 SongNameInput.TextSize = 11
 SongNameInput.Parent = InputArea
@@ -480,67 +546,114 @@ local NextBtn = CreateDarkBtn(">>", UDim2.new(0.56, 0, 0, 0), UDim2.new(0.11, 0,
 local LoopToggleBtn = CreateDarkBtn("Loop", UDim2.new(0.68, 0, 0, 0), UDim2.new(0.15, 0, 1, 0), ControlsBar)
 local AutoPlayToggleBtn = CreateDarkBtn("Auto", UDim2.new(0.84, 0, 0, 0), UDim2.new(0.16, 0, 1, 0), ControlsBar)
 local VolumeArea = Instance.new("Frame")
-VolumeArea.Size = UDim2.new(1, 0, 0, 22)
+VolumeArea.Size = UDim2.new(1, 0, 0, 24)
 VolumeArea.Position = UDim2.new(0, 0, 0, 60)
 VolumeArea.BackgroundTransparency = 1
 VolumeArea.Parent = MusicContent
+local initVol = math.clamp(math.floor((tonumber(Settings.MusicVolume) or 100) + 0.5), 0, 100)
+Settings.MusicVolume = initVol
 local VolLabel = Instance.new("TextLabel")
-VolLabel.Size = UDim2.new(0.13, 0, 1, 0)
+VolLabel.Size = UDim2.new(0.18, 0, 1, 0)
 VolLabel.Position = UDim2.new(0, 0, 0, 0)
 VolLabel.BackgroundTransparency = 1
-VolLabel.Text = "Vol"
-VolLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+VolLabel.Text = "Vol " .. tostring(initVol) .. "%"
+VolLabel.TextColor3 = Theme.Text
+RegisterThemedObject(VolLabel, "TextColor3", "Text")
 VolLabel.Font = Enum.Font.GothamBold
 VolLabel.TextSize = 10
 VolLabel.TextXAlignment = Enum.TextXAlignment.Left
 VolLabel.Parent = VolumeArea
-local VolInput = Instance.new("TextBox")
-VolInput.Size = UDim2.new(0.13, 0, 1, 0)
-VolInput.Position = UDim2.new(0.13, 0, 0, 0)
-VolInput.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-VolInput.BorderSizePixel = 0
-VolInput.Text = tostring(Settings.MusicVolume)
-VolInput.PlaceholderText = "0-100"
-VolInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-VolInput.Font = Enum.Font.Gotham
-VolInput.TextSize = 10
-VolInput.ClearTextOnFocus = false
-VolInput.Parent = VolumeArea
-local VolInputCorner = Instance.new("UICorner")
-VolInputCorner.CornerRadius = UDim.new(0, 4)
-VolInputCorner.Parent = VolInput
-local function ApplyMusicVolume(value)
+
+local hasRightBtn = (game.PlaceId == 142823291 or game.PlaceId == 4522347649)
+local VolTrack = Instance.new("TextButton")
+VolTrack.Size = UDim2.new(hasRightBtn and 0.36 or 0.54, 0, 1, 0)
+VolTrack.Position = UDim2.new(0.19, 0, 0, 0)
+VolTrack.BackgroundTransparency = 1
+VolTrack.BorderSizePixel = 0
+VolTrack.Text = ""
+VolTrack.AutoButtonColor = false
+VolTrack.Parent = VolumeArea
+
+local VolBar = Instance.new("Frame")
+VolBar.Size = UDim2.new(1, 0, 0, 6)
+VolBar.Position = UDim2.new(0, 0, 0.5, -3)
+VolBar.BackgroundColor3 = Theme.Element
+VolBar.BorderSizePixel = 0
+VolBar.Parent = VolTrack
+local vBarCorner = Instance.new("UICorner") vBarCorner.CornerRadius = UDim.new(1, 0) vBarCorner.Parent = VolBar
+RegisterThemedObject(VolBar, "BackgroundColor3", "Element")
+
+local volRel = initVol / 100
+local VolFill = Instance.new("Frame")
+VolFill.Size = UDim2.new(volRel, 0, 1, 0)
+VolFill.BackgroundColor3 = Theme.Accent
+VolFill.BorderSizePixel = 0
+VolFill.Parent = VolBar
+local vFillCorner = Instance.new("UICorner") vFillCorner.CornerRadius = UDim.new(1, 0) vFillCorner.Parent = VolFill
+RegisterThemedObject(VolFill, "BackgroundColor3", "Accent")
+
+local VolKnob = Instance.new("Frame")
+VolKnob.Size = UDim2.new(0, 12, 0, 12)
+VolKnob.AnchorPoint = Vector2.new(0.5, 0.5)
+VolKnob.Position = UDim2.new(volRel, 0, 0.5, 0)
+VolKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+VolKnob.BorderSizePixel = 0
+VolKnob.ZIndex = VolBar.ZIndex + 2
+VolKnob.Parent = VolTrack
+local vKnobCorner = Instance.new("UICorner") vKnobCorner.CornerRadius = UDim.new(1, 0) vKnobCorner.Parent = VolKnob
+local vKnobStroke = Instance.new("UIStroke") vKnobStroke.Color = Theme.Accent vKnobStroke.Thickness = 1.5 vKnobStroke.Parent = VolKnob
+RegisterThemedObject(vKnobStroke, "Color", "Accent")
+
+local function ApplyMusicVolume(value, skipSave)
     local number = math.clamp(
         math.floor((tonumber(value) or Settings.MusicVolume or 100) + 0.5),
         0,
         100
     )
     Settings.MusicVolume = number
-    VolInput.Text = tostring(number)
+    local r = number / 100
+    VolLabel.Text = "Vol " .. tostring(number) .. "%"
+    VolFill.Size = UDim2.new(r, 0, 1, 0)
+    VolKnob.Position = UDim2.new(r, 0, 0.5, 0)
     if getgenv().ActiveSound then
-        getgenv().ActiveSound.Volume = number / 100
+        getgenv().ActiveSound.Volume = r
     end
-    AutoSaveConfiguration()
+    if not skipSave then
+        AutoSaveConfiguration()
+    end
 end
-VolInput.FocusLost:Connect(function()
-    ApplyMusicVolume(VolInput.Text)
+VolTrack.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+        local function calc(px)
+            local rel = math.clamp((px - VolTrack.AbsolutePosition.X) / math.max(VolTrack.AbsoluteSize.X, 1), 0, 1)
+            ApplyMusicVolume(rel * 100, true)
+        end
+        TweenService:Create(VolKnob, TweenInfo.new(0.1), {Size = UDim2.new(0, 14, 0, 14)}):Play()
+        calc(inp.Position.X)
+        local mc, ec
+        mc = UserInputService.InputChanged:Connect(function(c)
+            if c.UserInputType == Enum.UserInputType.MouseMovement or c.UserInputType == Enum.UserInputType.Touch then
+                calc(c.Position.X)
+            end
+        end)
+        ec = UserInputService.InputEnded:Connect(function(e)
+            if e.UserInputType == Enum.UserInputType.MouseButton1 or e.UserInputType == Enum.UserInputType.Touch then
+                TweenService:Create(VolKnob, TweenInfo.new(0.1), {Size = UDim2.new(0, 12, 0, 12)}):Play()
+                if mc then pcall(function() mc:Disconnect() end) end
+                if ec then pcall(function() ec:Disconnect() end) end
+                AutoSaveConfiguration()
+            end
+        end)
+    end
 end)
-local VolDownBtn = CreateDarkBtn("-", UDim2.new(0.27, 0, 0, 0), UDim2.new(0.07, 0, 1, 0), VolumeArea)
-VolDownBtn.MouseButton1Click:Connect(function()
-    ApplyMusicVolume((Settings.MusicVolume or 100) - 1)
-end)
-local VolUpBtn = CreateDarkBtn("+", UDim2.new(0.35, 0, 0, 0), UDim2.new(0.07, 0, 1, 0), VolumeArea)
-VolUpBtn.MouseButton1Click:Connect(function()
-    ApplyMusicVolume((Settings.MusicVolume or 100) + 1)
-end)
-local CheckMusicIDsBtn = CreateDarkBtn("Check IDs", UDim2.new(0.44, 0, 0, 0), UDim2.new(0.27, 0, 1, 0), VolumeArea)
+local CheckMusicIDsBtn = CreateDarkBtn("Check IDs", UDim2.new(hasRightBtn and 0.57 or 0.75, 0, 0, 0), UDim2.new(hasRightBtn and 0.21 or 0.25, 0, 1, 0), VolumeArea)
 getgenv().CheckMusicIDsBtn = CheckMusicIDsBtn
 local MM2RadioBtn = nil
 local AdminMusicBtn = nil
 if game.PlaceId == 142823291 then
-    MM2RadioBtn = CreateDarkBtn("Radio", UDim2.new(0.73, 0, 0, 0), UDim2.new(0.27, 0, 1, 0), VolumeArea)
+    MM2RadioBtn = CreateDarkBtn("Radio", UDim2.new(0.79, 0, 0, 0), UDim2.new(0.21, 0, 1, 0), VolumeArea)
 elseif game.PlaceId == 4522347649 then
-    AdminMusicBtn = CreateDarkBtn("Music", UDim2.new(0.73, 0, 0, 0), UDim2.new(0.27, 0, 1, 0), VolumeArea)
+    AdminMusicBtn = CreateDarkBtn("Music", UDim2.new(0.79, 0, 0, 0), UDim2.new(0.21, 0, 1, 0), VolumeArea)
 end
 local PlaylistScroll = Instance.new("ScrollingFrame")
 PlaylistScroll.Size = UDim2.new(1, 0, 1, -88)
@@ -548,7 +661,8 @@ PlaylistScroll.Position = UDim2.new(0, 0, 0, 86)
 PlaylistScroll.BackgroundTransparency = 1
 PlaylistScroll.BorderSizePixel = 0
 PlaylistScroll.ScrollBarThickness = 3
-PlaylistScroll.ScrollBarImageColor3 = MAIN_COLOR
+PlaylistScroll.ScrollBarImageColor3 = Theme.Accent
+RegisterThemedObject(PlaylistScroll, "ScrollBarImageColor3", "Accent")
 PlaylistScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 PlaylistScroll.Parent = MusicContent
 local PlaylistLayout = Instance.new("UIListLayout")
@@ -607,10 +721,11 @@ RefreshMusicPlaylistUI = function()
         local trackID = itemData.id
         local item = Instance.new("Frame")
         item.Size = UDim2.new(1, -4, 0, 26)
-        item.BackgroundColor3 = Color3.fromRGB(16, 16, 24)
+        item.BackgroundColor3 = Theme.Element
         item.BorderSizePixel = 0
         item.Parent = PlaylistScroll
         local c = Instance.new("UICorner") c.CornerRadius = UDim.new(0, 4) c.Parent = item
+        RegisterThemedObject(item, "BackgroundColor3", "Element")
         local idBox = Instance.new("TextLabel")
         idBox.Size = UDim2.new(0.24, -4, 1, 0)
         idBox.Position = UDim2.new(0, 4, 0, 0)
@@ -629,9 +744,11 @@ RefreshMusicPlaylistUI = function()
         local nameBox = Instance.new("TextBox")
         nameBox.Size = UDim2.new(0.36, -4, 1, -4)
         nameBox.Position = UDim2.new(0.24, 2, 0, 2)
-        nameBox.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+        nameBox.BackgroundColor3 = Theme.Panel
         nameBox.Text = trackName
-        nameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+        nameBox.TextColor3 = Theme.Text
+        RegisterThemedObject(nameBox, "BackgroundColor3", "Panel")
+        RegisterThemedObject(nameBox, "TextColor3", "Text")
         nameBox.Font = Enum.Font.Gotham
         nameBox.TextSize = 10
         nameBox.ClearTextOnFocus = false

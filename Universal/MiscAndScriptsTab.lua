@@ -268,7 +268,7 @@ do
         end
     end
 
-    if getgenv().CreateSection then getgenv().CreateSection(ScriptsPage, "Community Scripts", "ðŸ“œ") end
+    if getgenv().CreateSection then getgenv().CreateSection(ScriptsPage, "Community Scripts", "📜") end
     CreateButton("BigFroot", ScriptsPage, function()
         RunCommunityScript("BigFroot", "BigFroot.lua")
     end)

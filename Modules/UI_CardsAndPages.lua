@@ -63,8 +63,8 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     CardCorner.Parent = Card
     local CardStroke = Instance.new("UIStroke")
     CardStroke.Color = Theme.Outline
-    CardStroke.Thickness = 1.2
-    CardStroke.Transparency = 0.2
+    CardStroke.Thickness = 1
+    CardStroke.Transparency = 0.32
     CardStroke.Parent = Card
     RegisterThemedObject(CardStroke, "Color", "Outline")
     local CardLayout = Instance.new("UIListLayout")
@@ -581,6 +581,9 @@ if GamePage and DetectedGameModule then
 end
 local function ToxOpenPage(targetPage)
     if not targetPage then return end
+    if getgenv().CloseToxDropdownOverlay then
+        pcall(getgenv().CloseToxDropdownOverlay)
+    end
     for _, p in pairs(Pages) do
         p.Visible = false
     end
@@ -746,15 +749,17 @@ MobileToggleBtn.Size = UDim2.new(0, 46, 0, 46)
 MobileToggleBtn.Position = UDim2.new(1, -60, 0.5, -23)
 MobileToggleBtn.BackgroundColor3 = Theme.Panel
 MobileToggleBtn.BorderSizePixel = 0
-MobileToggleBtn.Image = LOGO_ID
+MobileToggleBtn.Image = (Settings.CustomIconUrl and Settings.CustomIconUrl ~= "") and Settings.CustomIconUrl or LOGO_ID
 MobileToggleBtn.Visible = false
 MobileToggleBtn.ZIndex = 999999
 MobileToggleBtn.Parent = Gui
 local MobileCorner = Instance.new("UICorner") MobileCorner.CornerRadius = UDim.new(1, 0) MobileCorner.Parent = MobileToggleBtn
-local MobileStroke = Instance.new("UIStroke") MobileStroke.Color = Theme.Accent MobileStroke.Thickness = 2 MobileStroke.Parent = MobileToggleBtn
+local MobileStroke = Instance.new("UIStroke") MobileStroke.Color = Theme.Accent MobileStroke.Thickness = 1 MobileStroke.Transparency = 0.2 MobileStroke.Parent = MobileToggleBtn
 RegisterThemedObject(MobileToggleBtn, "BackgroundColor3", "Panel")
 RegisterThemedObject(MobileStroke, "Color", "Accent")
 MakeDraggable(MobileToggleBtn, MobileToggleBtn)
+if getgenv().ApplySavedGuiPosition then getgenv().ApplySavedGuiPosition("MobileToggle", MobileToggleBtn) end
+if getgenv().TrackGuiPosition then getgenv().TrackGuiPosition("MobileToggle", MobileToggleBtn) end
 task.spawn(function()
     while not getgenv().Destroyed and not getgenv().ScriptLoaded do
         task.wait(0.05)
@@ -800,6 +805,8 @@ WatermarkLabel.TextXAlignment = Enum.TextXAlignment.Left
 WatermarkLabel.Parent = WatermarkFrame
 RegisterThemedObject(WatermarkLabel, "TextColor3", "Text")
 MakeDraggable(WatermarkFrame, WatermarkFrame)
+if getgenv().ApplySavedGuiPosition then getgenv().ApplySavedGuiPosition("Watermark", WatermarkFrame) end
+if getgenv().TrackGuiPosition then getgenv().TrackGuiPosition("Watermark", WatermarkFrame) end
 local ActiveWeatherParticles = {}
 local WeatherSpawnConnection = nil
 local function ClearWeather()
@@ -893,240 +900,372 @@ local function StartWeatherEngine()
     end)
 end
 StartWeatherEngine()
-do 
-local ColorPickerModal = Instance.new("Frame")
-ColorPickerModal.Name = "ToxColorPickerModal"
-ColorPickerModal.Size = UDim2.new(0, 310, 0, 360)
-ColorPickerModal.Position = UDim2.new(0.5, -155, 0.5, -180)
-ColorPickerModal.BackgroundColor3 = Theme.Panel
-ColorPickerModal.BorderSizePixel = 0
-ColorPickerModal.Visible = false
-ColorPickerModal.ZIndex = 2000
-ColorPickerModal.Parent = Gui
-RegisterThemedObject(ColorPickerModal, "BackgroundColor3", "Panel")
-local CPModalCorner = Instance.new("UICorner") CPModalCorner.CornerRadius = UDim.new(0, 10) CPModalCorner.Parent = ColorPickerModal
-local CPModalStroke = Instance.new("UIStroke") CPModalStroke.Color = Theme.Outline CPModalStroke.Thickness = 2 CPModalStroke.Parent = ColorPickerModal
-RegisterThemedObject(CPModalStroke, "Color", "Outline")
-MakeDraggable(ColorPickerModal, ColorPickerModal)
-local CPTitle = Instance.new("TextLabel")
-CPTitle.Size = UDim2.new(1, -50, 0, 36)
-CPTitle.Position = UDim2.new(0, 14, 0, 0)
-CPTitle.BackgroundTransparency = 1
-CPTitle.Text = "Color Picker"
-CPTitle.TextColor3 = Theme.Text
-CPTitle.Font = Enum.Font.GothamBold
-CPTitle.TextSize = 14
-CPTitle.TextXAlignment = Enum.TextXAlignment.Left
-CPTitle.ZIndex = 2001
-CPTitle.Parent = ColorPickerModal
-RegisterThemedObject(CPTitle, "TextColor3", "Text")
-local CPClose = Instance.new("TextButton")
-CPClose.Size = UDim2.new(0, 26, 0, 26)
-CPClose.Position = UDim2.new(1, -34, 0, 6)
-CPClose.BackgroundColor3 = Theme.Element
-CPClose.BorderSizePixel = 0
-CPClose.Text = "✕"
-CPClose.TextColor3 = Theme.DimText
-CPClose.Font = Enum.Font.GothamBold
-CPClose.TextSize = 12
-CPClose.ZIndex = 2001
-CPClose.Parent = ColorPickerModal
-local CPCloseCorner = Instance.new("UICorner") CPCloseCorner.CornerRadius = UDim.new(0, 5) CPCloseCorner.Parent = CPClose
-CPClose.MouseButton1Click:Connect(function()
+do
+    local ColorPickerModal = Instance.new("Frame")
+    ColorPickerModal.Name = "ToxColorPickerModal"
+    ColorPickerModal.Size = UDim2.new(0, 322, 0, 376)
+    ColorPickerModal.Position = UDim2.new(0.5, -161, 0.5, -188)
+    ColorPickerModal.BackgroundColor3 = Theme.Panel
+    ColorPickerModal.BorderSizePixel = 0
     ColorPickerModal.Visible = false
-end)
-local CPPreview = Instance.new("Frame")
-CPPreview.Size = UDim2.new(1, -28, 0, 42)
-CPPreview.Position = UDim2.new(0, 14, 0, 42)
-CPPreview.BackgroundColor3 = Theme.Accent
-CPPreview.BorderSizePixel = 0
-CPPreview.ZIndex = 2001
-CPPreview.Parent = ColorPickerModal
-local CPPreviewCorner = Instance.new("UICorner") CPPreviewCorner.CornerRadius = UDim.new(0, 6) CPPreviewCorner.Parent = CPPreview
-local function CreateCPSlider(name, yPos, maxVal, defaultVal)
-    maxVal = tonumber(maxVal) or 255
-    defaultVal = tonumber(defaultVal) or 0
-    if maxVal <= 0 then maxVal = 255 end
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, -28, 0, 40)
-    container.Position = UDim2.new(0, 14, 0, yPos)
-    container.BackgroundTransparency = 1
-    container.ZIndex = 2001
-    container.Parent = ColorPickerModal
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 40, 0, 18)
-    label.BackgroundTransparency = 1
-    label.Text = name
-    label.TextColor3 = Theme.Text
-    label.Font = Enum.Font.GothamMedium
-    label.TextSize = 11
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.ZIndex = 2002
-    label.Parent = container
-    local valLabel = Instance.new("TextLabel")
-    valLabel.Size = UDim2.new(0, 40, 0, 18)
-    valLabel.Position = UDim2.new(1, -40, 0, 0)
-    valLabel.BackgroundTransparency = 1
-    valLabel.Text = tostring(math.floor(defaultVal))
-    valLabel.TextColor3 = Theme.DimText
-    valLabel.Font = Enum.Font.GothamBold
-    valLabel.TextSize = 11
-    valLabel.TextXAlignment = Enum.TextXAlignment.Right
-    valLabel.ZIndex = 2002
-    valLabel.Parent = container
-    local bar = Instance.new("TextButton")
-    bar.Size = UDim2.new(1, 0, 0, 12)
-    bar.Position = UDim2.new(0, 0, 0, 22)
-    bar.BackgroundColor3 = Theme.Element
-    bar.BorderSizePixel = 0
-    bar.Text = ""
-    bar.AutoButtonColor = false
-    bar.ZIndex = 2002
-    bar.Parent = container
-    local barCorner = Instance.new("UICorner") barCorner.CornerRadius = UDim.new(0, 4) barCorner.Parent = bar
-    local fill = Instance.new("Frame")
-    fill.Size = UDim2.new(defaultVal / maxVal, 0, 1, 0)
-    fill.BackgroundColor3 = Theme.Accent
-    fill.BorderSizePixel = 0
-    fill.ZIndex = 2003
-    fill.Parent = bar
-    local fillCorner = Instance.new("UICorner") fillCorner.CornerRadius = UDim.new(0, 4) fillCorner.Parent = fill
-    RegisterThemedObject(fill, "BackgroundColor3", "Accent")
-    local curVal = defaultVal
-    local isDragging = false
-    local function Update(inputX)
-        local rel = math.clamp((inputX - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-        curVal = math.floor(rel * maxVal)
-        valLabel.Text = tostring(curVal)
-        fill.Size = UDim2.new(rel, 0, 1, 0)
-    end
-    bar.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-            isDragging = true
-            Update(inp.Position.X)
-            local moveConn, endConn
-            moveConn = UserInputService.InputChanged:Connect(function(change)
-                if change.UserInputType == Enum.UserInputType.MouseMovement or change.UserInputType == Enum.UserInputType.Touch then
-                    Update(change.Position.X)
-                end
-            end)
-            endConn = UserInputService.InputEnded:Connect(function(ended)
-                if ended.UserInputType == Enum.UserInputType.MouseButton1 or ended.UserInputType == Enum.UserInputType.Touch then
-                    isDragging = false
-                    if moveConn then moveConn:Disconnect() end
-                    if endConn then endConn:Disconnect() end
-                end
-            end)
-        end
+    ColorPickerModal.ZIndex = 2000
+    ColorPickerModal.Parent = Gui
+    RegisterThemedObject(ColorPickerModal, "BackgroundColor3", "Panel")
+    local CPModalCorner = Instance.new("UICorner") CPModalCorner.CornerRadius = UDim.new(0, 10) CPModalCorner.Parent = ColorPickerModal
+    local CPModalStroke = Instance.new("UIStroke") CPModalStroke.Color = Theme.Accent CPModalStroke.Thickness = 1 CPModalStroke.Transparency = 0.25 CPModalStroke.Parent = ColorPickerModal
+    RegisterThemedObject(CPModalStroke, "Color", "Accent")
+    MakeDraggable(ColorPickerModal, ColorPickerModal)
+
+    local CPTitle = Instance.new("TextLabel")
+    CPTitle.Size = UDim2.new(1, -50, 0, 34)
+    CPTitle.Position = UDim2.new(0, 14, 0, 2)
+    CPTitle.BackgroundTransparency = 1
+    CPTitle.Text = "Color Picker (HSV)"
+    CPTitle.TextColor3 = Theme.Text
+    CPTitle.Font = Enum.Font.GothamBold
+    CPTitle.TextSize = 13
+    CPTitle.TextXAlignment = Enum.TextXAlignment.Left
+    CPTitle.ZIndex = 2001
+    CPTitle.Parent = ColorPickerModal
+    RegisterThemedObject(CPTitle, "TextColor3", "Text")
+
+    local CPClose = Instance.new("TextButton")
+    CPClose.Size = UDim2.new(0, 24, 0, 24)
+    CPClose.Position = UDim2.new(1, -32, 0, 6)
+    CPClose.BackgroundColor3 = Theme.Element
+    CPClose.BorderSizePixel = 0
+    CPClose.Text = "✕"
+    CPClose.TextColor3 = Theme.DimText
+    CPClose.Font = Enum.Font.GothamBold
+    CPClose.TextSize = 12
+    CPClose.ZIndex = 2001
+    CPClose.Parent = ColorPickerModal
+    local CPCloseCorner = Instance.new("UICorner") CPCloseCorner.CornerRadius = UDim.new(0, 5) CPCloseCorner.Parent = CPClose
+    RegisterThemedObject(CPClose, "BackgroundColor3", "Element")
+    RegisterThemedObject(CPClose, "TextColor3", "DimText")
+    CPClose.MouseButton1Click:Connect(function()
+        ColorPickerModal.Visible = false
     end)
-    return {
-        GetValue = function() return curVal end,
-        SetValue = function(v)
-            curVal = math.clamp(math.floor(v), 0, maxVal)
-            valLabel.Text = tostring(curVal)
-            fill.Size = UDim2.new(curVal / maxVal, 0, 1, 0)
-        end,
-        OnChanged = function(cb)
-            bar:GetPropertyChangedSignal("AbsolutePosition"):Connect(function() end)
+
+    -- 2D Saturation / Value square
+    local SVBox = Instance.new("TextButton")
+    SVBox.Name = "SVBox"
+    SVBox.Size = UDim2.new(0, 260, 0, 180)
+    SVBox.Position = UDim2.new(0, 14, 0, 40)
+    SVBox.BackgroundColor3 = Color3.fromHSV(0.6, 1, 1)
+    SVBox.BorderSizePixel = 0
+    SVBox.Text = ""
+    SVBox.AutoButtonColor = false
+    SVBox.ClipsDescendants = true
+    SVBox.ZIndex = 2002
+    SVBox.Parent = ColorPickerModal
+    local svCorner = Instance.new("UICorner") svCorner.CornerRadius = UDim.new(0, 6) svCorner.Parent = SVBox
+    local svStroke = Instance.new("UIStroke") svStroke.Color = Theme.Outline svStroke.Thickness = 1 svStroke.Transparency = 0.35 svStroke.Parent = SVBox
+
+    local SatLayer = Instance.new("Frame")
+    SatLayer.Size = UDim2.new(1, 0, 1, 0)
+    SatLayer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    SatLayer.BorderSizePixel = 0
+    SatLayer.ZIndex = 2003
+    SatLayer.Parent = SVBox
+    local satCorner = Instance.new("UICorner") satCorner.CornerRadius = UDim.new(0, 6) satCorner.Parent = SatLayer
+    local satGrad = Instance.new("UIGradient")
+    satGrad.Rotation = 0
+    satGrad.Transparency = NumberSequence.new(0, 1)
+    satGrad.Parent = SatLayer
+
+    local ValLayer = Instance.new("Frame")
+    ValLayer.Size = UDim2.new(1, 0, 1, 0)
+    ValLayer.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    ValLayer.BorderSizePixel = 0
+    ValLayer.ZIndex = 2004
+    ValLayer.Parent = SVBox
+    local valCorner = Instance.new("UICorner") valCorner.CornerRadius = UDim.new(0, 6) valCorner.Parent = ValLayer
+    local valGrad = Instance.new("UIGradient")
+    valGrad.Rotation = 90
+    valGrad.Transparency = NumberSequence.new(1, 0)
+    valGrad.Parent = ValLayer
+
+    local SVKnob = Instance.new("Frame")
+    SVKnob.Size = UDim2.new(0, 14, 0, 14)
+    SVKnob.AnchorPoint = Vector2.new(0.5, 0.5)
+    SVKnob.Position = UDim2.new(1, 0, 0, 0)
+    SVKnob.BackgroundTransparency = 1
+    SVKnob.ZIndex = 2006
+    SVKnob.Parent = SVBox
+    local svkOuter = Instance.new("UIStroke") svkOuter.Color = Color3.fromRGB(255, 255, 255) svkOuter.Thickness = 2 svkOuter.Parent = SVKnob
+    local svkCorner = Instance.new("UICorner") svkCorner.CornerRadius = UDim.new(1, 0) svkCorner.Parent = SVKnob
+    local svkDot = Instance.new("Frame")
+    svkDot.Size = UDim2.new(1, -4, 1, -4)
+    svkDot.AnchorPoint = Vector2.new(0.5, 0.5)
+    svkDot.Position = UDim2.new(0.5, 0, 0.5, 0)
+    svkDot.BackgroundTransparency = 1
+    svkDot.ZIndex = 2007
+    svkDot.Parent = SVKnob
+    local svkdCorner = Instance.new("UICorner") svkdCorner.CornerRadius = UDim.new(1, 0) svkdCorner.Parent = svkDot
+    local svkdStroke = Instance.new("UIStroke") svkdStroke.Color = Color3.fromRGB(15, 15, 20) svkdStroke.Thickness = 1.5 svkdStroke.Parent = svkDot
+
+    -- Vertical full-spectrum Hue bar
+    local HueBar = Instance.new("TextButton")
+    HueBar.Name = "HueBar"
+    HueBar.Size = UDim2.new(0, 24, 0, 180)
+    HueBar.Position = UDim2.new(0, 284, 0, 40)
+    HueBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    HueBar.BorderSizePixel = 0
+    HueBar.Text = ""
+    HueBar.AutoButtonColor = false
+    HueBar.ZIndex = 2002
+    HueBar.Parent = ColorPickerModal
+    local hueCorner = Instance.new("UICorner") hueCorner.CornerRadius = UDim.new(0, 6) hueCorner.Parent = HueBar
+    local hueStroke = Instance.new("UIStroke") hueStroke.Color = Theme.Outline hueStroke.Thickness = 1 hueStroke.Transparency = 0.35 hueStroke.Parent = HueBar
+    local hueGrad = Instance.new("UIGradient")
+    hueGrad.Rotation = 90
+    hueGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.000, Color3.fromRGB(255, 0, 0)),
+        ColorSequenceKeypoint.new(0.167, Color3.fromRGB(255, 255, 0)),
+        ColorSequenceKeypoint.new(0.333, Color3.fromRGB(0, 255, 0)),
+        ColorSequenceKeypoint.new(0.500, Color3.fromRGB(0, 255, 255)),
+        ColorSequenceKeypoint.new(0.667, Color3.fromRGB(0, 0, 255)),
+        ColorSequenceKeypoint.new(0.833, Color3.fromRGB(255, 0, 255)),
+        ColorSequenceKeypoint.new(1.000, Color3.fromRGB(255, 0, 0))
+    })
+    hueGrad.Parent = HueBar
+
+    local HueKnob = Instance.new("Frame")
+    HueKnob.Size = UDim2.new(0, 16, 0, 16)
+    HueKnob.AnchorPoint = Vector2.new(0.5, 0.5)
+    HueKnob.Position = UDim2.new(0.5, 0, 0.6, 0)
+    HueKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    HueKnob.BorderSizePixel = 0
+    HueKnob.ZIndex = 2006
+    HueKnob.Parent = HueBar
+    local hkCorner = Instance.new("UICorner") hkCorner.CornerRadius = UDim.new(1, 0) hkCorner.Parent = HueKnob
+    local hkStroke = Instance.new("UIStroke") hkStroke.Color = Color3.fromRGB(20, 20, 26) hkStroke.Thickness = 1.5 hkStroke.Parent = HueKnob
+
+    -- Preview + Hex + RGB readout row
+    local CPPreview = Instance.new("Frame")
+    CPPreview.Size = UDim2.new(0, 52, 0, 30)
+    CPPreview.Position = UDim2.new(0, 14, 0, 232)
+    CPPreview.BackgroundColor3 = Theme.Accent
+    CPPreview.BorderSizePixel = 0
+    CPPreview.ZIndex = 2002
+    CPPreview.Parent = ColorPickerModal
+    local prevCorner = Instance.new("UICorner") prevCorner.CornerRadius = UDim.new(0, 6) prevCorner.Parent = CPPreview
+    local prevStroke = Instance.new("UIStroke") prevStroke.Color = Theme.Outline prevStroke.Thickness = 1 prevStroke.Transparency = 0.3 prevStroke.Parent = CPPreview
+
+    local HexBox = Instance.new("TextBox")
+    HexBox.Size = UDim2.new(0, 92, 0, 30)
+    HexBox.Position = UDim2.new(0, 74, 0, 232)
+    HexBox.BackgroundColor3 = Theme.Element
+    HexBox.BorderSizePixel = 0
+    HexBox.Text = "#1E5FFF"
+    HexBox.TextColor3 = Theme.Text
+    HexBox.Font = Enum.Font.Code
+    HexBox.TextSize = 12
+    HexBox.ClearTextOnFocus = false
+    HexBox.ZIndex = 2002
+    HexBox.Parent = ColorPickerModal
+    local hxCorner = Instance.new("UICorner") hxCorner.CornerRadius = UDim.new(0, 6) hxCorner.Parent = HexBox
+    local hxStroke = Instance.new("UIStroke") hxStroke.Color = Theme.Outline hxStroke.Thickness = 1 hxStroke.Transparency = 0.3 hxStroke.Parent = HexBox
+    RegisterThemedObject(HexBox, "BackgroundColor3", "Element")
+    RegisterThemedObject(HexBox, "TextColor3", "Text")
+
+    local RGBLabel = Instance.new("TextLabel")
+    RGBLabel.Size = UDim2.new(0, 136, 0, 30)
+    RGBLabel.Position = UDim2.new(0, 172, 0, 232)
+    RGBLabel.BackgroundColor3 = Theme.Element
+    RGBLabel.BorderSizePixel = 0
+    RGBLabel.Text = "RGB: 30, 95, 255"
+    RGBLabel.TextColor3 = Theme.DimText
+    RGBLabel.Font = Enum.Font.GothamMedium
+    RGBLabel.TextSize = 11
+    RGBLabel.ZIndex = 2002
+    RGBLabel.Parent = ColorPickerModal
+    local rgbCorner = Instance.new("UICorner") rgbCorner.CornerRadius = UDim.new(0, 6) rgbCorner.Parent = RGBLabel
+    RegisterThemedObject(RGBLabel, "BackgroundColor3", "Element")
+    RegisterThemedObject(RGBLabel, "TextColor3", "DimText")
+
+    -- Quick Swatches
+    local PresetsContainer = Instance.new("Frame")
+    PresetsContainer.Size = UDim2.new(1, -28, 0, 26)
+    PresetsContainer.Position = UDim2.new(0, 14, 0, 274)
+    PresetsContainer.BackgroundTransparency = 1
+    PresetsContainer.ZIndex = 2002
+    PresetsContainer.Parent = ColorPickerModal
+    local PresetsLayout = Instance.new("UIListLayout")
+    PresetsLayout.FillDirection = Enum.FillDirection.Horizontal
+    PresetsLayout.Padding = UDim.new(0, 6)
+    PresetsLayout.Parent = PresetsContainer
+
+    local CPApplyBtn = Instance.new("TextButton")
+    CPApplyBtn.Size = UDim2.new(1, -28, 0, 34)
+    CPApplyBtn.Position = UDim2.new(0, 14, 0, 326)
+    CPApplyBtn.BackgroundColor3 = Theme.Accent
+    CPApplyBtn.BorderSizePixel = 0
+    CPApplyBtn.Text = "Apply Color"
+    CPApplyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CPApplyBtn.Font = Enum.Font.GothamBold
+    CPApplyBtn.TextSize = 12
+    CPApplyBtn.ZIndex = 2002
+    CPApplyBtn.Parent = ColorPickerModal
+    local CPApplyCorner = Instance.new("UICorner") CPApplyCorner.CornerRadius = UDim.new(0, 6) CPApplyCorner.Parent = CPApplyBtn
+    RegisterThemedObject(CPApplyBtn, "BackgroundColor3", "Accent")
+
+    local curH, curS, curV = 0.6, 0.88, 1
+    local ActiveEditingColorKey = nil
+    local ActiveSwatchFrame = nil
+    local ActiveCustomCallback = nil
+
+    local function PushColorChange(isFinal)
+        local col = Color3.fromHSV(curH, curS, curV)
+        CPPreview.BackgroundColor3 = col
+        SVBox.BackgroundColor3 = Color3.fromHSV(curH, 1, 1)
+        SVKnob.Position = UDim2.new(curS, 0, 1 - curV, 0)
+        HueKnob.Position = UDim2.new(0.5, 0, curH, 0)
+        HueKnob.BackgroundColor3 = Color3.fromHSV(curH, 1, 1)
+        local r = math.clamp(math.floor(col.R * 255 + 0.5), 0, 255)
+        local g = math.clamp(math.floor(col.G * 255 + 0.5), 0, 255)
+        local b = math.clamp(math.floor(col.B * 255 + 0.5), 0, 255)
+        HexBox.Text = string.format("#%02X%02X%02X", r, g, b)
+        RGBLabel.Text = string.format("RGB: %d, %d, %d", r, g, b)
+        if ActiveCustomCallback then
+            pcall(ActiveCustomCallback, col, isFinal)
+        elseif ActiveEditingColorKey then
+            if ActiveEditingColorKey == "Accent" then
+                if getgenv().SetToxCustomAccent then
+                    getgenv().SetToxCustomAccent(col, not isFinal)
+                else
+                    Theme.Accent = col
+                    Settings.CustomAccentActive = true
+                    ApplyTheme()
+                end
+            else
+                Theme[ActiveEditingColorKey] = col
+                Settings.Theme = Theme
+                ApplyTheme()
+                if isFinal and getgenv().AutoSaveConfiguration then
+                    getgenv().AutoSaveConfiguration()
+                end
+            end
+            if ActiveSwatchFrame then
+                ActiveSwatchFrame.BackgroundColor3 = col
+            end
         end
+    end
+
+    local function SetFromColor3(col, isFinal)
+        if typeof(col) ~= "Color3" then return end
+        local h, s, v = col:ToHSV()
+        curH = h
+        curS = s
+        curV = v
+        PushColorChange(isFinal)
+    end
+
+    local function bindDrag2D(btn, onXY, onEnd)
+        btn.InputBegan:Connect(function(inp)
+            if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+                local function calc(px, py)
+                    local sz = btn.AbsoluteSize
+                    local ps = btn.AbsolutePosition
+                    local rx = math.clamp((px - ps.X) / math.max(sz.X, 1), 0, 1)
+                    local ry = math.clamp((py - ps.Y) / math.max(sz.Y, 1), 0, 1)
+                    onXY(rx, ry)
+                end
+                calc(inp.Position.X, inp.Position.Y)
+                local mc, ec
+                mc = UserInputService.InputChanged:Connect(function(c)
+                    if c.UserInputType == Enum.UserInputType.MouseMovement or c.UserInputType == Enum.UserInputType.Touch then
+                        calc(c.Position.X, c.Position.Y)
+                    end
+                end)
+                ec = UserInputService.InputEnded:Connect(function(e)
+                    if e.UserInputType == Enum.UserInputType.MouseButton1 or e.UserInputType == Enum.UserInputType.Touch then
+                        if mc then pcall(function() mc:Disconnect() end) end
+                        if ec then pcall(function() ec:Disconnect() end) end
+                        if onEnd then onEnd() end
+                    end
+                end)
+            end
+        end)
+    end
+
+    bindDrag2D(SVBox, function(rx, ry)
+        curS = rx
+        curV = 1 - ry
+        PushColorChange(false)
+    end, function()
+        PushColorChange(true)
+    end)
+
+    bindDrag2D(HueBar, function(_, ry)
+        curH = ry
+        PushColorChange(false)
+    end, function()
+        PushColorChange(true)
+    end)
+
+    HexBox.FocusLost:Connect(function()
+        local raw = tostring(HexBox.Text or ""):gsub("#", ""):gsub("%s+", "")
+        if #raw == 6 then
+            local r = tonumber(raw:sub(1, 2), 16)
+            local g = tonumber(raw:sub(3, 4), 16)
+            local b = tonumber(raw:sub(5, 6), 16)
+            if r and g and b then
+                SetFromColor3(Color3.fromRGB(r, g, b), true)
+                return
+            end
+        end
+        PushColorChange(false)
+    end)
+
+    local Presets = {
+        Color3.fromRGB(255, 55, 65),
+        Color3.fromRGB(255, 145, 35),
+        Color3.fromRGB(255, 220, 40),
+        Color3.fromRGB(35, 210, 115),
+        Color3.fromRGB(0, 215, 240),
+        Color3.fromRGB(30, 95, 255),
+        Color3.fromRGB(165, 65, 255),
+        Color3.fromRGB(255, 255, 255)
     }
-end
-local RSlider = CreateCPSlider("Red", 96, 255, 30)
-local GSlider = CreateCPSlider("Green", 144, 255, 95)
-local BSlider = CreateCPSlider("Blue", 192, 255, 255)
-local PresetsContainer = Instance.new("Frame")
-PresetsContainer.Size = UDim2.new(1, -28, 0, 30)
-PresetsContainer.Position = UDim2.new(0, 14, 0, 246)
-PresetsContainer.BackgroundTransparency = 1
-PresetsContainer.ZIndex = 2001
-PresetsContainer.Parent = ColorPickerModal
-local PresetsLayout = Instance.new("UIListLayout")
-PresetsLayout.FillDirection = Enum.FillDirection.Horizontal
-PresetsLayout.Padding = UDim.new(0, 6)
-PresetsLayout.Parent = PresetsContainer
-local CPApplyBtn = Instance.new("TextButton")
-CPApplyBtn.Size = UDim2.new(1, -28, 0, 34)
-CPApplyBtn.Position = UDim2.new(0, 14, 0, 290)
-CPApplyBtn.BackgroundColor3 = Theme.Accent
-CPApplyBtn.BorderSizePixel = 0
-CPApplyBtn.Text = "Apply Color"
-CPApplyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CPApplyBtn.Font = Enum.Font.GothamBold
-CPApplyBtn.TextSize = 12
-CPApplyBtn.ZIndex = 2002
-CPApplyBtn.Parent = ColorPickerModal
-local CPApplyCorner = Instance.new("UICorner") CPApplyCorner.CornerRadius = UDim.new(0, 6) CPApplyCorner.Parent = CPApplyBtn
-RegisterThemedObject(CPApplyBtn, "BackgroundColor3", "Accent")
-local ActiveEditingColorKey = nil
-local ActiveSwatchFrame = nil
-OpenColorPicker = function(colorKey, swatchFrame)
-    ActiveEditingColorKey = colorKey
-    ActiveSwatchFrame = swatchFrame
-    CPTitle.Text = "Color: " .. tostring(colorKey)
-    local current = Theme[colorKey] or Color3.fromRGB(255, 255, 255)
-    RSlider.SetValue(current.R * 255)
-    GSlider.SetValue(current.G * 255)
-    BSlider.SetValue(current.B * 255)
-    CPPreview.BackgroundColor3 = current
-    ColorPickerModal.Visible = true
-end
-local function UpdateModalPreview()
-    local r = RSlider.GetValue() / 255
-    local g = GSlider.GetValue() / 255
-    local b = BSlider.GetValue() / 255
-    CPPreview.BackgroundColor3 = Color3.new(r, g, b)
-end
-task.spawn(function()
-    while not getgenv().Destroyed do
-        if ColorPickerModal.Visible then
-            UpdateModalPreview()
-        end
-        task.wait(0.08)
+    for _, pCol in ipairs(Presets) do
+        local pBtn = Instance.new("TextButton")
+        pBtn.Size = UDim2.new(0, 30, 0, 24)
+        pBtn.BackgroundColor3 = pCol
+        pBtn.BorderSizePixel = 0
+        pBtn.Text = ""
+        pBtn.ZIndex = 2003
+        pBtn.Parent = PresetsContainer
+        local pCorner = Instance.new("UICorner") pCorner.CornerRadius = UDim.new(0, 4) pCorner.Parent = pBtn
+        local pStroke = Instance.new("UIStroke") pStroke.Color = Theme.Outline pStroke.Thickness = 1 pStroke.Transparency = 0.4 pStroke.Parent = pBtn
+        pBtn.MouseButton1Click:Connect(function()
+            SetFromColor3(pCol, true)
+        end)
     end
-end)
-CPApplyBtn.MouseButton1Click:Connect(function()
-    if ActiveEditingColorKey then
-        local r = RSlider.GetValue() / 255
-        local g = GSlider.GetValue() / 255
-        local b = BSlider.GetValue() / 255
-        local newCol = Color3.new(r, g, b)
-        Theme[ActiveEditingColorKey] = newCol
-        Settings.Theme = Theme
-        if ActiveSwatchFrame then
-            ActiveSwatchFrame.BackgroundColor3 = newCol
-        end
-        ApplyTheme()
-        if getgenv().AutoSaveConfiguration then
-            getgenv().AutoSaveConfiguration()
-        end
-    end
-    ColorPickerModal.Visible = false
-end)
-local Presets = {
-    Color3.fromRGB(30, 95, 255),
-    Color3.fromRGB(145, 45, 255),
-    Color3.fromRGB(25, 180, 100),
-    Color3.fromRGB(255, 55, 65),
-    Color3.fromRGB(255, 180, 20),
-    Color3.fromRGB(0, 200, 230),
-    Color3.fromRGB(255, 255, 255)
-}
-for _, pCol in ipairs(Presets) do
-    local pBtn = Instance.new("TextButton")
-    pBtn.Size = UDim2.new(0, 30, 0, 26)
-    pBtn.BackgroundColor3 = pCol
-    pBtn.BorderSizePixel = 0
-    pBtn.Text = ""
-    pBtn.ZIndex = 2002
-    pBtn.Parent = PresetsContainer
-    local pCorner = Instance.new("UICorner") pCorner.CornerRadius = UDim.new(0, 4) pCorner.Parent = pBtn
-    pBtn.MouseButton1Click:Connect(function()
-        RSlider.SetValue(pCol.R * 255)
-        GSlider.SetValue(pCol.G * 255)
-        BSlider.SetValue(pCol.B * 255)
-        CPPreview.BackgroundColor3 = pCol
+
+    CPApplyBtn.MouseButton1Click:Connect(function()
+        PushColorChange(true)
+        ColorPickerModal.Visible = false
     end)
-end
+
+    OpenColorPicker = function(colorKeyOrSpec, swatchFrame)
+        ColorPickerModal.BackgroundTransparency = math.clamp((tonumber(Settings.ToxUITransparency) or 0) * 0.72, 0, 0.75)
+        if typeof(colorKeyOrSpec) == "table" then
+            ActiveEditingColorKey = nil
+            ActiveSwatchFrame = swatchFrame
+            ActiveCustomCallback = colorKeyOrSpec.OnChanged
+            CPTitle.Text = tostring(colorKeyOrSpec.Title or "Color Picker (HSV)")
+            SetFromColor3(colorKeyOrSpec.InitialColor or Color3.fromRGB(255, 255, 255), false)
+        else
+            ActiveCustomCallback = nil
+            ActiveEditingColorKey = colorKeyOrSpec
+            ActiveSwatchFrame = swatchFrame
+            CPTitle.Text = "Color: " .. tostring(colorKeyOrSpec)
+            SetFromColor3(Theme[colorKeyOrSpec] or Color3.fromRGB(255, 255, 255), false)
+        end
+        ColorPickerModal.Visible = true
+    end
 end
 UI.CardRegistry = CardRegistry
 UI.CardLayoutOrder = CardLayoutOrder

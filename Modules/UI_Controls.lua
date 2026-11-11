@@ -94,6 +94,178 @@ local function IsFeatureRisky(name)
     local n = string.lower(tostring(name or ""))
     return string.find(n, "aura") ~= nil or string.find(n, "kill") ~= nil or string.find(n, "fling") ~= nil or string.find(n, "blatant") ~= nil
 end
+do
+    local activeBackdrop = nil
+    local activeAnchor = nil
+    local activeOnClose = nil
+    local activeKeyConn = nil
+
+    local function CloseToxDropdownOverlay()
+        if activeKeyConn then
+            pcall(function() activeKeyConn:Disconnect() end)
+            activeKeyConn = nil
+        end
+        if activeBackdrop and activeBackdrop.Parent then
+            pcall(function() activeBackdrop:Destroy() end)
+        end
+        activeBackdrop = nil
+        local cb = activeOnClose
+        activeAnchor = nil
+        activeOnClose = nil
+        if cb then
+            pcall(cb)
+        end
+    end
+
+    local function ShowToxDropdownOverlay(anchorBtn, options, selectedValue, onSelect, onClose)
+        if env.Destroyed or not anchorBtn or not anchorBtn.Parent then
+            return false
+        end
+        if activeAnchor == anchorBtn and activeBackdrop and activeBackdrop.Parent then
+            CloseToxDropdownOverlay()
+            return false
+        end
+        CloseToxDropdownOverlay()
+
+        local rootGui = env.Gui or UI.Gui or anchorBtn:FindFirstAncestorOfClass("ScreenGui")
+        if not rootGui then return false end
+
+        local opts = type(options) == "table" and options or {}
+        if #opts == 0 then return false end
+
+        local backdrop = Instance.new("TextButton")
+        backdrop.Name = "ToxDropdownOverlayBackdrop"
+        backdrop.Size = UDim2.new(1, 0, 1, 0)
+        backdrop.Position = UDim2.new(0, 0, 0, 0)
+        backdrop.BackgroundTransparency = 1
+        backdrop.BorderSizePixel = 0
+        backdrop.Text = ""
+        backdrop.AutoButtonColor = false
+        backdrop.ZIndex = 1800
+        backdrop.Parent = rootGui
+
+        activeBackdrop = backdrop
+        activeAnchor = anchorBtn
+        activeOnClose = onClose
+
+        backdrop.MouseButton1Click:Connect(CloseToxDropdownOverlay)
+        backdrop.MouseButton2Click:Connect(CloseToxDropdownOverlay)
+        activeKeyConn = UserInputService.InputBegan:Connect(function(inp)
+            if inp.UserInputType == Enum.UserInputType.Keyboard and inp.KeyCode == Enum.KeyCode.Escape then
+                CloseToxDropdownOverlay()
+            end
+        end)
+
+        local itemH = 26
+        local pad = 4
+        local maxMenuH = 186
+        local desiredH = math.min(#opts * (itemH + 2) + pad * 2, maxMenuH)
+        local aPos = anchorBtn.AbsolutePosition
+        local aSize = anchorBtn.AbsoluteSize
+        local gSize = rootGui.AbsoluteSize
+        local menuW = math.clamp(math.max(aSize.X, 152), 130, math.max(160, gSize.X - 16))
+        local posX = math.clamp(aPos.X + aSize.X - menuW, 8, math.max(8, gSize.X - menuW - 8))
+        local posY = aPos.Y + aSize.Y + 4
+        if posY + desiredH > gSize.Y - 8 and (aPos.Y - desiredH - 4) >= 8 then
+            posY = aPos.Y - desiredH - 4
+        else
+            posY = math.clamp(posY, 8, math.max(8, gSize.Y - desiredH - 8))
+        end
+
+        local panelTransp = math.clamp((tonumber(Settings.ToxUITransparency) or 0) * 0.72, 0, 0.72)
+        local menu = Instance.new("ScrollingFrame")
+        menu.Name = "ToxDropdownMenu"
+        menu.Size = UDim2.new(0, menuW, 0, 0)
+        menu.Position = UDim2.new(0, posX, 0, posY)
+        menu.BackgroundColor3 = Theme.Panel
+        menu.BackgroundTransparency = panelTransp
+        menu.BorderSizePixel = 0
+        menu.ScrollBarThickness = 3
+        menu.ScrollBarImageColor3 = Theme.Accent
+        menu.CanvasSize = UDim2.new(0, 0, 0, #opts * (itemH + 2) + pad * 2)
+        menu.ClipsDescendants = true
+        menu.ZIndex = 1810
+        menu.Parent = backdrop
+
+        local mCorner = Instance.new("UICorner")
+        mCorner.CornerRadius = UDim.new(0, 6)
+        mCorner.Parent = menu
+
+        local mStroke = Instance.new("UIStroke")
+        mStroke.Color = Theme.Accent
+        mStroke.Thickness = 1
+        mStroke.Transparency = 0.25
+        mStroke.Parent = menu
+
+        local mLayout = Instance.new("UIListLayout")
+        mLayout.Padding = UDim.new(0, 2)
+        mLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        mLayout.Parent = menu
+
+        local mPad = Instance.new("UIPadding")
+        mPad.PaddingTop = UDim.new(0, pad)
+        mPad.PaddingBottom = UDim.new(0, pad)
+        mPad.PaddingLeft = UDim.new(0, pad)
+        mPad.PaddingRight = UDim.new(0, pad)
+        mPad.Parent = menu
+
+        for idx, opt in ipairs(opts) do
+            local isSel = tostring(opt) == tostring(selectedValue)
+            local optBtn = Instance.new("TextButton")
+            optBtn.Size = UDim2.new(1, 0, 0, itemH)
+            optBtn.BackgroundColor3 = isSel and Theme.Element or Theme.Panel
+            optBtn.BackgroundTransparency = isSel and 0.1 or 0.35
+            optBtn.BorderSizePixel = 0
+            optBtn.Text = tostring(opt)
+            optBtn.TextColor3 = isSel and Theme.Accent or Theme.Text
+            optBtn.TextSize = 11
+            optBtn.Font = isSel and Enum.Font.GothamBold or Enum.Font.GothamMedium
+            optBtn.TextXAlignment = Enum.TextXAlignment.Left
+            optBtn.TextTruncate = Enum.TextTruncate.AtEnd
+            optBtn.AutoButtonColor = false
+            optBtn.LayoutOrder = idx
+            optBtn.ZIndex = 1812
+            optBtn.Parent = menu
+
+            local oCorner = Instance.new("UICorner")
+            oCorner.CornerRadius = UDim.new(0, 4)
+            oCorner.Parent = optBtn
+
+            local oPad = Instance.new("UIPadding")
+            oPad.PaddingLeft = UDim.new(0, 8)
+            oPad.PaddingRight = UDim.new(0, 8)
+            oPad.Parent = optBtn
+
+            optBtn.MouseEnter:Connect(function()
+                if not isSel then
+                    optBtn.BackgroundColor3 = Theme.Hover
+                    optBtn.BackgroundTransparency = 0.1
+                end
+            end)
+            optBtn.MouseLeave:Connect(function()
+                if not isSel then
+                    optBtn.BackgroundColor3 = Theme.Panel
+                    optBtn.BackgroundTransparency = 0.35
+                end
+            end)
+            optBtn.MouseButton1Click:Connect(function()
+                if env.Destroyed then return end
+                CloseToxDropdownOverlay()
+                if onSelect then
+                    onSelect(opt)
+                end
+            end)
+        end
+
+        TweenService:Create(menu, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, menuW, 0, desiredH)
+        }):Play()
+        return true
+    end
+
+    getgenv().ShowToxDropdownOverlay = ShowToxDropdownOverlay
+    getgenv().CloseToxDropdownOverlay = CloseToxDropdownOverlay
+end
 getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     local parentTarget = ResolveElementParent(Page)
     local Container = Instance.new("Frame")
@@ -344,6 +516,367 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     end
     return Container
 end
+getgenv().CreateSlider = function(Name, Page, MinVal, MaxVal, DefaultVal, Suffix, Callback, SyncKey, SkipNotify)
+    local parentTarget = ResolveElementParent(Page)
+    local minV = tonumber(MinVal) or 0
+    local maxV = tonumber(MaxVal) or 100
+    if maxV <= minV then maxV = minV + 1 end
+    local curVal = math.clamp(tonumber(DefaultVal) or minV, minV, maxV)
+    local unitSuffix = Suffix ~= nil and tostring(Suffix) or "%"
+
+    local Container = Instance.new("Frame")
+    Container.Size = UDim2.new(1, -4, 0, 46)
+    Container.BackgroundColor3 = Theme.Element
+    Container.BorderSizePixel = 0
+    Container.Parent = parentTarget
+    local cCorner = Instance.new("UICorner") cCorner.CornerRadius = UDim.new(0, 6) cCorner.Parent = Container
+    local cStroke = Instance.new("UIStroke") cStroke.Color = Theme.Outline cStroke.Thickness = 1 cStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cStroke.Parent = Container
+    RegisterThemedObject(Container, "BackgroundColor3", "Element")
+    RegisterThemedObject(cStroke, "Color", "Outline")
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -76, 0, 20)
+    Label.Position = UDim2.new(0, 12, 0, 4)
+    Label.BackgroundTransparency = 1
+    Label.Text = Name
+    Label.TextColor3 = Theme.Text
+    Label.TextSize = 12
+    Label.Font = Enum.Font.GothamMedium
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.TextTruncate = Enum.TextTruncate.AtEnd
+    Label.Parent = Container
+    RegisterThemedObject(Label, "TextColor3", "Text")
+
+    local ValLabel = Instance.new("TextLabel")
+    ValLabel.Size = UDim2.new(0, 60, 0, 20)
+    ValLabel.Position = UDim2.new(1, -70, 0, 4)
+    ValLabel.BackgroundTransparency = 1
+    ValLabel.Text = tostring(curVal) .. unitSuffix
+    ValLabel.TextColor3 = Theme.Accent
+    ValLabel.TextSize = 11
+    ValLabel.Font = Enum.Font.GothamBold
+    ValLabel.TextXAlignment = Enum.TextXAlignment.Right
+    ValLabel.Parent = Container
+    RegisterThemedObject(ValLabel, "TextColor3", "Accent")
+
+    local Track = Instance.new("TextButton")
+    Track.Size = UDim2.new(1, -24, 0, 14)
+    Track.Position = UDim2.new(0, 12, 0, 26)
+    Track.BackgroundTransparency = 1
+    Track.BorderSizePixel = 0
+    Track.Text = ""
+    Track.AutoButtonColor = false
+    Track.Parent = Container
+
+    local Bar = Instance.new("Frame")
+    Bar.Size = UDim2.new(1, 0, 0, 6)
+    Bar.Position = UDim2.new(0, 0, 0.5, -3)
+    Bar.BackgroundColor3 = Theme.Panel
+    Bar.BorderSizePixel = 0
+    Bar.Parent = Track
+    local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(1, 0) bCorner.Parent = Bar
+    RegisterThemedObject(Bar, "BackgroundColor3", "Panel")
+
+    local initialRel = math.clamp((curVal - minV) / (maxV - minV), 0, 1)
+    local Fill = Instance.new("Frame")
+    Fill.Size = UDim2.new(initialRel, 0, 1, 0)
+    Fill.BackgroundColor3 = Theme.Accent
+    Fill.BorderSizePixel = 0
+    Fill.Parent = Bar
+    local fCorner = Instance.new("UICorner") fCorner.CornerRadius = UDim.new(1, 0) fCorner.Parent = Fill
+    RegisterThemedObject(Fill, "BackgroundColor3", "Accent")
+
+    local Knob = Instance.new("Frame")
+    Knob.Size = UDim2.new(0, 14, 0, 14)
+    Knob.AnchorPoint = Vector2.new(0.5, 0.5)
+    Knob.Position = UDim2.new(initialRel, 0, 0.5, 0)
+    Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Knob.BorderSizePixel = 0
+    Knob.ZIndex = Bar.ZIndex + 2
+    Knob.Parent = Track
+    local kCorner = Instance.new("UICorner") kCorner.CornerRadius = UDim.new(1, 0) kCorner.Parent = Knob
+    local kStroke = Instance.new("UIStroke") kStroke.Color = Theme.Accent kStroke.Thickness = 1.5 kStroke.Parent = Knob
+    RegisterThemedObject(kStroke, "Color", "Accent")
+
+    local function applyVisual(val)
+        local clamped = math.clamp(math.floor((tonumber(val) or minV) + 0.5), minV, maxV)
+        curVal = clamped
+        local rel = math.clamp((clamped - minV) / (maxV - minV), 0, 1)
+        ValLabel.Text = tostring(clamped) .. unitSuffix
+        Fill.Size = UDim2.new(rel, 0, 1, 0)
+        Knob.Position = UDim2.new(rel, 0, 0.5, 0)
+        return clamped
+    end
+
+    table.insert(RegisteredToggles, {
+        UpdateColor = function()
+            Fill.BackgroundColor3 = Theme.Accent
+            ValLabel.TextColor3 = Theme.Accent
+            kStroke.Color = Theme.Accent
+            cStroke.Color = Theme.Outline
+        end
+    })
+
+    if SyncKey then
+        RegisterSharedValue(SyncKey, {
+            SetValue = function(v)
+                if tonumber(v) then
+                    applyVisual(v)
+                end
+            end
+        })
+    end
+
+    local function updateFromX(inpX, skipSync)
+        local width = math.max(Track.AbsoluteSize.X, 1)
+        local rel = math.clamp((inpX - Track.AbsolutePosition.X) / width, 0, 1)
+        local val = math.floor(minV + rel * (maxV - minV) + 0.5)
+        applyVisual(val)
+        if Callback then
+            Callback(val, true)
+        end
+        if not skipSync and SyncKey and getgenv().SyncValueVisuals then
+            getgenv().SyncValueVisuals(SyncKey, val)
+        end
+    end
+
+    Track.InputBegan:Connect(function(inp)
+        if getgenv().Destroyed then return end
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+            TweenService:Create(Knob, TweenInfo.new(0.1), {Size = UDim2.new(0, 16, 0, 16)}):Play()
+            updateFromX(inp.Position.X, false)
+            local moveConn, endConn
+            moveConn = UserInputService.InputChanged:Connect(function(change)
+                if change.UserInputType == Enum.UserInputType.MouseMovement or change.UserInputType == Enum.UserInputType.Touch then
+                    updateFromX(change.Position.X, false)
+                end
+            end)
+            endConn = UserInputService.InputEnded:Connect(function(ended)
+                if ended.UserInputType == Enum.UserInputType.MouseButton1 or ended.UserInputType == Enum.UserInputType.Touch then
+                    TweenService:Create(Knob, TweenInfo.new(0.1), {Size = UDim2.new(0, 14, 0, 14)}):Play()
+                    if moveConn then pcall(function() moveConn:Disconnect() end) end
+                    if endConn then pcall(function() endConn:Disconnect() end) end
+                    if Callback then Callback(curVal, false) end
+                    AutoSaveConfiguration()
+                end
+            end)
+        end
+    end)
+
+    if getgenv().RegisterToxSearchControl then
+        getgenv().RegisterToxSearchControl(Name, Page, Container)
+    end
+    return Container
+end
+getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultToggle, DefaultVal, Suffix, CallbackToggle, CallbackValue, SyncKey)
+    local parentTarget = ResolveElementParent(Page)
+    local minV = tonumber(MinVal) or 0
+    local maxV = tonumber(MaxVal) or 100
+    if maxV <= minV then maxV = minV + 1 end
+    local curVal = math.clamp(tonumber(DefaultVal) or minV, minV, maxV)
+    local unitSuffix = Suffix ~= nil and tostring(Suffix) or "%"
+
+    local Container = Instance.new("Frame")
+    Container.Size = UDim2.new(1, -4, 0, 48)
+    Container.BackgroundColor3 = Theme.Element
+    Container.BorderSizePixel = 0
+    Container.Parent = parentTarget
+    local cCorner = Instance.new("UICorner") cCorner.CornerRadius = UDim.new(0, 6) cCorner.Parent = Container
+    local cStroke = Instance.new("UIStroke") cStroke.Color = Theme.Outline cStroke.Thickness = 1 cStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cStroke.Parent = Container
+    RegisterThemedObject(Container, "BackgroundColor3", "Element")
+    RegisterThemedObject(cStroke, "Color", "Outline")
+
+    local risky = IsFeatureRisky(Name)
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -118, 0, 20)
+    Label.Position = UDim2.new(0, 12, 0, 4)
+    Label.BackgroundTransparency = 1
+    Label.Text = Name
+    Label.TextColor3 = risky and Theme.Risky or Theme.Text
+    Label.TextSize = 12
+    Label.Font = Enum.Font.GothamMedium
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.TextTruncate = Enum.TextTruncate.AtEnd
+    Label.Parent = Container
+    if not risky then RegisterThemedObject(Label, "TextColor3", "Text") else RegisterThemedObject(Label, "TextColor3", "Risky") end
+
+    local ValLabel = Instance.new("TextLabel")
+    ValLabel.Size = UDim2.new(0, 48, 0, 20)
+    ValLabel.Position = UDim2.new(1, -104, 0, 4)
+    ValLabel.BackgroundTransparency = 1
+    ValLabel.Text = tostring(curVal) .. unitSuffix
+    ValLabel.TextColor3 = Theme.Accent
+    ValLabel.TextSize = 11
+    ValLabel.Font = Enum.Font.GothamBold
+    ValLabel.TextXAlignment = Enum.TextXAlignment.Right
+    ValLabel.Parent = Container
+    RegisterThemedObject(ValLabel, "TextColor3", "Accent")
+
+    local initialState = DefaultToggle
+    if SyncKey and Settings[SyncKey] ~= nil then
+        initialState = Settings[SyncKey]
+    end
+    local Enabled = (initialState == true)
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Size = UDim2.new(0, 38, 0, 20)
+    ToggleButton.Position = UDim2.new(1, -48, 0, 6)
+    ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.Text = ""
+    ToggleButton.AutoButtonColor = false
+    ToggleButton.Parent = Container
+    local tgCorner = Instance.new("UICorner") tgCorner.CornerRadius = UDim.new(1, 0) tgCorner.Parent = ToggleButton
+    local tgStroke = Instance.new("UIStroke") tgStroke.Color = Theme.Outline tgStroke.Thickness = 1 tgStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border tgStroke.Parent = ToggleButton
+    RegisterThemedObject(tgStroke, "Color", "Outline")
+    local Indicator = Instance.new("Frame")
+    Indicator.Size = UDim2.new(0, 14, 0, 14)
+    Indicator.Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+    Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Indicator.BorderSizePixel = 0
+    Indicator.Parent = ToggleButton
+    local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
+
+    local Track = Instance.new("TextButton")
+    Track.Size = UDim2.new(1, -72, 0, 14)
+    Track.Position = UDim2.new(0, 12, 0, 28)
+    Track.BackgroundTransparency = 1
+    Track.BorderSizePixel = 0
+    Track.Text = ""
+    Track.AutoButtonColor = false
+    Track.Parent = Container
+
+    local Bar = Instance.new("Frame")
+    Bar.Size = UDim2.new(1, 0, 0, 6)
+    Bar.Position = UDim2.new(0, 0, 0.5, -3)
+    Bar.BackgroundColor3 = Theme.Panel
+    Bar.BorderSizePixel = 0
+    Bar.Parent = Track
+    local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(1, 0) bCorner.Parent = Bar
+    RegisterThemedObject(Bar, "BackgroundColor3", "Panel")
+
+    local initialRel = math.clamp((curVal - minV) / (maxV - minV), 0, 1)
+    local Fill = Instance.new("Frame")
+    Fill.Size = UDim2.new(initialRel, 0, 1, 0)
+    Fill.BackgroundColor3 = Theme.Accent
+    Fill.BorderSizePixel = 0
+    Fill.Parent = Bar
+    local fCorner = Instance.new("UICorner") fCorner.CornerRadius = UDim.new(1, 0) fCorner.Parent = Fill
+    RegisterThemedObject(Fill, "BackgroundColor3", "Accent")
+
+    local Knob = Instance.new("Frame")
+    Knob.Size = UDim2.new(0, 13, 0, 13)
+    Knob.AnchorPoint = Vector2.new(0.5, 0.5)
+    Knob.Position = UDim2.new(initialRel, 0, 0.5, 0)
+    Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Knob.BorderSizePixel = 0
+    Knob.ZIndex = Bar.ZIndex + 2
+    Knob.Parent = Track
+    local kCorner = Instance.new("UICorner") kCorner.CornerRadius = UDim.new(1, 0) kCorner.Parent = Knob
+    local kStroke = Instance.new("UIStroke") kStroke.Color = Theme.Accent kStroke.Thickness = 1.5 kStroke.Parent = Knob
+    RegisterThemedObject(kStroke, "Color", "Accent")
+
+    local function UpdateToggle()
+        TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
+            BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
+        }):Play()
+        TweenService:Create(Indicator, TweenInfo.new(0.2), {
+            Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+        }):Play()
+    end
+    local function applyValueVisual(val)
+        local clamped = math.clamp(math.floor((tonumber(val) or minV) + 0.5), minV, maxV)
+        curVal = clamped
+        local rel = math.clamp((clamped - minV) / (maxV - minV), 0, 1)
+        ValLabel.Text = tostring(clamped) .. unitSuffix
+        Fill.Size = UDim2.new(rel, 0, 1, 0)
+        Knob.Position = UDim2.new(rel, 0, 0.5, 0)
+    end
+
+    table.insert(RegisteredToggles, {
+        UpdateColor = function()
+            ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
+            tgStroke.Color = Theme.Outline
+            cStroke.Color = Theme.Outline
+            Fill.BackgroundColor3 = Theme.Accent
+            ValLabel.TextColor3 = Theme.Accent
+            kStroke.Color = Theme.Accent
+        end
+    })
+
+    local Controller = {
+        Button = Container,
+        SetVisual = function(Value)
+            Enabled = Value == true
+            UpdateToggle()
+        end,
+        SetValue = function(Value)
+            if tonumber(Value) then
+                applyValueVisual(Value)
+            end
+        end
+    }
+    RegisterSharedToggle(SyncKey, Controller)
+    RegisterSharedValue(SyncKey, Controller)
+    RegisterStartupToggleCallback(SyncKey, CallbackToggle)
+
+    ToggleButton.MouseButton1Click:Connect(function()
+        if getgenv().Destroyed then return end
+        Enabled = not Enabled
+        UpdateToggle()
+        if CallbackToggle then CallbackToggle(Enabled) end
+        if SyncKey and getgenv().SyncToggleVisuals then
+            getgenv().SyncToggleVisuals(SyncKey, Enabled)
+        end
+        if getgenv().ScriptLoaded then
+            CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(80, 255, 120) or Color3.fromRGB(255, 80, 90))
+        end
+        AutoSaveConfiguration()
+    end)
+
+    local function updateFromX(inpX)
+        local width = math.max(Track.AbsoluteSize.X, 1)
+        local rel = math.clamp((inpX - Track.AbsolutePosition.X) / width, 0, 1)
+        local val = math.floor(minV + rel * (maxV - minV) + 0.5)
+        applyValueVisual(val)
+        if CallbackValue then CallbackValue(val) end
+        if SyncKey and getgenv().SyncValueVisuals then
+            getgenv().SyncValueVisuals(SyncKey, val)
+        end
+    end
+
+    Track.InputBegan:Connect(function(inp)
+        if getgenv().Destroyed then return end
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+            TweenService:Create(Knob, TweenInfo.new(0.1), {Size = UDim2.new(0, 15, 0, 15)}):Play()
+            updateFromX(inp.Position.X)
+            local moveConn, endConn
+            moveConn = UserInputService.InputChanged:Connect(function(change)
+                if change.UserInputType == Enum.UserInputType.MouseMovement or change.UserInputType == Enum.UserInputType.Touch then
+                    updateFromX(change.Position.X)
+                end
+            end)
+            endConn = UserInputService.InputEnded:Connect(function(ended)
+                if ended.UserInputType == Enum.UserInputType.MouseButton1 or ended.UserInputType == Enum.UserInputType.Touch then
+                    TweenService:Create(Knob, TweenInfo.new(0.1), {Size = UDim2.new(0, 13, 0, 13)}):Play()
+                    if moveConn then pcall(function() moveConn:Disconnect() end) end
+                    if endConn then pcall(function() endConn:Disconnect() end) end
+                    AutoSaveConfiguration()
+                end
+            end)
+        end
+    end)
+
+    UpdateToggle()
+    if Enabled and CallbackToggle then
+        RunWhenLoaded(function()
+            return Enabled
+        end, CallbackToggle)
+    end
+    if getgenv().RegisterToxSearchControl then
+        getgenv().RegisterToxSearchControl(Name, Page, Container)
+    end
+    return Container
+end
 getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, DefaultChoice, CallbackToggle, CallbackChoice, SyncKey)
     local parentTarget = ResolveElementParent(Page)
     local Container = Instance.new("Frame")
@@ -394,91 +927,21 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     elseif SyncKey and Settings[SyncKey .. "Choice"] ~= nil then
         initialChoice = Settings[SyncKey .. "Choice"]
     end
-    ChoiceBtn.Text = tostring(initialChoice)
-    local isChoiceOpen = false
-    local choiceItemHeight = 22
-    local choiceListHeight = math.min(#Options * (choiceItemHeight + 2), 100)
-    local choiceOpenHeight = 36 + choiceListHeight + 8
-    Container.ClipsDescendants = true
-    local ChoiceScroll = Instance.new("ScrollingFrame")
-    ChoiceScroll.Size = UDim2.new(1, -16, 0, choiceListHeight)
-    ChoiceScroll.Position = UDim2.new(0, 8, 0, 36)
-    ChoiceScroll.BackgroundColor3 = Theme.Panel
-    ChoiceScroll.BorderSizePixel = 0
-    ChoiceScroll.ScrollBarThickness = 3
-    ChoiceScroll.ScrollBarImageColor3 = Theme.Accent
-    ChoiceScroll.CanvasSize = UDim2.new(0, 0, 0, #Options * (choiceItemHeight + 2))
-    ChoiceScroll.Visible = false
-    ChoiceScroll.Parent = Container
-    local csCorner = Instance.new("UICorner") csCorner.CornerRadius = UDim.new(0, 4) csCorner.Parent = ChoiceScroll
-    local csStroke = Instance.new("UIStroke") csStroke.Color = Theme.Outline csStroke.Thickness = 1 csStroke.Parent = ChoiceScroll
-    RegisterThemedObject(ChoiceScroll, "BackgroundColor3", "Panel")
-    RegisterThemedObject(csStroke, "Color", "Outline")
-    local csLayout = Instance.new("UIListLayout")
-    csLayout.Padding = UDim.new(0, 2)
-    csLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    csLayout.Parent = ChoiceScroll
-    local csPadding = Instance.new("UIPadding")
-    csPadding.PaddingTop = UDim.new(0, 2)
-    csPadding.PaddingBottom = UDim.new(0, 2)
-    csPadding.PaddingLeft = UDim.new(0, 4)
-    csPadding.PaddingRight = UDim.new(0, 4)
-    csPadding.Parent = ChoiceScroll
-    local choiceButtons = {}
-    local function RefreshChoiceButtons()
-        for optVal, btn in pairs(choiceButtons) do
-            if optVal == initialChoice then
-                btn.TextColor3 = Theme.Accent
-                btn.BackgroundColor3 = Theme.Element
-            else
-                btn.TextColor3 = Theme.Text
-                btn.BackgroundColor3 = Theme.Panel
-            end
-        end
-    end
-    for idx, opt in ipairs(Options) do
-        local cOptBtn = Instance.new("TextButton")
-        cOptBtn.Size = UDim2.new(1, -2, 0, choiceItemHeight)
-        cOptBtn.BackgroundColor3 = (opt == initialChoice) and Theme.Element or Theme.Panel
-        cOptBtn.BorderSizePixel = 0
-        cOptBtn.Text = tostring(opt)
-        cOptBtn.TextColor3 = (opt == initialChoice) and Theme.Accent or Theme.Text
-        cOptBtn.TextSize = 11
-        cOptBtn.Font = Enum.Font.GothamMedium
-        cOptBtn.TextXAlignment = Enum.TextXAlignment.Left
-        cOptBtn.LayoutOrder = idx
-        cOptBtn.Parent = ChoiceScroll
-        local cbCorner2 = Instance.new("UICorner") cbCorner2.CornerRadius = UDim.new(0, 3) cbCorner2.Parent = cOptBtn
-        local cbPad2 = Instance.new("UIPadding") cbPad2.PaddingLeft = UDim.new(0, 8) cbPad2.Parent = cOptBtn
-        choiceButtons[opt] = cOptBtn
-        cOptBtn.MouseButton1Click:Connect(function()
-            if getgenv().Destroyed then return end
-            initialChoice = opt
-            ChoiceBtn.Text = tostring(opt)
-            RefreshChoiceButtons()
-            isChoiceOpen = false
-            ChoiceScroll.Visible = false
-            TweenService:Create(Container, TweenInfo.new(0.18, Enum.EasingStyle.Quad), { Size = UDim2.new(1, -4, 0, 36) }):Play()
-            if CallbackChoice then CallbackChoice(opt) end
-            AutoSaveConfiguration()
-        end)
-    end
-    local function ToggleChoiceOpen()
-        isChoiceOpen = not isChoiceOpen
-        if isChoiceOpen then
-            ChoiceScroll.Visible = true
-            RefreshChoiceButtons()
-            TweenService:Create(Container, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Size = UDim2.new(1, -4, 0, choiceOpenHeight) }):Play()
-        else
-            TweenService:Create(Container, TweenInfo.new(0.18, Enum.EasingStyle.Quad), { Size = UDim2.new(1, -4, 0, 36) }):Play()
-            task.delay(0.2, function()
-                if not isChoiceOpen then ChoiceScroll.Visible = false end
+    ChoiceBtn.Text = tostring(initialChoice) .. " ▾"
+    ChoiceBtn.TextTruncate = Enum.TextTruncate.AtEnd
+    ChoiceBtn.MouseButton1Click:Connect(function()
+        if getgenv().Destroyed then return end
+        if getgenv().ShowToxDropdownOverlay then
+            ChoiceBtn.Text = tostring(initialChoice) .. " ▴"
+            getgenv().ShowToxDropdownOverlay(ChoiceBtn, Options, initialChoice, function(opt)
+                initialChoice = opt
+                ChoiceBtn.Text = tostring(opt) .. " ▾"
+                if CallbackChoice then CallbackChoice(opt) end
+                AutoSaveConfiguration()
+            end, function()
+                ChoiceBtn.Text = tostring(initialChoice) .. " ▾"
             end)
         end
-    end
-    ChoiceBtn.MouseButton1Click:Connect(function()
-        if getgenv().Destroyed  then return end
-        ToggleChoiceOpen()
     end)
     local ToggleButton = Instance.new("TextButton")
     ToggleButton.Size = UDim2.new(0, 38, 0, 20)
@@ -524,11 +987,11 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
         end,
         SetValue = function(Value)
             initialChoice = Value
-            ChoiceBtn.Text = tostring(Value)
-            RefreshChoiceButtons()
+            ChoiceBtn.Text = tostring(Value) .. " ▾"
         end
     }
     RegisterSharedToggle(SyncKey, Controller)
+    RegisterSharedValue(SyncKey, Controller)
     RegisterStartupToggleCallback(SyncKey, CallbackToggle)
     ToggleButton.MouseButton1Click:Connect(function()
         if getgenv().Destroyed  then return end
@@ -544,6 +1007,11 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
         AutoSaveConfiguration()
     end)
     UpdateToggle()
+    if Enabled and CallbackToggle then
+        RunWhenLoaded(function()
+            return Enabled
+        end, CallbackToggle)
+    end
     if getgenv().RegisterToxSearchControl then
         getgenv().RegisterToxSearchControl(Name, Page, Container)
     end
@@ -769,11 +1237,11 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback
     RegisterThemedObject(Label, "TextColor3", risky and "Risky" or "Text")
     local SelectedOption = DefaultOption
     local Button = Instance.new("TextButton")
-    Button.Size = UDim2.new(0, 120, 0, 24)
-    Button.Position = UDim2.new(1, -128, 0.5, -12)
+    Button.Size = UDim2.new(0, 126, 0, 24)
+    Button.Position = UDim2.new(1, -134, 0.5, -12)
     Button.BackgroundColor3 = Theme.Panel
     Button.BorderSizePixel = 0
-    Button.Text = tostring(DefaultOption) .. "  ▼"
+    Button.Text = tostring(DefaultOption) .. "  ▾"
     Button.TextColor3 = Theme.Accent
     Button.TextSize = 11
     Button.Font = Enum.Font.GothamBold
@@ -784,92 +1252,19 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback
     RegisterThemedObject(Button, "BackgroundColor3", "Panel")
     RegisterThemedObject(Button, "TextColor3", "Accent")
     RegisterThemedObject(btnStroke, "Color", "Outline")
-    local itemHeight = 24
-    local maxVisibleItems = 5
-    local listHeight = math.min(#Options * (itemHeight + 2), maxVisibleItems * (itemHeight + 2))
-    local totalOpenHeight = 36 + listHeight + 8
-    local DropdownScroll = Instance.new("ScrollingFrame")
-    DropdownScroll.Size = UDim2.new(1, -16, 0, listHeight)
-    DropdownScroll.Position = UDim2.new(0, 8, 0, 36)
-    DropdownScroll.BackgroundColor3 = Theme.Panel
-    DropdownScroll.BorderSizePixel = 0
-    DropdownScroll.ScrollBarThickness = 3
-    DropdownScroll.ScrollBarImageColor3 = Theme.Accent
-    DropdownScroll.CanvasSize = UDim2.new(0, 0, 0, #Options * (itemHeight + 2))
-    DropdownScroll.Visible = false
-    DropdownScroll.Parent = Box
-    local dsCorner = Instance.new("UICorner") dsCorner.CornerRadius = UDim.new(0, 4) dsCorner.Parent = DropdownScroll
-    local dsStroke = Instance.new("UIStroke") dsStroke.Color = Theme.Outline dsStroke.Thickness = 1 dsStroke.Parent = DropdownScroll
-    RegisterThemedObject(DropdownScroll, "BackgroundColor3", "Panel")
-    RegisterThemedObject(dsStroke, "Color", "Outline")
-    local dsLayout = Instance.new("UIListLayout")
-    dsLayout.Padding = UDim.new(0, 2)
-    dsLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    dsLayout.Parent = DropdownScroll
-    local dsPadding = Instance.new("UIPadding")
-    dsPadding.PaddingTop = UDim.new(0, 2)
-    dsPadding.PaddingBottom = UDim.new(0, 2)
-    dsPadding.PaddingLeft = UDim.new(0, 4)
-    dsPadding.PaddingRight = UDim.new(0, 4)
-    dsPadding.Parent = DropdownScroll
-    local isOpen = false
-    local OptionButtons = {}
-    local function RefreshOptionButtons()
-        for optVal, optBtn in pairs(OptionButtons) do
-            if optVal == SelectedOption then
-                optBtn.TextColor3 = Theme.Accent
-                optBtn.BackgroundColor3 = Theme.Element
-            else
-                optBtn.TextColor3 = Theme.Text
-                optBtn.BackgroundColor3 = Theme.Panel
-            end
-        end
-    end
-    for idx, opt in ipairs(Options) do
-        local optBtn = Instance.new("TextButton")
-        optBtn.Size = UDim2.new(1, -2, 0, itemHeight)
-        optBtn.BackgroundColor3 = (opt == SelectedOption) and Theme.Element or Theme.Panel
-        optBtn.BorderSizePixel = 0
-        optBtn.Text = tostring(opt)
-        optBtn.TextColor3 = (opt == SelectedOption) and Theme.Accent or Theme.Text
-        optBtn.TextSize = 11
-        optBtn.Font = Enum.Font.GothamMedium
-        optBtn.TextXAlignment = Enum.TextXAlignment.Left
-        optBtn.LayoutOrder = idx
-        optBtn.Parent = DropdownScroll
-        local obCorner = Instance.new("UICorner") obCorner.CornerRadius = UDim.new(0, 3) obCorner.Parent = optBtn
-        local obPad = Instance.new("UIPadding") obPad.PaddingLeft = UDim.new(0, 8) obPad.Parent = optBtn
-        OptionButtons[opt] = optBtn
-        optBtn.MouseButton1Click:Connect(function()
-            if getgenv().Destroyed then return end
-            SelectedOption = opt
-            Button.Text = tostring(opt) .. "  ▼"
-            RefreshOptionButtons()
-            isOpen = false
-            DropdownScroll.Visible = false
-            TweenService:Create(Box, TweenInfo.new(0.18, Enum.EasingStyle.Quad), { Size = UDim2.new(1, -4, 0, 36) }):Play()
-            if Callback then Callback(opt) end
-            AutoSaveConfiguration()
-        end)
-    end
-    local function ToggleOpen()
-        isOpen = not isOpen
-        if isOpen then
-            DropdownScroll.Visible = true
-            RefreshOptionButtons()
-            Button.Text = tostring(SelectedOption) .. "  ▲"
-            TweenService:Create(Box, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Size = UDim2.new(1, -4, 0, totalOpenHeight) }):Play()
-        else
-            Button.Text = tostring(SelectedOption) .. "  ▼"
-            TweenService:Create(Box, TweenInfo.new(0.18, Enum.EasingStyle.Quad), { Size = UDim2.new(1, -4, 0, 36) }):Play()
-            task.delay(0.2, function()
-                if not isOpen then DropdownScroll.Visible = false end
-            end)
-        end
-    end
     Button.MouseButton1Click:Connect(function()
         if getgenv().Destroyed then return end
-        ToggleOpen()
+        if getgenv().ShowToxDropdownOverlay then
+            Button.Text = tostring(SelectedOption) .. "  ▴"
+            getgenv().ShowToxDropdownOverlay(Button, Options, SelectedOption, function(opt)
+                SelectedOption = opt
+                Button.Text = tostring(opt) .. "  ▾"
+                if Callback then Callback(opt) end
+                AutoSaveConfiguration()
+            end, function()
+                Button.Text = tostring(SelectedOption) .. "  ▾"
+            end)
+        end
     end)
     if getgenv().RegisterToxSearchControl then
         getgenv().RegisterToxSearchControl(Name, Page, Box, Options)
@@ -1114,6 +1509,14 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
             Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
         }):Play()
     end
+    table.insert(RegisteredToggles, {
+        UpdateColor = function()
+            Toggle.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
+            tgStroke.Color = Theme.Outline
+            bStroke.Color = Theme.Outline
+            kbStroke.Color = Theme.Outline
+        end
+    })
     local Controller = {
         Button = Box,
         SetVisual = function(Value)
@@ -1199,3 +1602,7 @@ end)
 UI.RegisterSharedToggle = RegisterSharedToggle
 UI.RegisterStartupToggleCallback = RegisterStartupToggleCallback
 UI.RegisterSharedValue = RegisterSharedValue
+UI.CreateSlider = getgenv().CreateSlider
+UI.CreateToggleWithSlider = getgenv().CreateToggleWithSlider
+UI.ShowToxDropdownOverlay = getgenv().ShowToxDropdownOverlay
+UI.CloseToxDropdownOverlay = getgenv().CloseToxDropdownOverlay

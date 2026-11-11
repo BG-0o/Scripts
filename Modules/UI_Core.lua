@@ -32,19 +32,25 @@ local DefaultTheme = {
     Panel = Color3.fromRGB(16, 16, 26),
     Element = Color3.fromRGB(22, 22, 34),
     Hover = Color3.fromRGB(30, 30, 48),
-    Outline = Color3.fromRGB(36, 36, 56),
-    Accent = Color3.fromRGB(30, 95, 255),       
-    Accent2 = Color3.fromRGB(145, 45, 255),     
+    Outline = Color3.fromRGB(48, 48, 72),
+    Accent = Color3.fromRGB(30, 95, 255),
+    Accent2 = Color3.fromRGB(145, 45, 255),
     Text = Color3.fromRGB(255, 255, 255),
     DimText = Color3.fromRGB(165, 165, 185),
-    Risky = Color3.fromRGB(255, 55, 65)         
+    Risky = Color3.fromRGB(255, 55, 65)
 }
 if typeof(Settings.Theme) ~= "table" then
     Settings.Theme = {}
 end
+local UIThemePresets
 for key, val in pairs(DefaultTheme) do
     if Settings.Theme[key] == nil then
         Settings.Theme[key] = val
+    end
+end
+if Settings.CustomAccentActive ~= true and env.MAIN_COLOR and typeof(env.MAIN_COLOR) == "Color3" then
+    if Settings.Theme.Accent == DefaultTheme.Accent then
+        Settings.Theme.Accent = env.MAIN_COLOR
     end
 end
 local Theme = Settings.Theme
@@ -52,6 +58,7 @@ getgenv().Theme = Theme
 MAIN_COLOR = Theme.Accent
 getgenv().MAIN_COLOR = MAIN_COLOR
 local ThemedObjects = {}
+local TransparentObjects = {}
 local RegisteredToggles = {}
 local function RegisterThemedObject(instance, prop, colorKey)
     if not instance then return end
@@ -60,9 +67,57 @@ local function RegisterThemedObject(instance, prop, colorKey)
         instance[prop] = Theme[colorKey]
     end)
 end
+local function RegisterTransparentObject(instance, mode)
+    if not instance then return end
+    table.insert(TransparentObjects, {Instance = instance, Mode = mode or "Panel"})
+end
 getgenv().RegisterThemedObject = RegisterThemedObject
+getgenv().RegisterTransparentObject = RegisterTransparentObject
+getgenv().ToxRegisterTransparentObject = RegisterTransparentObject
 getgenv().ThemedObjects = ThemedObjects
 getgenv().RegisteredToggles = RegisteredToggles
+getgenv().ToxGetRainbowColor = function(speedVal, phase)
+    local spd = tonumber(speedVal) or tonumber(Settings.UIRainbowSpeed) or 35
+    local rate = math.clamp(spd, 1, 100) / 140
+    local hue = ((os.clock() * rate) + (tonumber(phase) or 0)) % 1
+    return Color3.fromHSV(hue, 0.95, 1)
+end
+local function SyncAccentOnly(accentColor, accent2Color)
+    if typeof(accentColor) ~= "Color3" then return end
+    Theme.Accent = accentColor
+    if typeof(accent2Color) == "Color3" then
+        Theme.Accent2 = accent2Color
+    end
+    MAIN_COLOR = accentColor
+    getgenv().MAIN_COLOR = accentColor
+    for i = #ThemedObjects, 1, -1 do
+        local entry = ThemedObjects[i]
+        local inst = entry.Instance
+        if inst and inst.Parent then
+            if entry.Key == "Accent" or entry.Key == "Accent2" then
+                pcall(function()
+                    inst[entry.Prop] = Theme[entry.Key]
+                end)
+            end
+        else
+            table.remove(ThemedObjects, i)
+        end
+    end
+    for i = #RegisteredToggles, 1, -1 do
+        local toggleEntry = RegisteredToggles[i]
+        if toggleEntry and toggleEntry.UpdateColor then
+            pcall(toggleEntry.UpdateColor)
+        else
+            table.remove(RegisteredToggles, i)
+        end
+    end
+    if env.ToxUserExpiryLabel and env.ToxUserExpiryLabel.Parent then
+        local r = math.clamp(math.floor(accentColor.R * 255 + 0.5), 0, 255)
+        local g = math.clamp(math.floor(accentColor.G * 255 + 0.5), 0, 255)
+        local b = math.clamp(math.floor(accentColor.B * 255 + 0.5), 0, 255)
+        env.ToxUserExpiryLabel.Text = string.format('Expires: <font color="#%02x%02x%02x">lifetime</font>', r, g, b)
+    end
+end
 local function ApplyTheme()
     MAIN_COLOR = Theme.Accent
     getgenv().MAIN_COLOR = MAIN_COLOR
@@ -85,27 +140,44 @@ local function ApplyTheme()
             table.remove(RegisteredToggles, i)
         end
     end
+    SyncAccentOnly(Theme.Accent, Theme.Accent2)
 end
 getgenv().ApplyToxTheme = ApplyTheme
-getgenv().SetToxGuiColor = function(colorName)
+getgenv().SetToxCustomAccent = function(color, skipSave)
+    if typeof(color) ~= "Color3" then return false end
+    Settings.UIRainbow = false
+    Settings.CustomAccentActive = true
+    Settings.GUIColorName = "Custom"
+    Theme.Accent = color
+    local h, s, v = color:ToHSV()
+    Theme.Accent2 = Color3.fromHSV((h + 0.12) % 1, math.clamp(s, 0.35, 1), math.clamp(v, 0.45, 1))
+    ApplyTheme()
+    if not skipSave and getgenv().AutoSaveConfiguration then
+        getgenv().AutoSaveConfiguration()
+    end
+    return true
+end
+getgenv().SetToxGuiColor = function(colorName, skipSave)
     local selected = GUIColorMap[tostring(colorName)]
     if selected then
+        Settings.UIRainbow = false
+        Settings.CustomAccentActive = false
         Theme.Accent = selected
         Theme.Outline = Color3.fromRGB(
-            math.clamp(math.floor(selected.R * 255 * 0.4), 22, 70),
-            math.clamp(math.floor(selected.G * 255 * 0.4), 22, 70),
-            math.clamp(math.floor(selected.B * 255 * 0.4), 28, 80)
+            math.clamp(math.floor(selected.R * 255 * 0.4), 28, 76),
+            math.clamp(math.floor(selected.G * 255 * 0.4), 28, 76),
+            math.clamp(math.floor(selected.B * 255 * 0.4), 34, 86)
         )
         ApplyTheme()
         Settings.GUIColorName = tostring(colorName)
-        if getgenv().AutoSaveConfiguration then
+        if not skipSave and getgenv().AutoSaveConfiguration then
             getgenv().AutoSaveConfiguration()
         end
         return true
     end
     return false
 end
-local UIThemePresets = {
+UIThemePresets = {
     ["Dark Neon"] = {
         Background = Color3.fromRGB(12, 12, 18),
         Panel = Color3.fromRGB(16, 16, 26),
@@ -167,7 +239,7 @@ local UIThemePresets = {
         Risky = Color3.fromRGB(255, 55, 65)
     }
 }
-getgenv().SetToxUITheme = function(themeName)
+getgenv().SetToxUITheme = function(themeName, skipSave)
     local preset = UIThemePresets[tostring(themeName)]
     if preset then
         for k, v in pairs(preset) do
@@ -178,36 +250,61 @@ getgenv().SetToxUITheme = function(themeName)
             if not Settings.ToxUITransparency or Settings.ToxUITransparency < 0.25 then
                 Settings.ToxUITransparency = 0.35
             end
-        elseif tostring(themeName) == "Clean White" then
+        elseif tostring(themeName) == "Clean White" and Settings.CustomAccentActive ~= true then
             Theme.Accent = Color3.fromRGB(20, 100, 255)
         end
         ApplyTheme()
         if getgenv().SetToxUITransparency then
-            getgenv().SetToxUITransparency(Settings.ToxUITransparency or 0)
+            getgenv().SetToxUITransparency(Settings.ToxUITransparency or 0, true)
         end
-        if getgenv().AutoSaveConfiguration then
+        if not skipSave and getgenv().AutoSaveConfiguration then
             getgenv().AutoSaveConfiguration()
         end
         return true
     end
     return false
 end
-getgenv().SetToxUITransparency = function(transparency)
-    local val = math.clamp(tonumber(transparency) or 0, 0, 0.85)
+getgenv().SetToxUITransparency = function(transparency, skipSave)
+    local val = math.clamp(tonumber(transparency) or 0, 0, 1)
     Settings.ToxUITransparency = val
+    local elemTransp = math.clamp(val * 0.9, 0, 0.9)
+    local strokeTransp = math.clamp(0.28 + val * 0.25, 0.2, 0.65)
     if env.Main then
         env.Main.BackgroundTransparency = val
     end
-    if getgenv().ThemedObjects then
-        for _, entry in ipairs(getgenv().ThemedObjects) do
-            if entry.Key == "Background" and entry.Instance and entry.Instance:IsA("GuiObject") then
-                entry.Instance.BackgroundTransparency = val
-            elseif (entry.Key == "Panel" or entry.Key == "Element") and entry.Instance and entry.Instance:IsA("GuiObject") then
-                entry.Instance.BackgroundTransparency = math.clamp(val * 0.7, 0, 0.75)
+    for i = #ThemedObjects, 1, -1 do
+        local entry = ThemedObjects[i]
+        local inst = entry and entry.Instance
+        if inst and inst.Parent then
+            if entry.Prop == "BackgroundColor3" and inst:IsA("GuiObject") then
+                if entry.Key == "Background" or entry.Key == "Panel" then
+                    inst.BackgroundTransparency = val
+                elseif entry.Key == "Element" then
+                    inst.BackgroundTransparency = elemTransp
+                end
+            elseif inst:IsA("UIStroke") and entry.Key == "Outline" then
+                inst.Transparency = strokeTransp
             end
         end
     end
-    if getgenv().AutoSaveConfiguration then
+    for i = #TransparentObjects, 1, -1 do
+        local entry = TransparentObjects[i]
+        local inst = entry and entry.Instance
+        if inst and inst.Parent then
+            pcall(function()
+                if entry.Mode == "Background" or entry.Mode == "Panel" then
+                    inst.BackgroundTransparency = val
+                elseif entry.Mode == "Element" then
+                    inst.BackgroundTransparency = elemTransp
+                elseif entry.Mode == "Stroke" and inst:IsA("UIStroke") then
+                    inst.Transparency = strokeTransp
+                end
+            end)
+        else
+            table.remove(TransparentObjects, i)
+        end
+    end
+    if not skipSave and getgenv().AutoSaveConfiguration then
         getgenv().AutoSaveConfiguration()
     end
 end
@@ -250,7 +347,8 @@ MainCorner.CornerRadius = UDim.new(0, 10)
 MainCorner.Parent = Main
 local MainStroke = Instance.new("UIStroke")
 MainStroke.Color = Theme.Accent
-MainStroke.Thickness = 1.5
+MainStroke.Thickness = 1
+MainStroke.Transparency = 0.22
 MainStroke.Parent = Main
 RegisterThemedObject(MainStroke, "Color", "Accent")
 local MainGradient = Instance.new("UIGradient")
@@ -530,6 +628,7 @@ UserExpiryLabel.TextXAlignment = Enum.TextXAlignment.Left
 UserExpiryLabel.Visible = not isSidebarCollapsed
 UserExpiryLabel.ZIndex = 13
 UserExpiryLabel.Parent = SidebarFooter
+env.ToxUserExpiryLabel = UserExpiryLabel
 ContentArea = Instance.new("Frame")
 ContentArea.Name = "ContentArea"
 ContentArea.Size = UDim2.new(1, -(isSidebarCollapsed and sidebarCollapsedWidth or sidebarExpandedWidth), 1, 0)
@@ -675,6 +774,9 @@ isMinimized = false
 local MainExpandedSize = Main.Size
 local savedPageTitle = "Home"
 local function SetMinimized(minimized)
+    if getgenv().CloseToxDropdownOverlay then
+        pcall(getgenv().CloseToxDropdownOverlay)
+    end
     isMinimized = (minimized == true)
     getgenv().ToxMainMinimized = isMinimized
     getgenv().Minimized = isMinimized
@@ -701,16 +803,18 @@ local function SetMinimized(minimized)
         if CurrentTabTitle then CurrentTabTitle.Text = "ToxHub" end
         if Main then
             Main.ClipsDescendants = true
-            local currentW = MainExpandedSize and MainExpandedSize.X.Offset or 680
-            if currentW < 400 then currentW = 680 end
+            local refSz = getgenv().ToxMainExpandedSize or MainExpandedSize
+            local currentW = refSz and refSz.X.Offset or 680
+            if currentW < 180 then currentW = 180 end
             Main.Size = UDim2.new(0, currentW, 0, 46)
         end
         if MinimizeBtn then MinimizeBtn.Text = "+" end
     else
-        local currentW = MainExpandedSize and MainExpandedSize.X.Offset or 680
-        local currentH = MainExpandedSize and MainExpandedSize.Y.Offset or 480
-        if currentW < 480 then currentW = 680 end
-        if currentH < 320 then currentH = 480 end
+        local refSz = getgenv().ToxMainExpandedSize or MainExpandedSize
+        local currentW = refSz and refSz.X.Offset or 680
+        local currentH = refSz and refSz.Y.Offset or 480
+        if currentW < 180 then currentW = 680 end
+        if currentH < 120 then currentH = 480 end
         if Main then
             Main.Size = UDim2.new(0, currentW, 0, currentH)
             Main.ClipsDescendants = true
@@ -778,8 +882,9 @@ SearchResultsScroll.ClipsDescendants = true
 SearchResultsScroll.Parent = TopBar
 RegisterThemedObject(SearchResultsScroll, "BackgroundColor3", "Panel")
 local SearchResultsCorner = Instance.new("UICorner") SearchResultsCorner.CornerRadius = UDim.new(0, 8) SearchResultsCorner.Parent = SearchResultsScroll
-local SearchResultsStroke = Instance.new("UIStroke") SearchResultsStroke.Color = Theme.Outline SearchResultsStroke.Thickness = 1.2 SearchResultsStroke.Parent = SearchResultsScroll
+local SearchResultsStroke = Instance.new("UIStroke") SearchResultsStroke.Color = Theme.Outline SearchResultsStroke.Thickness = 1 SearchResultsStroke.Transparency = 0.25 SearchResultsStroke.Parent = SearchResultsScroll
 RegisterThemedObject(SearchResultsStroke, "Color", "Outline")
+RegisterTransparentObject(SearchResultsScroll, "Panel")
 local SearchResultsLayout = Instance.new("UIListLayout")
 SearchResultsLayout.Padding = UDim.new(0, 4)
 SearchResultsLayout.Parent = SearchResultsScroll
@@ -801,8 +906,54 @@ PagesContainer.ClipsDescendants = true
 PagesContainer.ZIndex = 6
 PagesContainer.Parent = ContentArea
 if getgenv().MakeResizable then
-    getgenv().MakeResizable(Main, "Main", Vector2.new(480, 320), Vector2.new(3840, 2160))
+    getgenv().MakeResizable(Main, "Main", Vector2.new(180, 120), Vector2.new(8192, 8192))
 end
+do
+    local function updateResponsiveTopBar()
+        if not ContentArea or not TopBar then return end
+        local w = ContentArea.AbsoluteSize.X
+        if isMinimized then
+            if CurrentTabTitle then
+                CurrentTabTitle.Size = UDim2.new(1, -90, 1, 0)
+            end
+            return
+        end
+        if SearchPill then
+            if w < 215 then
+                SearchPill.Visible = false
+                if CurrentTabTitle then
+                    CurrentTabTitle.Size = UDim2.new(1, -86, 1, 0)
+                end
+            else
+                SearchPill.Visible = true
+                local pillW = math.clamp(math.floor(w - 205), 68, 160)
+                SearchPill.Size = UDim2.new(0, pillW, 0, 28)
+                SearchPill.Position = UDim2.new(1, -(pillW + 76), 0.5, -14)
+                if CurrentTabTitle then
+                    CurrentTabTitle.Size = UDim2.new(1, -(pillW + 96), 1, 0)
+                end
+            end
+        end
+    end
+    ContentArea:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateResponsiveTopBar)
+    task.defer(updateResponsiveTopBar)
+
+    local lastRainbowTick = 0
+    RunService.RenderStepped:Connect(function()
+        if env.Destroyed then return end
+        if Settings.UIRainbow == true then
+            local now = os.clock()
+            if now - lastRainbowTick >= 0.032 then
+                lastRainbowTick = now
+                local col = getgenv().ToxGetRainbowColor(Settings.UIRainbowSpeed or 35, 0)
+                local col2 = getgenv().ToxGetRainbowColor(Settings.UIRainbowSpeed or 35, 0.14)
+                SyncAccentOnly(col, col2)
+            end
+        end
+    end)
+end
+getgenv().ApplyToxTheme()
+getgenv().SetToxUITransparency(Settings.ToxUITransparency or 0, true)
 env.ToxUI = env.ToxUI or {}
 local UI = env.ToxUI
 UI.DefaultTheme = DefaultTheme

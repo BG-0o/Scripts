@@ -25,7 +25,7 @@ ToxChatGui.Parent = ChatPage
 getgenv().ToxChatGui = ToxChatGui
 RegisterThemedObject(ToxChatGui, "BackgroundColor3", "Panel")
 local ToxChatCorner = Instance.new("UICorner") ToxChatCorner.CornerRadius = UDim.new(0, 8) ToxChatCorner.Parent = ToxChatGui
-local ToxChatStroke = Instance.new("UIStroke") ToxChatStroke.Color = Theme.Outline ToxChatStroke.Thickness = 1.5 ToxChatStroke.Parent = ToxChatGui
+local ToxChatStroke = Instance.new("UIStroke") ToxChatStroke.Color = Theme.Outline ToxChatStroke.Thickness = 1 ToxChatStroke.Transparency = 0.32 ToxChatStroke.Parent = ToxChatGui
 RegisterThemedObject(ToxChatStroke, "Color", "Outline")
 local ToxChatTopBar = Instance.new("Frame")
 ToxChatTopBar.Size = UDim2.new(1, 0, 0, 32)
@@ -152,7 +152,7 @@ JoinGamesGui.Parent = JoinPage
 getgenv().JoinGamesGui = JoinGamesGui
 RegisterThemedObject(JoinGamesGui, "BackgroundColor3", "Panel")
 local JoinGamesCorner = Instance.new("UICorner") JoinGamesCorner.CornerRadius = UDim.new(0, 8) JoinGamesCorner.Parent = JoinGamesGui
-local JoinGamesStroke = Instance.new("UIStroke") JoinGamesStroke.Color = Theme.Outline JoinGamesStroke.Thickness = 1.5 JoinGamesStroke.Parent = JoinGamesGui
+local JoinGamesStroke = Instance.new("UIStroke") JoinGamesStroke.Color = Theme.Outline JoinGamesStroke.Thickness = 1 JoinGamesStroke.Transparency = 0.32 JoinGamesStroke.Parent = JoinGamesGui
 RegisterThemedObject(JoinGamesStroke, "Color", "Outline")
 local JoinGameAddArea = Instance.new("Frame")
 JoinGameAddArea.Size = UDim2.new(1, -16, 0, 32)

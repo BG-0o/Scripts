@@ -343,16 +343,29 @@ local function CreateServerInfoFrame()
     if not gui then
         return
     end
+    local uiTheme = env.Theme
     ServerInfoFrame = Instance.new("Frame")
     ServerInfoFrame.Name = "ToxServerInfoFrame"
     ServerInfoFrame.Size = UDim2.new(0, 430, 0, 174)
     ServerInfoFrame.Position = UDim2.new(1, -340, 0, 110)
-    ServerInfoFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
-    ServerInfoFrame.BackgroundTransparency = 0.35
+    ServerInfoFrame.BackgroundColor3 = (uiTheme and uiTheme.Panel) or Color3.fromRGB(16, 16, 26)
+    ServerInfoFrame.BackgroundTransparency = math.clamp(tonumber(Settings.ToxUITransparency) or 0, 0, 0.9)
     ServerInfoFrame.BorderSizePixel = 0
     ServerInfoFrame.Active = true
     ServerInfoFrame.Visible = false
     ServerInfoFrame.Parent = gui
+    if env.RegisterThemedObject then
+        env.RegisterThemedObject(ServerInfoFrame, "BackgroundColor3", "Panel")
+    end
+    if env.RegisterTransparentObject then
+        env.RegisterTransparentObject(ServerInfoFrame, "Panel")
+    end
+    if getgenv().ApplySavedGuiPosition then
+        getgenv().ApplySavedGuiPosition("ServerInfo", ServerInfoFrame)
+    end
+    if getgenv().TrackGuiPosition then
+        getgenv().TrackGuiPosition("ServerInfo", ServerInfoFrame)
+    end
     if getgenv().RegisterToxLinkedSubGui then
         getgenv().RegisterToxLinkedSubGui("ServerInfo", ServerInfoFrame)
     end
@@ -363,17 +376,26 @@ local function CreateServerInfoFrame()
     corner.CornerRadius = UDim.new(0, 8)
     corner.Parent = ServerInfoFrame
     local stroke = Instance.new("UIStroke")
-    stroke.Color = MAIN_COLOR
+    stroke.Color = (uiTheme and uiTheme.Accent) or MAIN_COLOR
     stroke.Thickness = 1
     stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    stroke.Transparency = 0.2
+    stroke.Transparency = 0.25
     stroke.Parent = ServerInfoFrame
+    if env.RegisterThemedObject then
+        env.RegisterThemedObject(stroke, "Color", "Accent")
+    end
     local topBar = Instance.new("Frame")
     topBar.Size = UDim2.new(1, 0, 0, 26)
-    topBar.BackgroundColor3 = MAIN_COLOR
+    topBar.BackgroundColor3 = (uiTheme and uiTheme.Accent) or MAIN_COLOR
     topBar.BackgroundTransparency = 0.15
     topBar.BorderSizePixel = 0
     topBar.Parent = ServerInfoFrame
+    if env.RegisterThemedObject then
+        env.RegisterThemedObject(topBar, "BackgroundColor3", "Accent")
+    end
+    local topBarCorner = Instance.new("UICorner")
+    topBarCorner.CornerRadius = UDim.new(0, 8)
+    topBarCorner.Parent = topBar
     if MakeDraggable then
         MakeDraggable(ServerInfoFrame, topBar)
     end
@@ -390,39 +412,51 @@ local function CreateServerInfoFrame()
     local modeButton = Instance.new("TextButton")
     modeButton.Size = UDim2.new(0, 60, 0, 18)
     modeButton.Position = UDim2.new(1, -148, 0.5, -9)
-    modeButton.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
+    modeButton.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(24, 24, 34)
     modeButton.BorderSizePixel = 0
     modeButton.Text = ServerInfoModeButtonText(NormalizeServerInfoMode(Settings.ToxServerInfoMode))
-    modeButton.TextColor3 = Color3.fromRGB(230, 230, 240)
+    modeButton.TextColor3 = (uiTheme and uiTheme.Text) or Color3.fromRGB(230, 230, 240)
     modeButton.Font = Enum.Font.GothamBold
     modeButton.TextSize = 10
     modeButton.Parent = topBar
+    if env.RegisterThemedObject then
+        env.RegisterThemedObject(modeButton, "BackgroundColor3", "Element")
+        env.RegisterThemedObject(modeButton, "TextColor3", "Text")
+    end
     local modeCorner = Instance.new("UICorner")
     modeCorner.CornerRadius = UDim.new(0, 4)
     modeCorner.Parent = modeButton
     local copyButton = Instance.new("TextButton")
     copyButton.Size = UDim2.new(0, 58, 0, 18)
     copyButton.Position = UDim2.new(1, -84, 0.5, -9)
-    copyButton.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
+    copyButton.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(24, 24, 34)
     copyButton.BorderSizePixel = 0
     copyButton.Text = "COPY"
-    copyButton.TextColor3 = Color3.fromRGB(230, 230, 240)
+    copyButton.TextColor3 = (uiTheme and uiTheme.Text) or Color3.fromRGB(230, 230, 240)
     copyButton.Font = Enum.Font.GothamBold
     copyButton.TextSize = 10
     copyButton.Parent = topBar
+    if env.RegisterThemedObject then
+        env.RegisterThemedObject(copyButton, "BackgroundColor3", "Element")
+        env.RegisterThemedObject(copyButton, "TextColor3", "Text")
+    end
     local copyCorner = Instance.new("UICorner")
     copyCorner.CornerRadius = UDim.new(0, 4)
     copyCorner.Parent = copyButton
     local closeButton = Instance.new("TextButton")
     closeButton.Size = UDim2.new(0, 22, 0, 18)
     closeButton.Position = UDim2.new(1, -25, 0.5, -9)
-    closeButton.BackgroundColor3 = Color3.fromRGB(24, 24, 34)
+    closeButton.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(24, 24, 34)
     closeButton.BorderSizePixel = 0
     closeButton.Text = "X"
-    closeButton.TextColor3 = Color3.fromRGB(230, 230, 240)
+    closeButton.TextColor3 = (uiTheme and uiTheme.Text) or Color3.fromRGB(230, 230, 240)
     closeButton.Font = Enum.Font.GothamBold
     closeButton.TextSize = 10
     closeButton.Parent = topBar
+    if env.RegisterThemedObject then
+        env.RegisterThemedObject(closeButton, "BackgroundColor3", "Element")
+        env.RegisterThemedObject(closeButton, "TextColor3", "Text")
+    end
     local closeCorner = Instance.new("UICorner")
     closeCorner.CornerRadius = UDim.new(0, 4)
     closeCorner.Parent = closeButton
@@ -431,7 +465,7 @@ local function CreateServerInfoFrame()
     ServerInfoText.Position = UDim2.new(0, 8, 0, 31)
     ServerInfoText.BackgroundTransparency = 1
     ServerInfoText.Text = ""
-    ServerInfoText.TextColor3 = Color3.fromRGB(240, 240, 245)
+    ServerInfoText.TextColor3 = (uiTheme and uiTheme.Text) or Color3.fromRGB(240, 240, 245)
     ServerInfoText.Font = Enum.Font.GothamMedium
     ServerInfoText.TextSize = 12
     ServerInfoText.TextWrapped = false
@@ -439,6 +473,9 @@ local function CreateServerInfoFrame()
     ServerInfoText.TextXAlignment = Enum.TextXAlignment.Left
     ServerInfoText.TextYAlignment = Enum.TextYAlignment.Top
     ServerInfoText.Parent = ServerInfoFrame
+    if env.RegisterThemedObject then
+        env.RegisterThemedObject(ServerInfoText, "TextColor3", "Text")
+    end
     copyButton.MouseButton1Click:Connect(function()
         CopyServerJoinId()
     end)
@@ -589,39 +626,29 @@ CreateDropdown(
         end
     end
 )
-CreateDropdown(
-    "UI Transparency",
-    {
-        "0% (Opaque)",
-        "15%",
-        "30%",
-        "50%",
-        "70%"
-    },
-    ConfigPage,
-    tostring(
-        Settings.ToxUITransparency == 0.7 and "70%"
-        or Settings.ToxUITransparency == 0.5 and "50%"
-        or Settings.ToxUITransparency == 0.3 and "30%"
-        or Settings.ToxUITransparency == 0.15 and "15%"
-        or "0% (Opaque)"
-    ),
-    function(value)
-        local val = 0
-        if value == "70%" then val = 0.7
-        elseif value == "50%" then val = 0.5
-        elseif value == "30%" then val = 0.3
-        elseif value == "15%" then val = 0.15
-        end
-        Settings.ToxUITransparency = val
-        if getgenv().SetToxUITransparency then
-            getgenv().SetToxUITransparency(val)
-        end
-        if getgenv().AutoSaveConfiguration then
-            getgenv().AutoSaveConfiguration()
-        end
+CreateButton("🎨 Custom Accent (Color Picker)", ConfigPage, function()
+    local ui = getgenv().ToxUI
+    local opener = (ui and ui.OpenColorPicker) or getgenv().OpenToxColorPicker
+    if opener then
+        opener("Accent")
     end
-)
+end)
+CreateToggle("UI Rainbow (All Colors)", ConfigPage, Settings.UIRainbow == true, function(val)
+    Settings.UIRainbow = val == true
+    if not val and getgenv().ApplyToxTheme then
+        getgenv().ApplyToxTheme()
+    end
+end, "UIRainbow")
+if getgenv().CreateSlider then
+    getgenv().CreateSlider("UI Rainbow Speed", ConfigPage, 1, 100, math.floor(tonumber(Settings.UIRainbowSpeed) or 35), "%", function(val)
+        Settings.UIRainbowSpeed = val
+    end, "UIRainbowSpeedPct")
+    getgenv().CreateSlider("UI Transparency", ConfigPage, 0, 100, math.floor((tonumber(Settings.ToxUITransparency) or 0) * 100 + 0.5), "%", function(val, isDragging)
+        if getgenv().SetToxUITransparency then
+            getgenv().SetToxUITransparency(val / 100, isDragging == true)
+        end
+    end, "UITransparencyPct")
+end
 CreateKeybindButton("GUI Keybind", ConfigPage, Settings.GUIKeybind, function(key)
     Settings.GUIKeybind = key
     if getgenv().AutoSaveConfiguration then
@@ -665,8 +692,13 @@ local gameName = (resolvedMod and resolvedMod.GameName and resolvedMod.ShortName
     or ((game.GameId == 142823291 or game.PlaceId == 142823291) and "MM2")
     or (game.PlaceId == 189707 and "NDS")
     or (game.PlaceId == 537413528 and "BABFT")
-    or (game.PlaceId == 3851622793 and "WID")
-    or (game.PlaceId == 111311599 and "ADMIN")
+    or (game.PlaceId == 109440485612336 and "WID")
+    or (game.PlaceId == 4522347649 and "ADMIN")
+    or (game.PlaceId == 662417684 and "LBB")
+    or (game.PlaceId == 893973440 and "FTF")
+    or (game.PlaceId == 155615604 and "PL")
+    or (game.PlaceId == 70650894743738 and "BE")
+    or (game.PlaceId == 93660722909304 and "SBR")
     or (game.PlaceId == 119925538689885 and "SOD")
     or (game.PlaceId == 115681808123944 and "Throw a Coin (TAC)")
     or ((game.PlaceId == 3823781113 or game.GameId == 1307638097) and "Saber Simulator (SS)")
@@ -1554,16 +1586,17 @@ local function ShowCenterLoadSequence()
     if not Main or not pcall(function() return Main.Parent end) or not Main.Parent then
         Main = (getgenv and getgenv().Main) or (Gui and Gui:FindFirstChild("Main"))
     end
+    local uiTheme = env.Theme
     local SplashFrame = Instance.new("Frame")
     SplashFrame.Size = UDim2.new(0, 360, 0, 110)
     SplashFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
     SplashFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-    SplashFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+    SplashFrame.BackgroundColor3 = (uiTheme and uiTheme.Panel) or Color3.fromRGB(16, 16, 26)
     SplashFrame.BorderSizePixel = 0
     SplashFrame.ClipsDescendants = true
     pcall(function() SplashFrame.Parent = NotifGui end)
     local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 10) Corner.Parent = SplashFrame
-    local Stroke = Instance.new("UIStroke") Stroke.Color = MAIN_COLOR Stroke.Thickness = 2 Stroke.Parent = SplashFrame
+    local Stroke = Instance.new("UIStroke") Stroke.Color = (uiTheme and uiTheme.Accent) or MAIN_COLOR Stroke.Thickness = 1 Stroke.Transparency = 0.2 Stroke.Parent = SplashFrame
     local SplashLogo = Instance.new("ImageLabel")
     SplashLogo.Size = UDim2.new(0, 48, 0, 48)
     SplashLogo.Position = UDim2.new(0, 18, 0, 16)
@@ -1661,20 +1694,14 @@ local function ShowCenterLoadSequence()
                     getgenv().GetSavedGuiSize
                     and getgenv().GetSavedGuiSize(
                         "Main",
-                        UDim2.new(
-                            0,
-                            720,
-                            0,
-                            480
-                        )
+                        UDim2.new(0, 720, 0, 480)
                     )
                 )
-                or UDim2.new(
-                    0,
-                    720,
-                    0,
-                    480
-                )
+                or UDim2.new(0, 720, 0, 480)
+            getgenv().ToxMainExpandedSize = finalSize
+            Main:SetAttribute("ToxIgnorePosTrack", true)
+            if getgenv().ApplyToxTheme then pcall(getgenv().ApplyToxTheme) end
+            if getgenv().SetToxUITransparency then pcall(getgenv().SetToxUITransparency, Settings.ToxUITransparency or 0, true) end
             if not Settings.StartHidden then
                 local dimmer = getgenv().DimmerFrame or (Gui and Gui:FindFirstChild("DimmerFrame"))
                 if dimmer then
@@ -1688,7 +1715,7 @@ local function ShowCenterLoadSequence()
                     finalPosition,
                     Enum.EasingDirection.Out,
                     Enum.EasingStyle.Back,
-                    0.5,
+                    0.45,
                     true
                 )
             else
@@ -1696,6 +1723,11 @@ local function ShowCenterLoadSequence()
                 Main.Position = finalPosition
                 Main.Visible = false
             end
+            task.delay(0.6, function()
+                if Main and Main.Parent then
+                    Main:SetAttribute("ToxIgnorePosTrack", nil)
+                end
+            end)
             CustomNotify("ToxHub Revolution Loaded Successfully!", Color3.fromRGB(100, 255, 100))
         end
     end

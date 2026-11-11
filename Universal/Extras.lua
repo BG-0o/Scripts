@@ -80,6 +80,7 @@ local visualConnections = {}
 local xrayDefaults = setmetatable({}, {__mode = "k"})
 local fakeLagSleeping = setmetatable({}, {__mode = "k"})
 local lastRainbowColor = nil
+local preRainbowEspColor = nil
 local fakeLagClock = 0
 local VISUAL_BIND = "ToxUniversal2Visuals"
 local healthBillboards = setmetatable({}, {__mode = "k"})
@@ -1059,57 +1060,75 @@ end
 local function ApplyRainbow()
     if not Settings.VisualRainbow then
         if lastRainbowColor ~= nil then
-            local colors = env.ColorMap
-            local restore = typeof(colors) == "table"
-                and colors[Settings.EspColorName]
-                or nil
-
-            if typeof(restore) == "Color3" then
-                Settings.EspColor = restore
+            if typeof(preRainbowEspColor) == "Color3" then
+                Settings.EspColor = preRainbowEspColor
+            elseif Settings.EspColorName ~= "Custom" then
+                local colors = env.ColorMap
+                local restore = typeof(colors) == "table"
+                    and colors[Settings.EspColorName]
+                    or nil
+                if typeof(restore) == "Color3" then
+                    Settings.EspColor = restore
+                end
             end
-
+            preRainbowEspColor = nil
             lastRainbowColor = nil
         end
         return
     end
 
-    local speed = math.clamp(tonumber(Settings.RainbowSpeed) or 10, 0.1, 100)
-    local hue = (tick() * speed * 0.025) % 1
-    local color = Color3.fromHSV(hue, 1, 1)
+    if preRainbowEspColor == nil and typeof(Settings.EspColor) == "Color3" then
+        preRainbowEspColor = Settings.EspColor
+    end
+
+    local speed = math.clamp(tonumber(Settings.RainbowSpeed) or 25, 1, 100)
+    local hue = (os.clock() * (speed / 140)) % 1
+    local color = Color3.fromHSV(hue, 0.98, 1)
     lastRainbowColor = color
     Settings.EspColor = color
 
-    local highlights = env.ToxESPHighlights
-    if typeof(highlights) == "table" then
-        for _, highlight in pairs(highlights) do
-            if highlight and highlight.Parent then
-                pcall(function()
-                    highlight.FillColor = color
-                    highlight.OutlineColor = color
-                end)
-            end
-        end
-    end
-
-    local drawings = env.ToxESPDrawings
-    if typeof(drawings) == "table" then
-        for _, group in pairs(drawings) do
-            if typeof(group) == "table" then
-                for _, drawing in pairs(group) do
+    local mm2Active = (game.GameId == 142823291 or game.PlaceId == 142823291) and Settings.MM2RoleESP == true
+    if not mm2Active then
+        local highlights = env.ToxESPHighlights
+        if typeof(highlights) == "table" then
+            for _, highlight in pairs(highlights) do
+                if highlight and highlight.Parent then
                     pcall(function()
-                        drawing.Color = color
+                        highlight.FillColor = color
+                        highlight.OutlineColor = color
                     end)
                 end
             end
         end
-    end
 
-    local labels = env.ToxESPLabels
-    if typeof(labels) == "table" then
-        for _, billboard in pairs(labels) do
-            local label = billboard and billboard:FindFirstChild("Label")
-            if label then
-                label.TextColor3 = color
+        local drawings = env.ToxESPDrawings
+        if typeof(drawings) == "table" then
+            for _, group in pairs(drawings) do
+                if typeof(group) == "table" then
+                    for _, drawing in pairs(group) do
+                        if typeof(drawing) == "table" then
+                            for _, subDrawing in pairs(drawing) do
+                                pcall(function()
+                                    subDrawing.Color = color
+                                end)
+                            end
+                        else
+                            pcall(function()
+                                drawing.Color = color
+                            end)
+                        end
+                    end
+                end
+            end
+        end
+
+        local labels = env.ToxESPLabels
+        if typeof(labels) == "table" then
+            for _, billboard in pairs(labels) do
+                local label = billboard and billboard:FindFirstChild("Label")
+                if label then
+                    label.TextColor3 = color
+                end
             end
         end
     end
@@ -1211,6 +1230,8 @@ local function UpdateHealthESP()
 
                     if Settings.VisualRainbow and lastRainbowColor then
                         label.TextColor3 = lastRainbowColor
+                    elseif typeof(Settings.EspColor) == "Color3" then
+                        label.TextColor3 = Settings.EspColor
                     else
                         local colors = env.ColorMap
                         local color = typeof(colors) == "table"
@@ -1395,6 +1416,7 @@ local function InstallVisualUI(page)
 
     local Toggle = env.CreateToggle
     local ToggleWithValue = env.CreateToggleWithValue
+    local ToggleWithSlider = env.CreateToggleWithSlider or getgenv().CreateToggleWithSlider
 
     if type(Toggle) ~= "function"
     or type(ToggleWithValue) ~= "function" then
@@ -1413,37 +1435,77 @@ local function InstallVisualUI(page)
         "ESPShowHealth"
     )
 
-    ToggleWithValue(
-        "Rainbow",
-        page,
-        Settings.VisualRainbow,
-        Settings.RainbowSpeed,
-        function(value)
-            Settings.VisualRainbow = value == true
-            if not Settings.VisualRainbow then
-                ApplyRainbow()
-            end
-        end,
-        function(value)
-            Settings.RainbowSpeed = math.clamp(tonumber(value) or 10, 0.1, 100)
-        end,
-        "VisualRainbow"
-    )
+    if type(ToggleWithSlider) == "function" then
+        ToggleWithSlider(
+            "Rainbow",
+            page,
+            1,
+            100,
+            Settings.VisualRainbow,
+            math.floor(math.clamp(tonumber(Settings.RainbowSpeed) or 25, 1, 100) + 0.5),
+            "%",
+            function(value)
+                Settings.VisualRainbow = value == true
+                if not Settings.VisualRainbow then
+                    ApplyRainbow()
+                end
+            end,
+            function(value)
+                Settings.RainbowSpeed = math.clamp(tonumber(value) or 25, 1, 100)
+            end,
+            "VisualRainbow"
+        )
 
-    ToggleWithValue(
-        "XRay",
-        page,
-        Settings.XRay,
-        Settings.XRayTransparency,
-        SetXRay,
-        function(value)
-            Settings.XRayTransparency = math.clamp(tonumber(value) or 0.7, 0, 1)
-            if Settings.XRay then
-                ApplyXRayAll()
-            end
-        end,
-        "XRay"
-    )
+        ToggleWithSlider(
+            "XRay",
+            page,
+            0,
+            100,
+            Settings.XRay,
+            math.floor(math.clamp(tonumber(Settings.XRayTransparency) or 0.7, 0, 1) * 100 + 0.5),
+            "%",
+            SetXRay,
+            function(value)
+                Settings.XRayTransparency = math.clamp((tonumber(value) or 70) / 100, 0, 1)
+                if Settings.XRay then
+                    ApplyXRayAll()
+                end
+            end,
+            "XRay"
+        )
+    else
+        ToggleWithValue(
+            "Rainbow",
+            page,
+            Settings.VisualRainbow,
+            Settings.RainbowSpeed,
+            function(value)
+                Settings.VisualRainbow = value == true
+                if not Settings.VisualRainbow then
+                    ApplyRainbow()
+                end
+            end,
+            function(value)
+                Settings.RainbowSpeed = math.clamp(tonumber(value) or 25, 1, 100)
+            end,
+            "VisualRainbow"
+        )
+
+        ToggleWithValue(
+            "XRay",
+            page,
+            Settings.XRay,
+            Settings.XRayTransparency,
+            SetXRay,
+            function(value)
+                Settings.XRayTransparency = math.clamp(tonumber(value) or 0.7, 0, 1)
+                if Settings.XRay then
+                    ApplyXRayAll()
+                end
+            end,
+            "XRay"
+        )
+    end
 
 end
 
@@ -3042,43 +3104,77 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             "ForceJump"
         )
 
-        CreateToggleWithValue(
-            "Fake Lag (%)",
-            page,
-            Settings.FakeLag,
-            Settings.LagChance,
-            function(value)
-                if value and type(sethiddenproperty) ~= "function" then
-                    Settings.FakeLag = false
-                    if type(env.SyncToggleVisuals) == "function" then
+        local fakeLagFn = env.CreateToggleWithSlider or getgenv().CreateToggleWithSlider
+        if type(fakeLagFn) == "function" then
+            fakeLagFn(
+                "Fake Lag (%)",
+                page,
+                0,
+                100,
+                Settings.FakeLag,
+                math.floor(math.clamp(tonumber(Settings.LagChance) or 70, 0, 100) + 0.5),
+                "%",
+                function(value)
+                    if value and type(sethiddenproperty) ~= "function" then
+                        Settings.FakeLag = false
+                        if type(env.SyncToggleVisuals) == "function" then
+                            task.defer(function()
+                                env.SyncToggleVisuals("FakeLag", false)
+                            end)
+                        end
+                        VisualNotify(
+                            "Fake Lag unsupported by this executor",
+                            Color3.fromRGB(255, 180, 70)
+                        )
+                        return
+                    end
+                    SetFakeLag(value)
+                end,
+                function(value)
+                    local clamped = math.clamp(tonumber(value) or 70, 0, 100)
+                    Settings.LagChance = clamped
+                end,
+                "FakeLag"
+            )
+        else
+            CreateToggleWithValue(
+                "Fake Lag (%)",
+                page,
+                Settings.FakeLag,
+                Settings.LagChance,
+                function(value)
+                    if value and type(sethiddenproperty) ~= "function" then
+                        Settings.FakeLag = false
+                        if type(env.SyncToggleVisuals) == "function" then
+                            task.defer(function()
+                                env.SyncToggleVisuals("FakeLag", false)
+                            end)
+                        end
+                        VisualNotify(
+                            "Fake Lag unsupported by this executor",
+                            Color3.fromRGB(255, 180, 70)
+                        )
+                        return
+                    end
+                    SetFakeLag(value)
+                end,
+                function(value)
+                    local clamped = math.clamp(
+                        tonumber(value) or 70,
+                        0,
+                        100
+                    )
+                    Settings.LagChance = clamped
+
+                    if type(env.SyncValueVisuals) == "function" then
                         task.defer(function()
-                            env.SyncToggleVisuals("FakeLag", false)
+                            env.SyncValueVisuals("FakeLag", clamped)
                         end)
                     end
-                    VisualNotify(
-                        "Fake Lag unsupported by this executor",
-                        Color3.fromRGB(255, 180, 70)
-                    )
-                    return
-                end
-                SetFakeLag(value)
-            end,
-            function(value)
-                local clamped = math.clamp(
-                    tonumber(value) or 70,
-                    0,
-                    100
-                )
-                Settings.LagChance = clamped
-
-                if type(env.SyncValueVisuals) == "function" then
-                    task.defer(function()
-                        env.SyncValueVisuals("FakeLag", clamped)
-                    end)
-                end
-            end,
-            "FakeLag"
-        )
+                end,
+                "FakeLag"
+            )
+        end
     end
     
     local function ControlHasName(control, name)

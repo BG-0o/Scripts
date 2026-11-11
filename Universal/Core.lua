@@ -481,10 +481,9 @@ if JoinGamesGui then
     JoinGamesGui.Visible = false
 end
 if getgenv().MakeResizable then
-    getgenv().MakeResizable(Main, "Main", 0.88, 1.50)
-    getgenv().MakeResizable(ChatLogGui, "ChatLogs", 0.85, 1.50)
-    getgenv().MakeResizable(MusicGui, "Music", 0.85, 1.50)
-    getgenv().MakeResizable(WaypointsGui, "Waypoints", 0.85, 1.50)
+    getgenv().MakeResizable(ChatLogGui, "ChatLogs", Vector2.new(180, 110), Vector2.new(4096, 4096))
+    getgenv().MakeResizable(MusicGui, "Music", Vector2.new(220, 160), Vector2.new(4096, 4096))
+    getgenv().MakeResizable(WaypointsGui, "Waypoints", Vector2.new(200, 150), Vector2.new(4096, 4096))
 end
 getgenv().ToxLinkedSubGuis = getgenv().ToxLinkedSubGuis or {}
 getgenv().RegisterToxSubGuiMinimize = function(gui, buttonOffset)
