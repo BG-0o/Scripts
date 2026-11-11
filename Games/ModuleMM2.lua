@@ -4073,18 +4073,19 @@ function GetAutoFarmMapRoot(forceRefresh)
     local cachedRoot = AutoFarmMapRootCache
     local cachedContainer = AutoFarmMapContainerCache
 
-    if not forceRefresh
-    and now - (AutoFarmMapRootScanTime or 0) < 0.12 then
+    if not forceRefresh then
         if cachedRoot
         and cachedContainer
         and cachedRoot.Parent
         and cachedContainer.Parent
         and cachedContainer:IsDescendantOf(cachedRoot) then
-            return cachedRoot, cachedContainer
-        end
-
-        if not cachedRoot and not cachedContainer then
-            return nil, nil
+            if now - (AutoFarmMapRootScanTime or 0) < 0.15 then
+                return cachedRoot, cachedContainer
+            end
+        elseif not cachedRoot and not cachedContainer then
+            if now - (AutoFarmMapRootScanTime or 0) < 0.45 then
+                return nil, nil
+            end
         end
     end
 
@@ -4105,6 +4106,12 @@ function GetAutoFarmMapRoot(forceRefresh)
 
     local function FindCoinContainer(root)
         if not root then return nil end
+        local fast = root:FindFirstChild("CoinContainer")
+            or root:FindFirstChild("CandyContainer")
+            or root:FindFirstChild("Coins")
+            or root:FindFirstChild("Candies")
+        if fast then return fast end
+
         local found = root:FindFirstChild("CoinContainer", true)
             or root:FindFirstChild("CandyContainer", true)
             or root:FindFirstChild("Candies", true)
@@ -4145,7 +4152,9 @@ function GetAutoFarmMapRoot(forceRefresh)
             if object ~= Player.Character
             and object ~= normal
             and object.Name ~= "Lobby"
-            and object:IsA("Model") then
+            and object.Name ~= "ToxMM2SafeLobby"
+            and object:IsA("Model")
+            and not Players:GetPlayerFromCharacter(object) then
                 local container = FindCoinContainer(object)
                 if container then
                     if HasPotentialFarmCoins(container) then
@@ -4395,7 +4404,7 @@ function IsInSafeLobbyArea(pos)
     if typeof(pos) ~= "Vector3" then
         return false
     end
-    return pos.Y < -30 or (pos - SafeLobbyPosition).Magnitude < 48
+    return (pos - SafeLobbyPosition).Magnitude < 32
 end
 
 function IsInNormalLobbyArea(pos)
@@ -5669,16 +5678,36 @@ local MM2CoinBestMaps = {
     "research"
 }
 
-local function FindMM2VotingPads()
+local CachedMM2VotingPads = nil
+local CachedMM2VotingPadsTime = 0
+
+local function FindMM2VotingPads(forceRefresh)
+    local now = os.clock()
+    if not forceRefresh
+    and CachedMM2VotingPads
+    and (now - CachedMM2VotingPadsTime) < 3.0 then
+        local validPads = {}
+        for _, pad in ipairs(CachedMM2VotingPads) do
+            if pad and pad.Part and pad.Part.Parent then
+                table.insert(validPads, pad)
+            end
+        end
+        if #validPads > 0 or (now - CachedMM2VotingPadsTime) < 1.2 then
+            return validPads
+        end
+    end
+
+    CachedMM2VotingPadsTime = now
     local pads = {}
-    local lobby = workspace:FindFirstChild("Lobby") or workspace
-    
+    local lobby = workspace:FindFirstChild("Lobby")
+    local searchRoot = lobby or workspace
+
     local containers = {}
     for _, name in ipairs({"Voting", "MapVoting", "VotingPads", "VotePads", "Pads", "Vote"}) do
-        local c = lobby:FindFirstChild(name, true)
+        local c = searchRoot:FindFirstChild(name) or (lobby and lobby:FindFirstChild(name, true))
         if c then table.insert(containers, c) end
     end
-    
+
     for _, c in ipairs(containers) do
         for _, child in ipairs(c:GetChildren()) do
             local part = child:IsA("BasePart") and child or child:FindFirstChildWhichIsA("BasePart", true)
@@ -5696,8 +5725,8 @@ local function FindMM2VotingPads()
             end
         end
     end
-    
-    if #pads == 0 then
+
+    if #pads == 0 and lobby then
         for _, desc in ipairs(lobby:GetDescendants()) do
             local lname = string.lower(desc.Name)
             if (string.find(lname, "vote") or string.find(lname, "pad")) and (desc:IsA("BasePart") or desc:IsA("Model")) then
@@ -5708,6 +5737,8 @@ local function FindMM2VotingPads()
             end
         end
     end
+
+    CachedMM2VotingPads = pads
     return pads
 end
 
@@ -5750,7 +5781,10 @@ end
 
 task.spawn(function()
     while not getgenv().Destroyed and game.PlaceId == 142823291 do
-        if Settings.MM2AutoVote then
+        if not ToxScriptReady() then
+            AutoVoteBusy = false
+            task.wait(0.15)
+        elseif Settings.MM2AutoVote then
             local isRoundActive = IsAutoFarmRoundActive()
             if not isRoundActive then
                 local character, humanoid, root, alive = IsAliveCharacter()
@@ -5765,40 +5799,53 @@ task.spawn(function()
                         root.AssemblyLinearVelocity = Vector3.zero
                         if firetouchinterest then
                             pcall(function()
+                                pad.Part.CanTouch = true
+                                root.CanTouch = true
                                 firetouchinterest(root, pad.Part, 0)
-                                firetouchinterest(pad.Part, root, 0)
                                 firetouchinterest(root, pad.Part, 1)
-                                firetouchinterest(pad.Part, root, 1)
                             end)
                         end
-                        task.wait(0.12)
+                        RunService.Heartbeat:Wait()
+                        RunService.Heartbeat:Wait()
                         AutoVoteBusy = false
-                        -- Infinite reset loop
+                        -- Infinite reset loop (no dead collision lag, immediate respawn wait)
                         if Settings.MM2AutoVote and humanoid and humanoid.Health > 0 and (Settings.MM2VoteInfinite ~= false) then
+                            local oldChar = character
+                            for _, part in ipairs(oldChar:GetDescendants()) do
+                                if part:IsA("BasePart") then
+                                    part.CanCollide = false
+                                end
+                            end
                             humanoid.Health = 0
                             local t0 = os.clock()
-                            while os.clock() - t0 < 6 and (not Player.Character or not Player.Character:FindFirstChild("Humanoid") or Player.Character.Humanoid.Health <= 0) do
-                                task.wait(0.1)
+                            while Settings.MM2AutoVote and not getgenv().Destroyed and os.clock() - t0 < 6 do
+                                local c = Player.Character
+                                local h = c and c:FindFirstChildOfClass("Humanoid")
+                                local r = c and c:FindFirstChild("HumanoidRootPart")
+                                if c and c ~= oldChar and h and h.Health > 0 and r then
+                                    break
+                                end
+                                RunService.Heartbeat:Wait()
                             end
-                            task.wait(0.35)
+                            task.wait(0.03)
                         else
-                            task.wait(0.5)
+                            task.wait(0.45)
                         end
                     else
                         AutoVoteBusy = false
-                        task.wait(0.5)
+                        task.wait(0.35)
                     end
                 else
                     AutoVoteBusy = false
-                    task.wait(0.2)
+                    RunService.Heartbeat:Wait()
                 end
             else
                 AutoVoteBusy = false
-                task.wait(1)
+                task.wait(0.6)
             end
         else
             AutoVoteBusy = false
-            task.wait(0.5)
+            task.wait(0.4)
         end
     end
 end)
@@ -5867,12 +5914,14 @@ end
 
 task.spawn(function()
     while not getgenv().Destroyed and game.PlaceId == 142823291 do
-        if Settings.MM2SafeLobby then
+        if not ToxScriptReady() then
+            task.wait(0.15)
+        elseif Settings.MM2SafeLobby then
             local _, _, root, alive = IsAliveCharacter()
             local character = Player.Character
             local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 
-            if alive and root and humanoid and humanoid.Health > 0 then
+            if alive and root and humanoid and humanoid.Health > 0 and not AutoFarmPrepared then
                 local inLobby, isMatchLive, mapRoot, isRoundCoins = GetSafeLobbyPlayerState()
 
                 if isMatchLive then
@@ -6163,9 +6212,7 @@ function TouchCoin(coin)
                         pcall(function()
                             charPart.CanTouch = true
                             firetouchinterest(charPart, coinPart, 0)
-                            firetouchinterest(coinPart, charPart, 0)
                             firetouchinterest(charPart, coinPart, 1)
-                            firetouchinterest(coinPart, charPart, 1)
                         end)
                     end
                 end
@@ -6234,7 +6281,7 @@ function CollectFarmCoin(coin, mode)
     AutoFarmAtCoin = true
     SetAutoFarmCoinPosition(holdPos, Vector3.zero)
 
-    local holdUntil = os.clock() + 0.07
+    local holdUntil = os.clock() + 0.09
 
     while Settings.MM2AutoFarmV2
     and generation == AutoFarmGeneration
@@ -6258,7 +6305,7 @@ function CollectFarmCoin(coin, mode)
         RunService.Heartbeat:Wait()
     end
 
-    -- Underground micro-peek fallback only if touch from below did not collect yet
+    -- Smooth close-reach rise only if touch from deeper Underground did not collect yet
     if mode == "Underground"
     and Settings.MM2AutoFarmV2
     and generation == AutoFarmGeneration
@@ -6267,25 +6314,23 @@ function CollectFarmCoin(coin, mode)
     and AutoFarmRoot
     and AutoFarmRoot.Parent
     and IsAutoFarmPlayerEligible() then
-        local peekPos = coinPos - Vector3.new(0, 1.8, 0)
-        local peekUntil = os.clock() + 0.06
-        while Settings.MM2AutoFarmV2
-        and generation == AutoFarmGeneration
+        local closePos = coinPos - Vector3.new(0, 2.5, 0)
+        local speedValue = math.clamp(tonumber(Settings.MM2AutoFarmSpeed) or 5, 1, 250)
+        local nudgeSpeed = math.clamp(math.max(speedValue * 4, 28), AutoFarmMinTweenSpeed, 120)
+        if AutoFarmRoot.Position.Y < closePos.Y - 0.5 then
+            TweenSegment(AutoFarmRoot.Position, closePos, nudgeSpeed, coin)
+        end
+        if IsCoinValid(coin) and not IsFarmBagFull() and AutoFarmRoot and AutoFarmRoot.Parent and IsAutoFarmPlayerEligible() then
+            TouchCoin(coin)
+            RegisterFarmCoinCollected(coin, serialBefore, bagBefore)
+        end
+        if Settings.MM2AutoFarmV2
         and not IsFarmBagFull()
-        and IsCoinValid(coin)
         and AutoFarmRoot
         and AutoFarmRoot.Parent
         and IsAutoFarmPlayerEligible()
-        and os.clock() <= peekUntil do
-            SetAutoFarmCoinPosition(peekPos, Vector3.zero)
-            TouchCoin(coin)
-            if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
-                break
-            end
-            RunService.Heartbeat:Wait()
-        end
-        if AutoFarmRoot and AutoFarmRoot.Parent and IsAutoFarmPlayerEligible() then
-            SetAutoFarmCoinPosition(holdPos, Vector3.zero)
+        and AutoFarmRoot.Position.Y > holdPos.Y + 0.5 then
+            TweenSegment(AutoFarmRoot.Position, holdPos, nudgeSpeed, nil)
         end
     end
 

@@ -161,7 +161,30 @@ CreateMM2Section(
     "FARM"
 )
 
-CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarmV2, (Settings.MM2AutoFarmMode == "Teleport" and (Settings.MM2AutoFarmTeleportDelay or 1.2) or (Settings.MM2AutoFarmSpeed or 5)), function(v)
+local ValidMM2FarmModes = {
+    Underground = true,
+    Tween = true,
+    Sky = true,
+    Teleport = true,
+}
+
+local currentFarmMode = tostring(Settings.MM2AutoFarmMode or "Tween")
+if not ValidMM2FarmModes[currentFarmMode] then
+    currentFarmMode = "Tween"
+    Settings.MM2AutoFarmMode = currentFarmMode
+end
+
+local function GetMM2AutoFarmDisplayValue(mode)
+    if mode == "Teleport" then
+        return Settings.MM2AutoFarmTeleportDelay or 1.2
+    elseif mode == "Underground" then
+        return Settings.MM2AutoFarmDepth or 6
+    else
+        return Settings.MM2AutoFarmSpeed or 5
+    end
+end
+
+CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarmV2, GetMM2AutoFarmDisplayValue(currentFarmMode), function(v)
     if v then
         Settings.MM2AutoFarmV2 = true
         ResetAutoFarmFullPause()
@@ -197,42 +220,28 @@ CreateToggleWithValue("Auto Farm", GamePage, Settings.MM2AutoFarmV2, (Settings.M
     AutoSaveConfiguration()
 end, function(value)
     local num = tonumber(value)
-    if Settings.MM2AutoFarmMode == "Teleport" then
+    local mode = tostring(Settings.MM2AutoFarmMode or "Tween")
+    if mode == "Teleport" then
         Settings.MM2AutoFarmTeleportDelay = math.clamp(num or 1.2, 0.2, 10)
+    elseif mode == "Underground" then
+        Settings.MM2AutoFarmDepth = math.clamp(num or 6, 3, 15)
     else
         Settings.MM2AutoFarmSpeed = math.clamp(num or 5, 1, 250)
         WarnAutoFarmSpeed(Settings.MM2AutoFarmSpeed)
     end
+    if getgenv().SyncValueVisuals then
+        getgenv().SyncValueVisuals("MM2AutoFarmV2", GetMM2AutoFarmDisplayValue(mode))
+    end
     AutoSaveConfiguration()
 end, "MM2AutoFarmV2")
-
-local ValidMM2FarmModes = {
-    Underground = true,
-    Tween = true,
-    Sky = true,
-    Teleport = true,
-}
-
-local currentFarmMode = tostring(Settings.MM2AutoFarmMode or "Tween")
-if not ValidMM2FarmModes[currentFarmMode] then
-    currentFarmMode = "Tween"
-    Settings.MM2AutoFarmMode = currentFarmMode
-end
 
 CreateDropdown("Farm Mode", {"Underground", "Tween", "Sky", "Teleport"}, GamePage, currentFarmMode, function(choice)
     Settings.MM2AutoFarmMode = choice
     if getgenv().SyncValueVisuals then
-        local currentVal = choice == "Teleport" and (Settings.MM2AutoFarmTeleportDelay or 1.2) or (Settings.MM2AutoFarmSpeed or 5)
-        getgenv().SyncValueVisuals("MM2AutoFarmV2", currentVal)
+        getgenv().SyncValueVisuals("MM2AutoFarmV2", GetMM2AutoFarmDisplayValue(choice))
     end
     AutoSaveConfiguration()
 end)
-
-CreateTextBox("Underground Depth", GamePage, tostring(Settings.MM2AutoFarmDepth or 6), function(txt)
-    local num = math.clamp(tonumber(txt) or 6, 3, 15)
-    Settings.MM2AutoFarmDepth = num
-    AutoSaveConfiguration()
-end, "6 (3-15)")
 
 CreateToggle(
     "Avoid Murderer",
@@ -993,6 +1002,9 @@ local AutoGrabAttemptedDrops = setmetatable({}, {__mode = "k"})
 
 task.spawn(function()
     while not getgenv().Destroyed and game.PlaceId == 142823291 do
+        if not ToxScriptReady() then
+            task.wait(0.1)
+        else
         local knife = FindNamedTool({"knife"})
         local gun = FindNamedTool({"gun", "revolver"})
         local character = Player.Character
@@ -1071,6 +1083,7 @@ task.spawn(function()
         end
 
         task.wait(0.1)
+        end
     end
 end)
 
@@ -1081,6 +1094,7 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed
     or UserInputService:GetFocusedTextBox()
     or input.UserInputType ~= Enum.UserInputType.Keyboard
+    or not ToxScriptReady()
     or getgenv().Destroyed then
         return
     end

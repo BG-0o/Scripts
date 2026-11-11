@@ -1613,15 +1613,29 @@ local function ShowCenterLoadSequence()
     PercentLabel.TextSize = 12
     PercentLabel.TextXAlignment = Enum.TextXAlignment.Right
     PercentLabel.Parent = SplashFrame
-    local duration = 4.0
-    local steps = 50
+    local duration = 3.2
+    local steps = 45
     for i = 1, steps do
-        local p = i / steps
+        if env.Destroyed or getgenv().Destroyed then
+            if blur then blur:Destroy() end
+            pcall(function() if SplashFrame and SplashFrame.Parent then SplashFrame:Destroy() end end)
+            return
+        end
+        local p = (i / steps) * 0.92
         BarFill.Size = UDim2.new(p, 0, 1, 0)
         PercentLabel.Text = math.floor(p * 100) .. "%"
-        if i == steps then TitleLabel.Text = "ToxHub Loaded Successfully" end
         task.wait(duration / steps)
     end
+    local waitGameStart = os.clock()
+    while not env.Destroyed and not getgenv().Destroyed and getgenv().ToxGameModuleLoadingUrl ~= nil and (os.clock() - waitGameStart) < 5 do
+        BarFill.Size = UDim2.new(0.95, 0, 1, 0)
+        PercentLabel.Text = "95%"
+        task.wait(0.05)
+    end
+    BarFill.Size = UDim2.new(1, 0, 1, 0)
+    PercentLabel.Text = "100%"
+    TitleLabel.Text = "ToxHub Loaded Successfully"
+    task.wait(0.18)
     if blur then blur:Destroy() end
     local fallTween = TweenService:Create(SplashFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
         Position = UDim2.new(0.5, 0, 1.3, 0),
@@ -1662,6 +1676,10 @@ local function ShowCenterLoadSequence()
                     480
                 )
             if not Settings.StartHidden then
+                local dimmer = getgenv().DimmerFrame or (Gui and Gui:FindFirstChild("DimmerFrame"))
+                if dimmer then
+                    dimmer.Visible = (Settings.DimBackground == true)
+                end
                 Main.Size = UDim2.new(0, 0, 0, 0)
                 Main.Position = finalPosition
                 Main.Visible = true

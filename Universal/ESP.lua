@@ -642,15 +642,21 @@ local function ApplyMM2PlayerData(data)
     for playerKey, info in pairs(container) do
         local p = ResolveMM2Player(playerKey)
         if p and typeof(info) == "table" then
+            applied = true
             local role = NormalizeRoleName(info.Role or info.role or info.Team or info.team)
             local dead = info.Killed or info.killed or info.Dead or info.dead
-            if role then nextRoles[p] = role applied = true end
-            if dead ~= nil then nextDead[p] = dead == true applied = true end
+            if role then
+                nextRoles[p] = role
+            elseif dead ~= true then
+                nextRoles[p] = "Innocent"
+            end
+            if dead ~= nil then nextDead[p] = dead == true end
         end
     end
     if applied then
         MM2RoleCache = nextRoles
         MM2DeadCache = nextDead
+        env.ToxMM2StableRoleCache = {}
         for p, r in pairs(nextRoles) do
             env.ToxMM2StableRoleCache[p] = r
         end
@@ -690,6 +696,30 @@ local function HasNamedTool(p, names)
         if char and char:FindFirstChild(name) then return true end
         if backpack and backpack:FindFirstChild(name) then return true end
     end
+    if char then
+        for _, obj in ipairs(char:GetChildren()) do
+            if obj:IsA("Tool") then
+                local lname = string.lower(obj.Name)
+                for _, target in ipairs(names) do
+                    if string.find(lname, string.lower(target), 1, true) then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    if backpack then
+        for _, obj in ipairs(backpack:GetChildren()) do
+            if obj:IsA("Tool") then
+                local lname = string.lower(obj.Name)
+                for _, target in ipairs(names) do
+                    if string.find(lname, string.lower(target), 1, true) then
+                        return true
+                    end
+                end
+            end
+        end
+    end
     return false
 end
 
@@ -707,18 +737,71 @@ local function GetAttributeRole(p)
     return nil
 end
 
+local MM2SheriffNames = {"Gun", "Revolver", "SheriffGun", "DefaultGun"}
+local MM2MurdererNames = {"Knife", "Blade", "Dagger", "DefaultKnife", "Sword"}
+
+local function OverlayLiveMM2Tools()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if HasNamedTool(p, MM2MurdererNames) then
+            MM2RoleCache[p] = "Murderer"
+            env.ToxMM2StableRoleCache[p] = "Murderer"
+        elseif HasNamedTool(p, MM2SheriffNames) then
+            local cur = MM2RoleCache[p]
+            local nextRole = (cur == "Hero") and "Hero" or "Sheriff"
+            MM2RoleCache[p] = nextRole
+            env.ToxMM2StableRoleCache[p] = nextRole
+        else
+            local attrRole = GetAttributeRole(p)
+            if attrRole then
+                MM2RoleCache[p] = attrRole
+                env.ToxMM2StableRoleCache[p] = attrRole
+            elseif not MM2RoleCache[p] and not env.ToxMM2StableRoleCache[p] then
+                MM2RoleCache[p] = "Innocent"
+            end
+        end
+    end
+end
+
+local function FetchMM2PlayerDataFromRemote()
+    if game.GameId ~= MM2GameId and game.PlaceId ~= MM2PlaceId then
+        return false
+    end
+    if not MM2PlayerDataRemote or not MM2PlayerDataRemote.Parent then
+        MM2PlayerDataRemote = ReplicatedStorage:FindFirstChild("GetPlayerData", true)
+    end
+    if not MM2PlayerDataRemote or not MM2PlayerDataRemote:IsA("RemoteFunction") then
+        return false
+    end
+    local ok, data = pcall(function()
+        return MM2PlayerDataRemote:InvokeServer()
+    end)
+    if ok and typeof(data) == "table" then
+        if next(data) == nil then
+            MM2HasAuthoritativeData = false
+            MM2RoleCache = {}
+            MM2DeadCache = {}
+            env.ToxMM2StableRoleCache = {}
+            OverlayLiveMM2Tools()
+            MM2RoleCacheTime = tick()
+            return false
+        end
+        local applied = ApplyMM2PlayerData(data)
+        OverlayLiveMM2Tools()
+        return applied
+    end
+    return false
+end
+
 local function BuildMM2FallbackRoles()
     local nextRoles = {}
-    local sheriffNames = {"Gun", "Revolver", "SheriffGun", "DefaultGun"}
-    local murdererNames = {"Knife", "Blade", "Dagger", "DefaultKnife", "Sword"}
 
     for _, p in ipairs(Players:GetPlayers()) do
         local attrRole = GetAttributeRole(p)
         if attrRole then
             nextRoles[p] = attrRole
         else
-            local hasKnife = HasNamedTool(p, murdererNames)
-            local hasGun = HasNamedTool(p, sheriffNames)
+            local hasKnife = HasNamedTool(p, MM2MurdererNames)
+            local hasGun = HasNamedTool(p, MM2SheriffNames)
             if hasKnife then
                 nextRoles[p] = "Murderer"
             elseif hasGun then
@@ -736,14 +819,17 @@ end
 local function RefreshMM2Roles(force)
     if (game.GameId ~= MM2GameId and game.PlaceId ~= MM2PlaceId) then return end
     local now = tick()
-    if not force and (now - MM2RoleCacheTime) < 0.5 then return end
-    if MM2HasAuthoritativeData and (now - MM2RoleCacheTime) < 2.5 then return end
+    if not force and (now - MM2RoleCacheTime) < 0.35 then return end
 
-    local fallback = BuildMM2FallbackRoles()
-    MM2RoleCache = fallback
-    for p, r in pairs(fallback) do
-        env.ToxMM2StableRoleCache[p] = r
+    if not MM2HasAuthoritativeData or force then
+        local fallback = BuildMM2FallbackRoles()
+        for p, r in pairs(fallback) do
+            if not MM2HasAuthoritativeData or not MM2RoleCache[p] then
+                MM2RoleCache[p] = r
+            end
+        end
     end
+    OverlayLiveMM2Tools()
     MM2RoleCacheTime = now
 end
 
@@ -756,11 +842,17 @@ local function GetESPVisualInfo(p)
     end
 
     if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
-        local role = MM2RoleCache[p] or env.ToxMM2StableRoleCache[p]
-        if role then
-            return RoleColors[role] or MM2UnknownColor, role
+        local role = MM2RoleCache[p] or env.ToxMM2StableRoleCache[p] or GetAttributeRole(p)
+        if not role then
+            if HasNamedTool(p, MM2MurdererNames) then
+                role = "Murderer"
+            elseif HasNamedTool(p, MM2SheriffNames) then
+                role = "Sheriff"
+            else
+                role = "Innocent"
+            end
         end
-        return defaultColor, nil
+        return RoleColors[role] or MM2UnknownColor, role
     end
 
     local attributeRole = GetAttributeRole(p)
@@ -779,7 +871,27 @@ local function GetESPVisualInfo(p)
 end
 
 env.GetToxMM2Role = function(p)
-    return MM2RoleCache[p] or env.ToxMM2StableRoleCache[p]
+    if not p then return nil end
+    local cached = MM2RoleCache[p] or env.ToxMM2StableRoleCache[p]
+    if cached then return cached end
+    if HasNamedTool(p, MM2MurdererNames) then return "Murderer" end
+    if HasNamedTool(p, MM2SheriffNames) then return "Sheriff" end
+    return nil
+end
+env.ToxGetMM2Role = env.GetToxMM2Role
+env.ToxRefreshMM2Roles = function(force)
+    RefreshMM2Roles(force == true)
+    task.spawn(function()
+        pcall(FetchMM2PlayerDataFromRemote)
+        OverlayLiveMM2Tools()
+    end)
+end
+env.ToxClearMM2Roles = function()
+    MM2RoleCache = {}
+    MM2DeadCache = {}
+    env.ToxMM2StableRoleCache = {}
+    MM2HasAuthoritativeData = false
+    MM2RoleCacheTime = 0
 end
 
 -- ReplicatedStorage Remote Events for MM2
@@ -823,11 +935,24 @@ if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
             ClearESPForPlayer(p)
         end))
     end)
+
+    task.spawn(function()
+        while env.ToxUniversal3Token == token and not env.Destroyed do
+            if env.ScriptLoaded and (Settings.MM2RoleESP or Settings.ESPEnabled or Settings.ESPTeamColors) then
+                pcall(FetchMM2PlayerDataFromRemote)
+                pcall(OverlayLiveMM2Tools)
+                task.wait(0.75)
+            else
+                task.wait(0.35)
+            end
+        end
+    end)
 end
 
 -- ==============================================================================
 -- MAIN ESP & HUD RENDER LOOP (RunService.RenderStepped)
 -- ==============================================================================
+local lastMM2ToolTick = 0
 local espConnection = nil
 espConnection = RunService.RenderStepped:Connect(function(delta)
     if env.Destroyed or env.ToxUniversal3Token ~= token then
@@ -837,6 +962,7 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
         end
         return
     end
+    if not env.ScriptLoaded then return end
 
     Camera = Workspace.CurrentCamera or Camera
     if not Camera then return end
@@ -851,6 +977,13 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
 
     -- Determine ESP State
     local mm2RoleESPActive = (game.GameId == MM2GameId or game.PlaceId == MM2PlaceId) and Settings.MM2RoleESP == true
+    if (game.GameId == MM2GameId or game.PlaceId == MM2PlaceId) and (mm2RoleESPActive or Settings.ESPTeamColors) then
+        local now = tick()
+        if now - lastMM2ToolTick >= 0.25 then
+            lastMM2ToolTick = now
+            OverlayLiveMM2Tools()
+        end
+    end
     local effectiveESPEnabled = Settings.ESPEnabled or mm2RoleESPActive
     local effectiveESPNames = Settings.ESPNames or mm2RoleESPActive
     local effectiveChams = Settings.Chams or mm2RoleESPActive

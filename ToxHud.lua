@@ -81,12 +81,13 @@ for _, mod in ipairs(CORE_MODULES) do
     end
 end
 
+-- ConfigAndRuntime's loading sequence reveals Main and activates staged options once ScriptLoaded becomes true.
 local settings = getgenv and getgenv().Settings
-if not (settings and settings.StartHidden) then
-    if getgenv and getgenv().Main and getgenv().Main.Parent then
+if getgenv and getgenv().ScriptLoaded == true and not (settings and settings.StartHidden) then
+    if getgenv().Main and getgenv().Main.Parent then
         getgenv().Main.Visible = true
     end
-    if getgenv and getgenv().ToggleToxGui then
+    if getgenv().ToggleToxGui then
         pcall(function() getgenv().ToggleToxGui(true) end)
     end
 end

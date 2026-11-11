@@ -1014,9 +1014,18 @@ task.spawn(function()
         local timeStr = tostring(mins) .. "m " .. tostring(secs) .. "s"
         UpdateSessionPill(timeStr)
         local activeFeatures = 0
-        for k, v in pairs(Settings) do
-            if v == true and k ~= "DraggableCards" and k ~= "AutoScaleScreen" and k ~= "WindowGradient" then
-                activeFeatures = activeFeatures + 1
+        if getgenv().ScriptLoaded == true then
+            for k, v in pairs(Settings) do
+                if v == true
+                and k ~= "DraggableCards"
+                and k ~= "AutoScaleScreen"
+                and k ~= "WindowGradient"
+                and k ~= "Render3D"
+                and k ~= "MobileToggle"
+                and k ~= "MM2AutoFarmAvoidMurderer"
+                and k ~= "MM2VoteInfinite" then
+                    activeFeatures = activeFeatures + 1
+                end
             end
         end
         UpdateFeaturesPill(tostring(activeFeatures))
@@ -1117,7 +1126,7 @@ local function ToggleToxGui(forceVisible)
 end
 getgenv().ToggleToxGui = ToggleToxGui
 UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
+    if gp or getgenv().Destroyed or not getgenv().ScriptLoaded then return end
     local matchKey = false
     if typeof(Settings.GUIKeybind) == "EnumItem" then
         matchKey = (input.KeyCode == Settings.GUIKeybind)

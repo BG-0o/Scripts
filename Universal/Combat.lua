@@ -402,7 +402,7 @@ local lastTriggerTime = 0
 local spinAngle = 0
 
 local combatConnection = RunService.RenderStepped:Connect(function(dt)
-    if env.Destroyed then return end
+    if env.Destroyed or not env.ScriptLoaded then return end
     if not Camera then Camera = Workspace.CurrentCamera end
     if not Camera then return end
 

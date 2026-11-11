@@ -1,6 +1,4 @@
 local env = getgenv()
-getgenv().ToxOptionsReady = true
-getgenv().ScriptLoaded = true
 if env.Destroyed then
     return
 end
@@ -230,7 +228,7 @@ DimmerFrame.BackgroundTransparency = 0.55
 DimmerFrame.BorderSizePixel = 0
 DimmerFrame.Text = ""
 DimmerFrame.AutoButtonColor = false
-DimmerFrame.Visible = Settings.DimBackground == true
+DimmerFrame.Visible = false
 DimmerFrame.ZIndex = 1
 DimmerFrame.Parent = Gui
 local defaultInitSize = UDim2.new(0, 720, 0, 480)
@@ -242,7 +240,7 @@ Main.Position = defaultInitPos
 Main.BackgroundColor3 = Theme.Background
 Main.BorderSizePixel = 0
 Main.ClipsDescendants = true
-Main.Visible = true
+Main.Visible = false
 Main.ZIndex = 2
 Main.Parent = Gui
 getgenv().Main = Main

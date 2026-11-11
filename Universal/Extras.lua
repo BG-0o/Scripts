@@ -91,7 +91,7 @@ local function SinkCameraMovement()
 end
 
 local function ShouldFreezeCameraMovement()
-    return freecamActive == true or Settings.NoclipCamera == true
+    return freecamActive == true
 end
 
 local function RestoreCameraMovementFreeze(force)
@@ -680,11 +680,8 @@ local function SetNoclipCamera(enabled)
         pcall(function()
             RunService:UnbindFromRenderStep(CAMERA_NOCLIP_BIND)
         end)
-
-        ApplyCameraMovementFreeze()
     else
         RestoreCameraNoclip()
-        RestoreCameraMovementFreeze()
     end
 end
 

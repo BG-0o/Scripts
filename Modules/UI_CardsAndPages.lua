@@ -747,7 +747,7 @@ MobileToggleBtn.Position = UDim2.new(1, -60, 0.5, -23)
 MobileToggleBtn.BackgroundColor3 = Theme.Panel
 MobileToggleBtn.BorderSizePixel = 0
 MobileToggleBtn.Image = LOGO_ID
-MobileToggleBtn.Visible = Settings.MobileToggle ~= false
+MobileToggleBtn.Visible = false
 MobileToggleBtn.ZIndex = 999999
 MobileToggleBtn.Parent = Gui
 local MobileCorner = Instance.new("UICorner") MobileCorner.CornerRadius = UDim.new(1, 0) MobileCorner.Parent = MobileToggleBtn
@@ -755,7 +755,16 @@ local MobileStroke = Instance.new("UIStroke") MobileStroke.Color = Theme.Accent 
 RegisterThemedObject(MobileToggleBtn, "BackgroundColor3", "Panel")
 RegisterThemedObject(MobileStroke, "Color", "Accent")
 MakeDraggable(MobileToggleBtn, MobileToggleBtn)
+task.spawn(function()
+    while not getgenv().Destroyed and not getgenv().ScriptLoaded do
+        task.wait(0.05)
+    end
+    if not getgenv().Destroyed and MobileToggleBtn and MobileToggleBtn.Parent then
+        MobileToggleBtn.Visible = Settings.MobileToggle ~= false
+    end
+end)
 MobileToggleBtn.MouseButton1Click:Connect(function()
+    if getgenv().Destroyed or not getgenv().ScriptLoaded then return end
     if getgenv().ToggleToxGui then
         getgenv().ToggleToxGui()
     else

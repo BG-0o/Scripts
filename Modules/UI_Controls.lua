@@ -50,6 +50,25 @@ local function RegisterStartupToggleCallback(Key, Callback)
     end
 end
 getgenv().RegisterStartupToggleCallback = RegisterStartupToggleCallback
+local DeferredStartupCallbacks = {}
+local function RunWhenLoaded(isEnabledFn, callback)
+    if type(callback) ~= "function" then
+        return
+    end
+    if getgenv().ScriptLoaded == true then
+        task.defer(function()
+            if not getgenv().Destroyed and isEnabledFn() then
+                pcall(callback, true)
+            end
+        end)
+    else
+        table.insert(DeferredStartupCallbacks, function()
+            if not getgenv().Destroyed and isEnabledFn() then
+                pcall(callback, true)
+            end
+        end)
+    end
+end
 getgenv().SyncValueVisuals = function(Key, Value)
     if not Key then return end
     local controls = getgenv().SharedValueControls[Key]
@@ -184,9 +203,9 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     end)
     Update()
     if Enabled and Callback then
-        task.defer(function()
-            pcall(Callback, true)
-        end)
+        RunWhenLoaded(function()
+            return Enabled
+        end, Callback)
     end
     if getgenv().RegisterToxSearchControl then
         getgenv().RegisterToxSearchControl(Name, Page, Container)
@@ -279,7 +298,10 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
             UpdateToggle()
         end,
         SetValue = function(Value)
-            if tonumber(Value) then Input.Text = tostring(Value) end
+            if tonumber(Value) then
+                DefaultValue = Value
+                Input.Text = tostring(Value)
+            end
         end
     }
     RegisterSharedToggle(SyncKey, Controller)
@@ -303,7 +325,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
         local num = tonumber(Input.Text)
         if num then
             CallbackValue(num)
-            if SyncKey and getgenv().SyncValueVisuals then
+            if SyncKey and getgenv().SyncValueVisuals and tostring(SyncKey) ~= "MM2AutoFarmV2" then
                 getgenv().SyncValueVisuals(SyncKey, num)
             end
             AutoSaveConfiguration()
@@ -313,9 +335,9 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     end)
     UpdateToggle()
     if Enabled and CallbackToggle then
-        task.defer(function()
-            pcall(CallbackToggle, true)
-        end)
+        RunWhenLoaded(function()
+            return Enabled
+        end, CallbackToggle)
     end
     if getgenv().RegisterToxSearchControl then
         getgenv().RegisterToxSearchControl(Name, Page, Container)
@@ -1158,6 +1180,10 @@ local function ApplyStagedOptionsAfterLoadScreen()
             end
         end
     end
+    for _, runFn in ipairs(DeferredStartupCallbacks) do
+        task.defer(runFn)
+    end
+    DeferredStartupCallbacks = {}
     getgenv().ToxStartupBooleanState = nil
     getgenv().ToxStartupToggleCallbacks = nil
 end
