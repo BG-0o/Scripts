@@ -1303,6 +1303,14 @@ local function StartNoTP()
 
         if frameDistance > 8
         and protectedDistance > 8 then
+            if getgenv().ToxIsToxTeleportAllowed and getgenv().ToxIsToxTeleportAllowed() then
+                NoTPAnchorCFrame = currentRoot.CFrame
+                NoTPLastObservedCFrame = currentRoot.CFrame
+                NoTPCorrectionCFrame = nil
+                NoTPCorrectionUntil = 0
+                return
+            end
+
             NoTPCorrectionCFrame =
                 NoTPAnchorCFrame
             NoTPCorrectionUntil =

@@ -132,10 +132,7 @@ local function SyncAccentOnly(accentColor, accent2Color)
     end
 
     if env.ToxUserExpiryLabel and env.ToxUserExpiryLabel.Parent then
-        local r = math.clamp(math.floor(accentColor.R * 255 + 0.5), 0, 255)
-        local g = math.clamp(math.floor(accentColor.G * 255 + 0.5), 0, 255)
-        local b = math.clamp(math.floor(accentColor.B * 255 + 0.5), 0, 255)
-        env.ToxUserExpiryLabel.Text = string.format('Status: <font color="#%02x%02x%02x">Lifetime VIP</font>', r, g, b)
+        env.ToxUserExpiryLabel.Text = "Lifetime"
     end
 end
 
@@ -485,33 +482,33 @@ HubVersion.Name = "HubVersion"
 HubVersion.Size = UDim2.new(0, 70, 0, 14)
 HubVersion.Position = UDim2.new(0, 48, 0, 28)
 HubVersion.BackgroundTransparency = 1
-HubVersion.Text = "v2.0 Cyber"
-HubVersion.TextColor3 = Theme.Accent2
+HubVersion.Text = "1.0.0"
+HubVersion.TextColor3 = Theme.Accent
 HubVersion.Font = Enum.Font.GothamMedium
 HubVersion.TextSize = 10
 HubVersion.TextXAlignment = Enum.TextXAlignment.Left
 HubVersion.ZIndex = 32
 HubVersion.Parent = TopBar
-RegisterThemedObject(HubVersion, "TextColor3", "Accent2")
+RegisterThemedObject(HubVersion, "TextColor3", "Accent")
 
 -- Current Game Tag Badge
 local GameTagPill = Instance.new("Frame")
 GameTagPill.Name = "GameTagPill"
-GameTagPill.Size = UDim2.new(0, 140, 0, 22)
-GameTagPill.Position = UDim2.new(0, 124, 0.5, -11)
+GameTagPill.Size = UDim2.new(0, 105, 0, 22)
+GameTagPill.Position = UDim2.new(0, 126, 0.5, -11)
 GameTagPill.BackgroundColor3 = Theme.Element
 GameTagPill.BorderSizePixel = 0
 GameTagPill.ZIndex = 32
 GameTagPill.Parent = TopBar
 RegisterThemedObject(GameTagPill, "BackgroundColor3", "Element")
 local GameTagCorner = Instance.new("UICorner") GameTagCorner.CornerRadius = UDim.new(0, 6) GameTagCorner.Parent = GameTagPill
-local GameTagStroke = Instance.new("UIStroke") GameTagStroke.Color = Theme.Accent GameTagStroke.Thickness = 1 GameTagStroke.Transparency = 0.65 GameTagStroke.Parent = GameTagPill
+local GameTagStroke = Instance.new("UIStroke") GameTagStroke.Color = Theme.Accent GameTagStroke.Thickness = 1 GameTagStroke.Transparency = 0.6 GameTagStroke.Parent = GameTagPill
 RegisterThemedObject(GameTagStroke, "Color", "Accent")
 
 local GameTagText = Instance.new("TextLabel")
 GameTagText.Name = "GameTagText"
-GameTagText.Size = UDim2.new(1, -12, 1, 0)
-GameTagText.Position = UDim2.new(0, 6, 0, 0)
+GameTagText.Size = UDim2.new(1, -8, 1, 0)
+GameTagText.Position = UDim2.new(0, 4, 0, 0)
 GameTagText.BackgroundTransparency = 1
 GameTagText.Text = "Universal"
 GameTagText.TextColor3 = Theme.Accent
@@ -526,21 +523,21 @@ env.ToxGameTagText = GameTagText
 -- Center/Right: USER PROFILE CAPSULE AT THE TOP
 local UserCapsule = Instance.new("Frame")
 UserCapsule.Name = "UserCapsule"
-UserCapsule.Size = UDim2.new(0, 240, 0, 36)
-UserCapsule.Position = UDim2.new(1, -440, 0.5, -18)
+UserCapsule.Size = UDim2.new(0, 230, 0, 36)
+UserCapsule.Position = UDim2.new(1, -430, 0.5, -18)
 UserCapsule.BackgroundColor3 = Theme.Element
 UserCapsule.BorderSizePixel = 0
 UserCapsule.ZIndex = 32
 UserCapsule.Parent = TopBar
 RegisterThemedObject(UserCapsule, "BackgroundColor3", "Element")
 local UserCapCorner = Instance.new("UICorner") UserCapCorner.CornerRadius = UDim.new(0, 8) UserCapCorner.Parent = UserCapsule
-local UserCapStroke = Instance.new("UIStroke") UserCapStroke.Color = Theme.Outline UserCapStroke.Thickness = 1 UserCapStroke.Parent = UserCapsule
+local UserCapStroke = Instance.new("UIStroke") UserCapStroke.Color = Theme.Outline UserCapStroke.Thickness = 1 UserCapStroke.Transparency = 0.5 UserCapStroke.Parent = UserCapsule
 RegisterThemedObject(UserCapStroke, "Color", "Outline")
 
 local UserAvatar = Instance.new("ImageLabel")
 UserAvatar.Name = "UserAvatar"
 UserAvatar.Size = UDim2.new(0, 26, 0, 26)
-UserAvatar.Position = UDim2.new(0, 5, 0.5, -13)
+UserAvatar.Position = UDim2.new(0, 6, 0.5, -13)
 UserAvatar.BackgroundColor3 = Theme.Hover
 UserAvatar.BackgroundTransparency = 0
 UserAvatar.Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(Player.UserId) .. "&w=100&h=100"
@@ -552,8 +549,8 @@ RegisterThemedObject(AvatarStroke, "Color", "Accent")
 
 local UserNameLabel = Instance.new("TextLabel")
 UserNameLabel.Name = "UserName"
-UserNameLabel.Size = UDim2.new(1, -120, 0, 16)
-UserNameLabel.Position = UDim2.new(0, 36, 0, 3)
+UserNameLabel.Size = UDim2.new(1, -125, 0, 16)
+UserNameLabel.Position = UDim2.new(0, 38, 0, 2)
 UserNameLabel.BackgroundTransparency = 1
 UserNameLabel.Text = Player.DisplayName or Player.Name
 UserNameLabel.TextColor3 = Theme.Text
@@ -565,20 +562,29 @@ UserNameLabel.ZIndex = 33
 UserNameLabel.Parent = UserCapsule
 RegisterThemedObject(UserNameLabel, "TextColor3", "Text")
 
+local StatusBadge = Instance.new("Frame")
+StatusBadge.Name = "StatusBadge"
+StatusBadge.Size = UDim2.new(0, 52, 0, 14)
+StatusBadge.Position = UDim2.new(0, 38, 0, 18)
+StatusBadge.BackgroundColor3 = Color3.fromRGB(14, 28, 48)
+StatusBadge.BorderSizePixel = 0
+StatusBadge.ZIndex = 33
+StatusBadge.Parent = UserCapsule
+local sCorner = Instance.new("UICorner") sCorner.CornerRadius = UDim.new(0, 3) sCorner.Parent = StatusBadge
+local sStroke = Instance.new("UIStroke") sStroke.Color = Theme.Accent sStroke.Thickness = 1 sStroke.Transparency = 0.5 sStroke.Parent = StatusBadge
+RegisterThemedObject(sStroke, "Color", "Accent")
+
 local UserExpiryLabel = Instance.new("TextLabel")
 UserExpiryLabel.Name = "UserExpiry"
-UserExpiryLabel.Size = UDim2.new(1, -120, 0, 14)
-UserExpiryLabel.Position = UDim2.new(0, 36, 0, 19)
+UserExpiryLabel.Size = UDim2.new(1, 0, 1, 0)
 UserExpiryLabel.BackgroundTransparency = 1
-UserExpiryLabel.RichText = true
-UserExpiryLabel.Text = 'Status: <font color="#38bdf8">Lifetime VIP</font>'
-UserExpiryLabel.TextColor3 = Theme.DimText
-UserExpiryLabel.Font = Enum.Font.Gotham
+UserExpiryLabel.Text = "Lifetime"
+UserExpiryLabel.TextColor3 = Theme.Accent
+UserExpiryLabel.Font = Enum.Font.GothamBold
 UserExpiryLabel.TextSize = 9
-UserExpiryLabel.TextXAlignment = Enum.TextXAlignment.Left
-UserExpiryLabel.ZIndex = 33
-UserExpiryLabel.Parent = UserCapsule
-RegisterThemedObject(UserExpiryLabel, "TextColor3", "DimText")
+UserExpiryLabel.ZIndex = 34
+UserExpiryLabel.Parent = StatusBadge
+RegisterThemedObject(UserExpiryLabel, "TextColor3", "Accent")
 env.ToxUserExpiryLabel = UserExpiryLabel
 
 -- Live FPS & Ping Display inside Capsule

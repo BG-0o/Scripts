@@ -1098,60 +1098,27 @@ local function GetCtrlClickTeleportCFrame()
     local mouse = Player:GetMouse()
     local character = Player.Character
     local root = character and character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    if not mouse
-    or not root then
+    if not mouse or not root then
         return nil
     end
-    local excluded = {}
-    if character then
-        table.insert(excluded, character)
+    local targetPos = nil
+    if mouse.Hit then
+        targetPos = mouse.Hit.Position + Vector3.new(0, 3, 0)
+    else
+        local camera = workspace.CurrentCamera or Camera
+        if not camera then return nil end
+        local ray = camera:ScreenPointToRay(mouse.X, mouse.Y)
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = { character, getgenv().Gui }
+        local result = workspace:Raycast(ray.Origin, ray.Direction * 2000, params)
+        if result and result.Position then
+            targetPos = result.Position + Vector3.new(0, 3, 0)
+        end
     end
-    if getgenv().Gui then
-        table.insert(excluded, getgenv().Gui)
-    end
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = excluded
-    params.IgnoreWater = false
-    local camera = workspace.CurrentCamera or Camera
-    if not camera then
-        return nil
-    end
-    local ray = camera:ScreenPointToRay(
-        mouse.X,
-        mouse.Y
-    )
-    local result = workspace:Raycast(
-        ray.Origin,
-        ray.Direction * 5000,
-        params
-    )
-    if not result
-    or not result.Instance
-    or IsBadCtrlClickTeleportPart(result.Instance) then
-        return nil
-    end
-    local normal = result.Normal
-    if normal.Magnitude <= 0 then
-        return nil
-    end
-    local targetPosition =
-        result.Position
-        + GetCtrlClickTeleportOffset(
-            root,
-            humanoid,
-            normal
-        )
-    local _, yaw, _ =
-        root.CFrame:ToOrientation()
-    return CFrame.new(
-        targetPosition
-    ) * CFrame.Angles(
-        0,
-        yaw,
-        0
-    )
+    if not targetPos then return nil end
+    local _, yaw, _ = root.CFrame:ToOrientation()
+    return CFrame.new(targetPos) * CFrame.Angles(0, yaw, 0)
 end
 AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and Settings.CtrlClickTP and input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -1159,6 +1126,12 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
             local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
             local targetCFrame = GetCtrlClickTeleportCFrame()
             if targetCFrame and Root then
+                if getgenv().AllowToxTeleport then
+                    getgenv().AllowToxTeleport(1.5, "Ctrl Click TP")
+                end
+                if getgenv().SetNDSNoTPAnchor then
+                    pcall(getgenv().SetNDSNoTPAnchor, targetCFrame, true)
+                end
                 if getgenv().ToxSafeTeleportToCFrame then
                     getgenv().ToxSafeTeleportToCFrame(
                         targetCFrame,
@@ -1168,9 +1141,6 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 else
                     if getgenv().RecordToxTeleportReturn then
                         getgenv().RecordToxTeleportReturn()
-                    end
-                    if getgenv().AllowToxTeleport then
-                        getgenv().AllowToxTeleport(1.25, "Ctrl Click TP")
                     end
                     Root.AssemblyLinearVelocity = Vector3.zero
                     Root.AssemblyAngularVelocity = Vector3.zero

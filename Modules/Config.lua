@@ -1219,14 +1219,14 @@ local function LoadSharedUIProfile(placeSavedAt)
     return applied
 end
 getgenv().HasSavedConfigForCurrentPlace = HasSavedConfigForCurrentPlace
-getgenv().AutoSaveConfiguration = function(force)
+
+local saveDebounceTimer = nil
+
+local function InternalSaveConfiguration()
     if getgenv().Destroyed then
         return false
     end
-    if not force and getgenv().ToxOptionsReady == false then
-        return false
-    end
-    if not force and getgenv().ToxAutoSaveEnabled ~= true then
+    if getgenv().ToxAutoSaveEnabled ~= true then
         return false
     end
     if not getgenv().CurrentGameModule then
@@ -1333,6 +1333,35 @@ getgenv().AutoSaveConfiguration = function(force)
     SaveSharedJoinGames()
     SaveSharedUIProfile(data.SavedAt)
     return primaryOK
+end
+
+getgenv().AutoSaveConfiguration = function(force)
+    if getgenv().Destroyed then
+        return false
+    end
+    if not force and getgenv().ToxOptionsReady == false then
+        return false
+    end
+    if not force and getgenv().ToxAutoSaveEnabled ~= true then
+        return false
+    end
+
+    if force then
+        if saveDebounceTimer then
+            pcall(task.cancel, saveDebounceTimer)
+            saveDebounceTimer = nil
+        end
+        return InternalSaveConfiguration()
+    end
+
+    if saveDebounceTimer then
+        pcall(task.cancel, saveDebounceTimer)
+    end
+    saveDebounceTimer = task.delay(0.5, function()
+        saveDebounceTimer = nil
+        task.spawn(InternalSaveConfiguration)
+    end)
+    return true
 end
 local function LoadConfiguration()
     if not readfile then

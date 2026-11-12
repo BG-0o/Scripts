@@ -688,13 +688,23 @@ local function BuildCombatUI()
         end, "Aimbot")
     end
 
-    CreateToggleWithValue("Aim Smoothness", CombatPage, Settings.AimbotSmoothnessEnabled, Settings.AimbotSmoothness, function(v)
-        Settings.AimbotSmoothnessEnabled = v == true
-        AutoSaveConfiguration()
-    end, function(val)
-        Settings.AimbotSmoothness = tonumber(val) or 2
-        AutoSaveConfiguration()
-    end, "AimbotSmoothnessEnabled")
+    if type(CreateToggleWithSlider) == "function" then
+        CreateToggleWithSlider("Aim Smoothness", CombatPage, 1, 20, Settings.AimbotSmoothnessEnabled, Settings.AimbotSmoothness or 2, "x", function(v)
+            Settings.AimbotSmoothnessEnabled = v == true
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.AimbotSmoothness = tonumber(val) or 2
+            AutoSaveConfiguration()
+        end, "AimbotSmoothnessEnabled")
+    else
+        CreateToggleWithValue("Aim Smoothness", CombatPage, Settings.AimbotSmoothnessEnabled, Settings.AimbotSmoothness, function(v)
+            Settings.AimbotSmoothnessEnabled = v == true
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.AimbotSmoothness = tonumber(val) or 2
+            AutoSaveConfiguration()
+        end, "AimbotSmoothnessEnabled")
+    end
 
     CreateDropdown("Aim Part", {"Head", "HumanoidRootPart", "Torso"}, CombatPage, Settings.AimPart or "Head", function(v)
         Settings.AimPart = v
@@ -706,23 +716,43 @@ local function BuildCombatUI()
         AutoSaveConfiguration()
     end, "AimWallCheck")
 
-    CreateToggleWithValue("Show FOV Circle", CombatPage, Settings.ShowFOV, Settings.FOVRadius, function(v)
-        Settings.ShowFOV = v == true
-        AutoSaveConfiguration()
-    end, function(val)
-        Settings.FOVRadius = tonumber(val) or 120
-        if FOVCircle then FOVCircle.Radius = Settings.FOVRadius end
-        AutoSaveConfiguration()
-    end, "ShowFOV")
+    if type(CreateToggleWithSlider) == "function" then
+        CreateToggleWithSlider("Show FOV Circle", CombatPage, 30, 400, Settings.ShowFOV, Settings.FOVRadius or 120, "px", function(v)
+            Settings.ShowFOV = v == true
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.FOVRadius = tonumber(val) or 120
+            if FOVCircle then FOVCircle.Radius = Settings.FOVRadius end
+            AutoSaveConfiguration()
+        end, "ShowFOV")
 
-    CreateToggleWithValue("Aim Lock", CombatPage, Settings.AimLock, Settings.LockRadius, function(v)
-        Settings.AimLock = v == true
-        if not v then lockedTarget = nil end
-        AutoSaveConfiguration()
-    end, function(val)
-        Settings.LockRadius = tonumber(val) or 110
-        AutoSaveConfiguration()
-    end, "AimLock")
+        CreateToggleWithSlider("Aim Lock", CombatPage, 30, 300, Settings.AimLock, Settings.LockRadius or 110, "px", function(v)
+            Settings.AimLock = v == true
+            if not v then lockedTarget = nil end
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.LockRadius = tonumber(val) or 110
+            AutoSaveConfiguration()
+        end, "AimLock")
+    else
+        CreateToggleWithValue("Show FOV Circle", CombatPage, Settings.ShowFOV, Settings.FOVRadius, function(v)
+            Settings.ShowFOV = v == true
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.FOVRadius = tonumber(val) or 120
+            if FOVCircle then FOVCircle.Radius = Settings.FOVRadius end
+            AutoSaveConfiguration()
+        end, "ShowFOV")
+
+        CreateToggleWithValue("Aim Lock", CombatPage, Settings.AimLock, Settings.LockRadius, function(v)
+            Settings.AimLock = v == true
+            if not v then lockedTarget = nil end
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.LockRadius = tonumber(val) or 110
+            AutoSaveConfiguration()
+        end, "AimLock")
+    end
 
     CreateToggle("Blatant Aimbot", CombatPage, Settings.AimbotBlatant, function(v)
         Settings.AimbotBlatant = v == true
@@ -793,42 +823,80 @@ local function BuildCombatUI()
         AutoSaveConfiguration()
     end, "Triggerbot")
 
-    CreateToggleWithValue("Kill Aura", CombatPage, Settings.KillAura, Settings.KillAuraRange, function(v)
-        Settings.KillAura = v == true
-        AutoSaveConfiguration()
-    end, function(val)
-        Settings.KillAuraRange = tonumber(val) or 15
-        AutoSaveConfiguration()
-    end, "KillAura")
+    if type(CreateToggleWithSlider) == "function" then
+        CreateToggleWithSlider("Kill Aura", CombatPage, 5, 30, Settings.KillAura, Settings.KillAuraRange or 15, " studs", function(v)
+            Settings.KillAura = v == true
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.KillAuraRange = tonumber(val) or 15
+            AutoSaveConfiguration()
+        end, "KillAura")
 
-    CreateToggleWithValue("Spinbot", CombatPage, Settings.Spinbot, Settings.SpinSpeed, function(v)
-        Settings.Spinbot = v == true
-        AutoSaveConfiguration()
-    end, function(val)
-        Settings.SpinSpeed = tonumber(val) or 50
-        AutoSaveConfiguration()
-    end, "Spinbot")
+        CreateToggleWithSlider("Spinbot", CombatPage, 10, 100, Settings.Spinbot, Settings.SpinSpeed or 50, "°/s", function(v)
+            Settings.Spinbot = v == true
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.SpinSpeed = tonumber(val) or 50
+            AutoSaveConfiguration()
+        end, "Spinbot")
+    else
+        CreateToggleWithValue("Kill Aura", CombatPage, Settings.KillAura, Settings.KillAuraRange, function(v)
+            Settings.KillAura = v == true
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.KillAuraRange = tonumber(val) or 15
+            AutoSaveConfiguration()
+        end, "KillAura")
+
+        CreateToggleWithValue("Spinbot", CombatPage, Settings.Spinbot, Settings.SpinSpeed, function(v)
+            Settings.Spinbot = v == true
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.SpinSpeed = tonumber(val) or 50
+            AutoSaveConfiguration()
+        end, "Spinbot")
+    end
 
     -- Card 3: Hitbox Expanders
     CreateSection(CombatPage, "Hitbox Expanders", "📦")
 
-    CreateToggleWithValue("Hitbox Expander", CombatPage, Settings.HitboxExpander, Settings.HitboxSize, function(v)
-        Settings.HitboxExpander = v == true
-        if not v then RestoreHitboxDefaults() end
-        AutoSaveConfiguration()
-    end, function(val)
-        Settings.HitboxSize = tonumber(val) or 10
-        AutoSaveConfiguration()
-    end, "HitboxExpander")
+    if type(CreateToggleWithSlider) == "function" then
+        CreateToggleWithSlider("Hitbox Expander", CombatPage, 2, 40, Settings.HitboxExpander, Settings.HitboxSize or 10, " studs", function(v)
+            Settings.HitboxExpander = v == true
+            if not v then RestoreHitboxDefaults() end
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.HitboxSize = tonumber(val) or 10
+            AutoSaveConfiguration()
+        end, "HitboxExpander")
 
-    CreateToggleWithValue("Head Hitbox Expander", CombatPage, Settings.HeadHitboxExpander, Settings.HeadHitboxSize, function(v)
-        Settings.HeadHitboxExpander = v == true
-        if not v then RestoreHeadHitboxDefaults() end
-        AutoSaveConfiguration()
-    end, function(val)
-        Settings.HeadHitboxSize = tonumber(val) or 7
-        AutoSaveConfiguration()
-    end, "HeadHitboxExpander")
+        CreateToggleWithSlider("Head Hitbox Expander", CombatPage, 2, 25, Settings.HeadHitboxExpander, Settings.HeadHitboxSize or 7, " studs", function(v)
+            Settings.HeadHitboxExpander = v == true
+            if not v then RestoreHeadHitboxDefaults() end
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.HeadHitboxSize = tonumber(val) or 7
+            AutoSaveConfiguration()
+        end, "HeadHitboxExpander")
+    else
+        CreateToggleWithValue("Hitbox Expander", CombatPage, Settings.HitboxExpander, Settings.HitboxSize, function(v)
+            Settings.HitboxExpander = v == true
+            if not v then RestoreHitboxDefaults() end
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.HitboxSize = tonumber(val) or 10
+            AutoSaveConfiguration()
+        end, "HitboxExpander")
+
+        CreateToggleWithValue("Head Hitbox Expander", CombatPage, Settings.HeadHitboxExpander, Settings.HeadHitboxSize, function(v)
+            Settings.HeadHitboxExpander = v == true
+            if not v then RestoreHeadHitboxDefaults() end
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.HeadHitboxSize = tonumber(val) or 7
+            AutoSaveConfiguration()
+        end, "HeadHitboxExpander")
+    end
 
     if type(env.ClearActivePageCard) == "function" then
         pcall(env.ClearActivePageCard, CombatPage)

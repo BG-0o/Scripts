@@ -59,18 +59,19 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     Card.Size = UDim2.new(1, -6, 0, 36)
     Card.AutomaticSize = Enum.AutomaticSize.Y
     Card.BackgroundColor3 = Theme.Panel
+    Card.BackgroundTransparency = 0.2
     Card.BorderSizePixel = 0
     Card.LayoutOrder = currentOrder
     Card.ZIndex = 7
     Card.Parent = Page
     RegisterThemedObject(Card, "BackgroundColor3", "Panel")
     local CardCorner = Instance.new("UICorner")
-    CardCorner.CornerRadius = UDim.new(0, 8)
+    CardCorner.CornerRadius = UDim.new(0, 10)
     CardCorner.Parent = Card
     local CardStroke = Instance.new("UIStroke")
     CardStroke.Color = Theme.Outline
     CardStroke.Thickness = 1
-    CardStroke.Transparency = 0.32
+    CardStroke.Transparency = 0.55
     CardStroke.Parent = Card
     RegisterThemedObject(CardStroke, "Color", "Outline")
     local CardLayout = Instance.new("UIListLayout")
@@ -80,14 +81,14 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     local Header = Instance.new("Frame")
     Header.Name = "Header"
     Header.LayoutOrder = 1
-    Header.Size = UDim2.new(1, 0, 0, 36)
+    Header.Size = UDim2.new(1, 0, 0, 34)
     Header.BackgroundTransparency = 1
     Header.ZIndex = 8
     Header.Parent = Card
     local AccentBar = Instance.new("Frame")
     AccentBar.Name = "AccentBar"
-    AccentBar.Size = UDim2.new(0, 3, 0, 16)
-    AccentBar.Position = UDim2.new(0, 10, 0.5, -8)
+    AccentBar.Size = UDim2.new(0, 3, 0, 14)
+    AccentBar.Position = UDim2.new(0, 12, 0.5, -7)
     AccentBar.BackgroundColor3 = Theme.Accent
     AccentBar.BorderSizePixel = 0
     AccentBar.ZIndex = 9
@@ -97,7 +98,7 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     local IconLabel = Instance.new("TextLabel")
     IconLabel.Name = "Icon"
     IconLabel.Size = UDim2.new(0, 20, 1, 0)
-    IconLabel.Position = UDim2.new(0, 18, 0, 0)
+    IconLabel.Position = UDim2.new(0, 20, 0, 0)
     IconLabel.BackgroundTransparency = 1
     IconLabel.Text = Icon or ""
     IconLabel.TextColor3 = Theme.Accent
@@ -108,8 +109,8 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     RegisterThemedObject(IconLabel, "TextColor3", "Accent")
     local TitleLabel = Instance.new("TextLabel")
     TitleLabel.Name = "Title"
-    TitleLabel.Size = UDim2.new(1, -120, 1, 0)
-    TitleLabel.Position = UDim2.new(0, (Icon and Icon ~= "") and 42 or 22, 0, 0)
+    TitleLabel.Size = UDim2.new(1, -50, 1, 0)
+    TitleLabel.Position = UDim2.new(0, (Icon and Icon ~= "") and 44 or 24, 0, 0)
     TitleLabel.BackgroundTransparency = 1
     TitleLabel.Text = Title
     TitleLabel.TextColor3 = Theme.Text
@@ -119,72 +120,7 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     TitleLabel.ZIndex = 9
     TitleLabel.Parent = Header
     RegisterThemedObject(TitleLabel, "TextColor3", "Text")
-    local ReorderBtn = Instance.new("TextButton")
-    ReorderBtn.Name = "ReorderBtn"
-    ReorderBtn.Size = UDim2.new(0, 24, 0, 24)
-    ReorderBtn.Position = UDim2.new(1, -58, 0.5, -12)
-    ReorderBtn.BackgroundColor3 = Theme.Element
-    ReorderBtn.BorderSizePixel = 0
-    ReorderBtn.Text = "+"
-    ReorderBtn.TextColor3 = Theme.DimText
-    ReorderBtn.Font = Enum.Font.GothamBold
-    ReorderBtn.TextSize = 15
-    ReorderBtn.ZIndex = 9
-    ReorderBtn.Parent = Header
-    RegisterThemedObject(ReorderBtn, "BackgroundColor3", "Element")
-    RegisterThemedObject(ReorderBtn, "TextColor3", "DimText")
-    local ReorderCorner = Instance.new("UICorner") ReorderCorner.CornerRadius = UDim.new(0, 5) ReorderCorner.Parent = ReorderBtn
-    local CollapseBtn = Instance.new("TextButton")
-    CollapseBtn.Name = "CollapseBtn"
-    CollapseBtn.Size = UDim2.new(0, 24, 0, 24)
-    CollapseBtn.Position = UDim2.new(1, -30, 0.5, -12)
-    CollapseBtn.BackgroundColor3 = Theme.Element
-    CollapseBtn.BorderSizePixel = 0
-    CollapseBtn.Text = "v"
-    CollapseBtn.TextColor3 = Theme.DimText
-    CollapseBtn.Font = Enum.Font.GothamBold
-    CollapseBtn.TextSize = 10
-    CollapseBtn.ZIndex = 9
-    CollapseBtn.Parent = Header
-    RegisterThemedObject(CollapseBtn, "BackgroundColor3", "Element")
-    RegisterThemedObject(CollapseBtn, "TextColor3", "DimText")
-    local CollapseCorner = Instance.new("UICorner") CollapseCorner.CornerRadius = UDim.new(0, 5) CollapseCorner.Parent = CollapseBtn
-    local ArrowFrame = Instance.new("Frame")
-    ArrowFrame.Name = "ArrowFrame"
-    ArrowFrame.Size = UDim2.new(0, 52, 0, 24)
-    ArrowFrame.Position = UDim2.new(1, -114, 0.5, -12)
-    ArrowFrame.BackgroundTransparency = 1
-    ArrowFrame.Visible = false
-    ArrowFrame.ZIndex = 10
-    ArrowFrame.Parent = Header
-    local UpBtn = Instance.new("TextButton")
-    UpBtn.Size = UDim2.new(0, 24, 0, 24)
-    UpBtn.Position = UDim2.new(0, 0, 0, 0)
-    UpBtn.BackgroundColor3 = Theme.Element
-    UpBtn.BorderSizePixel = 0
-    UpBtn.Text = "^"
-    UpBtn.TextColor3 = Theme.Accent
-    UpBtn.Font = Enum.Font.GothamBold
-    UpBtn.TextSize = 10
-    UpBtn.ZIndex = 10
-    UpBtn.Parent = ArrowFrame
-    local UpCorner = Instance.new("UICorner") UpCorner.CornerRadius = UDim.new(0, 5) UpCorner.Parent = UpBtn
-    RegisterThemedObject(UpBtn, "BackgroundColor3", "Element")
-    RegisterThemedObject(UpBtn, "TextColor3", "Accent")
-    local DownBtn = Instance.new("TextButton")
-    DownBtn.Size = UDim2.new(0, 24, 0, 24)
-    DownBtn.Position = UDim2.new(0, 28, 0, 0)
-    DownBtn.BackgroundColor3 = Theme.Element
-    DownBtn.BorderSizePixel = 0
-    DownBtn.Text = "v"
-    DownBtn.TextColor3 = Theme.Accent
-    DownBtn.Font = Enum.Font.GothamBold
-    DownBtn.TextSize = 10
-    DownBtn.ZIndex = 10
-    DownBtn.Parent = ArrowFrame
-    local DownCorner = Instance.new("UICorner") DownCorner.CornerRadius = UDim.new(0, 5) DownCorner.Parent = DownBtn
-    RegisterThemedObject(DownBtn, "BackgroundColor3", "Element")
-    RegisterThemedObject(DownBtn, "TextColor3", "Accent")
+
     local Content = Instance.new("Frame")
     Content.Name = "Content"
     Content.LayoutOrder = 2
@@ -194,94 +130,15 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     Content.ZIndex = 8
     Content.Parent = Card
     local ContentLayout = Instance.new("UIListLayout")
-    ContentLayout.Padding = UDim.new(0, 5)
+    ContentLayout.Padding = UDim.new(0, 6)
     ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
     ContentLayout.Parent = Content
     local ContentPadding = Instance.new("UIPadding")
-    ContentPadding.PaddingLeft = UDim.new(0, 8)
-    ContentPadding.PaddingRight = UDim.new(0, 8)
-    ContentPadding.PaddingBottom = UDim.new(0, 10)
+    ContentPadding.PaddingLeft = UDim.new(0, 10)
+    ContentPadding.PaddingRight = UDim.new(0, 10)
+    ContentPadding.PaddingBottom = UDim.new(0, 12)
     ContentPadding.Parent = Content
-    local isCollapsed = false
-    CollapseBtn.MouseButton1Click:Connect(function()
-        isCollapsed = not isCollapsed
-        Content.Visible = not isCollapsed
-        CollapseBtn.Text = isCollapsed and ">" or "v"
-    end)
-    ReorderBtn.MouseButton1Click:Connect(function()
-        ArrowFrame.Visible = not ArrowFrame.Visible
-    end)
-    local function SwapWithSibling(direction)
-        local siblings = {}
-        for _, child in ipairs(Page:GetChildren()) do
-            if child:IsA("Frame") and child:GetAttribute("CardKey") then
-                table.insert(siblings, child)
-            end
-        end
-        table.sort(siblings, function(a, b) return a.LayoutOrder < b.LayoutOrder end)
-        local myIndex = table.find(siblings, Card)
-        if not myIndex then return end
-        local targetIndex = myIndex + direction
-        if targetIndex >= 1 and targetIndex <= #siblings then
-            local other = siblings[targetIndex]
-            local temp = Card.LayoutOrder
-            Card.LayoutOrder = other.LayoutOrder
-            other.LayoutOrder = temp
-            CardLayoutOrder[Card:GetAttribute("CardKey")] = Card.LayoutOrder
-            CardLayoutOrder[other:GetAttribute("CardKey")] = other.LayoutOrder
-            Settings.CardLayoutOrder = CardLayoutOrder
-            if getgenv().AutoSaveConfiguration then
-                getgenv().AutoSaveConfiguration()
-            end
-        end
-    end
-    UpBtn.MouseButton1Click:Connect(function() SwapWithSibling(-1) end)
-    DownBtn.MouseButton1Click:Connect(function() SwapWithSibling(1) end)
-    ReorderBtn.InputBegan:Connect(function(input)
-        if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and Settings.DraggableCards ~= false then
-            local isDraggingCard = true
-            CardStroke.Color = Theme.Accent
-            Card.BackgroundTransparency = 0.25
-            local moveConn, endConn
-            moveConn = UserInputService.InputChanged:Connect(function(change)
-                if change.UserInputType == Enum.UserInputType.MouseMovement or change.UserInputType == Enum.UserInputType.Touch then
-                    local mouseY = change.Position.Y
-                    for _, sibling in ipairs(Page:GetChildren()) do
-                        if sibling ~= Card and sibling:IsA("Frame") and sibling:GetAttribute("CardKey") then
-                            local sibY = sibling.AbsolutePosition.Y
-                            local sibH = sibling.AbsoluteSize.Y
-                            if mouseY >= sibY and mouseY <= sibY + sibH then
-                                if sibling.LayoutOrder ~= Card.LayoutOrder then
-                                    local temp = Card.LayoutOrder
-                                    Card.LayoutOrder = sibling.LayoutOrder
-                                    sibling.LayoutOrder = temp
-                                end
-                                break
-                            end
-                        end
-                    end
-                end
-            end)
-            endConn = UserInputService.InputEnded:Connect(function(ended)
-                if ended.UserInputType == Enum.UserInputType.MouseButton1 or ended.UserInputType == Enum.UserInputType.Touch then
-                    isDraggingCard = false
-                    CardStroke.Color = Theme.Outline
-                    Card.BackgroundTransparency = 0
-                    if moveConn then moveConn:Disconnect() end
-                    if endConn then endConn:Disconnect() end
-                    for _, child in ipairs(Page:GetChildren()) do
-                        if child:IsA("Frame") and child:GetAttribute("CardKey") then
-                            CardLayoutOrder[child:GetAttribute("CardKey")] = child.LayoutOrder
-                        end
-                    end
-                    Settings.CardLayoutOrder = CardLayoutOrder
-                    if getgenv().AutoSaveConfiguration then
-                        getgenv().AutoSaveConfiguration()
-                    end
-                end
-            end)
-        end
-    end)
+
     table.insert(CardRegistry, Card)
     return Card
 end
