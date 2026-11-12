@@ -2708,12 +2708,16 @@ local function FindVotingCards()
     local hasVotingHeader = false
 
     for _, gui in ipairs(pGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "ToxSODWarnRadar" then
+        if gui:IsA("ScreenGui") and gui.Enabled then
+            local gName = string.lower(gui.Name)
+            if string.find(gName, "tox") or string.find(gName, "chat") or string.find(gName, "music") then
+                continue
+            end
             for _, desc in ipairs(gui:GetDescendants()) do
                 if (desc:IsA("TextLabel") or desc:IsA("TextButton")) and desc.Text and desc.Text ~= "" and IsGuiTrulyVisible(desc) then
                     local rawText = desc.Text
                     local tUpper = string.upper(rawText)
-                    if string.find(tUpper, "PICK") or string.find(tUpper, "MAP") or string.find(tUpper, "VOTE") or string.find(tUpper, "INTERMISSION") then
+                    if string.find(tUpper, "PICK A MAP") or string.find(tUpper, "MAP VOTING") or string.find(tUpper, "VOTE FOR") then
                         hasVotingHeader = true
                     end
                     local function ResolveCard(lbl)
@@ -2752,7 +2756,7 @@ local function FindVotingCards()
             end
         end
     end
-    local isWindowOpen = hasVotingHeader or (next(mapCards) ~= nil)
+    local isWindowOpen = (next(mapCards) ~= nil) or (next(entityCards) ~= nil)
     if not isWindowOpen then
         return false, {}, {}
     end
@@ -2821,7 +2825,7 @@ local function StartAutoVoteLoop()
             local isOpen, mapCards, entityCards = FindVotingCards()
             if not isOpen then
                 ClosedTicks = ClosedTicks + 1
-                if ClosedTicks >= 3 then
+                if ClosedTicks >= 2 then
                     VotingSessionActive = false
                 end
             else

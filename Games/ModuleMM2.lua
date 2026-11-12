@@ -5402,6 +5402,52 @@ end
 
 getgenv().ToxMM2RunKillOnFull = ToxMM2RunKillOnFull
 
+local function ForceResetCharacter(char, hum)
+    char = char or Player.Character
+    hum = hum or (char and char:FindFirstChildOfClass("Humanoid"))
+    if not char then return end
+
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            pcall(function() part.CanCollide = false end)
+        end
+    end
+
+    if hum then
+        pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true) end)
+        pcall(function() hum:ChangeState(Enum.HumanoidStateType.Dead) end)
+        pcall(function() hum.Health = 0 end)
+    end
+    pcall(function() char:BreakJoints() end)
+    pcall(function()
+        for _, m in ipairs(char:GetDescendants()) do
+            if m:IsA("Motor6D") and (m.Name == "Neck" or (m.Part0 and m.Part0.Name == "Head") or (m.Part1 and m.Part1.Name == "Head")) then
+                m:Destroy()
+            end
+        end
+    end)
+    pcall(function()
+        local head = char:FindFirstChild("Head")
+        if head then head:Destroy() end
+    end)
+    -- Universal engine void-drop fallback: guarantees server-side engine kill & respawn
+    pcall(function()
+        local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+        if root then
+            if getgenv().AllowToxTeleport then
+                getgenv().AllowToxTeleport(2.5, "Character Reset")
+            end
+            local fallY = -2500
+            local fpdh = workspace.FallenPartsDestroyHeight
+            if typeof(fpdh) == "number" and fpdh < 0 then
+                fallY = math.min(fpdh - 300, -2500)
+            end
+            root.CFrame = CFrame.new(root.Position.X, fallY, root.Position.Z)
+            root.AssemblyLinearVelocity = Vector3.new(0, -3000, 0)
+        end
+    end)
+end
+
 function CompleteAutoFarm()
     if not IsAutoFarmPlayerEligible() then
         return
@@ -5467,20 +5513,7 @@ function CompleteAutoFarm()
                     return
                 end
 
-                local character =
-                    Player.Character
-
-                local humanoid =
-                    character
-                    and character:
-                        FindFirstChildOfClass(
-                            "Humanoid"
-                        )
-
-                if humanoid
-                and humanoid.Health > 0 then
-                    humanoid.Health = 0
-                end
+                ForceResetCharacter(Player.Character)
             end
         )
     else
@@ -5836,32 +5869,26 @@ task.spawn(function()
                                 firetouchinterest(root, pad.Part, 1)
                             end)
                         end
-                        RunService.Heartbeat:Wait()
-                        RunService.Heartbeat:Wait()
-                        AutoVoteBusy = false
-                        -- Infinite reset loop (no dead collision lag, immediate respawn wait)
-                        if Settings.MM2AutoVote and humanoid and humanoid.Health > 0 and (Settings.MM2VoteInfinite ~= false) then
+                        task.wait(0.12)
+                        -- Infinite reset loop (instant clean reset & immediate respawn wait)
+                        if Settings.MM2AutoVote and (Settings.MM2VoteInfinite ~= false) then
                             local oldChar = character
-                            for _, part in ipairs(oldChar:GetDescendants()) do
-                                if part:IsA("BasePart") then
-                                    part.CanCollide = false
-                                end
-                            end
-                            humanoid.Health = 0
+                            ForceResetCharacter(oldChar, humanoid)
                             local t0 = os.clock()
-                            while Settings.MM2AutoVote and not getgenv().Destroyed and os.clock() - t0 < 6 do
+                            while Settings.MM2AutoVote and not getgenv().Destroyed and os.clock() - t0 < 5 do
                                 local c = Player.Character
                                 local h = c and c:FindFirstChildOfClass("Humanoid")
                                 local r = c and c:FindFirstChild("HumanoidRootPart")
                                 if c and c ~= oldChar and h and h.Health > 0 and r then
                                     break
                                 end
-                                RunService.Heartbeat:Wait()
+                                task.wait(0.04)
                             end
-                            task.wait(0.03)
+                            task.wait(0.12)
                         else
                             task.wait(0.45)
                         end
+                        AutoVoteBusy = false
                     else
                         AutoVoteBusy = false
                         task.wait(0.35)

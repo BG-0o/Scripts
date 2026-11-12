@@ -279,6 +279,17 @@ CreateToggle(
     "MM2AutoVote"
 )
 
+CreateToggle(
+    "Infinite Vote (Auto Reset)",
+    GamePage,
+    Settings.MM2VoteInfinite ~= false,
+    function(v)
+        Settings.MM2VoteInfinite = v == true
+        AutoSaveConfiguration()
+    end,
+    "MM2VoteInfinite"
+)
+
 CreateDropdown(
     "Vote Map",
     {
