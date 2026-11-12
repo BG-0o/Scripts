@@ -927,19 +927,19 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     elseif SyncKey and Settings[SyncKey .. "Choice"] ~= nil then
         initialChoice = Settings[SyncKey .. "Choice"]
     end
-    ChoiceBtn.Text = tostring(initialChoice) .. " ▾"
+    ChoiceBtn.Text = tostring(initialChoice) .. " v"
     ChoiceBtn.TextTruncate = Enum.TextTruncate.AtEnd
     ChoiceBtn.MouseButton1Click:Connect(function()
         if getgenv().Destroyed then return end
         if getgenv().ShowToxDropdownOverlay then
-            ChoiceBtn.Text = tostring(initialChoice) .. " ▴"
+            ChoiceBtn.Text = tostring(initialChoice) .. " ^"
             getgenv().ShowToxDropdownOverlay(ChoiceBtn, Options, initialChoice, function(opt)
                 initialChoice = opt
-                ChoiceBtn.Text = tostring(opt) .. " ▾"
+                ChoiceBtn.Text = tostring(opt) .. " v"
                 if CallbackChoice then CallbackChoice(opt) end
                 AutoSaveConfiguration()
             end, function()
-                ChoiceBtn.Text = tostring(initialChoice) .. " ▾"
+                ChoiceBtn.Text = tostring(initialChoice) .. " v"
             end)
         end
     end)
@@ -987,7 +987,7 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
         end,
         SetValue = function(Value)
             initialChoice = Value
-            ChoiceBtn.Text = tostring(Value) .. " ▾"
+            ChoiceBtn.Text = tostring(Value) .. " v"
         end
     }
     RegisterSharedToggle(SyncKey, Controller)
@@ -1241,7 +1241,7 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback
     Button.Position = UDim2.new(1, -134, 0.5, -12)
     Button.BackgroundColor3 = Theme.Panel
     Button.BorderSizePixel = 0
-    Button.Text = tostring(DefaultOption) .. "  ▾"
+    Button.Text = tostring(DefaultOption) .. "  v"
     Button.TextColor3 = Theme.Accent
     Button.TextSize = 11
     Button.Font = Enum.Font.GothamBold
@@ -1255,14 +1255,14 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback
     Button.MouseButton1Click:Connect(function()
         if getgenv().Destroyed then return end
         if getgenv().ShowToxDropdownOverlay then
-            Button.Text = tostring(SelectedOption) .. "  ▴"
+            Button.Text = tostring(SelectedOption) .. "  ^"
             getgenv().ShowToxDropdownOverlay(Button, Options, SelectedOption, function(opt)
                 SelectedOption = opt
-                Button.Text = tostring(opt) .. "  ▾"
+                Button.Text = tostring(opt) .. "  v"
                 if Callback then Callback(opt) end
                 AutoSaveConfiguration()
             end, function()
-                Button.Text = tostring(SelectedOption) .. "  ▾"
+                Button.Text = tostring(SelectedOption) .. "  v"
             end)
         end
     end)

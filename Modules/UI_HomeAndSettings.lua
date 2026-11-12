@@ -646,7 +646,7 @@ local function AddSettingsDropdown(parent, name, options, defaultOption, callbac
     btn.Position = UDim2.new(1, -118, 0.5, -12)
     btn.BackgroundColor3 = Theme.Panel
     btn.BorderSizePixel = 0
-    btn.Text = tostring(defaultOption) .. "  ▾"
+    btn.Text = tostring(defaultOption) .. "  v"
     btn.TextColor3 = Theme.Accent
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 11
@@ -660,14 +660,14 @@ local function AddSettingsDropdown(parent, name, options, defaultOption, callbac
     local currentOpt = defaultOption
     btn.MouseButton1Click:Connect(function()
         if getgenv().ShowToxDropdownOverlay then
-            btn.Text = tostring(currentOpt) .. "  ▴"
+            btn.Text = tostring(currentOpt) .. "  ^"
             getgenv().ShowToxDropdownOverlay(btn, options, currentOpt, function(opt)
                 currentOpt = opt
-                btn.Text = tostring(opt) .. "  ▾"
+                btn.Text = tostring(opt) .. "  v"
                 if callback then callback(opt) end
                 if getgenv().AutoSaveConfiguration then getgenv().AutoSaveConfiguration() end
             end, function()
-                btn.Text = tostring(currentOpt) .. "  ▾"
+                btn.Text = tostring(currentOpt) .. "  v"
             end)
         end
     end)
