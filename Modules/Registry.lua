@@ -1,15 +1,15 @@
 local LOGO_ID = "rbxassetid://120675082996894"
-local MAIN_COLOR = Color3.fromRGB(9, 0, 136)
+local MAIN_COLOR = Color3.fromRGB(0, 168, 255)
 local GUIColorMap = {
-    ["Blue"] = Color3.fromRGB(9, 0, 136),
-    ["Cyan"] = Color3.fromRGB(0, 120, 160),
-    ["Purple"] = Color3.fromRGB(95, 35, 180),
-    ["Green"] = Color3.fromRGB(25, 140, 80),
-    ["Red"] = Color3.fromRGB(160, 35, 50),
-    ["Orange"] = Color3.fromRGB(190, 90, 25),
-    ["Pink"] = Color3.fromRGB(180, 55, 130),
-    ["Gold"] = Color3.fromRGB(175, 130, 20),
-    ["White"] = Color3.fromRGB(150, 150, 165)
+    ["Blue"] = Color3.fromRGB(0, 168, 255),
+    ["Cyan"] = Color3.fromRGB(6, 182, 212),
+    ["Purple"] = Color3.fromRGB(168, 85, 247),
+    ["Green"] = Color3.fromRGB(16, 185, 129),
+    ["Red"] = Color3.fromRGB(244, 63, 94),
+    ["Orange"] = Color3.fromRGB(249, 115, 22),
+    ["Pink"] = Color3.fromRGB(236, 72, 153),
+    ["Gold"] = Color3.fromRGB(234, 179, 8),
+    ["White"] = Color3.fromRGB(241, 245, 249)
 }
 local ColorMap = {
 	["White"] = Color3.fromRGB(255, 255, 255),

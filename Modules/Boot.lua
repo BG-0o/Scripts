@@ -76,7 +76,7 @@ local function ShowReexecuteConfirm()
     corner.CornerRadius = UDim.new(0, 10)
     corner.Parent = frame
     local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(9, 0, 136)
+    stroke.Color = Color3.fromRGB(0, 168, 255)
     stroke.Thickness = 2
     stroke.Parent = frame
     local title = Instance.new("TextLabel")

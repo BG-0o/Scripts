@@ -92,7 +92,7 @@ end
 
 local MAIN_COLOR =
     getgenv().MAIN_COLOR
-    or Color3.fromRGB(9, 0, 136)
+    or Color3.fromRGB(0, 168, 255)
 
 local function RebuildEmbeddedChat()
     local previous = getgenv().ToxChatGui

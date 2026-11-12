@@ -84,12 +84,22 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     Header.BackgroundTransparency = 1
     Header.ZIndex = 8
     Header.Parent = Card
+    local AccentBar = Instance.new("Frame")
+    AccentBar.Name = "AccentBar"
+    AccentBar.Size = UDim2.new(0, 3, 0, 16)
+    AccentBar.Position = UDim2.new(0, 10, 0.5, -8)
+    AccentBar.BackgroundColor3 = Theme.Accent
+    AccentBar.BorderSizePixel = 0
+    AccentBar.ZIndex = 9
+    AccentBar.Parent = Header
+    local BarCorner = Instance.new("UICorner") BarCorner.CornerRadius = UDim.new(0, 2) BarCorner.Parent = AccentBar
+    RegisterThemedObject(AccentBar, "BackgroundColor3", "Accent")
     local IconLabel = Instance.new("TextLabel")
     IconLabel.Name = "Icon"
-    IconLabel.Size = UDim2.new(0, 24, 1, 0)
-    IconLabel.Position = UDim2.new(0, 10, 0, 0)
+    IconLabel.Size = UDim2.new(0, 20, 1, 0)
+    IconLabel.Position = UDim2.new(0, 18, 0, 0)
     IconLabel.BackgroundTransparency = 1
-    IconLabel.Text = Icon or "🔹"
+    IconLabel.Text = Icon or ""
     IconLabel.TextColor3 = Theme.Accent
     IconLabel.Font = Enum.Font.GothamBold
     IconLabel.TextSize = 13
@@ -99,7 +109,7 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     local TitleLabel = Instance.new("TextLabel")
     TitleLabel.Name = "Title"
     TitleLabel.Size = UDim2.new(1, -120, 1, 0)
-    TitleLabel.Position = UDim2.new(0, 36, 0, 0)
+    TitleLabel.Position = UDim2.new(0, (Icon and Icon ~= "") and 42 or 22, 0, 0)
     TitleLabel.BackgroundTransparency = 1
     TitleLabel.Text = Title
     TitleLabel.TextColor3 = Theme.Text
@@ -130,7 +140,7 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     CollapseBtn.Position = UDim2.new(1, -30, 0.5, -12)
     CollapseBtn.BackgroundColor3 = Theme.Element
     CollapseBtn.BorderSizePixel = 0
-    CollapseBtn.Text = "▼"
+    CollapseBtn.Text = "v"
     CollapseBtn.TextColor3 = Theme.DimText
     CollapseBtn.Font = Enum.Font.GothamBold
     CollapseBtn.TextSize = 10
@@ -152,7 +162,7 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     UpBtn.Position = UDim2.new(0, 0, 0, 0)
     UpBtn.BackgroundColor3 = Theme.Element
     UpBtn.BorderSizePixel = 0
-    UpBtn.Text = "▲"
+    UpBtn.Text = "^"
     UpBtn.TextColor3 = Theme.Accent
     UpBtn.Font = Enum.Font.GothamBold
     UpBtn.TextSize = 10
@@ -166,7 +176,7 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     DownBtn.Position = UDim2.new(0, 28, 0, 0)
     DownBtn.BackgroundColor3 = Theme.Element
     DownBtn.BorderSizePixel = 0
-    DownBtn.Text = "▼"
+    DownBtn.Text = "v"
     DownBtn.TextColor3 = Theme.Accent
     DownBtn.Font = Enum.Font.GothamBold
     DownBtn.TextSize = 10
@@ -196,7 +206,7 @@ local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
     CollapseBtn.MouseButton1Click:Connect(function()
         isCollapsed = not isCollapsed
         Content.Visible = not isCollapsed
-        CollapseBtn.Text = isCollapsed and "▶" or "▼"
+        CollapseBtn.Text = isCollapsed and ">" or "v"
     end)
     ReorderBtn.MouseButton1Click:Connect(function()
         ArrowFrame.Visible = not ArrowFrame.Visible
@@ -425,12 +435,17 @@ local function CreateSidebarNavButton(name, iconText, page, order)
     Button.ZIndex = 12
     Button.Parent = SidebarScroll
     local BtnCorner = Instance.new("UICorner")
-    BtnCorner.CornerRadius = UDim.new(0, 6)
+    BtnCorner.CornerRadius = UDim.new(0, 8)
     BtnCorner.Parent = Button
+    local BtnStroke = Instance.new("UIStroke")
+    BtnStroke.Color = Theme.Accent
+    BtnStroke.Thickness = 1
+    BtnStroke.Transparency = 1
+    BtnStroke.Parent = Button
     local IndicatorBar = Instance.new("Frame")
     IndicatorBar.Name = "IndicatorBar"
-    IndicatorBar.Size = UDim2.new(0, 3, 0.7, 0)
-    IndicatorBar.Position = UDim2.new(0, 0, 0.15, 0)
+    IndicatorBar.Size = UDim2.new(0, 3, 0.6, 0)
+    IndicatorBar.Position = UDim2.new(0, 2, 0.2, 0)
     IndicatorBar.BackgroundColor3 = Theme.Accent
     IndicatorBar.BorderSizePixel = 0
     IndicatorBar.Visible = false
@@ -466,21 +481,42 @@ local function CreateSidebarNavButton(name, iconText, page, order)
     RegisterThemedObject(TextLabel, "TextColor3", "DimText")
     local function SetActive(active)
         IndicatorBar.Visible = active
-        Button.BackgroundTransparency = active and 0 or 1
-        Button.BackgroundColor3 = active and Theme.Element or Theme.Hover
-        IconLabel.TextColor3 = active and Theme.Accent or Theme.DimText
-        TextLabel.TextColor3 = active and Theme.Text or Theme.DimText
-        TextLabel.Font = active and Enum.Font.GothamBold or Enum.Font.GothamMedium
+        if active then
+            TweenService:Create(Button, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                BackgroundTransparency = 0,
+                BackgroundColor3 = Theme.Element
+            }):Play()
+            BtnStroke.Transparency = 0.65
+            BtnStroke.Color = Theme.Accent
+            IconLabel.TextColor3 = Theme.Accent
+            TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            TextLabel.Font = Enum.Font.GothamBold
+        else
+            TweenService:Create(Button, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                BackgroundTransparency = 1,
+                BackgroundColor3 = Theme.Hover
+            }):Play()
+            BtnStroke.Transparency = 1
+            IconLabel.TextColor3 = Theme.DimText
+            TextLabel.TextColor3 = Theme.DimText
+            TextLabel.Font = Enum.Font.GothamMedium
+        end
     end
     Button.MouseEnter:Connect(function()
         if CurrentActivePage ~= page then
-            Button.BackgroundTransparency = 0.5
-            Button.BackgroundColor3 = Theme.Element
+            TweenService:Create(Button, TweenInfo.new(0.15), {
+                BackgroundTransparency = 0.5,
+                BackgroundColor3 = Theme.Hover
+            }):Play()
+            TextLabel.TextColor3 = Color3.fromRGB(240, 245, 255)
         end
     end)
     Button.MouseLeave:Connect(function()
         if CurrentActivePage ~= page then
-            Button.BackgroundTransparency = 1
+            TweenService:Create(Button, TweenInfo.new(0.15), {
+                BackgroundTransparency = 1
+            }):Play()
+            TextLabel.TextColor3 = Theme.DimText
         end
     end)
     Button.MouseButton1Click:Connect(function()
@@ -598,6 +634,15 @@ local function ToxOpenPage(targetPage)
     getgenv().CurrentPage = targetPage
     local pageTitle = getgenv().ToxPageNamesByPage[targetPage] or targetPage.Name
     CurrentTabTitle.Text = pageTitle
+    if env.ToxGameTagText and env.ToxGameTagText.Parent then
+        if targetPage == GamePage and DetectedGameModule then
+            env.ToxGameTagText.Text = DetectedGameModule.ShortName or "Game"
+        elseif DetectedGameModule and DetectedGameModule.Ready then
+            env.ToxGameTagText.Text = DetectedGameModule.ShortName or "Game"
+        else
+            env.ToxGameTagText.Text = pageTitle
+        end
+    end
     for page, navData in pairs(SidebarNavButtons) do
         navData.SetActive(page == targetPage)
     end
@@ -712,7 +757,7 @@ local function RebuildSearchResults()
                             if parentCard and parentCard:FindFirstChild("Content") then
                                 parentCard.Content.Visible = true
                                 local colBtn = parentCard:FindFirstChild("Header") and parentCard.Header:FindFirstChild("CollapseBtn")
-                                if colBtn then colBtn.Text = "▼" end
+                                if colBtn then colBtn.Text = "v" end
                             end
                             local offset = item.Object.AbsolutePosition.Y - item.Page.AbsolutePosition.Y + item.Page.CanvasPosition.Y - 14
                             item.Page.CanvasPosition = Vector2.new(0, math.max(0, offset))
