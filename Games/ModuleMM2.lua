@@ -2916,23 +2916,34 @@ function GetPredictedTargetPosition(
         return nil
     end
 
+    local myChar = Player.Character
+    local myRoot = myChar and (myChar:FindFirstChild("HumanoidRootPart") or myChar:FindFirstChild("UpperTorso") or myChar:FindFirstChild("Torso"))
+    local myPos = myRoot and myRoot.Position or aimPart.Position
+    local dist = (aimPart.Position - myPos).Magnitude
+
+    -- At close range (< 12 studs), bullet travels near-instantaneously: direct torso aim hits 100%
+    if dist < 12 then
+        return aimPart.Position
+    end
+
     local velocity = aimPart.AssemblyLinearVelocity
     local moveDirection = humanoid.MoveDirection
     local offset = tonumber(Settings.MM2ShootOffset) or MM2ShootOffset
     local pingMultiplier = tonumber(Settings.MM2ShootPingMultiplier) or MM2OffsetPingMultiplier
-    local pingScale = 1
-
+    local ping = 0.035
     pcall(function()
-        pingScale = ((Player:GetNetworkPing() * 1000) * ((pingMultiplier - 1) * 0.01)) + 1
+        ping = math.clamp(Player:GetNetworkPing(), 0.01, 0.25)
     end)
 
-    local predicted = aimPart.Position
-        + ((velocity * Vector3.new(0.75, 0.5, 0.75)) * (offset / 15))
-        + (moveDirection * offset)
+    -- Bullet velocity in MM2 is approx 300 studs/sec
+    local travelTime = (dist / 300) + (ping * pingMultiplier)
+    -- Smoothly scale leading based on distance: 0 at <= 12 studs, increasing up to full lead at 60+ studs
+    local distFactor = math.clamp((dist - 12) / 48, 0, 1)
 
-    predicted = predicted * pingScale
+    local lead = (velocity * Vector3.new(0.85, 0.4, 0.85) * travelTime)
+        + (moveDirection * (offset * distFactor))
 
-    return predicted
+    return aimPart.Position + lead
 end
 
 function GetGuidedTargetPart(
@@ -3175,6 +3186,28 @@ function FireGuidedGunShot(
 
     local shotTarget = GetPredictedTargetPosition(target) or targetRoot.Position
 
+    local knifeLocal = gun:FindFirstChild("KnifeLocal")
+        or gun:FindFirstChild("KnifeLocal", true)
+    local createBeam = knifeLocal and (
+        knifeLocal:FindFirstChild("CreateBeam")
+        or knifeLocal:FindFirstChild("CreateBeam", true)
+    )
+    local remoteFunction = createBeam and (
+        createBeam:FindFirstChild("RemoteFunction")
+        or createBeam:FindFirstChildWhichIsA("RemoteFunction", true)
+    )
+
+    if remoteFunction
+    and remoteFunction:IsA("RemoteFunction") then
+        local ok = pcall(function()
+            remoteFunction:InvokeServer(1, shotTarget, "AH2")
+        end)
+
+        if ok then
+            return true
+        end
+    end
+
     local shotOrigin = Vector3.new(
         shotTarget.X,
         shotTarget.Y + 1.25,
@@ -3196,26 +3229,6 @@ function FireGuidedGunShot(
         if ok then
             return true
         end
-    end
-
-    local knifeLocal = gun:FindFirstChild("KnifeLocal")
-        or gun:FindFirstChild("KnifeLocal", true)
-    local createBeam = knifeLocal and (
-        knifeLocal:FindFirstChild("CreateBeam")
-        or knifeLocal:FindFirstChild("CreateBeam", true)
-    )
-    local remoteFunction = createBeam and (
-        createBeam:FindFirstChild("RemoteFunction")
-        or createBeam:FindFirstChildWhichIsA("RemoteFunction", true)
-    )
-
-    if remoteFunction
-    and remoteFunction:IsA("RemoteFunction") then
-        local ok = pcall(function()
-            remoteFunction:InvokeServer(1, shotTarget, "AH2")
-        end)
-
-        return ok
     end
 
     return false

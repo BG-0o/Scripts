@@ -445,6 +445,20 @@ TopBar.ZIndex = 30
 TopBar.Parent = Main
 RegisterThemedObject(TopBar, "BackgroundColor3", "Panel")
 
+local TopBarCorner = Instance.new("UICorner")
+TopBarCorner.CornerRadius = UDim.new(0, 12)
+TopBarCorner.Parent = TopBar
+
+local TopBarBottomMask = Instance.new("Frame")
+TopBarBottomMask.Name = "BottomSquareMask"
+TopBarBottomMask.Size = UDim2.new(1, 0, 0, 14)
+TopBarBottomMask.Position = UDim2.new(0, 0, 1, -14)
+TopBarBottomMask.BackgroundColor3 = Theme.Panel
+TopBarBottomMask.BorderSizePixel = 0
+TopBarBottomMask.ZIndex = 30
+TopBarBottomMask.Parent = TopBar
+RegisterThemedObject(TopBarBottomMask, "BackgroundColor3", "Panel")
+
 local TopBarBottomBorder = Instance.new("Frame")
 TopBarBottomBorder.Name = "BottomBorder"
 TopBarBottomBorder.Size = UDim2.new(1, 0, 0, 1)
@@ -778,6 +792,30 @@ Sidebar.BorderSizePixel = 0
 Sidebar.ZIndex = 10
 Sidebar.Parent = Main
 RegisterThemedObject(Sidebar, "BackgroundColor3", "Panel")
+
+local SidebarCorner = Instance.new("UICorner")
+SidebarCorner.CornerRadius = UDim.new(0, 12)
+SidebarCorner.Parent = Sidebar
+
+local SidebarTopMask = Instance.new("Frame")
+SidebarTopMask.Name = "TopSquareMask"
+SidebarTopMask.Size = UDim2.new(1, 0, 0, 14)
+SidebarTopMask.Position = UDim2.new(0, 0, 0, 0)
+SidebarTopMask.BackgroundColor3 = Theme.Panel
+SidebarTopMask.BorderSizePixel = 0
+SidebarTopMask.ZIndex = 10
+SidebarTopMask.Parent = Sidebar
+RegisterThemedObject(SidebarTopMask, "BackgroundColor3", "Panel")
+
+local SidebarRightMask = Instance.new("Frame")
+SidebarRightMask.Name = "RightSquareMask"
+SidebarRightMask.Size = UDim2.new(0, 14, 1, 0)
+SidebarRightMask.Position = UDim2.new(1, -14, 0, 0)
+SidebarRightMask.BackgroundColor3 = Theme.Panel
+SidebarRightMask.BorderSizePixel = 0
+SidebarRightMask.ZIndex = 10
+SidebarRightMask.Parent = Sidebar
+RegisterThemedObject(SidebarRightMask, "BackgroundColor3", "Panel")
 
 local SidebarRightBorder = Instance.new("Frame")
 SidebarRightBorder.Name = "RightBorder"

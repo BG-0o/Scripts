@@ -344,7 +344,7 @@ local function InstallMagicBulletHook()
                         if isSafeCaller then
                             if method == "Raycast" and self == Workspace then
                                 local origin, dir = ...
-                                if typeof(origin) == "Vector3" and typeof(dir) == "Vector3" and dir.Magnitude >= 15 then
+                                if typeof(origin) == "Vector3" and typeof(dir) == "Vector3" and dir.Magnitude >= 1.5 then
                                     -- Ignore downward ground checks and backward camera checks
                                     local isDownward = dir.Unit.Y < -0.8
                                     local isBehindCamera = dir:Dot(Camera.CFrame.LookVector) < -0.3
@@ -358,7 +358,7 @@ local function InstallMagicBulletHook()
                                 end
                             elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" then
                                 local r = ...
-                                if typeof(r) == "Ray" and r.Direction.Magnitude >= 15 then
+                                if typeof(r) == "Ray" and r.Direction.Magnitude >= 1.5 then
                                     local isDownward = r.Direction.Unit.Y < -0.8
                                     if not isDownward then
                                         local newDir = (target.Position - r.Origin).Unit * r.Direction.Magnitude
@@ -406,9 +406,11 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
     if not Camera then Camera = Workspace.CurrentCamera end
     if not Camera then return end
 
-    -- Pre-cache Magic Bullet target without running heavy Raycast inside __namecall!
-    if Settings.MagicBullet then
-        local mbFov = Settings.MagicBulletFOVEnabled and (Settings.MagicBulletFOV or 200) or 200
+    -- Pre-cache Magic Bullet / Silent Aim target without running heavy Raycast inside __namecall!
+    if Settings.MagicBullet or Settings.SilentAim then
+        local mbFov = (Settings.MagicBullet and Settings.MagicBulletFOVEnabled and Settings.MagicBulletFOV)
+            or (Settings.SilentAim and Settings.SilentAimFOVEnabled and Settings.SilentAimFOV)
+            or 300
         currentMagicTarget = GetClosestTarget(mbFov)
     else
         currentMagicTarget = nil
