@@ -148,8 +148,10 @@ end
 if HasRunningToxHub() then
     if not ShowReexecuteConfirm() then
         getgenv().__ToxHubBootLock = nil
+        getgenv().__ToxHubReexecCancelled = true
         return
     end
+    getgenv().__ToxHubReexecCancelled = nil
     getgenv().Destroyed = true
     getgenv().ScriptLoaded = false
     Destroyed = true
@@ -292,7 +294,15 @@ if HasRunningToxHub() then
             end)
         end
     end
-    task.wait(0.25)
+    task.wait(0.15)
+end
+if getgenv().ToxUI and getgenv().ToxUI.ScreenWeatherGui then
+    pcall(function() getgenv().ToxUI.ScreenWeatherGui:Destroy() end)
+    getgenv().ToxUI.ScreenWeatherGui = nil
+end
+if getgenv().ToxRenderBackdropGui then
+    pcall(function() getgenv().ToxRenderBackdropGui:Destroy() end)
+    getgenv().ToxRenderBackdropGui = nil
 end
 if getgenv().Gui then
     pcall(function() getgenv().Gui:Destroy() end)
@@ -308,3 +318,6 @@ if getgenv().NotifGui then
     pcall(function() getgenv().NotifGui:Destroy() end)
     getgenv().NotifGui = nil
 end
+getgenv().Destroyed = false
+Destroyed = false
+getgenv().__ToxHubReexecCancelled = nil

@@ -1647,8 +1647,8 @@ local function ShowCenterLoadSequence()
     PercentLabel.TextSize = 12
     PercentLabel.TextXAlignment = Enum.TextXAlignment.Right
     PercentLabel.Parent = SplashFrame
-    local duration = 3.2
-    local steps = 45
+    local duration = 0.85
+    local steps = 20
     for i = 1, steps do
         if env.Destroyed or getgenv().Destroyed then
             if blur then blur:Destroy() end
@@ -1661,7 +1661,7 @@ local function ShowCenterLoadSequence()
         task.wait(duration / steps)
     end
     local waitGameStart = os.clock()
-    while not env.Destroyed and not getgenv().Destroyed and getgenv().ToxGameModuleLoadingUrl ~= nil and (os.clock() - waitGameStart) < 5 do
+    while not env.Destroyed and not getgenv().Destroyed and getgenv().ToxGameModuleLoadingUrl ~= nil and (os.clock() - waitGameStart) < 2.5 do
         BarFill.Size = UDim2.new(0.95, 0, 1, 0)
         PercentLabel.Text = "95%"
         task.wait(0.05)
@@ -1669,9 +1669,9 @@ local function ShowCenterLoadSequence()
     BarFill.Size = UDim2.new(1, 0, 1, 0)
     PercentLabel.Text = "100%"
     TitleLabel.Text = "ToxHub Loaded Successfully"
-    task.wait(0.18)
+    task.wait(0.1)
     if blur then blur:Destroy() end
-    local fallTween = TweenService:Create(SplashFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+    local fallTween = TweenService:Create(SplashFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
         Position = UDim2.new(0.5, 0, 1.3, 0),
         BackgroundTransparency = 1
     })

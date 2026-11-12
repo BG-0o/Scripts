@@ -42,10 +42,7 @@ local function Notify(text, color, duration)
     end
 end
 
-local function LoadRemote(name, url)
-    local fetchOk, source = pcall(function()
-        return game:HttpGet(AddToxCacheBuster(url))
-    end)
+local function ExecuteFetchedModule(name, fetchOk, source)
     if not fetchOk or type(source) ~= "string" or source == "" or source:sub(1, 15):find("404") then
         Notify(name .. " download failed", Color3.fromRGB(255, 100, 100), 5)
         warn("[ToxHub " .. name .. " Download Error]: " .. tostring(source))
@@ -68,12 +65,57 @@ local function LoadRemote(name, url)
     return true
 end
 
+local detected = getgenv().CurrentGameModule
+if not detected and getgenv().ResolveCurrentGameModule then
+    detected = getgenv().ResolveCurrentGameModule()
+    getgenv().CurrentGameModule = detected
+end
+
+-- Start concurrent pre-fetch of Universal modules, Chat, Systems, and Game module
+local prefetched = {}
+local function StartFetch(key, url)
+    task.spawn(function()
+        local ok, body = pcall(function()
+            return game:HttpGet(AddToxCacheBuster(url))
+        end)
+        prefetched[key] = { Ok = ok, Body = body }
+    end)
+end
+
+if not getgenv().ToxUniversalLoaded then
+    for _, mod in ipairs(UNIVERSAL_MODULES) do
+        StartFetch(mod.Name, BASE_REPO .. mod.Path)
+    end
+end
+if not getgenv().ToxChatLoaded then
+    StartFetch("Modules/ToxChat.lua", TOX_CHAT_URL)
+end
+if not getgenv().ToxSystemsLoaded then
+    StartFetch("Modules/ToxSystems.lua", TOX_SYSTEMS_URL)
+end
+
+local gameUrlToFetch = (detected and detected.Ready and detected.Url) and tostring(detected.Url) or nil
+if gameUrlToFetch then
+    StartFetch("__GAME_MODULE__", gameUrlToFetch)
+end
+
+local function WaitAndRun(key)
+    while not prefetched[key] do
+        if env.Destroyed then
+            return false
+        end
+        task.wait()
+    end
+    local entry = prefetched[key]
+    return ExecuteFetchedModule(key, entry.Ok, entry.Body)
+end
+
 if not getgenv().ToxUniversalLoaded then
     for _, mod in ipairs(UNIVERSAL_MODULES) do
         if env.Destroyed then
             return
         end
-        local ok = LoadRemote(mod.Name, BASE_REPO .. mod.Path)
+        local ok = WaitAndRun(mod.Name)
         if not ok and mod.Path == "Universal/ConfigAndRuntime.lua" then
             return
         end
@@ -81,18 +123,13 @@ if not getgenv().ToxUniversalLoaded then
 end
 
 if not getgenv().ToxChatLoaded then
-    LoadRemote("Modules/ToxChat.lua", TOX_CHAT_URL)
+    WaitAndRun("Modules/ToxChat.lua")
 end
 
 if not getgenv().ToxSystemsLoaded then
-    LoadRemote("Modules/ToxSystems.lua", TOX_SYSTEMS_URL)
+    WaitAndRun("Modules/ToxSystems.lua")
 end
 
-local detected = getgenv().CurrentGameModule
-if not detected and getgenv().ResolveCurrentGameModule then
-    detected = getgenv().ResolveCurrentGameModule()
-    getgenv().CurrentGameModule = detected
-end
 if detected and getgenv().EnsureGameTabCreated then
     pcall(getgenv().EnsureGameTabCreated, detected)
 end
@@ -117,8 +154,17 @@ if detected and detected.Ready and detected.Url and getgenv().GamePage then
         env.ToxGameModuleLoadingUrl = moduleUrl
         task.spawn(function()
             local ok, err = pcall(function()
-                local source = game:HttpGet(AddToxCacheBuster(moduleUrl))
-                local chunk, compileError = loadstring(source)
+                while not prefetched["__GAME_MODULE__"] do
+                    if env.Destroyed then
+                        return
+                    end
+                    task.wait()
+                end
+                local entry = prefetched["__GAME_MODULE__"]
+                if not entry.Ok or type(entry.Body) ~= "string" or entry.Body == "" then
+                    error(tostring(entry.Body or "game module download failed"))
+                end
+                local chunk, compileError = loadstring(entry.Body)
                 if not chunk then
                     error(tostring(compileError or "invalid game module"))
                 end

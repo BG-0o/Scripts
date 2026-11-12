@@ -3,14 +3,15 @@ if not game:IsLoaded() then
 end
 
 local waitPlaceTries = 0
-while (not game.PlaceId or game.PlaceId == 0) and waitPlaceTries < 15 do
-    task.wait(0.2)
+while (not game.PlaceId or game.PlaceId == 0) and waitPlaceTries < 10 do
+    task.wait(0.1)
     waitPlaceTries = waitPlaceTries + 1
 end
 
 if getgenv then
-    getgenv().Destroyed = nil
+    getgenv().Destroyed = false
     getgenv().__ToxHubBootLock = nil
+    getgenv().__ToxHubReexecCancelled = nil
 end
 
 local REPO_BASE = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/"
@@ -43,14 +44,15 @@ local function AddCacheBuster(url)
         .. tostring(math.random(1000, 999999))
 end
 
-local function SafeLoad(relPath)
-    local url = REPO_BASE .. relPath
-    local requestUrl = AddCacheBuster(url)
-
+local function FetchSource(relPath)
+    local requestUrl = AddCacheBuster(REPO_BASE .. relPath)
     local success, content = pcall(function()
         return game:HttpGet(requestUrl)
     end)
+    return success, content
+end
 
+local function RunFetchedSource(relPath, success, content)
     if not success or type(content) ~= "string" or content == "" or content == "404: Not Found" or content:sub(1, 15):find("404") then
         warn("[ToxHud Error]: Nao foi possivel carregar " .. tostring(relPath))
         return false
@@ -71,14 +73,47 @@ local function SafeLoad(relPath)
     return true
 end
 
-for _, mod in ipairs(CORE_MODULES) do
-    local ok = SafeLoad(mod.Path)
+-- Execute Boot first so re-execution confirm/cleanup runs cleanly before fetching remaining modules
+do
+    local okFetch, bootSrc = FetchSource(CORE_MODULES[1].Path)
+    if not RunFetchedSource(CORE_MODULES[1].Path, okFetch, bootSrc) then
+        return
+    end
+    if getgenv and (getgenv().Destroyed or getgenv().__ToxHubReexecCancelled) then
+        if getgenv().__ToxHubReexecCancelled then
+            getgenv().__ToxHubReexecCancelled = nil
+        end
+        return
+    end
+end
+
+-- Pre-fetch remaining core modules concurrently while executing them in strict order
+local prefetched = {}
+for idx = 2, #CORE_MODULES do
+    local modPath = CORE_MODULES[idx].Path
+    task.spawn(function()
+        local ok, body = FetchSource(modPath)
+        prefetched[idx] = { Ok = ok, Body = body }
+    end)
+end
+
+for idx = 2, #CORE_MODULES do
+    local mod = CORE_MODULES[idx]
+    while not prefetched[idx] do
+        task.wait()
+    end
+    local res = prefetched[idx]
+    local ok = RunFetchedSource(mod.Path, res.Ok, res.Body)
     if not ok and mod.Required then
         return
     end
     if getgenv and getgenv().Destroyed then
         return
     end
+end
+
+if getgenv then
+    getgenv().__ToxHubBootLock = nil
 end
 
 -- ConfigAndRuntime's loading sequence reveals Main and activates staged options once ScriptLoaded becomes true.
