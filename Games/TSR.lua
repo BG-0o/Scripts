@@ -1,54 +1,17 @@
---[========================================================================[
-    ToxHub Game Module: TSR (Tap Simulator REBORN)
-    PlaceId: 72858262610964
-    Version: 2026-11-12-tsr-v3
-]========================================================================]
-do
-    local isTarget = (
-        game.PlaceId == 72858262610964
-        or game.GameId == 72858262610964
-        or tostring(game.PlaceId) == "72858262610964"
-    )
-    local curMod = getgenv and getgenv().CurrentGameModule
-    if not isTarget and curMod and curMod.ShortName == "TSR" then
-        isTarget = true
-    end
-    if not isTarget then
-        return
-    end
-end
-
 local env = getgenv()
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local VirtualUser = game:GetService("VirtualUser")
-local TeleportService = game:GetService("TeleportService")
-local Player = Players.LocalPlayer
-
-local Settings = env.Settings
-local GamePage = env.GamePage
-local CreateToggle = env.CreateToggle
-local CreateButton = env.CreateButton
-local CreateDropdown = env.CreateDropdown
-local CreateToggleWithValue = env.CreateToggleWithValue
-local CreateSlider = env.CreateSlider
-local CreateSection = env.CreateSection
-local CustomNotify = env.CustomNotify or function() end
-local AutoSaveConfiguration = env.AutoSaveConfiguration or function() end
-local AddConnection = env.AddConnection or function(c) return c end
-
-if not Settings or not GamePage or not CreateToggle or not CreateButton or not CreateDropdown then
+if env.Destroyed then
     return
 end
 
-local TSRModuleVersion = "2026-11-12-tsr-v3"
+local ExpectedPlaceId = 72858262610964
+local TSRModuleVersion = "2026-11-12-tsr-v4"
+if game.PlaceId ~= ExpectedPlaceId then
+    return
+end
+
 if env.ToxTSRModuleLoadedJobId == game.JobId
 and env.ToxTSRModuleVersion == TSRModuleVersion
-and env.ToxTSRModulePage == GamePage
-and not env.Destroyed then
+and env.ToxTSRModulePage == env.GamePage then
     return
 end
 
@@ -56,8 +19,30 @@ if env.ToxTSRCleanup then
     pcall(env.ToxTSRCleanup)
 end
 
-env.ToxTSRGeneration = (tonumber(env.ToxTSRGeneration) or 0) + 1
-local CurrentGeneration = env.ToxTSRGeneration
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualUser = game:GetService("VirtualUser")
+
+local Player = Players.LocalPlayer
+local Settings = env.Settings or {}
+local GamePage = env.GamePage
+local AutoSaveConfiguration = env.AutoSaveConfiguration or function() end
+local CustomNotify = env.CustomNotify or function() end
+
+local CreateCard = env.CreateCard
+local ClearActivePageCard = env.ClearActivePageCard
+local CreateToggle = env.CreateToggle
+local CreateSlider = env.CreateSlider
+local CreateDropdown = env.CreateDropdown
+local CreateButton = env.CreateButton
+
+if not GamePage or not CreateToggle or not CreateButton then
+    return
+end
 
 for _, child in ipairs(GamePage:GetChildren()) do
     if child:IsA("GuiObject") then
@@ -68,276 +53,311 @@ end
 -- ============================================================================
 -- SETTINGS DEFAULTS
 -- ============================================================================
-Settings.TSRAutoTap = Settings.TSRAutoTap == true
-Settings.TSRTapMode = tostring(Settings.TSRTapMode or "Hybrid (Remote + Click)")
-Settings.TSRTapsPerCycle = math.clamp(tonumber(Settings.TSRTapsPerCycle) or 3, 1, 10)
-Settings.TSRAutoBreakables = Settings.TSRAutoBreakables == true
-Settings.TSRAutoCollect = Settings.TSRAutoCollect == true
-Settings.TSRAutoClaim = Settings.TSRAutoClaim == true
-Settings.TSRAutoRebirth = Settings.TSRAutoRebirth == true
-Settings.TSRRebirthMode = tostring(Settings.TSRRebirthMode or "Best / Max")
-Settings.TSRRebirthTier = math.clamp(tonumber(Settings.TSRRebirthTier) or 1, 1, 40)
-Settings.TSRAutoUpgrades = Settings.TSRAutoUpgrades == true
-Settings.TSRAutoHatch = Settings.TSRAutoHatch == true
-Settings.TSRSelectedEgg = tostring(Settings.TSRSelectedEgg or "Best available")
-Settings.TSREggBudget = math.clamp(tonumber(Settings.TSREggBudget) or 50, 1, 100)
-Settings.TSRHatchAmount = tostring(Settings.TSRHatchAmount or "Auto (3 or 1)")
-Settings.TSRTeleportToEgg = Settings.TSRTeleportToEgg == true
-Settings.TSRAutoEquipBest = Settings.TSRAutoEquipBest == true
-Settings.TSRAutoCraft = Settings.TSRAutoCraft == true
-Settings.TSRMutationTarget = tostring(Settings.TSRMutationTarget or "Auto / Any")
-Settings.TSRAutoDeletePets = Settings.TSRAutoDeletePets == true
-Settings.TSRDeleteThreshold = tostring(Settings.TSRDeleteThreshold or "Common")
-Settings.TSRSkipAnimation = Settings.TSRSkipAnimation == true
-Settings.TSRAutoLuckyDucky = Settings.TSRAutoLuckyDucky == true
-Settings.TSRAutoPetDefense = Settings.TSRAutoPetDefense == true
-Settings.TSRRelicRewardMode = tostring(Settings.TSRRelicRewardMode or "Replace")
-Settings.TSRSelectedIsland = tostring(Settings.TSRSelectedIsland or "Spawn")
-Settings.TSRAutoUnlockIslands = Settings.TSRAutoUnlockIslands == true
-Settings.TSRSafeSpeed = Settings.TSRSafeSpeed == true
-Settings.TSRWalkSpeed = math.clamp(tonumber(Settings.TSRWalkSpeed) or 48, 16, 200)
-Settings.TSRInfiniteJump = Settings.TSRInfiniteJump == true
-Settings.TSRAntiAFK = Settings.TSRAntiAFK ~= false
+if Settings.TSRAutoTap == nil then Settings.TSRAutoTap = false end
+if Settings.TSRTapsPerCycle == nil then Settings.TSRTapsPerCycle = 2 end
+if Settings.TSRVirtualClick == nil then Settings.TSRVirtualClick = false end
+if Settings.TSRAutoBreakables == nil then Settings.TSRAutoBreakables = false end
+if Settings.TSRAutoChests == nil then Settings.TSRAutoChests = false end
+if Settings.TSRChestTP == nil then Settings.TSRChestTP = false end
+if Settings.TSRAutoCollect == nil then Settings.TSRAutoCollect = false end
+if Settings.TSRAutoRebirth == nil then Settings.TSRAutoRebirth = false end
+if Settings.TSRRebirthMode == nil then Settings.TSRRebirthMode = "Best available" end
+if Settings.TSRRebirthDelayTenths == nil then Settings.TSRRebirthDelayTenths = 5 end
+if Settings.TSRAutoHatch == nil then Settings.TSRAutoHatch = false end
+if Settings.TSREggSelected == nil then Settings.TSREggSelected = "Best available" end
+if Settings.TSREggBudgetPct == nil then Settings.TSREggBudgetPct = 50 end
+if Settings.TSRHatchAmount == nil then Settings.TSRHatchAmount = "Auto" end
+if Settings.TSREggApproach == nil then Settings.TSREggApproach = "Teleport" end
+if Settings.TSRSkipAnimation == nil then Settings.TSRSkipAnimation = false end
+if Settings.TSRAutoEquipBest == nil then Settings.TSRAutoEquipBest = false end
+if Settings.TSRAutoCraft == nil then Settings.TSRAutoCraft = false end
+if Settings.TSRCraftTier == nil then Settings.TSRCraftTier = "Normal -> Gold" end
+if Settings.TSRCraftBatchSize == nil then Settings.TSRCraftBatchSize = 5 end
+if Settings.TSRAutoDeletePets == nil then Settings.TSRAutoDeletePets = false end
+if Settings.TSRDeleteRarity == nil then Settings.TSRDeleteRarity = "Common" end
+if Settings.TSRAutoClaim == nil then Settings.TSRAutoClaim = false end
+if Settings.TSRAutoUpgrades == nil then Settings.TSRAutoUpgrades = false end
+if Settings.TSRAutoLuckyDucky == nil then Settings.TSRAutoLuckyDucky = false end
+if Settings.TSRAutoPetDefense == nil then Settings.TSRAutoPetDefense = false end
+if Settings.TSRRelicRewardMode == nil then Settings.TSRRelicRewardMode = "Replace" end
+if Settings.TSRSelectedIsland == nil then Settings.TSRSelectedIsland = "Spawn" end
+if Settings.TSRAutoUnlockIslands == nil then Settings.TSRAutoUnlockIslands = false end
+if Settings.TSRAutoReturnSaved == nil then Settings.TSRAutoReturnSaved = false end
+if Settings.TSRInfiniteJump == nil then Settings.TSRInfiniteJump = false end
+if Settings.TSRSafeSpeed == nil then Settings.TSRSafeSpeed = false end
+if Settings.TSRWalkSpeed == nil then Settings.TSRWalkSpeed = 36 end
+if Settings.TSRAntiAFK == nil then Settings.TSRAntiAFK = true end
 
--- ============================================================================
--- STATE & REMOTE / NETWORK RESOLVER
--- ============================================================================
 local TSR = {
     Connections = {},
-    NetworkModule = nil,
-    Remotes = {},
-    CapturedArgs = {},
-    DiscoveredEggs = {},
-    EggDisplayToName = {},
-    EggPrices = {},
-    EggPriceTexts = {},
-    DiscoveredIslands = {},
-    SavedFarmCFrame = typeof(Settings.TSRSavedFarmCFrame) == "CFrame" and Settings.TSRSavedFarmCFrame or nil,
+    Network = nil,
+    EggsModule = nil,
+    Replication = nil,
+    PetStats = nil,
+    RebirthsModule = nil,
+    RebirthAmounts = {},
+    RebirthIndexByAmount = {},
+    RemotesByName = {},
+    EventsFolder = nil,
+    FunctionsFolder = nil,
+    RemoteCount = 0,
+    EggOptions = { "Best available" },
+    EggCatalog = {},
+    IslandOptions = { "Spawn" },
+    IslandPositions = {},
+    SavedPosition = nil,
     LastRemoteScan = 0,
-    LastRebirthTry = 0,
-    LastUpgradeTry = 0,
-    LastClaimTry = 0,
-    LastEquipTry = 0,
-    LastCraftTry = 0,
-    LastDeleteTry = 0,
-    LastUnlockTry = 0,
-    LastBreakableTry = 0,
-    LastDuckyTry = 0,
-    LastDefenseTry = 0,
+    HiddenHatchTargets = {},
+    Cooldowns = {
+        Rebirth = 0,
+        Hatch = 0,
+        Claim = 0,
+        Upgrade = 0,
+        Equip = 0,
+        Craft = 0,
+        Delete = 0,
+        Ducky = 0,
+        Defense = 0,
+        Chests = 0,
+        Breakables = 0,
+        Collect = 0,
+        Unlock = 0
+    }
 }
 
 local function IsAliveSession()
-    return not env.Destroyed and env.ToxTSRGeneration == CurrentGeneration and game.PlaceId == 72858262610964
+    return not env.Destroyed
+        and game.PlaceId == ExpectedPlaceId
+        and env.ToxTSRModuleVersion == TSRModuleVersion
 end
 
 local function TrackConn(conn)
     if conn then
         table.insert(TSR.Connections, conn)
-        pcall(AddConnection, conn)
     end
     return conn
 end
 
 local function SafeCharState()
-    local char = Player and Player.Character
+    local char = Player.Character
     if not char or not char.Parent then
         return nil, nil, nil
     end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
     local hum = char:FindFirstChildOfClass("Humanoid")
-    local root = char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart
-    return char, hum, root
+    return char, hum, hrp
 end
 
-local function SafeTeleportTo(targetPosOrCFrame)
-    local char, _, root = SafeCharState()
-    if not root or not targetPosOrCFrame then
+local function SafeTouch(hrp, part)
+    if not hrp or not part or not part.Parent then
         return false
     end
-    if env.AllowToxTeleport then
-        env.AllowToxTeleport(0.6, "TSR Teleport")
+    if type(firetouchinterest) == "function" then
+        pcall(firetouchinterest, hrp, part, 0)
+        pcall(firetouchinterest, hrp, part, 1)
+        return true
     end
-    local cf = typeof(targetPosOrCFrame) == "CFrame"
-        and targetPosOrCFrame
-        or CFrame.new(targetPosOrCFrame + Vector3.new(0, 3.5, 0))
-    pcall(function()
-        root.AssemblyLinearVelocity = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
-        if char and char.PrimaryPart then
-            char:PivotTo(cf)
-        else
-            root.CFrame = cf
-        end
-    end)
-    return true
+    return false
 end
 
-local NumberSuffixes = {
+-- ============================================================================
+-- NUMBER & SUFFIX PARSING / FORMATTING
+-- ============================================================================
+local SuffixMultipliers = {
     k = 1e3, m = 1e6, b = 1e9, t = 1e12,
-    qa = 1e15, qi = 1e18, qn = 1e18, sx = 1e21, sp = 1e24,
+    qa = 1e15, qd = 1e15, qi = 1e18, sx = 1e21, sp = 1e24,
     oc = 1e27, no = 1e30, dc = 1e33, ud = 1e36, dd = 1e39,
+    td = 1e42, tg = 1e42, qg = 1e45, qad = 1e45,
+    sxq = 1e48, spq = 1e51, oq = 1e54, nq = 1e57, dcq = 1e60, sqx = 1e63
 }
 
-local function ParseAbbrevNumber(raw)
-    if typeof(raw) == "number" then
+local SuffixDisplayOrder = {
+    { 1e33, "DC" }, { 1e30, "NO" }, { 1e27, "OC" }, { 1e24, "SP" },
+    { 1e21, "SX" }, { 1e18, "QI" }, { 1e15, "QD" }, { 1e12, "T" },
+    { 1e9, "B" }, { 1e6, "M" }, { 1e3, "K" }
+}
+
+local function ParseAbbreviatedNumber(raw)
+    if type(raw) == "number" then
         return raw
     end
-    local s = tostring(raw or ""):gsub(",", ""):gsub("%$", ""):gsub("%s+", "")
-    local numStr, suf = string.match(s, "^([%d%.]+)(%a*)$")
-    local base = tonumber(numStr)
-    if not base then
-        return tonumber(string.match(s, "([%d%.]+)"))
-    end
-    local mult = (suf and suf ~= "" and NumberSuffixes[string.lower(suf)]) or 1
-    return base * mult
-end
-
-local function FormatAbbrevNumber(n)
-    local num = tonumber(n)
-    if not num or num <= 0 then return nil end
-    local units = {
-        { 1e24, "Sp" }, { 1e21, "Sx" }, { 1e18, "Qn" }, { 1e15, "Qa" },
-        { 1e12, "T" },  { 1e9, "B" },   { 1e6, "M" },   { 1e3, "K" }
-    }
-    for _, u in ipairs(units) do
-        if num >= u[1] then
-            return string.format("%.2f%s", num / u[1], u[2])
-        end
-    end
-    return tostring(math.floor(num + 0.5))
-end
-
-local function GetPlayerTapCurrency()
-    local ls = Player and Player:FindFirstChild("leaderstats")
-    if ls then
-        for _, child in ipairs(ls:GetChildren()) do
-            local ln = string.lower(child.Name)
-            if (child:IsA("NumberValue") or child:IsA("IntValue"))
-            and (string.find(ln, "tap", 1, true) or string.find(ln, "click", 1, true) or string.find(ln, "coin", 1, true) or string.find(ln, "cash", 1, true)) then
-                return tonumber(child.Value) or 0
-            end
-        end
-        for _, child in ipairs(ls:GetChildren()) do
-            if child:IsA("NumberValue") or child:IsA("IntValue") then
-                return tonumber(child.Value) or 0
-            end
-        end
-    end
-    for _, attrKey in ipairs({ "Clicks", "Taps", "Coins", "Cash" }) do
-        local v = Player and Player:GetAttribute(attrKey)
-        if tonumber(v) then return tonumber(v) end
-    end
-    return math.huge
-end
-
-local ActionPatterns = {
-    Tap = { "tap", "click", "taps", "gain", "swing" },
-    Rebirth = { "rebirth", "requestrebirth", "dorebirth" },
-    Hatch = { "hatch", "buyegg", "openegg", "egg" },
-    EquipBest = { "equipbest", "bestpet", "equip" },
-    Craft = { "craft", "craftall", "mutate", "mutation", "golden", "rainbow", "evolve", "merge" },
-    DeletePet = { "deletepet", "multidelete", "autodelete", "sellpet", "remove" },
-    Breakable = { "breakable", "damage", "attack", "hit", "meteor", "chest" },
-    LuckyDucky = { "duck", "luckyduck", "ducky", "minigame" },
-    PetDefense = { "defense", "petdefense", "relic", "wave" },
-    Upgrade = { "buyupgrade", "purchaseupgrade", "upgrade", "gemupgrade", "perk" },
-    Claim = { "claim", "reward", "gift", "playtime", "daily", "quest", "achievement", "rank" },
-    Teleport = { "teleport", "zone", "island", "world", "unlock" },
-    Code = { "code", "redeem" },
-}
-
-local function ClassifyRemoteName(name)
-    local lower = string.lower(tostring(name or ""))
-    if lower == "" or lower:match("^%s+$") then
+    if type(raw) ~= "string" then
         return nil
     end
-    for action, patterns in pairs(ActionPatterns) do
-        for _, pat in ipairs(patterns) do
-            if string.find(lower, pat, 1, true) then
-                return action
+    local clean = string.gsub(raw, ",", "")
+    clean = string.gsub(clean, "%s+", "")
+    local numStr, suf = string.match(clean, "([%d%.]+)%s*([A-Za-z]*)")
+    local base = tonumber(numStr)
+    if not base then
+        return nil
+    end
+    if suf and suf ~= "" then
+        local mult = SuffixMultipliers[string.lower(suf)]
+        if mult then
+            return base * mult
+        end
+    end
+    return base
+end
+
+local function FormatAbbreviatedNumber(num)
+    local val = tonumber(num)
+    if not val then
+        return "?"
+    end
+    for _, entry in ipairs(SuffixDisplayOrder) do
+        if val >= entry[1] then
+            local scaled = val / entry[1]
+            if scaled % 1 == 0 then
+                return string.format("%.0f%s", scaled, entry[2])
             end
+            return string.format("%.2f%s", scaled, entry[2])
+        end
+    end
+    return tostring(math.floor(val))
+end
+
+local function ExtractRawEggName(label)
+    if type(label) ~= "string" then
+        return label
+    end
+    local stripped = string.match(label, "^(.-)%s*%b()$")
+    if stripped and stripped ~= "" then
+        return stripped
+    end
+    return label
+end
+
+-- ============================================================================
+-- SAFE MODULE & REMOTE DISCOVERY (NO BLIND REQUIRE / NO NAMECALL HOOK)
+-- ============================================================================
+local function SafeRequireChild(parent, childName)
+    if not parent then
+        return nil
+    end
+    local target = parent:FindFirstChild(childName)
+    if target and target:IsA("ModuleScript") then
+        local ok, res = pcall(require, target)
+        if ok then
+            return res
         end
     end
     return nil
 end
 
-local function RegisterRemoteCandidate(action, remote, keyHint)
-    if not action or not remote then return end
-    TSR.Remotes[action] = TSR.Remotes[action] or {}
-    for _, existing in ipairs(TSR.Remotes[action]) do
-        if existing == remote then
-            return
+local function LoadKnownGameModules()
+    local modulesFolder = ReplicatedStorage:FindFirstChild("Modules")
+    if modulesFolder and not TSR.Network then
+        local net = SafeRequireChild(modulesFolder, "Network")
+        if type(net) == "table" and (type(net.FireServer) == "function" or type(net.InvokeServer) == "function") then
+            TSR.Network = net
         end
     end
-    table.insert(TSR.Remotes[action], remote)
-    if keyHint and not TSR.CapturedArgs[action] then
-        TSR.CapturedArgs[action] = { KeyHint = keyHint }
-    end
-end
 
-local function TryLoadNetworkModule()
-    if TSR.NetworkModule then
-        return TSR.NetworkModule
-    end
-    local candidates = {}
-    local function scanForNet(container)
-        if not container then return end
-        for _, obj in ipairs(container:GetDescendants()) do
-            if obj:IsA("ModuleScript") then
-                local ln = string.lower(obj.Name)
-                if string.find(ln, "network", 1, true)
-                or string.find(ln, "remote", 1, true)
-                or string.find(ln, "packet", 1, true)
-                or string.find(ln, "bridge", 1, true) then
-                    table.insert(candidates, obj)
+    local gameFolder = ReplicatedStorage:FindFirstChild("Game")
+    if gameFolder then
+        if not TSR.EggsModule then
+            local eggs = SafeRequireChild(gameFolder, "Eggs")
+            if type(eggs) == "table" then
+                TSR.EggsModule = eggs
+            end
+        end
+        if not TSR.Replication then
+            local rep = SafeRequireChild(gameFolder, "Replication")
+            if type(rep) == "table" then
+                TSR.Replication = rep
+            end
+        end
+        if not TSR.PetStats then
+            local ps = SafeRequireChild(gameFolder, "PetStats")
+            if type(ps) == "table" then
+                TSR.PetStats = ps
+            end
+        end
+        if not TSR.RebirthsModule then
+            local reb = SafeRequireChild(gameFolder, "Rebirths")
+            if type(reb) == "table" then
+                TSR.RebirthsModule = reb
+                if type(reb.fromIndex) == "function" and type(debug) == "table" and type(debug.getupvalues) == "function" then
+                    pcall(function()
+                        local upvals = debug.getupvalues(reb.fromIndex)
+                        if type(upvals) == "table" and type(upvals[1]) == "table" then
+                            local list = {}
+                            local idxMap = {}
+                            for idx, amt in pairs(upvals[1]) do
+                                local nAmt = tonumber(amt)
+                                local nIdx = tonumber(idx)
+                                if nAmt and nIdx then
+                                    idxMap[nAmt] = nIdx
+                                    table.insert(list, nAmt)
+                                end
+                            end
+                            table.sort(list)
+                            TSR.RebirthAmounts = list
+                            TSR.RebirthIndexByAmount = idxMap
+                        end
+                    end)
                 end
             end
         end
     end
-    pcall(scanForNet, ReplicatedStorage)
-    for _, mod in ipairs(candidates) do
-        local ok, res = pcall(require, mod)
-        if ok and typeof(res) == "table" then
-            if type(res.FireServer) == "function"
-            or type(res.InvokeServer) == "function"
-            or type(res.Send) == "function"
-            or type(res.Fire) == "function" then
-                TSR.NetworkModule = res
-                return res
-            end
-        end
-    end
-    return nil
 end
 
-local function ScanAllRemotes(force)
+local function StoreRemoteEntry(name, remote, folder)
+    if type(name) ~= "string" or name == "" or typeof(remote) ~= "Instance" then
+        return
+    end
+    local cls = remote.ClassName
+    if cls ~= "RemoteEvent" and cls ~= "RemoteFunction" and cls ~= "UnreliableRemoteEvent" then
+        return
+    end
+    if not TSR.RemotesByName[name] then
+        TSR.RemoteCount = TSR.RemoteCount + 1
+    end
+    TSR.RemotesByName[name] = remote
+    if typeof(folder) == "Instance" then
+        if folder.Name == "Events" then
+            TSR.EventsFolder = folder
+        elseif folder.Name == "Functions" then
+            TSR.FunctionsFolder = folder
+        end
+    end
+end
+
+local function ScanRemotesSafe(force)
     local now = os.clock()
     if not force and (now - TSR.LastRemoteScan) < 4 then
         return
     end
     TSR.LastRemoteScan = now
-    TryLoadNetworkModule()
+    LoadKnownGameModules()
 
-    for _, inst in ipairs(ReplicatedStorage:GetDescendants()) do
-        if inst:IsA("RemoteEvent")
-        or inst:IsA("RemoteFunction")
-        or inst:IsA("UnreliableRemoteEvent") then
-            local action = ClassifyRemoteName(inst.Name)
-            if action then
-                RegisterRemoteCandidate(action, inst, inst.Name)
+    -- Scan standard ReplicatedStorage folders cleanly
+    for _, folderName in ipairs({ "Events", "Functions", "Remotes" }) do
+        local folder = ReplicatedStorage:FindFirstChild(folderName)
+        if folder then
+            for _, child in ipairs(folder:GetChildren()) do
+                local n = child.Name
+                if #n > 0 and #n < 32 and not string.match(n, "^%x%x%x%x%x%x%x%x%-") and not string.match(n, "^%s+$") then
+                    StoreRemoteEntry(n, child, folder)
+                end
             end
         end
     end
 
+    -- Non-destructive TapSimulator remote table discovery via getgc(true)
     if type(getgc) == "function" then
         pcall(function()
             for _, obj in ipairs(getgc(true)) do
-                if typeof(obj) == "table" then
-                    for k, v in pairs(obj) do
-                        if typeof(k) == "string" and typeof(v) == "Instance" then
-                            if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") or v:IsA("UnreliableRemoteEvent") then
-                                local act = ClassifyRemoteName(k)
-                                if act then
-                                    RegisterRemoteCandidate(act, v, k)
+                if type(obj) == "table" then
+                    if rawget(obj, "OpenEgg") ~= nil or rawget(obj, "Tap") ~= nil then
+                        for key, entry in pairs(obj) do
+                            if type(entry) == "table" then
+                                local rem = rawget(entry, "Remote")
+                                local remName = rawget(entry, "Name") or (type(key) == "string" and key or nil)
+                                local folder = rawget(entry, "Folder")
+                                if typeof(rem) == "Instance" and type(remName) == "string" then
+                                    StoreRemoteEntry(remName, rem, folder)
                                 end
                             end
                         end
@@ -348,318 +368,355 @@ local function ScanAllRemotes(force)
     end
 end
 
-do
-    if type(hookmetamethod) == "function" and type(getnamecallmethod) == "function" and not env.ToxTSRHooked then
-        pcall(function()
-            local oldNamecall
-            oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-                if env.Destroyed then
-                    return oldNamecall(self, ...)
-                end
-                local method = getnamecallmethod()
-                if (method == "FireServer" or method == "InvokeServer")
-                and typeof(self) == "Instance"
-                and (self:IsA("RemoteEvent") or self:IsA("RemoteFunction") or self:IsA("UnreliableRemoteEvent"))
-                and not (type(checkcaller) == "function" and checkcaller()) then
-                    local args = { ... }
-                    local first = tostring(args[1] or "")
-                    local act = ClassifyRemoteName(self.Name) or ClassifyRemoteName(first)
-                    if not act and #args >= 1 and typeof(args[1]) == "boolean" and #args <= 4 then
-                        act = "Tap"
-                    end
-                    if act then
-                        RegisterRemoteCandidate(act, self, first)
-                        TSR.CapturedArgs[act] = args
-                    end
-                end
-                return oldNamecall(self, ...)
+local function FindRemote(name)
+    if TSR.RemotesByName[name] then
+        return TSR.RemotesByName[name]
+    end
+    local lower = string.lower(name)
+    for k, rem in pairs(TSR.RemotesByName) do
+        if string.lower(k) == lower then
+            return rem
+        end
+    end
+    return nil
+end
+
+local function FindRemoteMatching(patterns)
+    for _, pat in ipairs(patterns) do
+        local lp = string.lower(pat)
+        for k, rem in pairs(TSR.RemotesByName) do
+            if string.find(string.lower(k), lp, 1, true) then
+                return k, rem
+            end
+        end
+    end
+    return nil, nil
+end
+
+local function CallGameRemote(mode, name, ...)
+    ScanRemotesSafe(false)
+    local args = { ... }
+
+    local rem = FindRemote(name)
+    if rem and rem.Parent then
+        local cls = rem.ClassName
+        if cls == "RemoteFunction" then
+            local ok, res = pcall(function()
+                return rem:InvokeServer(unpack(args))
             end)
-            env.ToxTSRHooked = true
+            if ok then
+                return true, res
+            end
+        elseif cls == "RemoteEvent" or cls == "UnreliableRemoteEvent" then
+            local ok = pcall(function()
+                rem:FireServer(unpack(args))
+            end)
+            if ok then
+                return true
+            end
+        end
+    end
+
+    local net = TSR.Network
+    if type(net) == "table" then
+        if mode == "Fire" and type(net.FireServer) == "function" then
+            local ok, res = pcall(function()
+                return net:FireServer(name, unpack(args))
+            end)
+            if ok then
+                return true, res
+            end
+        elseif type(net.InvokeServer) == "function" then
+            local ok, res = pcall(function()
+                return net:InvokeServer(name, unpack(args))
+            end)
+            if ok then
+                return true, res
+            end
+        elseif type(net.FireServer) == "function" then
+            local ok, res = pcall(function()
+                return net:FireServer(name, unpack(args))
+            end)
+            if ok then
+                return true, res
+            end
+        end
+    end
+
+    return false, nil
+end
+
+-- ============================================================================
+-- PLAYER DATA & CURRENCY HELPERS
+-- ============================================================================
+local function GetCurrentClicks()
+    if type(TSR.Replication) == "table" and type(TSR.Replication.Data) == "table" then
+        local d = TSR.Replication.Data
+        local val = tonumber(d.Clicks) or tonumber(d.Taps) or tonumber(d.Coins) or tonumber(d.Cash)
+        if val then
+            return val
+        end
+    end
+    local ls = Player:FindFirstChild("leaderstats")
+    if ls then
+        for _, child in ipairs(ls:GetChildren()) do
+            local ln = string.lower(child.Name)
+            if (child:IsA("NumberValue") or child:IsA("IntValue"))
+            and (string.find(ln, "click", 1, true) or string.find(ln, "tap", 1, true) or string.find(ln, "coin", 1, true)) then
+                return tonumber(child.Value)
+            end
+        end
+    end
+    local pGui = Player:FindFirstChildOfClass("PlayerGui")
+    if pGui then
+        local sg = pGui:FindFirstChild("ScreenGui")
+        local curr = sg and sg:FindFirstChild("Currencies")
+        local c1 = curr and (curr:FindFirstChild("Currency1") or curr:FindFirstChild("Clicks") or curr:FindFirstChild("Taps"))
+        local amt = c1 and c1:FindFirstChild("Amount")
+        if amt and amt:IsA("TextLabel") then
+            return ParseAbbreviatedNumber(amt.Text)
+        end
+    end
+    return nil
+end
+
+-- ============================================================================
+-- WORKSPACE SCANNERS (EGGS & ISLANDS)
+-- ============================================================================
+local function GetInstancePosition(obj)
+    if not obj then
+        return nil
+    end
+    if obj:IsA("BasePart") then
+        return obj.Position
+    end
+    if obj:IsA("Model") then
+        local ok, cf = pcall(function()
+            return obj:GetPivot()
         end)
+        if ok and typeof(cf) == "CFrame" then
+            return cf.Position
+        end
     end
+    local part = obj:FindFirstChildWhichIsA("BasePart", true)
+    return part and part.Position or nil
 end
 
-local function FireAction(action, ...)
-    ScanAllRemotes(false)
-    local payload = { ... }
-    local fired = false
-
-    local net = TSR.NetworkModule
-    if net then
-        local keysToTry = ActionPatterns[action] or { string.lower(action) }
-        for _, key in ipairs(keysToTry) do
-            local fn = net.FireServer or net.Send or net.Fire
-            if type(fn) == "function" then
-                local ok = pcall(function()
-                    fn(net, key, table.unpack(payload))
-                end)
-                if ok then fired = true end
-            end
-        end
+local function FindEggInWorkspace(rawEggName)
+    local containers = {}
+    local gameFolder = Workspace:FindFirstChild("Game")
+    if gameFolder then
+        table.insert(containers, gameFolder:FindFirstChild("Eggs"))
     end
+    table.insert(containers, Workspace:FindFirstChild("Eggs"))
+    table.insert(containers, Workspace:FindFirstChild("Capsules"))
 
-    local list = TSR.Remotes[action]
-    if list and #list > 0 then
-        for _, remote in ipairs(list) do
-            if remote and remote.Parent then
-                pcall(function()
-                    if remote:IsA("RemoteEvent") or remote:IsA("UnreliableRemoteEvent") then
-                        remote:FireServer(table.unpack(payload))
-                        fired = true
-                    elseif remote:IsA("RemoteFunction") then
-                        task.spawn(function()
-                            pcall(function()
-                                remote:InvokeServer(table.unpack(payload))
-                            end)
-                        end)
-                        fired = true
-                    end
-                end)
+    local lowerTarget = string.lower(rawEggName)
+    for _, folder in ipairs(containers) do
+        if folder then
+            local direct = folder:FindFirstChild(rawEggName)
+            if direct then
+                return GetInstancePosition(direct)
             end
-        end
-    end
-
-    if not fired and TSR.CapturedArgs[action] and TSR.Remotes[action] then
-        local remote = TSR.Remotes[action][1]
-        if remote and remote.Parent then
-            pcall(function()
-                if remote:IsA("RemoteEvent") or remote:IsA("UnreliableRemoteEvent") then
-                    remote:FireServer(table.unpack(TSR.CapturedArgs[action]))
-                    fired = true
+            for _, child in ipairs(folder:GetChildren()) do
+                if string.lower(child.Name) == lowerTarget then
+                    return GetInstancePosition(child)
                 end
-            end)
-        end
-    end
-
-    return fired
-end
-
--- ============================================================================
--- WORKSPACE SCANNERS (EGGS + PRICES, ISLANDS, BREAKABLES, EVENTS)
--- ============================================================================
-local DefaultEggs = {
-    "Basic Egg",
-    "Forest Egg",
-    "Desert Egg",
-    "Mushroom Egg",
-    "Crystal",
-    "Heaven Egg",
-    "Time Rift Egg",
-    "Prehistoric Egg",
-    "Ice Age Egg",
-}
-
-local DefaultIslands = {
-    "Spawn",
-    "Sky Island",
-    "Autumn",
-    "Mushroom",
-    "Desert",
-    "Crystal Cave",
-    "Heaven",
-    "Time Rift",
-    "Prehistoric",
-    "Ice Age",
-}
-
-local function GetInstanceWorldPos(inst)
-    if not inst then return nil end
-    if inst:IsA("BasePart") then return inst.Position end
-    if inst:IsA("Model") then
-        if inst.PrimaryPart then return inst.PrimaryPart.Position end
-        local ok, cf = pcall(function() return inst:GetPivot() end)
-        if ok and typeof(cf) == "CFrame" then return cf.Position end
-        local bp = inst:FindFirstChildWhichIsA("BasePart", true)
-        if bp then return bp.Position end
-    end
-    return nil
-end
-
-local function ExtractEggPrice(eggInst)
-    if not eggInst then return nil end
-    for _, attr in ipairs({ "Price", "Cost", "CostAmount", "Amount" }) do
-        local v = eggInst:GetAttribute(attr)
-        if tonumber(v) and tonumber(v) > 0 then
-            return tonumber(v)
-        end
-    end
-    for _, vName in ipairs({ "Price", "Cost" }) do
-        local valObj = eggInst:FindFirstChild(vName, true)
-        if valObj and (valObj:IsA("NumberValue") or valObj:IsA("IntValue")) and valObj.Value > 0 then
-            return valObj.Value
-        elseif valObj and valObj:IsA("StringValue") then
-            local p = ParseAbbrevNumber(valObj.Value)
-            if p and p > 0 then return p end
-        end
-    end
-    for _, desc in ipairs(eggInst:GetDescendants()) do
-        if desc:IsA("TextLabel") then
-            local p = ParseAbbrevNumber(desc.Text)
-            if p and p > 0 then
-                return p
             end
         end
     end
     return nil
 end
 
-local function ScanEggsInWorkspace()
-    local found = { "Best available" }
-    local seen = { ["Best available"] = true }
-    TSR.EggDisplayToName = { ["Best available"] = "Best available" }
+local function RefreshEggCatalog()
+    LoadKnownGameModules()
+    local entries = {}
+    local seen = {}
 
-    local function addEgg(name, obj)
-        if not name or name == "" then return end
-        local clean = tostring(name)
-        local price = obj and ExtractEggPrice(obj) or TSR.EggPrices[clean]
-        if price then
-            TSR.EggPrices[clean] = price
+    if type(TSR.EggsModule) == "table" then
+        for eggName, info in pairs(TSR.EggsModule) do
+            if type(eggName) == "string" and type(info) == "table" and not seen[eggName] then
+                seen[eggName] = true
+                local price = tonumber(info.Price) or tonumber(info.Cost) or ParseAbbreviatedNumber(info.Price) or 0
+                table.insert(entries, {
+                    Name = eggName,
+                    Price = price,
+                    Label = price > 0 and (eggName .. " (" .. FormatAbbreviatedNumber(price) .. ")") or eggName
+                })
+            end
         end
-        local priceFmt = price and FormatAbbrevNumber(price) or nil
-        local label = priceFmt and (clean .. " (" .. priceFmt .. ")") or clean
-        if not seen[label] then
-            seen[label] = true
-            table.insert(found, label)
-        end
-        TSR.EggDisplayToName[label] = clean
-        TSR.DiscoveredEggs[clean] = obj
     end
 
-    for _, desc in ipairs(Workspace:GetDescendants()) do
-        if desc:IsA("Model") or desc:IsA("BasePart") then
-            local lname = string.lower(desc.Name)
-            local pname = desc.Parent and string.lower(desc.Parent.Name) or ""
-            if (string.find(pname, "egg", 1, true) or string.find(lname, "egg", 1, true))
-            and not Players:GetPlayerFromCharacter(desc)
-            and #desc.Name > 2
-            and #desc.Name < 42 then
-                local hasPromptOrPrice = desc:FindFirstChildOfClass("ProximityPrompt", true)
-                    or desc:FindFirstChild("Price", true)
-                    or desc:FindFirstChild("Cost", true)
-                    or desc:FindFirstChild("BillboardGui", true)
-                    or string.find(pname, "egg", 1, true)
-                if hasPromptOrPrice then
-                    addEgg(desc.Name, desc)
+    local gameFolder = Workspace:FindFirstChild("Game")
+    local eggFolders = {
+        gameFolder and gameFolder:FindFirstChild("Eggs") or nil,
+        Workspace:FindFirstChild("Eggs")
+    }
+    for _, folder in ipairs(eggFolders) do
+        if folder then
+            for _, child in ipairs(folder:GetChildren()) do
+                if not seen[child.Name] then
+                    seen[child.Name] = true
+                    local price = tonumber(child:GetAttribute("Price")) or tonumber(child:GetAttribute("Cost")) or 0
+                    table.insert(entries, {
+                        Name = child.Name,
+                        Price = price,
+                        Label = price > 0 and (child.Name .. " (" .. FormatAbbreviatedNumber(price) .. ")") or child.Name
+                    })
                 end
             end
         end
     end
 
-    if #found == 1 then
-        for _, name in ipairs(DefaultEggs) do
-            addEgg(name, nil)
+    table.sort(entries, function(a, b)
+        if a.Price ~= b.Price then
+            return a.Price < b.Price
         end
-    end
+        return a.Name < b.Name
+    end)
 
-    return found
+    TSR.EggCatalog = entries
+    table.clear(TSR.EggOptions)
+    table.insert(TSR.EggOptions, "Best available")
+    for _, entry in ipairs(entries) do
+        table.insert(TSR.EggOptions, entry.Label)
+    end
+    return TSR.EggOptions
 end
 
-local function ResolveTargetEggName()
-    local rawChoice = tostring(Settings.TSRSelectedEgg or "Best available")
-    local mapped = TSR.EggDisplayToName[rawChoice] or rawChoice
-    if mapped ~= "Best available" then
-        return mapped, TSR.EggPrices[mapped]
-    end
-
-    if next(TSR.DiscoveredEggs) == nil then
-        ScanEggsInWorkspace()
-    end
-
-    local wallet = GetPlayerTapCurrency()
-    local budgetPct = math.clamp(tonumber(Settings.TSREggBudget) or 50, 1, 100) / 100
-    local maxSpend = (wallet == math.huge) and math.huge or (wallet * budgetPct)
-
-    local bestEgg = nil
-    local bestPrice = -1
-    for eggName, eggObj in pairs(TSR.DiscoveredEggs) do
-        if eggName ~= "Best available" and eggObj and eggObj.Parent then
-            local price = TSR.EggPrices[eggName] or ExtractEggPrice(eggObj)
-            if price and price <= maxSpend and price > bestPrice then
-                bestPrice = price
-                bestEgg = eggName
-            end
-        end
-    end
-
-    if not bestEgg then
-        local _, _, root = SafeCharState()
-        local bestDist = math.huge
-        for eggName, eggObj in pairs(TSR.DiscoveredEggs) do
-            if eggName ~= "Best available" and eggObj and eggObj.Parent then
-                local pos = GetInstanceWorldPos(eggObj)
-                if pos and root then
-                    local d = (root.Position - pos).Magnitude
-                    if d < bestDist then
-                        bestDist = d
-                        bestEgg = eggName
-                    end
-                elseif not bestEgg then
-                    bestEgg = eggName
-                end
-            end
-        end
-    end
-
-    bestEgg = bestEgg or "Basic Egg"
-    return bestEgg, TSR.EggPrices[bestEgg]
-end
-
-local function ScanIslandsInWorkspace()
-    local found = {}
+local function RefreshIslandCatalog()
+    local islands = {}
     local seen = {}
 
     local function addIsland(name, obj)
-        if not name or name == "" then return end
-        local clean = tostring(name)
-        if not seen[clean] then
-            seen[clean] = true
-            table.insert(found, clean)
+        if type(name) ~= "string" or name == "" or seen[name] then
+            return
         end
-        TSR.DiscoveredIslands[clean] = obj
+        local pos = GetInstancePosition(obj)
+        if not pos then
+            return
+        end
+        local spawnObj = obj:FindFirstChild("Spawn") or obj:FindFirstChild("Teleport") or obj:FindFirstChild("Pad")
+        local spawnPos = GetInstancePosition(spawnObj) or pos
+        seen[name] = true
+        TSR.IslandPositions[name] = spawnPos + Vector3.new(0, 6, 0)
+        table.insert(islands, name)
     end
 
-    local containerNames = { "Worlds", "Islands", "Zones", "Portals", "Areas", "Maps", "Teleports" }
-    for _, cname in ipairs(containerNames) do
-        local folder = Workspace:FindFirstChild(cname)
-        if folder then
-            for _, child in ipairs(folder:GetChildren()) do
-                if child:IsA("Model") or child:IsA("BasePart") or child:IsA("Folder") then
-                    addIsland(child.Name, child)
+    TSR.IslandPositions = {}
+    local islFolder = Workspace:FindFirstChild("Island") or Workspace:FindFirstChild("Islands")
+    if islFolder then
+        for _, child in ipairs(islFolder:GetChildren()) do
+            addIsland(child.Name, child)
+        end
+    end
+    local gameFolder = Workspace:FindFirstChild("Game")
+    local gameIsl = gameFolder and (gameFolder:FindFirstChild("Islands") or gameFolder:FindFirstChild("Island"))
+    if gameIsl then
+        for _, child in ipairs(gameIsl:GetChildren()) do
+            addIsland(child.Name, child)
+        end
+    end
+
+    table.sort(islands)
+    table.clear(TSR.IslandOptions)
+    if #islands == 0 then
+        table.insert(TSR.IslandOptions, "Spawn")
+    else
+        for _, name in ipairs(islands) do
+            table.insert(TSR.IslandOptions, name)
+        end
+    end
+    return TSR.IslandOptions
+end
+
+local function BuildRebirthChoices()
+    ScanRemotesSafe(false)
+    local choices = { "Best available" }
+    if #TSR.RebirthAmounts > 0 then
+        for _, amt in ipairs(TSR.RebirthAmounts) do
+            table.insert(choices, FormatAbbreviatedNumber(amt) .. " (" .. tostring(amt) .. ")")
+        end
+    else
+        for _, v in ipairs({ "1", "5", "15", "50", "250", "1000" }) do
+            table.insert(choices, v)
+        end
+    end
+    return choices
+end
+
+-- ============================================================================
+-- SAFE HATCH ANIMATION HIDING (NEVER BREAKS MAIN HUD)
+-- ============================================================================
+local function RestoreHiddenHatchTargets()
+    for inst, prev in pairs(TSR.HiddenHatchTargets) do
+        pcall(function()
+            if inst and inst.Parent then
+                if inst:IsA("ScreenGui") then
+                    inst.Enabled = prev
+                elseif inst:IsA("GuiObject") then
+                    inst.Visible = prev
+                end
+            end
+        end)
+    end
+    TSR.HiddenHatchTargets = {}
+end
+
+local function SuppressHatchAnimationFrame()
+    local pGui = Player:FindFirstChildOfClass("PlayerGui")
+    if pGui then
+        for _, gui in ipairs(pGui:GetChildren()) do
+            if gui:IsA("ScreenGui") then
+                local ln = string.lower(gui.Name)
+                if (string.find(ln, "egg", 1, true) or string.find(ln, "hatch", 1, true) or string.find(ln, "unbox", 1, true))
+                and not gui:FindFirstChild("Currencies")
+                and not gui:FindFirstChild("Menus") then
+                    if gui.Enabled then
+                        TSR.HiddenHatchTargets[gui] = true
+                        gui.Enabled = false
+                    end
+                elseif ln == "screengui" then
+                    for _, sub in ipairs(gui:GetChildren()) do
+                        if sub:IsA("GuiObject") then
+                            local sn = string.lower(sub.Name)
+                            if (string.find(sn, "egghatch", 1, true) or string.find(sn, "hatchanim", 1, true) or string.find(sn, "eggopening", 1, true))
+                            and sub.Visible then
+                                TSR.HiddenHatchTargets[sub] = true
+                                sub.Visible = false
+                            end
+                        end
+                    end
                 end
             end
         end
     end
 
-    for _, desc in ipairs(Workspace:GetDescendants()) do
-        if desc:IsA("BasePart") and (string.find(string.lower(desc.Name), "teleport", 1, true) or string.find(string.lower(desc.Name), "portal", 1, true)) then
-            local label = desc.Parent and desc.Parent ~= Workspace and desc.Parent.Name or desc.Name
-            if label ~= "Portals" and label ~= "Teleports" then
-                addIsland(label, desc)
+    local cam = Workspace.CurrentCamera
+    if cam then
+        for _, child in ipairs(cam:GetChildren()) do
+            local cn = string.lower(child.Name)
+            if string.find(cn, "egg", 1, true) or string.find(cn, "hatch", 1, true) then
+                pcall(function()
+                    child:Destroy()
+                end)
             end
         end
     end
-
-    if #found == 0 then
-        for _, name in ipairs(DefaultIslands) do
-            addIsland(name, nil)
-        end
-    end
-
-    return found
 end
 
 -- ============================================================================
 -- FEATURE ACTIONS
 -- ============================================================================
-local function PerformTapOnce()
-    local mode = Settings.TSRTapMode
-    if mode ~= "Fast Click" then
-        local sent = FireAction("Tap", true, nil, false)
-        if not sent then
-            FireAction("Tap")
+local function DoAutoTap()
+    local count = math.clamp(tonumber(Settings.TSRTapsPerCycle) or 2, 1, 10)
+    for _ = 1, count do
+        if not IsAliveSession() or not Settings.TSRAutoTap then
+            break
         end
+        CallGameRemote("Fire", "Tap", true, nil, true)
     end
-    if mode ~= "Remote Only" then
+    if Settings.TSRVirtualClick then
         pcall(function()
             VirtualUser:CaptureController()
             VirtualUser:ClickButton1(Vector2.new(0, 0))
@@ -667,506 +724,586 @@ local function PerformTapOnce()
     end
 end
 
-local function CollectNearbyDrops()
-    local _, _, root = SafeCharState()
-    if not root or type(firetouchinterest) ~= "function" then return end
-
-    local folderHints = { "drops", "orbs", "coins", "gems", "pickups", "gifts", "candy", "candies", "collect", "relic" }
-    for _, child in ipairs(Workspace:GetChildren()) do
-        local ln = string.lower(child.Name)
-        local isDropFolder = false
-        for _, hint in ipairs(folderHints) do
-            if string.find(ln, hint, 1, true) then
-                isDropFolder = true
-                break
-            end
+local function ResolveRebirthIndex()
+    local mode = tostring(Settings.TSRRebirthMode or "Best available")
+    if mode ~= "Best available" then
+        local parenNum = tonumber(string.match(mode, "%((%d+)%)")) or tonumber(mode)
+        if parenNum and TSR.RebirthIndexByAmount[parenNum] then
+            return TSR.RebirthIndexByAmount[parenNum]
         end
-        if isDropFolder then
-            for _, part in ipairs(child:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    pcall(function()
-                        firetouchinterest(root, part, 0)
-                        firetouchinterest(root, part, 1)
-                    end)
-                end
-            end
+        if parenNum then
+            return parenNum
         end
     end
-end
-
-local function AttackNearbyBreakables()
-    if os.clock() - TSR.LastBreakableTry < 0.2 then return end
-    TSR.LastBreakableTry = os.clock()
-
-    local _, _, root = SafeCharState()
-    local closestObj = nil
-    local closestDist = math.huge
-    for _, folderName in ipairs({ "Breakables", "Chests", "Meteors", "Objects", "Targets", "Nodes" }) do
-        local folder = Workspace:FindFirstChild(folderName)
-        if folder then
-            for _, item in ipairs(folder:GetChildren()) do
-                local pos = GetInstanceWorldPos(item)
-                if pos and root then
-                    local d = (root.Position - pos).Magnitude
-                    if d < closestDist then
-                        closestDist = d
-                        closestObj = item
-                    end
-                elseif not closestObj then
-                    closestObj = item
-                end
-            end
-        end
-    end
-
-    if closestObj then
-        FireAction("Breakable", closestObj)
-        FireAction("Breakable", closestObj.Name)
-        local prompt = closestObj:FindFirstChildOfClass("ProximityPrompt", true)
-        if prompt and type(fireproximityprompt) == "function" then
-            pcall(fireproximityprompt, prompt)
-        end
-    else
-        FireAction("Breakable")
-    end
-end
-
-local function RunLuckyDucky()
-    if os.clock() - TSR.LastDuckyTry < 0.4 then return end
-    TSR.LastDuckyTry = os.clock()
-
-    local _, _, root = SafeCharState()
-    for _, desc in ipairs(Workspace:GetDescendants()) do
-        if desc:IsA("Model") or desc:IsA("BasePart") then
-            local ln = string.lower(desc.Name)
-            if string.find(ln, "ducky", 1, true) or string.find(ln, "luckyduck", 1, true) then
-                local pos = GetInstanceWorldPos(desc)
-                if pos and root and (root.Position - pos).Magnitude > 14 then
-                    SafeTeleportTo(pos)
-                end
-                local prompt = desc:FindFirstChildOfClass("ProximityPrompt", true)
-                if prompt and type(fireproximityprompt) == "function" then
-                    pcall(fireproximityprompt, prompt)
-                end
-                FireAction("LuckyDucky", desc)
-                FireAction("LuckyDucky")
-                return
-            end
-        end
-    end
-    FireAction("LuckyDucky")
-end
-
-local function RunPetDefense()
-    if os.clock() - TSR.LastDefenseTry < 0.6 then return end
-    TSR.LastDefenseTry = os.clock()
-
-    local relicChoice = tostring(Settings.TSRRelicRewardMode or "Replace")
-    FireAction("PetDefense", "Start")
-    FireAction("PetDefense", relicChoice)
-    FireAction("PetDefense")
-end
-
-local function TriggerRebirth()
-    if os.clock() - TSR.LastRebirthTry < 0.45 then return end
-    TSR.LastRebirthTry = os.clock()
-
-    if Settings.TSRRebirthMode == "Target Tier" then
-        FireAction("Rebirth", Settings.TSRRebirthTier)
-    elseif Settings.TSRRebirthMode == "Max / Single" then
-        FireAction("Rebirth", 1)
-        FireAction("Rebirth")
-    else
-        FireAction("Rebirth", "Max")
-        FireAction("Rebirth", Settings.TSRRebirthTier)
-        FireAction("Rebirth", 1)
-    end
-end
-
-local function TriggerUpgrades()
-    if os.clock() - TSR.LastUpgradeTry < 2.0 then return end
-    TSR.LastUpgradeTry = os.clock()
-    local upgradeNames = {
-        "ClickMultiplier", "TapPower", "AutoClicker", "ClickSpeed",
-        "EggLuck", "PetSlots", "PetStorage", "RebirthMultiplier", "WalkSpeed", "GemMultiplier"
-    }
-    for _, uName in ipairs(upgradeNames) do
-        FireAction("Upgrade", uName)
-    end
-end
-
-local function TriggerClaims()
-    if os.clock() - TSR.LastClaimTry < 5.0 then return end
-    TSR.LastClaimTry = os.clock()
-    FireAction("Claim")
-    for i = 1, 12 do
-        FireAction("Claim", i)
-    end
-end
-
-local function ReachEggWithin10Studs(eggPos)
-    local _, hum, root = SafeCharState()
-    if not eggPos or not root then
-        return true
-    end
-    local dist = (root.Position - eggPos).Magnitude
-    if dist <= 9.5 then
-        return true
-    end
-    local approachSpot = eggPos + Vector3.new(0, 0, 4)
-    if Settings.TSRTeleportToEgg then
-        SafeTeleportTo(approachSpot)
-        task.wait(0.05)
-        return true
-    elseif hum and hum.Health > 0 then
-        hum:MoveTo(approachSpot)
-        return false
-    end
-    return false
-end
-
-local function ComputeHatchCount(eggPrice)
-    local amountMode = tostring(Settings.TSRHatchAmount or "Auto (3 or 1)")
-    if string.find(amountMode, "Auto", 1, true) then
-        if eggPrice and eggPrice > 0 then
-            local wallet = GetPlayerTapCurrency()
-            local budgetPct = math.clamp(tonumber(Settings.TSREggBudget) or 50, 1, 100) / 100
-            if wallet == math.huge or (wallet * budgetPct) >= (eggPrice * 3) then
-                return 3
-            end
-            return 1
-        end
-        return 3
-    elseif string.find(amountMode, "Triple", 1, true) then
-        return 3
-    elseif string.find(amountMode, "Max", 1, true) then
-        return 8
+    local list = TSR.RebirthAmounts
+    if #list > 0 then
+        local mid = math.clamp(math.floor(#list * 0.5), 1, #list)
+        local amt = list[mid]
+        return TSR.RebirthIndexByAmount[amt] or mid
     end
     return 1
 end
 
-local function TriggerHatchEgg()
-    local eggName, eggPrice = ResolveTargetEggName()
-    local count = ComputeHatchCount(eggPrice)
+local function DoAutoRebirth()
+    local now = os.clock()
+    local delaySec = math.clamp((tonumber(Settings.TSRRebirthDelayTenths) or 5) / 10, 0.1, 5)
+    if (now - TSR.Cooldowns.Rebirth) < delaySec then
+        return
+    end
+    TSR.Cooldowns.Rebirth = now
+    local idx = ResolveRebirthIndex()
+    CallGameRemote("Invoke", "Rebirth", idx)
+end
 
-    local eggObj = TSR.DiscoveredEggs[eggName]
-    local eggPos = GetInstanceWorldPos(eggObj)
-    if eggPos then
-        local inRange = ReachEggWithin10Studs(eggPos)
-        if not inRange then
-            return
+local function PickTargetEgg()
+    if #TSR.EggCatalog == 0 then
+        RefreshEggCatalog()
+    end
+    local selected = tostring(Settings.TSREggSelected or "Best available")
+    if selected ~= "Best available" then
+        local raw = ExtractRawEggName(selected)
+        for _, entry in ipairs(TSR.EggCatalog) do
+            if entry.Name == raw or entry.Label == selected then
+                return entry
+            end
         end
+        return { Name = raw, Price = 0 }
     end
 
-    if eggObj then
-        local prompt = eggObj:FindFirstChildOfClass("ProximityPrompt", true)
-        if prompt and type(fireproximityprompt) == "function" then
-            pcall(fireproximityprompt, prompt)
+    local budgetRatio = math.clamp((tonumber(Settings.TSREggBudgetPct) or 50) / 100, 0.05, 1)
+    local clicks = GetCurrentClicks()
+    if clicks then
+        local maxSpend = clicks * budgetRatio
+        local best = nil
+        for _, entry in ipairs(TSR.EggCatalog) do
+            if entry.Price <= maxSpend and FindEggInWorkspace(entry.Name) then
+                best = entry
+            end
+        end
+        if best then
+            return best
         end
     end
+    return TSR.EggCatalog[1]
+end
 
-    local ok = FireAction("Hatch", eggName, count)
-    if not ok then
-        FireAction("Hatch", eggName, count == 3)
+local function ApproachEgg(eggName)
+    local approach = tostring(Settings.TSREggApproach or "Teleport")
+    if approach == "None" then
+        return
+    end
+    local eggPos = FindEggInWorkspace(eggName)
+    local _, hum, hrp = SafeCharState()
+    if not eggPos or not hrp then
+        return
+    end
+    local dist = (hrp.Position - eggPos).Magnitude
+    if dist <= 8.5 then
+        return
+    end
+    if approach == "Teleport" then
+        hrp.CFrame = CFrame.new(eggPos + Vector3.new(0, 3.5, 4), eggPos)
+    elseif approach == "Walk" and hum and hum.Health > 0 then
+        hum:MoveTo(eggPos)
     end
 end
 
-local function TeleportToIslandByName(name)
-    local target = TSR.DiscoveredIslands[name]
-    local pos = GetInstanceWorldPos(target)
-    if pos then
-        SafeTeleportTo(pos)
-        CustomNotify("Teleported to " .. tostring(name), Color3.fromRGB(80, 255, 130), 2.5)
-        return true
+local function ResolveHatchCount(eggEntry)
+    local mode = tostring(Settings.TSRHatchAmount or "Auto")
+    if mode ~= "Auto" then
+        return tonumber(mode) or 1
     end
-    local fired = FireAction("Teleport", name)
-    if fired then
-        CustomNotify("Requested TP to " .. tostring(name), Color3.fromRGB(100, 200, 255), 2.5)
-    else
-        CustomNotify("Island position not found: " .. tostring(name), Color3.fromRGB(255, 180, 70), 3)
+    local clicks = GetCurrentClicks()
+    local price = eggEntry and tonumber(eggEntry.Price) or 0
+    if clicks and price > 0 and clicks >= (price * 3) then
+        return 3
     end
-    return fired
+    return 1
 end
 
-local ActiveCodes = {
-    "30MVISITS",
-    "HEAVEN",
-    "SPOOKY",
-    "BOO!",
-    "20MVISITS",
-    "10MVISITS",
-    "REBORN",
-    "RELEASE",
-    "LUCKY",
-    "UPDATE1",
-    "UPDATE2",
+local function DoAutoHatch()
+    local now = os.clock()
+    if (now - TSR.Cooldowns.Hatch) < 0.3 then
+        return
+    end
+    TSR.Cooldowns.Hatch = now
+
+    local egg = PickTargetEgg()
+    if not egg or not egg.Name then
+        return
+    end
+    ApproachEgg(egg.Name)
+    local amount = ResolveHatchCount(egg)
+    CallGameRemote("Invoke", "OpenEgg", egg.Name, amount)
+end
+
+local function DoFarmChests()
+    local now = os.clock()
+    if (now - TSR.Cooldowns.Chests) < 0.2 then
+        return
+    end
+    TSR.Cooldowns.Chests = now
+    local _, _, hrp = SafeCharState()
+    if not hrp then
+        return
+    end
+
+    local gameFolder = Workspace:FindFirstChild("Game")
+    local worldChests = gameFolder and gameFolder:FindFirstChild("WorldChests")
+    if worldChests then
+        for _, v in ipairs(worldChests:GetChildren()) do
+            local hitbox = v:FindFirstChild("Hitbox")
+            if hitbox and hitbox:IsA("BasePart") then
+                if Settings.TSRChestTP then
+                    hrp.CFrame = hitbox.CFrame + Vector3.new(0, 4, 0)
+                end
+                SafeTouch(hrp, hitbox)
+            end
+        end
+    end
+
+    local islands = Workspace:FindFirstChild("Island") or Workspace:FindFirstChild("Islands")
+    if islands then
+        for _, island in ipairs(islands:GetChildren()) do
+            local props = island:FindFirstChild("Props")
+            if props then
+                for _, prop in ipairs(props:GetChildren()) do
+                    if prop.Name == "ClickerChest" then
+                        local hitbox = prop:FindFirstChild("Hitbox")
+                        if hitbox and hitbox:IsA("BasePart") then
+                            if Settings.TSRChestTP then
+                                hrp.CFrame = hitbox.CFrame + Vector3.new(0, 4, 0)
+                            end
+                            SafeTouch(hrp, hitbox)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function DoAttackBreakables()
+    local now = os.clock()
+    if (now - TSR.Cooldowns.Breakables) < 0.2 then
+        return
+    end
+    TSR.Cooldowns.Breakables = now
+    local _, _, hrp = SafeCharState()
+    if not hrp then
+        return
+    end
+
+    local gameFolder = Workspace:FindFirstChild("Game")
+    local folder = (gameFolder and gameFolder:FindFirstChild("Breakables")) or Workspace:FindFirstChild("Breakables")
+    if not folder then
+        return
+    end
+
+    local nearest, nearestDist = nil, 250
+    for _, item in ipairs(folder:GetChildren()) do
+        local pos = GetInstancePosition(item)
+        if pos then
+            local d = (hrp.Position - pos).Magnitude
+            if d < nearestDist then
+                nearestDist = d
+                nearest = item
+            end
+        end
+    end
+
+    if nearest then
+        local hb = nearest:FindFirstChild("Hitbox") or nearest:FindFirstChildWhichIsA("BasePart", true)
+        if hb then
+            SafeTouch(hrp, hb)
+        end
+        local remName = FindRemoteMatching({ "AttackBreakable", "DamageBreakable", "Breakable", "HitObject" })
+        if remName then
+            CallGameRemote("Auto", remName, nearest.Name)
+            CallGameRemote("Auto", remName, nearest)
+        end
+    end
+end
+
+local function DoCollectDrops()
+    local now = os.clock()
+    if (now - TSR.Cooldowns.Collect) < 0.25 then
+        return
+    end
+    TSR.Cooldowns.Collect = now
+    local _, _, hrp = SafeCharState()
+    if not hrp then
+        return
+    end
+
+    local gameFolder = Workspace:FindFirstChild("Game")
+    local folders = {
+        gameFolder and gameFolder:FindFirstChild("Drops") or nil,
+        gameFolder and gameFolder:FindFirstChild("Orbs") or nil,
+        Workspace:FindFirstChild("Drops"),
+        Workspace:FindFirstChild("Orbs")
+    }
+    for _, folder in ipairs(folders) do
+        if folder then
+            for _, obj in ipairs(folder:GetChildren()) do
+                local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart", true)
+                if part then
+                    SafeTouch(hrp, part)
+                end
+            end
+        end
+    end
+end
+
+local RarityRank = {
+    Common = 1,
+    Uncommon = 2,
+    Rare = 3,
+    Epic = 4,
+    Legendary = 5
 }
 
-local function RedeemAllCodes()
-    ScanAllRemotes(true)
-    for _, code in ipairs(ActiveCodes) do
-        FireAction("Code", code)
-        task.wait(0.12)
-    end
-    CustomNotify("Tried " .. tostring(#ActiveCodes) .. " active TSR codes!", Color3.fromRGB(80, 255, 130), 3)
-end
+local function DoPetManagement()
+    local now = os.clock()
 
--- ============================================================================
--- UI CONTROLS
--- ============================================================================
-do
-    local function Sec(title, icon)
-        if CreateSection then
-            pcall(CreateSection, GamePage, title, icon)
+    if Settings.TSRAutoEquipBest and (now - TSR.Cooldowns.Equip) >= 2.5 then
+        TSR.Cooldowns.Equip = now
+        CallGameRemote("Invoke", "EquipBest")
+    end
+
+    if type(TSR.Replication) ~= "table" or type(TSR.Replication.Data) ~= "table" then
+        return
+    end
+    local pets = TSR.Replication.Data.Pets
+    if type(pets) ~= "table" then
+        return
+    end
+
+    if Settings.TSRAutoDeletePets and (now - TSR.Cooldowns.Delete) >= 1.5 and TSR.PetStats then
+        TSR.Cooldowns.Delete = now
+        local threshold = RarityRank[tostring(Settings.TSRDeleteRarity or "Common")] or 1
+        local deleted = 0
+        for _, pet in pairs(pets) do
+            if deleted >= 6 then
+                break
+            end
+            if type(pet) == "table" and pet.Id and pet.Name and not pet.Equipped and not pet.Locked then
+                local okR, rarity = pcall(function()
+                    return TSR.PetStats:GetRarity(pet.Name)
+                end)
+                local rank = okR and RarityRank[tostring(rarity)]
+                if rank and rank <= threshold then
+                    CallGameRemote("Invoke", "DeletePet", tostring(pet.Id))
+                    deleted = deleted + 1
+                end
+            end
         end
     end
 
-    Sec("Farm & Automation", "⚡")
-    CreateToggle("Auto Tap", GamePage, Settings.TSRAutoTap, function(v)
+    if Settings.TSRAutoCraft and (now - TSR.Cooldowns.Craft) >= 2.0 then
+        TSR.Cooldowns.Craft = now
+        local wantTier = Settings.TSRCraftTier == "Gold -> Rainbow" and "Golden" or "Normal"
+        local batchSize = math.clamp(tonumber(Settings.TSRCraftBatchSize) or 5, 1, 6)
+        local grouped = {}
+        for _, pet in pairs(pets) do
+            if type(pet) == "table" and pet.Id and pet.Name and not pet.Equipped and not pet.Locked then
+                if pet.Tier == wantTier or Settings.TSRCraftTier == "Any Tier" then
+                    grouped[pet.Name] = grouped[pet.Name] or {}
+                    table.insert(grouped[pet.Name], pet.Id)
+                end
+            end
+        end
+        for _, ids in pairs(grouped) do
+            if #ids >= batchSize then
+                local batch = {}
+                for i = 1, batchSize do
+                    table.insert(batch, ids[i])
+                end
+                CallGameRemote("Invoke", "CraftPets", batch)
+                break
+            end
+        end
+    end
+end
+
+local function DoClaimsAndEvents()
+    local now = os.clock()
+
+    if Settings.TSRAutoClaim and (now - TSR.Cooldowns.Claim) >= 3.0 then
+        TSR.Cooldowns.Claim = now
+        CallGameRemote("Invoke", "ClaimRankReward")
+        for _, cand in ipairs({ "ClaimDailyReward", "ClaimPlaytimeReward", "ClaimGift", "ClaimQuest", "ClaimAllGifts" }) do
+            if FindRemote(cand) then
+                CallGameRemote("Auto", cand)
+            end
+        end
+    end
+
+    if Settings.TSRAutoUpgrades and (now - TSR.Cooldowns.Upgrade) >= 2.5 then
+        TSR.Cooldowns.Upgrade = now
+        local upgRem = FindRemoteMatching({ "BuyUpgrade", "PurchaseUpgrade", "Upgrade" })
+        if upgRem then
+            for idx = 1, 5 do
+                CallGameRemote("Auto", upgRem, idx)
+            end
+        end
+    end
+
+    if Settings.TSRAutoLuckyDucky and (now - TSR.Cooldowns.Ducky) >= 1.5 then
+        TSR.Cooldowns.Ducky = now
+        local _, _, hrp = SafeCharState()
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and string.find(string.lower(obj.Name), "duck", 1, true) then
+                SafeTouch(hrp, obj)
+            end
+        end
+        local duckRem = FindRemoteMatching({ "LuckyDucky", "Ducky", "SpinWheel" })
+        if duckRem then
+            CallGameRemote("Auto", duckRem)
+        end
+    end
+
+    if Settings.TSRAutoPetDefense and (now - TSR.Cooldowns.Defense) >= 1.5 then
+        TSR.Cooldowns.Defense = now
+        local defRem = FindRemoteMatching({ "PetDefense", "Defense" })
+        if defRem then
+            CallGameRemote("Auto", defRem)
+        end
+        local relRem = FindRemoteMatching({ "Relic" })
+        if relRem then
+            CallGameRemote("Auto", relRem, tostring(Settings.TSRRelicRewardMode or "Replace"))
+        end
+    end
+
+    if Settings.TSRAutoUnlockIslands and (now - TSR.Cooldowns.Unlock) >= 3.0 then
+        TSR.Cooldowns.Unlock = now
+        local portRem = FindRemoteMatching({ "UnlockIsland", "BuyIsland", "UnlockWorld" })
+        if portRem then
+            for _, isl in ipairs(TSR.IslandOptions) do
+                CallGameRemote("Auto", portRem, isl)
+            end
+        end
+    end
+end
+
+-- ============================================================================
+-- INITIAL DISCOVERY & UI CONSTRUCTION
+-- ============================================================================
+ScanRemotesSafe(true)
+RefreshEggCatalog()
+RefreshIslandCatalog()
+local rebirthChoices = BuildRebirthChoices()
+
+do
+    CreateCard("Auto Tap & Farm", GamePage, false)
+    CreateToggle("Auto Tap (Real Network)", GamePage, Settings.TSRAutoTap, function(v)
         Settings.TSRAutoTap = v == true
         AutoSaveConfiguration()
     end, "TSRAutoTap")
-
-    CreateDropdown("Tap Mode", { "Hybrid (Remote + Click)", "Remote Only", "Fast Click" }, GamePage, Settings.TSRTapMode, function(opt)
-        Settings.TSRTapMode = opt
+    CreateSlider("Taps Per Cycle", GamePage, 1, 10, Settings.TSRTapsPerCycle, "", function(v)
+        Settings.TSRTapsPerCycle = v
+    end, "TSRTapsPerCycle")
+    CreateToggle("Virtual Mouse Click (Extra)", GamePage, Settings.TSRVirtualClick, function(v)
+        Settings.TSRVirtualClick = v == true
         AutoSaveConfiguration()
-    end)
-
-    if CreateSlider then
-        CreateSlider("Taps Per Cycle", GamePage, 1, 10, Settings.TSRTapsPerCycle, "x", function(val)
-            Settings.TSRTapsPerCycle = math.clamp(tonumber(val) or 3, 1, 10)
-        end, "TSRTapsPerCycle")
-    end
-
-    CreateButton("Save Current Position", GamePage, function()
-        local _, _, root = SafeCharState()
-        if root then
-            TSR.SavedFarmCFrame = root.CFrame
-            Settings.TSRSavedFarmCFrame = root.CFrame
-            AutoSaveConfiguration()
-            CustomNotify("Saved farm position!", Color3.fromRGB(80, 255, 130), 2.5)
-        else
-            CustomNotify("Character not found", Color3.fromRGB(255, 180, 70), 2.5)
-        end
-    end)
-
-    CreateButton("TP to Saved Position", GamePage, function()
-        if TSR.SavedFarmCFrame then
-            SafeTeleportTo(TSR.SavedFarmCFrame)
-            CustomNotify("Returned to saved farm position!", Color3.fromRGB(100, 200, 255), 2.5)
-        else
-            CustomNotify("Save a position first", Color3.fromRGB(255, 180, 70), 2.5)
-        end
-    end)
-
+    end, "TSRVirtualClick")
+    CreateToggle("Auto Farm World & Island Chests", GamePage, Settings.TSRAutoChests, function(v)
+        Settings.TSRAutoChests = v == true
+        AutoSaveConfiguration()
+    end, "TSRAutoChests")
+    CreateToggle("Teleport to Chests", GamePage, Settings.TSRChestTP, function(v)
+        Settings.TSRChestTP = v == true
+        AutoSaveConfiguration()
+    end, "TSRChestTP")
     CreateToggle("Auto Attack Breakables", GamePage, Settings.TSRAutoBreakables, function(v)
         Settings.TSRAutoBreakables = v == true
         AutoSaveConfiguration()
     end, "TSRAutoBreakables")
-
     CreateToggle("Auto Collect Drops / Orbs", GamePage, Settings.TSRAutoCollect, function(v)
         Settings.TSRAutoCollect = v == true
         AutoSaveConfiguration()
     end, "TSRAutoCollect")
+end
 
-    CreateToggle("Auto Claim Rewards / Gifts", GamePage, Settings.TSRAutoClaim, function(v)
-        Settings.TSRAutoClaim = v == true
-        AutoSaveConfiguration()
-    end, "TSRAutoClaim")
-
-    Sec("Rebirth & Upgrades", "🔄")
+do
+    CreateCard("Auto Rebirth", GamePage, false)
+    CreateDropdown("Rebirth Tier", rebirthChoices, GamePage, Settings.TSRRebirthMode, function(opt)
+        Settings.TSRRebirthMode = opt
+    end)
+    CreateSlider("Rebirth Delay (x0.1s)", GamePage, 1, 50, Settings.TSRRebirthDelayTenths, "", function(v)
+        Settings.TSRRebirthDelayTenths = v
+    end, "TSRRebirthDelayTenths")
     CreateToggle("Auto Rebirth", GamePage, Settings.TSRAutoRebirth, function(v)
         Settings.TSRAutoRebirth = v == true
         AutoSaveConfiguration()
     end, "TSRAutoRebirth")
+end
 
-    CreateDropdown("Rebirth Mode", { "Best / Max", "Max / Single", "Target Tier" }, GamePage, Settings.TSRRebirthMode, function(opt)
-        Settings.TSRRebirthMode = opt
-        AutoSaveConfiguration()
+do
+    CreateCard("Eggs & Auto Hatch", GamePage, false)
+    CreateDropdown("Select Egg", TSR.EggOptions, GamePage, Settings.TSREggSelected, function(opt)
+        Settings.TSREggSelected = opt
     end)
-
-    if CreateSlider then
-        CreateSlider("Target Rebirth Tier", GamePage, 1, 40, Settings.TSRRebirthTier, "", function(val)
-            Settings.TSRRebirthTier = math.clamp(tonumber(val) or 1, 1, 40)
-        end, "TSRRebirthTier")
-    end
-
-    CreateToggle("Auto Buy Gem Upgrades", GamePage, Settings.TSRAutoUpgrades, function(v)
-        Settings.TSRAutoUpgrades = v == true
-        AutoSaveConfiguration()
-    end, "TSRAutoUpgrades")
-
-    Sec("Eggs & Auto Hatch", "🥚")
-    local initialEggs = ScanEggsInWorkspace()
-    if not TSR.EggDisplayToName[Settings.TSRSelectedEgg] then
-        Settings.TSRSelectedEgg = "Best available"
-    end
-
-    CreateDropdown("Select Egg", initialEggs, GamePage, Settings.TSRSelectedEgg, function(opt)
-        Settings.TSRSelectedEgg = tostring(opt)
-        AutoSaveConfiguration()
-    end)
-
-    if CreateSlider then
-        CreateSlider("Egg Budget", GamePage, 1, 100, Settings.TSREggBudget, "%", function(val)
-            Settings.TSREggBudget = math.clamp(tonumber(val) or 50, 1, 100)
-        end, "TSREggBudget")
-    end
-
-    CreateDropdown("Hatch Amount", { "Auto (3 or 1)", "Single (1)", "Triple (3)", "Max (8)" }, GamePage, Settings.TSRHatchAmount, function(opt)
+    CreateSlider("Best Egg Budget", GamePage, 5, 100, Settings.TSREggBudgetPct, "%", function(v)
+        Settings.TSREggBudgetPct = v
+    end, "TSREggBudgetPct")
+    CreateDropdown("Hatch Amount", { "Auto", "1", "3", "8" }, GamePage, Settings.TSRHatchAmount, function(opt)
         Settings.TSRHatchAmount = opt
-        AutoSaveConfiguration()
     end)
-
+    CreateDropdown("Egg Approach (~10 stud rule)", { "Teleport", "Walk", "None" }, GamePage, Settings.TSREggApproach, function(opt)
+        Settings.TSREggApproach = opt
+    end)
     CreateToggle("Auto Hatch", GamePage, Settings.TSRAutoHatch, function(v)
         Settings.TSRAutoHatch = v == true
         AutoSaveConfiguration()
     end, "TSRAutoHatch")
-
-    CreateToggle("Auto TP Egg", GamePage, Settings.TSRTeleportToEgg, function(v)
-        Settings.TSRTeleportToEgg = v == true
-        AutoSaveConfiguration()
-    end, "TSRTeleportToEgg")
-
-    CreateToggle("Hide Egg Hatch Animation", GamePage, Settings.TSRSkipAnimation, function(v)
+    CreateToggle("Hide Hatch Animation (Safe)", GamePage, Settings.TSRSkipAnimation, function(v)
         Settings.TSRSkipAnimation = v == true
+        if not Settings.TSRSkipAnimation then
+            RestoreHiddenHatchTargets()
+        end
         AutoSaveConfiguration()
     end, "TSRSkipAnimation")
+end
 
-    CreateButton("TP to Selected Egg Now", GamePage, function()
-        ScanEggsInWorkspace()
-        local eggName = ResolveTargetEggName()
-        local pos = GetInstanceWorldPos(TSR.DiscoveredEggs[eggName])
-        if pos then
-            SafeTeleportTo(pos + Vector3.new(0, 3, 4))
-            CustomNotify("Teleported to " .. tostring(eggName), Color3.fromRGB(80, 255, 130), 2.5)
-        else
-            CustomNotify("Egg not found in current world", Color3.fromRGB(255, 180, 70), 3)
-        end
-    end)
-
-    Sec("Pets, Crafting & Delete", "✨")
+do
+    CreateCard("Pets, Craft & Auto Delete", GamePage, false)
     CreateToggle("Auto Equip Best Pets", GamePage, Settings.TSRAutoEquipBest, function(v)
         Settings.TSRAutoEquipBest = v == true
         AutoSaveConfiguration()
     end, "TSRAutoEquipBest")
-
-    CreateButton("Equip Best Pets Now", GamePage, function()
-        FireAction("EquipBest")
-        CustomNotify("Requested Equip Best!", Color3.fromRGB(100, 200, 255), 2)
+    CreateDropdown("Craft Tier", { "Normal -> Gold", "Gold -> Rainbow", "Any Tier" }, GamePage, Settings.TSRCraftTier, function(opt)
+        Settings.TSRCraftTier = opt
     end)
-
-    CreateToggle("Auto Craft / Mutate Pets", GamePage, Settings.TSRAutoCraft, function(v)
+    CreateSlider("Craft Batch Size", GamePage, 1, 6, Settings.TSRCraftBatchSize, "", function(v)
+        Settings.TSRCraftBatchSize = v
+    end, "TSRCraftBatchSize")
+    CreateToggle("Auto Craft Pets", GamePage, Settings.TSRAutoCraft, function(v)
         Settings.TSRAutoCraft = v == true
         AutoSaveConfiguration()
     end, "TSRAutoCraft")
-
-    CreateDropdown("Mutation Target", { "Auto / Any", "Golden", "Rainbow", "Shiny", "Void" }, GamePage, Settings.TSRMutationTarget, function(opt)
-        Settings.TSRMutationTarget = opt
-        AutoSaveConfiguration()
+    CreateDropdown("Delete Rarity (<=)", { "Common", "Uncommon", "Rare", "Epic", "Legendary" }, GamePage, Settings.TSRDeleteRarity, function(opt)
+        Settings.TSRDeleteRarity = opt
     end)
-
-    CreateToggle("Auto Delete Pets", GamePage, Settings.TSRAutoDeletePets, function(v)
+    CreateToggle("Auto Delete Unlocked Pets", GamePage, Settings.TSRAutoDeletePets, function(v)
         Settings.TSRAutoDeletePets = v == true
         AutoSaveConfiguration()
     end, "TSRAutoDeletePets")
+end
 
-    CreateDropdown("Delete Rarity", { "Common", "Common + Uncommon", "Up to Rare", "Up to Epic" }, GamePage, Settings.TSRDeleteThreshold, function(opt)
-        Settings.TSRDeleteThreshold = opt
-        AutoSaveConfiguration()
+do
+    CreateCard("Islands & Saved Position", GamePage, false)
+    CreateDropdown("Island", TSR.IslandOptions, GamePage, Settings.TSRSelectedIsland, function(opt)
+        Settings.TSRSelectedIsland = opt
     end)
+    CreateButton("Teleport to Island", GamePage, function()
+        RefreshIslandCatalog()
+        local _, _, hrp = SafeCharState()
+        local targetPos = TSR.IslandPositions[Settings.TSRSelectedIsland]
+        if hrp and targetPos then
+            hrp.CFrame = CFrame.new(targetPos)
+        else
+            CustomNotify("Island position not found: " .. tostring(Settings.TSRSelectedIsland), Color3.fromRGB(255, 170, 70), 2.5)
+        end
+    end)
+    CreateButton("Save Current Position", GamePage, function()
+        local _, _, hrp = SafeCharState()
+        if hrp then
+            TSR.SavedPosition = hrp.CFrame
+            CustomNotify("Grind position saved!", Color3.fromRGB(80, 255, 130), 2)
+        end
+    end)
+    CreateButton("Teleport to Saved Position", GamePage, function()
+        local _, _, hrp = SafeCharState()
+        if hrp and TSR.SavedPosition then
+            hrp.CFrame = TSR.SavedPosition
+        else
+            CustomNotify("Save a position first!", Color3.fromRGB(255, 170, 70), 2)
+        end
+    end)
+    CreateToggle("Auto Unlock Islands / Portals", GamePage, Settings.TSRAutoUnlockIslands, function(v)
+        Settings.TSRAutoUnlockIslands = v == true
+        AutoSaveConfiguration()
+    end, "TSRAutoUnlockIslands")
+end
 
-    Sec("Minigames & Events", "🎮")
+do
+    CreateCard("Events, Minigames & Claims", GamePage, false)
+    CreateToggle("Auto Claim Rank & Rewards", GamePage, Settings.TSRAutoClaim, function(v)
+        Settings.TSRAutoClaim = v == true
+        AutoSaveConfiguration()
+    end, "TSRAutoClaim")
+    CreateToggle("Auto Buy Upgrades", GamePage, Settings.TSRAutoUpgrades, function(v)
+        Settings.TSRAutoUpgrades = v == true
+        AutoSaveConfiguration()
+    end, "TSRAutoUpgrades")
     CreateToggle("Auto Lucky Ducky", GamePage, Settings.TSRAutoLuckyDucky, function(v)
         Settings.TSRAutoLuckyDucky = v == true
         AutoSaveConfiguration()
     end, "TSRAutoLuckyDucky")
-
+    CreateDropdown("Relic Reward", { "Replace", "Keep Best", "Skip" }, GamePage, Settings.TSRRelicRewardMode, function(opt)
+        Settings.TSRRelicRewardMode = opt
+    end)
     CreateToggle("Auto Pet Defense", GamePage, Settings.TSRAutoPetDefense, function(v)
         Settings.TSRAutoPetDefense = v == true
         AutoSaveConfiguration()
     end, "TSRAutoPetDefense")
-
-    CreateDropdown("Relic Reward", { "Replace", "Keep", "Skip" }, GamePage, Settings.TSRRelicRewardMode, function(opt)
-        Settings.TSRRelicRewardMode = opt
-        AutoSaveConfiguration()
+    CreateButton("Redeem Known Codes", GamePage, function()
+        local codeRem = FindRemoteMatching({ "RedeemCode", "Code", "Redeem" }) or "RedeemCode"
+        for _, code in ipairs({ "30MVISITS", "HEAVEN", "SPOOKY", "BOO!" }) do
+            CallGameRemote("Invoke", codeRem, code)
+            task.wait(0.15)
+        end
+        CustomNotify("Attempted to redeem TSR codes!", Color3.fromRGB(80, 255, 130), 2.5)
     end)
+end
 
-    Sec("Islands & Worlds", "🗺️")
-    local initialIslands = ScanIslandsInWorkspace()
-    if not TSR.DiscoveredIslands[Settings.TSRSelectedIsland] and #initialIslands > 0 then
-        Settings.TSRSelectedIsland = initialIslands[1]
-    end
-
-    CreateDropdown("Island", initialIslands, GamePage, Settings.TSRSelectedIsland, function(opt)
-        Settings.TSRSelectedIsland = tostring(opt)
-        AutoSaveConfiguration()
-    end)
-
-    CreateButton("Teleport to Island", GamePage, function()
-        ScanIslandsInWorkspace()
-        TeleportToIslandByName(Settings.TSRSelectedIsland)
-    end)
-
-    CreateToggle("Auto Unlock Islands", GamePage, Settings.TSRAutoUnlockIslands, function(v)
-        Settings.TSRAutoUnlockIslands = v == true
-        AutoSaveConfiguration()
-    end, "TSRAutoUnlockIslands")
-
-    CreateButton("Scan Remotes / Refresh Map", GamePage, function()
-        ScanAllRemotes(true)
-        local e = ScanEggsInWorkspace()
-        local isl = ScanIslandsInWorkspace()
-        CustomNotify(
-            string.format("Found %d eggs & %d islands", math.max(0, #e - 1), #isl),
-            Color3.fromRGB(100, 200, 255),
-            3
-        )
-    end)
-
-    Sec("Codes & Player", "🎁")
-    CreateButton("Redeem All Active Codes", GamePage, function()
-        task.spawn(RedeemAllCodes)
-    end)
-
-    if CreateToggleWithValue then
-        CreateToggleWithValue("WalkSpeed Boost", GamePage, Settings.TSRSafeSpeed, Settings.TSRWalkSpeed, function(v)
-            Settings.TSRSafeSpeed = v == true
-            if not Settings.TSRSafeSpeed then
-                local _, hum = SafeCharState()
-                if hum then hum.WalkSpeed = 16 end
-            end
-            AutoSaveConfiguration()
-        end, function(val)
-            Settings.TSRWalkSpeed = math.clamp(tonumber(val) or 48, 16, 200)
-            AutoSaveConfiguration()
-        end, "TSRSafeSpeed")
-    end
-
+do
+    CreateCard("Player & Diagnostics", GamePage, false)
     CreateToggle("Infinite Jump", GamePage, Settings.TSRInfiniteJump, function(v)
         Settings.TSRInfiniteJump = v == true
         AutoSaveConfiguration()
     end, "TSRInfiniteJump")
-
+    CreateToggle("Safe WalkSpeed", GamePage, Settings.TSRSafeSpeed, function(v)
+        Settings.TSRSafeSpeed = v == true
+        AutoSaveConfiguration()
+    end, "TSRSafeSpeed")
+    CreateSlider("WalkSpeed Value", GamePage, 16, 250, Settings.TSRWalkSpeed, "", function(v)
+        Settings.TSRWalkSpeed = v
+    end, "TSRWalkSpeed")
     CreateToggle("Anti-AFK", GamePage, Settings.TSRAntiAFK, function(v)
         Settings.TSRAntiAFK = v == true
         AutoSaveConfiguration()
     end, "TSRAntiAFK")
-
+    CreateButton("Refresh Remotes, Eggs & Islands", GamePage, function()
+        ScanRemotesSafe(true)
+        RefreshEggCatalog()
+        RefreshIslandCatalog()
+        local msg = string.format(
+            "Net:%s | Remotes:%d | Eggs:%d | Islands:%d",
+            TSR.Network and "OK" or "Fallback",
+            TSR.RemoteCount,
+            #TSR.EggCatalog,
+            #TSR.IslandOptions
+        )
+        CustomNotify(msg, Color3.fromRGB(100, 210, 255), 4)
+    end)
     CreateButton("Rejoin Same Server", GamePage, function()
         TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player)
     end)
+end
 
-    if getgenv().ClearActivePageCard then
-        pcall(getgenv().ClearActivePageCard, GamePage)
-    end
+if ClearActivePageCard then
+    pcall(ClearActivePageCard, GamePage)
 end
 
 -- ============================================================================
--- BACKGROUND LOOPS & HOOKS
+-- BACKGROUND LOOPS (LIGHTWEIGHT, CLEAN TEARDOWN)
 -- ============================================================================
 TrackConn(UserInputService.JumpRequest:Connect(function()
-    if not IsAliveSession() or not Settings.TSRInfiniteJump then return end
+    if not IsAliveSession() or not Settings.TSRInfiniteJump then
+        return
+    end
     local _, hum = SafeCharState()
     if hum then
         hum:ChangeState(Enum.HumanoidStateType.Jumping)
@@ -1174,7 +1311,9 @@ TrackConn(UserInputService.JumpRequest:Connect(function()
 end))
 
 TrackConn(Player.Idled:Connect(function()
-    if not IsAliveSession() or not Settings.TSRAntiAFK then return end
+    if not IsAliveSession() or not Settings.TSRAntiAFK then
+        return
+    end
     pcall(function()
         VirtualUser:CaptureController()
         VirtualUser:ClickButton2(Vector2.new())
@@ -1182,95 +1321,58 @@ TrackConn(Player.Idled:Connect(function()
 end))
 
 TrackConn(RunService.Heartbeat:Connect(function()
-    if not IsAliveSession() then return end
+    if not IsAliveSession() then
+        return
+    end
     if Settings.TSRSafeSpeed then
         local _, hum = SafeCharState()
         if hum and hum.Health > 0 then
-            hum.WalkSpeed = Settings.TSRWalkSpeed
+            hum.WalkSpeed = tonumber(Settings.TSRWalkSpeed) or 36
         end
     end
     if Settings.TSRSkipAnimation then
-        local pGui = Player:FindFirstChildOfClass("PlayerGui")
-        if pGui then
-            for _, gui in ipairs(pGui:GetChildren()) do
-                local ln = string.lower(gui.Name)
-                if string.find(ln, "hatch", 1, true) or string.find(ln, "unbox", 1, true) then
-                    if gui:IsA("ScreenGui") and gui.Enabled then
-                        gui.Enabled = false
-                    end
-                end
-            end
-        end
+        SuppressHatchAnimationFrame()
     end
 end))
 
 task.spawn(function()
-    ScanAllRemotes(true)
     while IsAliveSession() do
         if env.ScriptLoaded then
             if Settings.TSRAutoTap then
-                local count = math.clamp(tonumber(Settings.TSRTapsPerCycle) or 3, 1, 10)
-                for _ = 1, count do
-                    if not Settings.TSRAutoTap or not IsAliveSession() then break end
-                    PerformTapOnce()
-                end
+                pcall(DoAutoTap)
+            end
+            if Settings.TSRAutoChests then
+                pcall(DoFarmChests)
             end
             if Settings.TSRAutoBreakables then
-                pcall(AttackNearbyBreakables)
+                pcall(DoAttackBreakables)
             end
             if Settings.TSRAutoCollect then
-                pcall(CollectNearbyDrops)
+                pcall(DoCollectDrops)
             end
             if Settings.TSRAutoRebirth then
-                pcall(TriggerRebirth)
-            end
-            if Settings.TSRAutoUpgrades then
-                pcall(TriggerUpgrades)
-            end
-            if Settings.TSRAutoClaim then
-                pcall(TriggerClaims)
-            end
-            if Settings.TSRAutoLuckyDucky then
-                pcall(RunLuckyDucky)
-            end
-            if Settings.TSRAutoPetDefense then
-                pcall(RunPetDefense)
-            end
-            if Settings.TSRAutoUnlockIslands and (os.clock() - TSR.LastUnlockTry) >= 3.0 then
-                TSR.LastUnlockTry = os.clock()
-                for islName in pairs(TSR.DiscoveredIslands) do
-                    pcall(FireAction, "Teleport", islName)
-                end
+                pcall(DoAutoRebirth)
             end
             if Settings.TSRAutoHatch then
-                pcall(TriggerHatchEgg)
+                pcall(DoAutoHatch)
             end
-            if Settings.TSRAutoEquipBest and (os.clock() - TSR.LastEquipTry) >= 3.0 then
-                TSR.LastEquipTry = os.clock()
-                pcall(FireAction, "EquipBest")
+            if Settings.TSRAutoEquipBest or Settings.TSRAutoDeletePets or Settings.TSRAutoCraft then
+                pcall(DoPetManagement)
             end
-            if Settings.TSRAutoCraft and (os.clock() - TSR.LastCraftTry) >= 4.0 then
-                TSR.LastCraftTry = os.clock()
-                if Settings.TSRMutationTarget == "Auto / Any" then
-                    pcall(FireAction, "Craft", "All")
-                    pcall(FireAction, "Craft")
-                else
-                    pcall(FireAction, "Craft", Settings.TSRMutationTarget)
-                    pcall(FireAction, "Craft", "All", Settings.TSRMutationTarget)
-                end
-            end
-            if Settings.TSRAutoDeletePets and (os.clock() - TSR.LastDeleteTry) >= 3.5 then
-                TSR.LastDeleteTry = os.clock()
-                pcall(FireAction, "DeletePet", Settings.TSRDeleteThreshold)
+            if Settings.TSRAutoClaim or Settings.TSRAutoUpgrades or Settings.TSRAutoLuckyDucky or Settings.TSRAutoPetDefense or Settings.TSRAutoUnlockIslands then
+                pcall(DoClaimsAndEvents)
             end
         end
-        task.wait(Settings.TSRAutoTap and 0.05 or 0.15)
+        task.wait(Settings.TSRAutoTap and 0.05 or 0.12)
     end
 end)
 
 env.ToxTSRCleanup = function()
-    for _, c in ipairs(TSR.Connections) do
-        pcall(function() c:Disconnect() end)
+    RestoreHiddenHatchTargets()
+    for _, conn in ipairs(TSR.Connections) do
+        pcall(function()
+            conn:Disconnect()
+        end)
     end
     TSR.Connections = {}
 end
