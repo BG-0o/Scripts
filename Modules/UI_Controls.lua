@@ -12,6 +12,10 @@ local RegisterThemedObject = env.RegisterThemedObject or UI.RegisterThemedObject
 local ResolveElementParent = env.ResolveElementParent or UI.ResolveElementParent or function(p) return p end
 local CustomNotify = function(...) if env.CustomNotify then return env.CustomNotify(...) end end
 local AutoSaveConfiguration = function(...) if env.AutoSaveConfiguration then return env.AutoSaveConfiguration(...) end end
+local TOGGLE_OFF_BG = Color3.fromRGB(26, 34, 50)
+local TOGGLE_OFF_STROKE = Color3.fromRGB(42, 56, 82)
+local TOGGLE_OFF_KNOB = Color3.fromRGB(180, 195, 215)
+local TOGGLE_ON_KNOB = Color3.fromRGB(255, 255, 255)
 getgenv().SharedToggleControls = {}
 getgenv().SharedValueControls = {}
 getgenv().SyncToggleVisuals = function(Key, Value)
@@ -271,14 +275,14 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, -4, 0, 38)
     Container.BackgroundColor3 = Theme.Element
-    Container.BackgroundTransparency = 0.45
+    Container.BackgroundTransparency = 0
     Container.BorderSizePixel = 0
     Container.Parent = parentTarget
     local cCorner = Instance.new("UICorner") cCorner.CornerRadius = UDim.new(0, 8) cCorner.Parent = Container
     local cStroke = Instance.new("UIStroke")
     cStroke.Color = Theme.Outline
     cStroke.Thickness = 1
-    cStroke.Transparency = 0.75
+    cStroke.Transparency = 0.35
     cStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     cStroke.Parent = Container
     RegisterThemedObject(Container, "BackgroundColor3", "Element")
@@ -290,13 +294,13 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     ClickBtn.Parent = Container
     ClickBtn.MouseEnter:Connect(function()
         if getgenv().Destroyed then return end
-        TweenService:Create(Container, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Hover, BackgroundTransparency = 0.2 }):Play()
-        TweenService:Create(cStroke, TweenInfo.new(0.15), { Transparency = 0.4 }):Play()
+        TweenService:Create(Container, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Hover }):Play()
+        TweenService:Create(cStroke, TweenInfo.new(0.15), { Transparency = 0.1 }):Play()
     end)
     ClickBtn.MouseLeave:Connect(function()
         if getgenv().Destroyed then return end
-        TweenService:Create(Container, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Element, BackgroundTransparency = 0.45 }):Play()
-        TweenService:Create(cStroke, TweenInfo.new(0.15), { Transparency = 0.75 }):Play()
+        TweenService:Create(Container, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Element }):Play()
+        TweenService:Create(cStroke, TweenInfo.new(0.15), { Transparency = 0.35 }):Play()
     end)
     local risky = IsFeatureRisky(Name)
     local Label = Instance.new("TextLabel")
@@ -323,41 +327,43 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     local ToggleBg = Instance.new("Frame")
     ToggleBg.Size = UDim2.new(0, 42, 0, 22)
     ToggleBg.Position = UDim2.new(1, -52, 0.5, -11)
-    ToggleBg.BackgroundColor3 = Enabled and Theme.Accent or Color3.fromRGB(18, 24, 38)
+    ToggleBg.BackgroundColor3 = Enabled and Theme.Accent or TOGGLE_OFF_BG
     ToggleBg.BorderSizePixel = 0
     ToggleBg.Parent = Container
     local tgCorner = Instance.new("UICorner") tgCorner.CornerRadius = UDim.new(1, 0) tgCorner.Parent = ToggleBg
     local tgStroke = Instance.new("UIStroke")
-    tgStroke.Color = Enabled and Theme.Accent or Theme.Outline
+    tgStroke.Color = Enabled and Theme.Accent or TOGGLE_OFF_STROKE
     tgStroke.Thickness = 1
-    tgStroke.Transparency = Enabled and 0.3 or 0.6
+    tgStroke.Transparency = Enabled and 0.2 or 0.25
     tgStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     tgStroke.Parent = ToggleBg
-    RegisterThemedObject(tgStroke, "Color", "Outline")
     local Indicator = Instance.new("Frame")
     Indicator.Size = UDim2.new(0, 16, 0, 16)
     Indicator.Position = Enabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-    Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Indicator.BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
     Indicator.BorderSizePixel = 0
     Indicator.Parent = ToggleBg
     local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
     local function Update()
         TweenService:Create(ToggleBg, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            BackgroundColor3 = Enabled and Theme.Accent or Color3.fromRGB(18, 24, 38)
+            BackgroundColor3 = Enabled and Theme.Accent or TOGGLE_OFF_BG
         }):Play()
         TweenService:Create(tgStroke, TweenInfo.new(0.2), {
-            Color = Enabled and Theme.Accent or Theme.Outline,
-            Transparency = Enabled and 0.3 or 0.6
+            Color = Enabled and Theme.Accent or TOGGLE_OFF_STROKE,
+            Transparency = Enabled and 0.2 or 0.25
         }):Play()
         TweenService:Create(Indicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Position = Enabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+            Position = Enabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
+            BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
         }):Play()
     end
     table.insert(RegisteredToggles, {
         UpdateColor = function()
-            ToggleBg.BackgroundColor3 = Enabled and Theme.Accent or Color3.fromRGB(18, 24, 38)
-            tgStroke.Color = Enabled and Theme.Accent or Theme.Outline
+            ToggleBg.BackgroundColor3 = Enabled and Theme.Accent or TOGGLE_OFF_BG
+            tgStroke.Color = Enabled and Theme.Accent or TOGGLE_OFF_STROKE
+            tgStroke.Transparency = Enabled and 0.2 or 0.25
             cStroke.Color = Theme.Outline
+            Indicator.BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
         end
     })
     local Controller = {
@@ -398,13 +404,23 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, -4, 0, 38)
     Container.BackgroundColor3 = Theme.Element
-    Container.BackgroundTransparency = 0.45
+    Container.BackgroundTransparency = 0
     Container.BorderSizePixel = 0
     Container.Parent = parentTarget
     local cCorner = Instance.new("UICorner") cCorner.CornerRadius = UDim.new(0, 8) cCorner.Parent = Container
-    local cStroke = Instance.new("UIStroke") cStroke.Color = Theme.Outline cStroke.Thickness = 1 cStroke.Transparency = 0.75 cStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cStroke.Parent = Container
+    local cStroke = Instance.new("UIStroke") cStroke.Color = Theme.Outline cStroke.Thickness = 1 cStroke.Transparency = 0.35 cStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cStroke.Parent = Container
     RegisterThemedObject(Container, "BackgroundColor3", "Element")
     RegisterThemedObject(cStroke, "Color", "Outline")
+    Container.MouseEnter:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Container, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Hover }):Play()
+        TweenService:Create(cStroke, TweenInfo.new(0.15), { Transparency = 0.1 }):Play()
+    end)
+    Container.MouseLeave:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Container, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Element }):Play()
+        TweenService:Create(cStroke, TweenInfo.new(0.15), { Transparency = 0.35 }):Play()
+    end)
     local risky = IsFeatureRisky(Name)
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(1, -135, 1, 0)
@@ -418,62 +434,74 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     Label.TextTruncate = Enum.TextTruncate.AtEnd
     Label.Parent = Container
     if not risky then RegisterThemedObject(Label, "TextColor3", "Text") else RegisterThemedObject(Label, "TextColor3", "Risky") end
-    local Input = Instance.new("TextBox")
-    Input.Size = UDim2.new(0, 50, 0, 22)
-    Input.Position = UDim2.new(1, -110, 0.5, -11)
-    Input.BackgroundColor3 = Color3.fromRGB(12, 18, 30)
-    Input.BorderSizePixel = 0
-    Input.Text = tostring(DefaultValue)
-    Input.TextColor3 = Theme.Accent
-    Input.Font = Enum.Font.GothamBold
-    Input.TextSize = 11
-    Input.ClearTextOnFocus = false
-    Input.Parent = Container
-    local inCorner = Instance.new("UICorner") inCorner.CornerRadius = UDim.new(0, 6) inCorner.Parent = Input
-    local inStroke = Instance.new("UIStroke") inStroke.Color = Theme.Accent inStroke.Thickness = 1 inStroke.Transparency = 0.6 inStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border inStroke.Parent = Input
-    RegisterThemedObject(Input, "TextColor3", "Accent")
-    RegisterThemedObject(inStroke, "Color", "Accent")
     local initialToggle = DefaultToggle
     if SyncKey and Settings[SyncKey] ~= nil then
         initialToggle = Settings[SyncKey]
     end
     local Enabled = (initialToggle == true)
+    local Input = Instance.new("TextBox")
+    Input.Size = UDim2.new(0, 50, 0, 22)
+    Input.Position = UDim2.new(1, -110, 0.5, -11)
+    Input.BackgroundColor3 = Color3.fromRGB(12, 17, 26)
+    Input.BorderSizePixel = 0
+    Input.Text = tostring(DefaultValue)
+    Input.TextColor3 = Enabled and Theme.Accent or Theme.Text
+    Input.Font = Enum.Font.GothamBold
+    Input.TextSize = 11
+    Input.ClearTextOnFocus = false
+    Input.Parent = Container
+    local inCorner = Instance.new("UICorner") inCorner.CornerRadius = UDim.new(0, 6) inCorner.Parent = Input
+    local inStroke = Instance.new("UIStroke") inStroke.Color = Enabled and Theme.Accent or Theme.Outline inStroke.Thickness = 1 inStroke.Transparency = Enabled and 0.4 or 0.6 inStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border inStroke.Parent = Input
+    Input.Focused:Connect(function()
+        TweenService:Create(inStroke, TweenInfo.new(0.15), { Color = Theme.Accent, Transparency = 0.1 }):Play()
+        TweenService:Create(Input, TweenInfo.new(0.15), { TextColor3 = Theme.Accent }):Play()
+    end)
     local ToggleButton = Instance.new("TextButton")
     ToggleButton.Size = UDim2.new(0, 42, 0, 22)
     ToggleButton.Position = UDim2.new(1, -52, 0.5, -11)
-    ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or Color3.fromRGB(18, 24, 38)
+    ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or TOGGLE_OFF_BG
     ToggleButton.BorderSizePixel = 0
     ToggleButton.Text = ""
     ToggleButton.AutoButtonColor = false
     ToggleButton.Parent = Container
     local tgCorner = Instance.new("UICorner") tgCorner.CornerRadius = UDim.new(1, 0) tgCorner.Parent = ToggleButton
-    local tgStroke = Instance.new("UIStroke") tgStroke.Color = Enabled and Theme.Accent or Theme.Outline tgStroke.Thickness = 1 tgStroke.Transparency = Enabled and 0.3 or 0.6 tgStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border tgStroke.Parent = ToggleButton
-    RegisterThemedObject(tgStroke, "Color", "Outline")
+    local tgStroke = Instance.new("UIStroke") tgStroke.Color = Enabled and Theme.Accent or TOGGLE_OFF_STROKE tgStroke.Thickness = 1 tgStroke.Transparency = Enabled and 0.2 or 0.25 tgStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border tgStroke.Parent = ToggleButton
     local Indicator = Instance.new("Frame")
     Indicator.Size = UDim2.new(0, 16, 0, 16)
     Indicator.Position = Enabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-    Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Indicator.BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
     Indicator.BorderSizePixel = 0
     Indicator.Parent = ToggleButton
     local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
     local function UpdateToggle()
         TweenService:Create(ToggleButton, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            BackgroundColor3 = Enabled and Theme.Accent or Color3.fromRGB(18, 24, 38)
+            BackgroundColor3 = Enabled and Theme.Accent or TOGGLE_OFF_BG
         }):Play()
         TweenService:Create(tgStroke, TweenInfo.new(0.2), {
-            Color = Enabled and Theme.Accent or Theme.Outline,
-            Transparency = Enabled and 0.3 or 0.6
+            Color = Enabled and Theme.Accent or TOGGLE_OFF_STROKE,
+            Transparency = Enabled and 0.2 or 0.25
         }):Play()
         TweenService:Create(Indicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Position = Enabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+            Position = Enabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
+            BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
+        }):Play()
+        TweenService:Create(inStroke, TweenInfo.new(0.2), {
+            Color = Enabled and Theme.Accent or Theme.Outline,
+            Transparency = Enabled and 0.4 or 0.6
+        }):Play()
+        TweenService:Create(Input, TweenInfo.new(0.2), {
+            TextColor3 = Enabled and Theme.Accent or Theme.Text
         }):Play()
     end
     table.insert(RegisteredToggles, {
         UpdateColor = function()
-            ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or Color3.fromRGB(18, 24, 38)
-            tgStroke.Color = Enabled and Theme.Accent or Theme.Outline
+            ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or TOGGLE_OFF_BG
+            tgStroke.Color = Enabled and Theme.Accent or TOGGLE_OFF_STROKE
+            tgStroke.Transparency = Enabled and 0.2 or 0.25
             cStroke.Color = Theme.Outline
-            inStroke.Color = Theme.Accent
+            inStroke.Color = Enabled and Theme.Accent or Theme.Outline
+            Input.TextColor3 = Enabled and Theme.Accent or Theme.Text
+            Indicator.BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
         end
     })
     local Controller = {
@@ -517,6 +545,13 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
         else
             Input.Text = tostring(DefaultValue)
         end
+        TweenService:Create(inStroke, TweenInfo.new(0.15), {
+            Color = Enabled and Theme.Accent or Theme.Outline,
+            Transparency = Enabled and 0.4 or 0.6
+        }):Play()
+        TweenService:Create(Input, TweenInfo.new(0.15), {
+            TextColor3 = Enabled and Theme.Accent or Theme.Text
+        }):Play()
     end)
     UpdateToggle()
     if Enabled and CallbackToggle then
@@ -540,13 +575,23 @@ getgenv().CreateSlider = function(Name, Page, MinVal, MaxVal, DefaultVal, Suffix
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, -4, 0, 46)
     Container.BackgroundColor3 = Theme.Element
-    Container.BackgroundTransparency = 0.45
+    Container.BackgroundTransparency = 0
     Container.BorderSizePixel = 0
     Container.Parent = parentTarget
     local cCorner = Instance.new("UICorner") cCorner.CornerRadius = UDim.new(0, 8) cCorner.Parent = Container
-    local cStroke = Instance.new("UIStroke") cStroke.Color = Theme.Outline cStroke.Thickness = 1 cStroke.Transparency = 0.75 cStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cStroke.Parent = Container
+    local cStroke = Instance.new("UIStroke") cStroke.Color = Theme.Outline cStroke.Thickness = 1 cStroke.Transparency = 0.35 cStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cStroke.Parent = Container
     RegisterThemedObject(Container, "BackgroundColor3", "Element")
     RegisterThemedObject(cStroke, "Color", "Outline")
+    Container.MouseEnter:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Container, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Hover }):Play()
+        TweenService:Create(cStroke, TweenInfo.new(0.15), { Transparency = 0.1 }):Play()
+    end)
+    Container.MouseLeave:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Container, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Element }):Play()
+        TweenService:Create(cStroke, TweenInfo.new(0.15), { Transparency = 0.35 }):Play()
+    end)
 
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(1, -76, 0, 20)
@@ -564,8 +609,8 @@ getgenv().CreateSlider = function(Name, Page, MinVal, MaxVal, DefaultVal, Suffix
     local ValLabel = Instance.new("TextLabel")
     ValLabel.Size = UDim2.new(0, 60, 0, 18)
     ValLabel.Position = UDim2.new(1, -70, 0, 5)
-    ValLabel.BackgroundColor3 = Color3.fromRGB(12, 18, 30)
-    ValLabel.BackgroundTransparency = 0.2
+    ValLabel.BackgroundColor3 = Color3.fromRGB(12, 17, 26)
+    ValLabel.BackgroundTransparency = 0
     ValLabel.Text = tostring(curVal) .. unitSuffix
     ValLabel.TextColor3 = Theme.Accent
     ValLabel.TextSize = 11
@@ -573,7 +618,9 @@ getgenv().CreateSlider = function(Name, Page, MinVal, MaxVal, DefaultVal, Suffix
     ValLabel.TextXAlignment = Enum.TextXAlignment.Center
     ValLabel.Parent = Container
     local vCorner = Instance.new("UICorner") vCorner.CornerRadius = UDim.new(0, 4) vCorner.Parent = ValLabel
+    local vStroke = Instance.new("UIStroke") vStroke.Color = Theme.Outline vStroke.Thickness = 1 vStroke.Transparency = 0.5 vStroke.Parent = ValLabel
     RegisterThemedObject(ValLabel, "TextColor3", "Accent")
+    RegisterThemedObject(vStroke, "Color", "Outline")
 
     local Track = Instance.new("TextButton")
     Track.Size = UDim2.new(1, -24, 0, 14)
@@ -587,7 +634,7 @@ getgenv().CreateSlider = function(Name, Page, MinVal, MaxVal, DefaultVal, Suffix
     local Bar = Instance.new("Frame")
     Bar.Size = UDim2.new(1, 0, 0, 5)
     Bar.Position = UDim2.new(0, 0, 0.5, -2)
-    Bar.BackgroundColor3 = Color3.fromRGB(14, 20, 32)
+    Bar.BackgroundColor3 = Color3.fromRGB(26, 34, 50)
     Bar.BorderSizePixel = 0
     Bar.Parent = Track
     local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(1, 0) bCorner.Parent = Bar
@@ -694,13 +741,23 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, -4, 0, 48)
     Container.BackgroundColor3 = Theme.Element
-    Container.BackgroundTransparency = 0.45
+    Container.BackgroundTransparency = 0
     Container.BorderSizePixel = 0
     Container.Parent = parentTarget
     local cCorner = Instance.new("UICorner") cCorner.CornerRadius = UDim.new(0, 8) cCorner.Parent = Container
-    local cStroke = Instance.new("UIStroke") cStroke.Color = Theme.Outline cStroke.Thickness = 1 cStroke.Transparency = 0.75 cStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cStroke.Parent = Container
+    local cStroke = Instance.new("UIStroke") cStroke.Color = Theme.Outline cStroke.Thickness = 1 cStroke.Transparency = 0.35 cStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cStroke.Parent = Container
     RegisterThemedObject(Container, "BackgroundColor3", "Element")
     RegisterThemedObject(cStroke, "Color", "Outline")
+    Container.MouseEnter:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Container, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Hover }):Play()
+        TweenService:Create(cStroke, TweenInfo.new(0.15), { Transparency = 0.1 }):Play()
+    end)
+    Container.MouseLeave:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Container, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Element }):Play()
+        TweenService:Create(cStroke, TweenInfo.new(0.15), { Transparency = 0.35 }):Play()
+    end)
 
     local risky = IsFeatureRisky(Name)
     local Label = Instance.new("TextLabel")
@@ -719,8 +776,8 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
     local ValLabel = Instance.new("TextLabel")
     ValLabel.Size = UDim2.new(0, 50, 0, 18)
     ValLabel.Position = UDim2.new(1, -108, 0, 6)
-    ValLabel.BackgroundColor3 = Color3.fromRGB(12, 18, 30)
-    ValLabel.BackgroundTransparency = 0.2
+    ValLabel.BackgroundColor3 = Color3.fromRGB(12, 17, 26)
+    ValLabel.BackgroundTransparency = 0
     ValLabel.Text = tostring(curVal) .. unitSuffix
     ValLabel.TextColor3 = Theme.Accent
     ValLabel.TextSize = 11
@@ -728,7 +785,9 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
     ValLabel.TextXAlignment = Enum.TextXAlignment.Center
     ValLabel.Parent = Container
     local vCorner = Instance.new("UICorner") vCorner.CornerRadius = UDim.new(0, 4) vCorner.Parent = ValLabel
+    local vStroke = Instance.new("UIStroke") vStroke.Color = Theme.Outline vStroke.Thickness = 1 vStroke.Transparency = 0.5 vStroke.Parent = ValLabel
     RegisterThemedObject(ValLabel, "TextColor3", "Accent")
+    RegisterThemedObject(vStroke, "Color", "Outline")
 
     local initialState = DefaultToggle
     if SyncKey and Settings[SyncKey] ~= nil then
@@ -738,18 +797,17 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
     local ToggleButton = Instance.new("TextButton")
     ToggleButton.Size = UDim2.new(0, 42, 0, 22)
     ToggleButton.Position = UDim2.new(1, -52, 0, 4)
-    ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or Color3.fromRGB(18, 24, 38)
+    ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or TOGGLE_OFF_BG
     ToggleButton.BorderSizePixel = 0
     ToggleButton.Text = ""
     ToggleButton.AutoButtonColor = false
     ToggleButton.Parent = Container
     local tgCorner = Instance.new("UICorner") tgCorner.CornerRadius = UDim.new(1, 0) tgCorner.Parent = ToggleButton
-    local tgStroke = Instance.new("UIStroke") tgStroke.Color = Enabled and Theme.Accent or Theme.Outline tgStroke.Thickness = 1 tgStroke.Transparency = Enabled and 0.3 or 0.6 tgStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border tgStroke.Parent = ToggleButton
-    RegisterThemedObject(tgStroke, "Color", "Outline")
+    local tgStroke = Instance.new("UIStroke") tgStroke.Color = Enabled and Theme.Accent or TOGGLE_OFF_STROKE tgStroke.Thickness = 1 tgStroke.Transparency = Enabled and 0.2 or 0.25 tgStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border tgStroke.Parent = ToggleButton
     local Indicator = Instance.new("Frame")
     Indicator.Size = UDim2.new(0, 16, 0, 16)
     Indicator.Position = Enabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-    Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Indicator.BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
     Indicator.BorderSizePixel = 0
     Indicator.Parent = ToggleButton
     local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
@@ -766,13 +824,10 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
     local Bar = Instance.new("Frame")
     Bar.Size = UDim2.new(1, 0, 0, 5)
     Bar.Position = UDim2.new(0, 0, 0.5, -2)
-    Bar.BackgroundColor3 = Color3.fromRGB(12, 17, 28)
+    Bar.BackgroundColor3 = Color3.fromRGB(26, 34, 50)
     Bar.BorderSizePixel = 0
     Bar.Parent = Track
     local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(1, 0) bCorner.Parent = Bar
-    Bar.Parent = Track
-    local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(1, 0) bCorner.Parent = Bar
-    RegisterThemedObject(Bar, "BackgroundColor3", "Panel")
 
     local initialRel = math.clamp((curVal - minV) / (maxV - minV), 0, 1)
     local Fill = Instance.new("Frame")
@@ -796,11 +851,16 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
     RegisterThemedObject(kStroke, "Color", "Accent")
 
     local function UpdateToggle()
-        TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
-            BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
+        TweenService:Create(ToggleButton, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Enabled and Theme.Accent or TOGGLE_OFF_BG
         }):Play()
-        TweenService:Create(Indicator, TweenInfo.new(0.2), {
-            Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+        TweenService:Create(tgStroke, TweenInfo.new(0.2), {
+            Color = Enabled and Theme.Accent or TOGGLE_OFF_STROKE,
+            Transparency = Enabled and 0.2 or 0.25
+        }):Play()
+        TweenService:Create(Indicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Position = Enabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
+            BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
         }):Play()
     end
     local function applyValueVisual(val)
@@ -814,12 +874,14 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
 
     table.insert(RegisteredToggles, {
         UpdateColor = function()
-            ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
-            tgStroke.Color = Theme.Outline
+            ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or TOGGLE_OFF_BG
+            tgStroke.Color = Enabled and Theme.Accent or TOGGLE_OFF_STROKE
+            tgStroke.Transparency = Enabled and 0.2 or 0.25
             cStroke.Color = Theme.Outline
             Fill.BackgroundColor3 = Theme.Accent
             ValLabel.TextColor3 = Theme.Accent
             kStroke.Color = Theme.Accent
+            Indicator.BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
         end
     })
 
@@ -902,13 +964,23 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, -4, 0, 38)
     Container.BackgroundColor3 = Theme.Element
-    Container.BackgroundTransparency = 0.45
+    Container.BackgroundTransparency = 0
     Container.BorderSizePixel = 0
     Container.Parent = parentTarget
     local cCorner = Instance.new("UICorner") cCorner.CornerRadius = UDim.new(0, 8) cCorner.Parent = Container
-    local cStroke = Instance.new("UIStroke") cStroke.Color = Theme.Outline cStroke.Thickness = 1 cStroke.Transparency = 0.75 cStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cStroke.Parent = Container
+    local cStroke = Instance.new("UIStroke") cStroke.Color = Theme.Outline cStroke.Thickness = 1 cStroke.Transparency = 0.35 cStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cStroke.Parent = Container
     RegisterThemedObject(Container, "BackgroundColor3", "Element")
     RegisterThemedObject(cStroke, "Color", "Outline")
+    Container.MouseEnter:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Container, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Hover }):Play()
+        TweenService:Create(cStroke, TweenInfo.new(0.15), { Transparency = 0.1 }):Play()
+    end)
+    Container.MouseLeave:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Container, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Element }):Play()
+        TweenService:Create(cStroke, TweenInfo.new(0.15), { Transparency = 0.35 }):Play()
+    end)
     local risky = IsFeatureRisky(Name)
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(1, -170, 1, 0)
@@ -922,20 +994,6 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     Label.TextTruncate = Enum.TextTruncate.AtEnd
     Label.Parent = Container
     if not risky then RegisterThemedObject(Label, "TextColor3", "Text") else RegisterThemedObject(Label, "TextColor3", "Risky") end
-    local ChoiceBtn = Instance.new("TextButton")
-    ChoiceBtn.Size = UDim2.new(0, 95, 0, 22)
-    ChoiceBtn.Position = UDim2.new(1, -154, 0.5, -11)
-    ChoiceBtn.BackgroundColor3 = Color3.fromRGB(12, 18, 30)
-    ChoiceBtn.BorderSizePixel = 0
-    ChoiceBtn.Text = tostring(DefaultChoice)
-    ChoiceBtn.TextColor3 = Theme.Accent
-    ChoiceBtn.Font = Enum.Font.GothamBold
-    ChoiceBtn.TextSize = 11
-    ChoiceBtn.Parent = Container
-    local cbCorner = Instance.new("UICorner") cbCorner.CornerRadius = UDim.new(0, 6) cbCorner.Parent = ChoiceBtn
-    local cbStroke = Instance.new("UIStroke") cbStroke.Color = Theme.Outline cbStroke.Thickness = 1 cbStroke.Transparency = 0.5 cbStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cbStroke.Parent = ChoiceBtn
-    RegisterThemedObject(ChoiceBtn, "TextColor3", "Accent")
-    RegisterThemedObject(cbStroke, "Color", "Outline")
     local initialToggle = DefaultToggle
     if SyncKey and Settings[SyncKey] ~= nil then
         initialToggle = Settings[SyncKey]
@@ -947,8 +1005,19 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     elseif SyncKey and Settings[SyncKey .. "Choice"] ~= nil then
         initialChoice = Settings[SyncKey .. "Choice"]
     end
+    local ChoiceBtn = Instance.new("TextButton")
+    ChoiceBtn.Size = UDim2.new(0, 95, 0, 22)
+    ChoiceBtn.Position = UDim2.new(1, -154, 0.5, -11)
+    ChoiceBtn.BackgroundColor3 = Color3.fromRGB(12, 17, 26)
+    ChoiceBtn.BorderSizePixel = 0
     ChoiceBtn.Text = tostring(initialChoice) .. " v"
+    ChoiceBtn.TextColor3 = Enabled and Theme.Accent or Theme.Text
+    ChoiceBtn.Font = Enum.Font.GothamBold
+    ChoiceBtn.TextSize = 11
     ChoiceBtn.TextTruncate = Enum.TextTruncate.AtEnd
+    ChoiceBtn.Parent = Container
+    local cbCorner = Instance.new("UICorner") cbCorner.CornerRadius = UDim.new(0, 6) cbCorner.Parent = ChoiceBtn
+    local cbStroke = Instance.new("UIStroke") cbStroke.Color = Enabled and Theme.Accent or Theme.Outline cbStroke.Thickness = 1 cbStroke.Transparency = 0.5 cbStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cbStroke.Parent = ChoiceBtn
     ChoiceBtn.MouseButton1Click:Connect(function()
         if getgenv().Destroyed then return end
         if getgenv().ShowToxDropdownOverlay then
@@ -966,57 +1035,49 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     local ToggleButton = Instance.new("TextButton")
     ToggleButton.Size = UDim2.new(0, 42, 0, 22)
     ToggleButton.Position = UDim2.new(1, -52, 0.5, -11)
-    ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or Color3.fromRGB(18, 24, 38)
+    ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or TOGGLE_OFF_BG
     ToggleButton.BorderSizePixel = 0
     ToggleButton.Text = ""
     ToggleButton.AutoButtonColor = false
     ToggleButton.Parent = Container
     local tgCorner = Instance.new("UICorner") tgCorner.CornerRadius = UDim.new(1, 0) tgCorner.Parent = ToggleButton
-    local tgStroke = Instance.new("UIStroke") tgStroke.Color = Enabled and Theme.Accent or Theme.Outline tgStroke.Thickness = 1 tgStroke.Transparency = Enabled and 0.3 or 0.6 tgStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border tgStroke.Parent = ToggleButton
-    RegisterThemedObject(tgStroke, "Color", "Outline")
+    local tgStroke = Instance.new("UIStroke") tgStroke.Color = Enabled and Theme.Accent or TOGGLE_OFF_STROKE tgStroke.Thickness = 1 tgStroke.Transparency = Enabled and 0.2 or 0.25 tgStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border tgStroke.Parent = ToggleButton
     local Indicator = Instance.new("Frame")
     Indicator.Size = UDim2.new(0, 16, 0, 16)
     Indicator.Position = Enabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-    Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Indicator.BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
     Indicator.BorderSizePixel = 0
     Indicator.Parent = ToggleButton
     local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
     local function UpdateToggle()
         TweenService:Create(ToggleButton, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            BackgroundColor3 = Enabled and Theme.Accent or Color3.fromRGB(18, 24, 38)
+            BackgroundColor3 = Enabled and Theme.Accent or TOGGLE_OFF_BG
         }):Play()
         TweenService:Create(tgStroke, TweenInfo.new(0.2), {
-            Color = Enabled and Theme.Accent or Theme.Outline,
-            Transparency = Enabled and 0.3 or 0.6
+            Color = Enabled and Theme.Accent or TOGGLE_OFF_STROKE,
+            Transparency = Enabled and 0.2 or 0.25
         }):Play()
         TweenService:Create(Indicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Position = Enabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+            Position = Enabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
+            BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
+        }):Play()
+        TweenService:Create(ChoiceBtn, TweenInfo.new(0.2), {
+            TextColor3 = Enabled and Theme.Accent or Theme.Text
+        }):Play()
+        TweenService:Create(cbStroke, TweenInfo.new(0.2), {
+            Color = Enabled and Theme.Accent or Theme.Outline
         }):Play()
     end
-    RegisterThemedObject(tgStroke, "Color", "Outline")
-    local Indicator = Instance.new("Frame")
-    Indicator.Size = UDim2.new(0, 14, 0, 14)
-    Indicator.Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
-    Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Indicator.BorderSizePixel = 0
-    Indicator.Parent = ToggleButton
-    local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
-    local function UpdateToggle()
-        TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
-            BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
-        }):Play()
-        TweenService:Create(Indicator, TweenInfo.new(0.2), {
-            Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
-        }):Play()
-    end
+
     table.insert(RegisteredToggles, {
         UpdateColor = function()
-            ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
-            tgStroke.Color = Theme.Outline
+            ToggleButton.BackgroundColor3 = Enabled and Theme.Accent or TOGGLE_OFF_BG
+            tgStroke.Color = Enabled and Theme.Accent or TOGGLE_OFF_STROKE
+            tgStroke.Transparency = Enabled and 0.2 or 0.25
             cStroke.Color = Theme.Outline
-            cbStroke.Color = Theme.Outline
-            ChoiceBtn.TextColor3 = Theme.Accent
-            ChoiceBtn.BackgroundColor3 = Theme.Panel
+            cbStroke.Color = Enabled and Theme.Accent or Theme.Outline
+            ChoiceBtn.TextColor3 = Enabled and Theme.Accent or Theme.Text
+            Indicator.BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
         end
     })
     local Controller = {
@@ -1252,14 +1313,24 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback
     local Box = Instance.new("Frame")
     Box.Size = UDim2.new(1, -4, 0, 38)
     Box.BackgroundColor3 = Theme.Element
-    Box.BackgroundTransparency = 0.45
+    Box.BackgroundTransparency = 0
     Box.BorderSizePixel = 0
     Box.ClipsDescendants = true
     Box.Parent = parentTarget
     local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 8) bCorner.Parent = Box
-    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.Transparency = 0.75 bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border bStroke.Parent = Box
+    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.Transparency = 0.35 bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border bStroke.Parent = Box
     RegisterThemedObject(Box, "BackgroundColor3", "Element")
     RegisterThemedObject(bStroke, "Color", "Outline")
+    Box.MouseEnter:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Box, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Hover }):Play()
+        TweenService:Create(bStroke, TweenInfo.new(0.15), { Transparency = 0.1 }):Play()
+    end)
+    Box.MouseLeave:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Box, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Element }):Play()
+        TweenService:Create(bStroke, TweenInfo.new(0.15), { Transparency = 0.35 }):Play()
+    end)
     local TopRow = Instance.new("Frame")
     TopRow.Size = UDim2.new(1, 0, 0, 38)
     TopRow.BackgroundTransparency = 1
@@ -1280,7 +1351,7 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback
     local Button = Instance.new("TextButton")
     Button.Size = UDim2.new(0, 126, 0, 24)
     Button.Position = UDim2.new(1, -134, 0.5, -12)
-    Button.BackgroundColor3 = Color3.fromRGB(12, 18, 30)
+    Button.BackgroundColor3 = Color3.fromRGB(12, 17, 26)
     Button.BorderSizePixel = 0
     Button.Text = tostring(DefaultOption) .. "  v"
     Button.TextColor3 = Theme.Accent
@@ -1316,7 +1387,7 @@ getgenv().CreateButton = function(Name, Page, Callback)
     local Button = Instance.new("TextButton")
     Button.Size = UDim2.new(1, -4, 0, 36)
     Button.BackgroundColor3 = Theme.Element
-    Button.BackgroundTransparency = 0.45
+    Button.BackgroundTransparency = 0
     Button.BorderSizePixel = 0
     Button.Text = Name
     Button.TextColor3 = Theme.Text
@@ -1324,19 +1395,19 @@ getgenv().CreateButton = function(Name, Page, Callback)
     Button.Font = Enum.Font.GothamMedium
     Button.Parent = parentTarget
     local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 8) Corner.Parent = Button
-    local Stroke = Instance.new("UIStroke") Stroke.Color = Theme.Outline Stroke.Thickness = 1 Stroke.Transparency = 0.75 Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border Stroke.Parent = Button
+    local Stroke = Instance.new("UIStroke") Stroke.Color = Theme.Outline Stroke.Thickness = 1 Stroke.Transparency = 0.35 Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border Stroke.Parent = Button
     RegisterThemedObject(Button, "BackgroundColor3", "Element")
     RegisterThemedObject(Button, "TextColor3", "Text")
     RegisterThemedObject(Stroke, "Color", "Outline")
     Button.MouseEnter:Connect(function()
         if getgenv().Destroyed then return end
-        TweenService:Create(Button, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Hover, BackgroundTransparency = 0.2 }):Play()
-        TweenService:Create(Stroke, TweenInfo.new(0.15), { Color = Theme.Accent, Transparency = 0.4 }):Play()
+        TweenService:Create(Button, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Hover }):Play()
+        TweenService:Create(Stroke, TweenInfo.new(0.15), { Color = Theme.Accent, Transparency = 0.1 }):Play()
     end)
     Button.MouseLeave:Connect(function()
         if getgenv().Destroyed then return end
-        TweenService:Create(Button, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Element, BackgroundTransparency = 0.45 }):Play()
-        TweenService:Create(Stroke, TweenInfo.new(0.15), { Color = Theme.Outline, Transparency = 0.75 }):Play()
+        TweenService:Create(Button, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Element }):Play()
+        TweenService:Create(Stroke, TweenInfo.new(0.15), { Color = Theme.Outline, Transparency = 0.35 }):Play()
     end)
     Button.MouseButton1Click:Connect(function()
         if getgenv().Destroyed  then return end
@@ -1352,7 +1423,7 @@ getgenv().CreateConfirmButton = function(Name, Page, Callback)
     local Button = Instance.new("TextButton")
     Button.Size = UDim2.new(1, -4, 0, 36)
     Button.BackgroundColor3 = Theme.Element
-    Button.BackgroundTransparency = 0.45
+    Button.BackgroundTransparency = 0
     Button.BorderSizePixel = 0
     Button.Text = Name
     Button.TextColor3 = Theme.Text
@@ -1360,20 +1431,20 @@ getgenv().CreateConfirmButton = function(Name, Page, Callback)
     Button.Font = Enum.Font.GothamMedium
     Button.Parent = parentTarget
     local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 8) Corner.Parent = Button
-    local Stroke = Instance.new("UIStroke") Stroke.Color = Theme.Outline Stroke.Thickness = 1 Stroke.Transparency = 0.75 Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border Stroke.Parent = Button
+    local Stroke = Instance.new("UIStroke") Stroke.Color = Theme.Outline Stroke.Thickness = 1 Stroke.Transparency = 0.35 Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border Stroke.Parent = Button
     RegisterThemedObject(Button, "BackgroundColor3", "Element")
     RegisterThemedObject(Button, "TextColor3", "Text")
     RegisterThemedObject(Stroke, "Color", "Outline")
     local Confirming = false
     Button.MouseEnter:Connect(function()
         if getgenv().Destroyed or Confirming then return end
-        TweenService:Create(Button, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Hover, BackgroundTransparency = 0.2 }):Play()
-        TweenService:Create(Stroke, TweenInfo.new(0.15), { Color = Theme.Accent, Transparency = 0.4 }):Play()
+        TweenService:Create(Button, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Hover }):Play()
+        TweenService:Create(Stroke, TweenInfo.new(0.15), { Color = Theme.Accent, Transparency = 0.1 }):Play()
     end)
     Button.MouseLeave:Connect(function()
         if getgenv().Destroyed or Confirming then return end
-        TweenService:Create(Button, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Element, BackgroundTransparency = 0.45 }):Play()
-        TweenService:Create(Stroke, TweenInfo.new(0.15), { Color = Theme.Outline, Transparency = 0.75 }):Play()
+        TweenService:Create(Button, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Element }):Play()
+        TweenService:Create(Stroke, TweenInfo.new(0.15), { Color = Theme.Outline, Transparency = 0.35 }):Play()
     end)
     Button.MouseButton1Click:Connect(function()
         if getgenv().Destroyed  then return end
@@ -1481,14 +1552,25 @@ end
 getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, KeyCallback, ToggleCallback, SyncKey)
     local parentTarget = ResolveElementParent(Page)
     local Box = Instance.new("Frame")
-    Box.Size = UDim2.new(1, -4, 0, 36)
+    Box.Size = UDim2.new(1, -4, 0, 38)
     Box.BackgroundColor3 = Theme.Element
+    Box.BackgroundTransparency = 0
     Box.BorderSizePixel = 0
     Box.Parent = parentTarget
-    local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 6) bCorner.Parent = Box
-    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border bStroke.Parent = Box
+    local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 8) bCorner.Parent = Box
+    local bStroke = Instance.new("UIStroke") bStroke.Color = Theme.Outline bStroke.Thickness = 1 bStroke.Transparency = 0.35 bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border bStroke.Parent = Box
     RegisterThemedObject(Box, "BackgroundColor3", "Element")
     RegisterThemedObject(bStroke, "Color", "Outline")
+    Box.MouseEnter:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Box, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Hover }):Play()
+        TweenService:Create(bStroke, TweenInfo.new(0.15), { Transparency = 0.1 }):Play()
+    end)
+    Box.MouseLeave:Connect(function()
+        if getgenv().Destroyed then return end
+        TweenService:Create(Box, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Element }):Play()
+        TweenService:Create(bStroke, TweenInfo.new(0.15), { Transparency = 0.35 }):Play()
+    end)
     local risky = IsFeatureRisky(Name)
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(1, -150, 1, 0)
@@ -1504,7 +1586,7 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     local KeyButton = Instance.new("TextButton")
     KeyButton.Size = UDim2.new(0, 60, 0, 22)
     KeyButton.Position = UDim2.new(1, -118, 0.5, -11)
-    KeyButton.BackgroundColor3 = Theme.Panel
+    KeyButton.BackgroundColor3 = Color3.fromRGB(12, 17, 26)
     KeyButton.BorderSizePixel = 0
     local defaultKeyText = "NONE"
     if typeof(DefaultKey) == "EnumItem" or (type(DefaultKey) == "table" and DefaultKey.Name) then
@@ -1518,8 +1600,7 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     KeyButton.Font = Enum.Font.GothamBold
     KeyButton.Parent = Box
     local kbCorner = Instance.new("UICorner") kbCorner.CornerRadius = UDim.new(0, 4) kbCorner.Parent = KeyButton
-    local kbStroke = Instance.new("UIStroke") kbStroke.Color = Theme.Outline kbStroke.Thickness = 1 kbStroke.Parent = KeyButton
-    RegisterThemedObject(KeyButton, "BackgroundColor3", "Panel")
+    local kbStroke = Instance.new("UIStroke") kbStroke.Color = Theme.Outline kbStroke.Thickness = 1 kbStroke.Transparency = 0.5 kbStroke.Parent = KeyButton
     RegisterThemedObject(KeyButton, "TextColor3", "DimText")
     RegisterThemedObject(kbStroke, "Color", "Outline")
     local initialToggle = DefaultToggle
@@ -1528,39 +1609,45 @@ getgenv().CreateKeybindToggle = function(Name, Page, DefaultKey, DefaultToggle, 
     end
     local Enabled = (initialToggle == true)
     local Toggle = Instance.new("TextButton")
-    Toggle.Size = UDim2.new(0, 38, 0, 20)
-    Toggle.Position = UDim2.new(1, -48, 0.5, -10)
-    Toggle.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
+    Toggle.Size = UDim2.new(0, 42, 0, 22)
+    Toggle.Position = UDim2.new(1, -52, 0.5, -11)
+    Toggle.BackgroundColor3 = Enabled and Theme.Accent or TOGGLE_OFF_BG
     Toggle.BorderSizePixel = 0
     Toggle.Text = ""
     Toggle.AutoButtonColor = false
     Toggle.Parent = Box
     local tgCorner = Instance.new("UICorner") tgCorner.CornerRadius = UDim.new(1, 0) tgCorner.Parent = Toggle
-    local tgStroke = Instance.new("UIStroke") tgStroke.Color = Theme.Outline tgStroke.Thickness = 1 tgStroke.Parent = Toggle
-    RegisterThemedObject(tgStroke, "Color", "Outline")
+    local tgStroke = Instance.new("UIStroke") tgStroke.Color = Enabled and Theme.Accent or TOGGLE_OFF_STROKE tgStroke.Thickness = 1 tgStroke.Transparency = Enabled and 0.2 or 0.25 tgStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border tgStroke.Parent = Toggle
     local Indicator = Instance.new("Frame")
-    Indicator.Size = UDim2.new(0, 14, 0, 14)
-    Indicator.Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
-    Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Indicator.Size = UDim2.new(0, 16, 0, 16)
+    Indicator.Position = Enabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+    Indicator.BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
     Indicator.BorderSizePixel = 0
     Indicator.Parent = Toggle
     local indCorner = Instance.new("UICorner") indCorner.CornerRadius = UDim.new(1, 0) indCorner.Parent = Indicator
     local Binding = false
     local CurrentKey = DefaultKey
     local function UpdateToggle()
-        TweenService:Create(Toggle, TweenInfo.new(0.2), {
-            BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
+        TweenService:Create(Toggle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Enabled and Theme.Accent or TOGGLE_OFF_BG
         }):Play()
-        TweenService:Create(Indicator, TweenInfo.new(0.2), {
-            Position = Enabled and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+        TweenService:Create(tgStroke, TweenInfo.new(0.2), {
+            Color = Enabled and Theme.Accent or TOGGLE_OFF_STROKE,
+            Transparency = Enabled and 0.2 or 0.25
+        }):Play()
+        TweenService:Create(Indicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Position = Enabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
+            BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
         }):Play()
     end
     table.insert(RegisteredToggles, {
         UpdateColor = function()
-            Toggle.BackgroundColor3 = Enabled and Theme.Accent or Theme.Panel
-            tgStroke.Color = Theme.Outline
+            Toggle.BackgroundColor3 = Enabled and Theme.Accent or TOGGLE_OFF_BG
+            tgStroke.Color = Enabled and Theme.Accent or TOGGLE_OFF_STROKE
+            tgStroke.Transparency = Enabled and 0.2 or 0.25
             bStroke.Color = Theme.Outline
             kbStroke.Color = Theme.Outline
+            Indicator.BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
         end
     })
     local Controller = {

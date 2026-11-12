@@ -66,7 +66,7 @@ local function InitializeHomePage()
     subLbl.Size = UDim2.new(1, -78, 0, 18)
     subLbl.Position = UDim2.new(0, 72, 0, 36)
     subLbl.BackgroundTransparency = 1
-    subLbl.Text = "ToxHud v2.0 Cyber • Assinatura Vitalícia (Lifetime)"
+    subLbl.Text = "ToxHud 1.0.0 • Lifetime"
     subLbl.TextColor3 = Theme.Accent
     subLbl.TextSize = 11
     subLbl.Font = Enum.Font.GothamMedium

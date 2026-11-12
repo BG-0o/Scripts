@@ -663,6 +663,7 @@ local function BuildCombatUI()
     local CreateToggle = env.CreateToggle or getgenv().CreateToggle
     local CreateToggleWithValue = env.CreateToggleWithValue or getgenv().CreateToggleWithValue
     local CreateToggleWithChoice = env.CreateToggleWithChoice or getgenv().CreateToggleWithChoice
+    local CreateToggleWithSlider = env.CreateToggleWithSlider or getgenv().CreateToggleWithSlider
     local CreateDropdown = env.CreateDropdown or getgenv().CreateDropdown
     local CreateKeybindToggle = env.CreateKeybindToggle or getgenv().CreateKeybindToggle
 

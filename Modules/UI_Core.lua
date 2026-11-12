@@ -52,15 +52,21 @@ if typeof(Settings.Theme) ~= "table" then
     Settings.Theme = {}
 end
 
-for key, val in pairs(DefaultTheme) do
-    if Settings.Theme[key] == nil then
+if Settings.CustomAccentActive ~= true then
+    for key, val in pairs(DefaultTheme) do
         Settings.Theme[key] = val
+    end
+else
+    for key, val in pairs(DefaultTheme) do
+        if Settings.Theme[key] == nil then
+            Settings.Theme[key] = val
+        end
     end
 end
 
 if Settings.CustomAccentActive ~= true and env.MAIN_COLOR and typeof(env.MAIN_COLOR) == "Color3" then
-    if Settings.Theme.Accent == DefaultTheme.Accent or Settings.Theme.Accent == Color3.fromRGB(9, 0, 136) then
-        Settings.Theme.Accent = env.MAIN_COLOR
+    if Settings.Theme.Accent == Color3.fromRGB(9, 0, 136) then
+        Settings.Theme.Accent = DefaultTheme.Accent
     end
 end
 
