@@ -1653,7 +1653,8 @@ local function InitToxControlGui()
             0
         )
 
-    local uiTheme = env.Theme
+    local env = getgenv()
+    local uiTheme = env and env.Theme
     controlGui.BackgroundColor3 =
         (uiTheme and uiTheme.Panel)
         or Color3.fromRGB(16, 16, 26)
