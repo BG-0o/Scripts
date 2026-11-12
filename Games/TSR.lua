@@ -4,7 +4,7 @@ if env.Destroyed then
 end
 
 local ExpectedPlaceId = 72858262610964
-local TSRModuleVersion = "2026-11-12-tsr-v5"
+local TSRModuleVersion = "2026-11-12-tsr-v6"
 if game.PlaceId ~= ExpectedPlaceId then
     return
 end
@@ -1098,10 +1098,13 @@ end
 -- ============================================================================
 -- INITIAL DISCOVERY & UI CONSTRUCTION
 -- ============================================================================
-ScanRemotesSafe(true)
-RefreshEggCatalog()
-RefreshIslandCatalog()
-local rebirthChoices = BuildRebirthChoices()
+pcall(ScanRemotesSafe, true)
+pcall(RefreshEggCatalog)
+pcall(RefreshIslandCatalog)
+local okReb, rebirthChoices = pcall(BuildRebirthChoices)
+if not okReb or type(rebirthChoices) ~= "table" or #rebirthChoices == 0 then
+    rebirthChoices = { "Best available", "1", "5", "15", "50", "250", "1000" }
+end
 
 do
     AddSection("Auto Tap & Farm")

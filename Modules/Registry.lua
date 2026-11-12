@@ -163,7 +163,7 @@ local GameModuleRegistry = {
     [72858262610964] = {
         ShortName = "TSR",
         GameName = "Tap Simulator REBORN",
-        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Games/TSR.lua",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/main/Games/TSR.lua",
         Ready = true
     }
 }

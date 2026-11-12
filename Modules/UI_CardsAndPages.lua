@@ -43,6 +43,12 @@ local function GetCardOrder(cardKey, defaultOrder)
     return defaultOrder
 end
 local function CreateCard(Page, Title, Icon, DefaultOrder, CardKey)
+    if type(Page) == "string" and typeof(Title) == "Instance" then
+        Page, Title = Title, Page
+    end
+    if typeof(Page) ~= "Instance" then
+        return nil
+    end
     CardKey = CardKey or (tostring(Page.Name or "P") .. "_" .. tostring(Title):gsub("%s+", ""))
     DefaultOrder = DefaultOrder or (#Page:GetChildren() + 1)
     local currentOrder = GetCardOrder(CardKey, DefaultOrder)
