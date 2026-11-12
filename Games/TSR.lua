@@ -4,7 +4,7 @@ if env.Destroyed then
 end
 
 local ExpectedPlaceId = 72858262610964
-local TSRModuleVersion = "2026-11-12-tsr-v4"
+local TSRModuleVersion = "2026-11-12-tsr-v5"
 if game.PlaceId ~= ExpectedPlaceId then
     return
 end
@@ -33,6 +33,7 @@ local GamePage = env.GamePage
 local AutoSaveConfiguration = env.AutoSaveConfiguration or function() end
 local CustomNotify = env.CustomNotify or function() end
 
+local CreateSection = env.CreateSection
 local CreateCard = env.CreateCard
 local ClearActivePageCard = env.ClearActivePageCard
 local CreateToggle = env.CreateToggle
@@ -42,6 +43,14 @@ local CreateButton = env.CreateButton
 
 if not GamePage or not CreateToggle or not CreateButton then
     return
+end
+
+local function AddSection(title, icon)
+    if CreateSection then
+        return CreateSection(GamePage, title, icon)
+    elseif CreateCard then
+        return CreateCard(GamePage, title, icon)
+    end
 end
 
 for _, child in ipairs(GamePage:GetChildren()) do
@@ -1095,7 +1104,7 @@ RefreshIslandCatalog()
 local rebirthChoices = BuildRebirthChoices()
 
 do
-    CreateCard("Auto Tap & Farm", GamePage, false)
+    AddSection("Auto Tap & Farm")
     CreateToggle("Auto Tap (Real Network)", GamePage, Settings.TSRAutoTap, function(v)
         Settings.TSRAutoTap = v == true
         AutoSaveConfiguration()
@@ -1126,7 +1135,7 @@ do
 end
 
 do
-    CreateCard("Auto Rebirth", GamePage, false)
+    AddSection("Auto Rebirth")
     CreateDropdown("Rebirth Tier", rebirthChoices, GamePage, Settings.TSRRebirthMode, function(opt)
         Settings.TSRRebirthMode = opt
     end)
@@ -1140,7 +1149,7 @@ do
 end
 
 do
-    CreateCard("Eggs & Auto Hatch", GamePage, false)
+    AddSection("Eggs & Auto Hatch")
     CreateDropdown("Select Egg", TSR.EggOptions, GamePage, Settings.TSREggSelected, function(opt)
         Settings.TSREggSelected = opt
     end)
@@ -1167,7 +1176,7 @@ do
 end
 
 do
-    CreateCard("Pets, Craft & Auto Delete", GamePage, false)
+    AddSection("Pets, Craft & Auto Delete")
     CreateToggle("Auto Equip Best Pets", GamePage, Settings.TSRAutoEquipBest, function(v)
         Settings.TSRAutoEquipBest = v == true
         AutoSaveConfiguration()
@@ -1192,7 +1201,7 @@ do
 end
 
 do
-    CreateCard("Islands & Saved Position", GamePage, false)
+    AddSection("Islands & Saved Position")
     CreateDropdown("Island", TSR.IslandOptions, GamePage, Settings.TSRSelectedIsland, function(opt)
         Settings.TSRSelectedIsland = opt
     end)
@@ -1228,7 +1237,7 @@ do
 end
 
 do
-    CreateCard("Events, Minigames & Claims", GamePage, false)
+    AddSection("Events, Minigames & Claims")
     CreateToggle("Auto Claim Rank & Rewards", GamePage, Settings.TSRAutoClaim, function(v)
         Settings.TSRAutoClaim = v == true
         AutoSaveConfiguration()
@@ -1259,7 +1268,7 @@ do
 end
 
 do
-    CreateCard("Player & Diagnostics", GamePage, false)
+    AddSection("Player & Diagnostics")
     CreateToggle("Infinite Jump", GamePage, Settings.TSRInfiniteJump, function(v)
         Settings.TSRInfiniteJump = v == true
         AutoSaveConfiguration()
