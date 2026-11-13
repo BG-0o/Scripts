@@ -1507,6 +1507,9 @@ getgenv().CreateInputWithTwoButtons = function(Name, Page, DefaultText, Btn1Text
     Input.Font = Enum.Font.Gotham
     Input.ClearTextOnFocus = false
     Input.Parent = Box
+    -- Registered by name so "Select Player" can fill the player boxes (Fling, Teleport...)
+    getgenv().ToxNamedInputs = getgenv().ToxNamedInputs or {}
+    getgenv().ToxNamedInputs[Name] = Input
     local inCorner = Instance.new("UICorner") inCorner.CornerRadius = UDim.new(0, 4) inCorner.Parent = Input
     local inStroke = Instance.new("UIStroke") inStroke.Color = Theme.Outline inStroke.Thickness = 1 inStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border inStroke.Parent = Input
     RegisterThemedObject(Input, "BackgroundColor3", "Panel")

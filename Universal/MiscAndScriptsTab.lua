@@ -283,6 +283,248 @@ CreateInputWithTwoButtons(
     end
 )
 CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
+
+-- ==============================================================================
+-- Shared player lookup (same matching as Fling / Teleport: name or display name)
+-- ==============================================================================
+local function FindPlayerByInput(text)
+    text = string.lower(tostring(text or ""))
+    if text == "" then return nil end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= Player and (string.find(string.lower(p.Name), text, 1, true)
+        or string.find(string.lower(p.DisplayName), text, 1, true)) then
+            return p
+        end
+    end
+    return nil
+end
+
+-- ==============================================================================
+-- SPECTATE: camera follows the chosen player
+-- ==============================================================================
+local SpectateTarget = nil
+local function StopSpectate(silent)
+    SpectateTarget = nil
+    local camera = workspace.CurrentCamera
+    local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
+    if camera and hum then
+        camera.CameraSubject = hum
+    end
+    if not silent then
+        CustomNotify("Spectate stopped", Color3.fromRGB(255, 120, 120))
+    end
+end
+
+CreateInputWithTwoButtons("Spectate", FlingPage, "", "View", "Stop", function(text, mode)
+    if mode ~= "TP" then
+        StopSpectate()
+        return
+    end
+    local target = FindPlayerByInput(text)
+    local hum = target and target.Character and target.Character:FindFirstChildOfClass("Humanoid")
+    if not hum then
+        return CustomNotify("Player not found!", Color3.fromRGB(255, 100, 100))
+    end
+    SpectateTarget = target
+    workspace.CurrentCamera.CameraSubject = hum
+    CustomNotify("Spectating • " .. target.DisplayName, Color3.fromRGB(100, 200, 255))
+end)
+
+AddConnection(game:GetService("RunService").Heartbeat:Connect(function()
+    if not SpectateTarget or env.Destroyed then return end
+    if not SpectateTarget.Parent then
+        StopSpectate(true)
+        return CustomNotify("Spectate stopped • player left", Color3.fromRGB(255, 180, 70))
+    end
+    -- keep following after they respawn
+    local hum = SpectateTarget.Character and SpectateTarget.Character:FindFirstChildOfClass("Humanoid")
+    local camera = workspace.CurrentCamera
+    if hum and camera and camera.CameraSubject ~= hum then
+        camera.CameraSubject = hum
+    end
+end))
+
+-- ==============================================================================
+-- UP PLAYER: goes under the player's feet and rises, lifting them with your head.
+-- Speed (studs/s) and Height (studs) are sliders. Then returns you to where you were.
+-- ==============================================================================
+Settings.UpPlayerSpeed = tonumber(Settings.UpPlayerSpeed) or 30
+Settings.UpPlayerHeight = tonumber(Settings.UpPlayerHeight) or 50
+local UpPlayerGeneration = 0
+
+local function StopUpPlayer()
+    UpPlayerGeneration = UpPlayerGeneration + 1
+end
+
+local function RunUpPlayer(target)
+    local character = Player.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local tRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+    if not root or not humanoid or not tRoot then
+        return CustomNotify("Up Player • player not available", Color3.fromRGB(255, 100, 100))
+    end
+
+    UpPlayerGeneration = UpPlayerGeneration + 1
+    local generation = UpPlayerGeneration
+    local startCF = root.CFrame
+    local speed = math.max(tonumber(Settings.UpPlayerSpeed) or 30, 1)
+    local height = math.max(tonumber(Settings.UpPlayerHeight) or 50, 1)
+    local RunService = game:GetService("RunService")
+
+    -- our root sits so the top of our head touches their feet
+    local UNDER = 5.6
+    local startY = tRoot.Position.Y - UNDER
+    local currentY = startY
+    local topY = startY + height
+    local deadline = os.clock() + height / speed + 6
+
+    CustomNotify("Up Player • " .. target.DisplayName, Color3.fromRGB(100, 255, 160))
+
+    -- make sure we can actually push them
+    local hadNoclip = Settings.Noclip
+    Settings.Noclip = false
+
+    while generation == UpPlayerGeneration and not env.Destroyed and os.clock() < deadline do
+        local dt = RunService.Heartbeat:Wait()
+        if not root.Parent or humanoid.Health <= 0 or not target.Parent then
+            break
+        end
+        tRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+        if not tRoot then
+            break
+        end
+        if env.AllowToxTeleport then env.AllowToxTeleport(0.3, "Up Player") end
+
+        currentY = math.min(currentY + speed * dt, topY)
+        -- never get above their feet (if they fell off, go back under them)
+        currentY = math.min(currentY, tRoot.Position.Y - UNDER + 0.6)
+        local pos = Vector3.new(tRoot.Position.X, currentY, tRoot.Position.Z)
+        root.CFrame = CFrame.new(pos) * CFrame.Angles(0, select(2, root.CFrame:ToOrientation()), 0)
+        root.AssemblyLinearVelocity = Vector3.new(0, speed, 0)
+        root.AssemblyAngularVelocity = Vector3.zero
+
+        if currentY >= topY - 0.05 then
+            -- hold them at the top for a moment
+            local holdUntil = os.clock() + 1
+            while os.clock() < holdUntil and generation == UpPlayerGeneration and root.Parent do
+                RunService.Heartbeat:Wait()
+                if env.AllowToxTeleport then env.AllowToxTeleport(0.3, "Up Player") end
+                local tr = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+                if tr then
+                    root.CFrame = CFrame.new(tr.Position.X, topY, tr.Position.Z)
+                end
+                root.AssemblyLinearVelocity = Vector3.zero
+            end
+            break
+        end
+    end
+
+    Settings.Noclip = hadNoclip
+    if root.Parent then
+        if env.AllowToxTeleport then env.AllowToxTeleport(1, "Up Player return") end
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        if env.ToxSafeTeleportToCFrame then
+            pcall(env.ToxSafeTeleportToCFrame, startCF, false)
+        else
+            root.CFrame = startCF
+        end
+    end
+end
+
+CreateInputWithTwoButtons("Up Player", FlingPage, "", "Up", "Stop", function(text, mode)
+    if mode ~= "TP" then
+        StopUpPlayer()
+        return CustomNotify("Up Player stopped", Color3.fromRGB(255, 120, 120))
+    end
+    local target = FindPlayerByInput(text)
+    if not target then
+        return CustomNotify("Player not found!", Color3.fromRGB(255, 100, 100))
+    end
+    task.spawn(RunUpPlayer, target)
+end)
+
+if type(env.CreateSlider) == "function" then
+    env.CreateSlider("Up Player Speed", FlingPage, 5, 200, Settings.UpPlayerSpeed, " studs/s", function(v)
+        Settings.UpPlayerSpeed = tonumber(v) or 30
+        if env.AutoSaveConfiguration then env.AutoSaveConfiguration() end
+    end, "UpPlayerSpeed", true)
+    env.CreateSlider("Up Player Height", FlingPage, 5, 500, Settings.UpPlayerHeight, " studs", function(v)
+        Settings.UpPlayerHeight = tonumber(v) or 50
+        if env.AutoSaveConfiguration then env.AutoSaveConfiguration() end
+    end, "UpPlayerHeight", true)
+end
+
+-- ==============================================================================
+-- SELECT PLAYER: hold the key and click someone -> their name goes into
+-- Fling / Teleport / Spectate / Up Player boxes.
+-- ==============================================================================
+local function GetSelectKeyName()
+    local key = Settings.SelectPlayerKey
+    if typeof(key) == "EnumItem" then return key.Name end
+    if type(key) == "string" and key ~= "" then return key end
+    return "LeftAlt"
+end
+
+if type(env.CreateKeybindButton) == "function" then
+    env.CreateKeybindButton("Select Player (Hold + Click)", FlingPage, GetSelectKeyName(), function(key)
+        if typeof(key) == "EnumItem" then
+            Settings.SelectPlayerKey = key.Name
+        else
+            Settings.SelectPlayerKey = nil
+        end
+        if env.AutoSaveConfiguration then env.AutoSaveConfiguration() end
+    end)
+end
+
+local function GetPlayerUnderMouse()
+    local mouse = Player:GetMouse()
+    local target = mouse and mouse.Target
+    while target and target ~= workspace do
+        local p = Players:GetPlayerFromCharacter(target)
+        if p then return p end
+        target = target.Parent
+    end
+    -- fallback: closest character to the mouse ray
+    local camera = workspace.CurrentCamera
+    local loc = UserInputService:GetMouseLocation()
+    local ray = camera:ViewportPointToRay(loc.X, loc.Y)
+    local best, bestDist = nil, 6
+    for _, p in ipairs(Players:GetPlayers()) do
+        local r = p ~= Player and p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+        if r then
+            local toPoint = r.Position - ray.Origin
+            local along = toPoint:Dot(ray.Direction)
+            if along > 0 then
+                local dist = (toPoint - ray.Direction * along).Magnitude
+                if dist < bestDist then
+                    best, bestDist = p, dist
+                end
+            end
+        end
+    end
+    return best
+end
+
+AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if env.Destroyed or input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+    local keyName = GetSelectKeyName()
+    local ok, keyCode = pcall(function() return Enum.KeyCode[keyName] end)
+    if not ok or not keyCode or not UserInputService:IsKeyDown(keyCode) then return end
+    local target = GetPlayerUnderMouse()
+    if not target then
+        return CustomNotify("No player under the mouse", Color3.fromRGB(255, 180, 70))
+    end
+    local boxes = env.ToxNamedInputs or {}
+    for _, name in ipairs({ "Fling", "Teleport", "Spectate", "Up Player" }) do
+        local box = boxes[name]
+        if box and box.Parent then
+            box.Text = target.Name
+        end
+    end
+    CustomNotify("Selected • " .. target.DisplayName .. " (@" .. target.Name .. ")", Color3.fromRGB(100, 200, 255))
+end))
 CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
 CreateButton("Tox Waypoints", FlingPage, function() WaypointsGui.Visible = not WaypointsGui.Visible end)
 do
