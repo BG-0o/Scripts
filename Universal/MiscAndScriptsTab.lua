@@ -352,6 +352,9 @@ Settings.UpPlayerSpeed = tonumber(Settings.UpPlayerSpeed) or 30
 Settings.UpPlayerHeight = tonumber(Settings.UpPlayerHeight) or 50
 local UpPlayerGeneration = 0
 
+local UpPlayerRunning = false
+local UpPlayerMode = "up"   -- "up" = rising/holding, "down" = bringing them back down
+
 local function StopUpPlayer()
     UpPlayerGeneration = UpPlayerGeneration + 1
 end
@@ -367,6 +370,8 @@ local function RunUpPlayer(target)
 
     UpPlayerGeneration = UpPlayerGeneration + 1
     local generation = UpPlayerGeneration
+    UpPlayerRunning = true
+    UpPlayerMode = "up"
     local startCF = root.CFrame
     local RunService = game:GetService("RunService")
 
@@ -375,7 +380,7 @@ local function RunUpPlayer(target)
     local currentY = tRoot.Position.Y - UNDER
     local reachedTop = false
 
-    CustomNotify("Up Player • " .. target.DisplayName .. " (Stop to end)", Color3.fromRGB(100, 255, 160))
+    CustomNotify("Up Player • " .. target.DisplayName .. " (Down to bring back)", Color3.fromRGB(100, 255, 160))
 
     -- make sure we can actually push them
     local hadNoclip = Settings.Noclip
@@ -401,6 +406,17 @@ local function RunUpPlayer(target)
         if reachedTop and currentY < wantedTop - 0.05 then
             reachedTop = false   -- Height slider was raised while holding: keep going up
         end
+        if UpPlayerMode == "down" then
+            -- bring them back down at the same speed, then finish
+            currentY = math.max(currentY - speed * dt, baseY)
+            root.CFrame = CFrame.new(tRoot.Position.X, currentY, tRoot.Position.Z) * CFrame.Angles(0, yaw, 0)
+            root.AssemblyLinearVelocity = Vector3.new(0, -speed, 0)
+            root.AssemblyAngularVelocity = Vector3.zero
+            if currentY <= baseY + 0.05 then
+                break
+            end
+            continue
+        end
         if not reachedTop then
             currentY = math.min(currentY + speed * dt, wantedTop)
             if currentY >= wantedTop - 0.05 then
@@ -414,6 +430,10 @@ local function RunUpPlayer(target)
         root.AssemblyAngularVelocity = Vector3.zero
     end
 
+    if generation == UpPlayerGeneration then
+        UpPlayerRunning = false
+        UpPlayerMode = "up"
+    end
     Settings.Noclip = hadNoclip
     if root.Parent then
         root.AssemblyLinearVelocity = Vector3.zero
@@ -430,10 +450,15 @@ local function RunUpPlayer(target)
     end
 end
 
-local UpPlayerBox = CreateInputWithTwoButtons("Up Player", FlingPage, "", "Up", "Stop", function(text, mode)
+local UpPlayerBox = CreateInputWithTwoButtons("Up Player", FlingPage, "", "Up", "Down", function(text, mode)
     if mode ~= "TP" then
-        StopUpPlayer()
-        return CustomNotify("Up Player stopped", Color3.fromRGB(255, 120, 120))
+        if UpPlayerRunning then
+            UpPlayerMode = "down"
+            CustomNotify("Up Player • bringing down", Color3.fromRGB(255, 200, 120))
+        else
+            CustomNotify("Up Player is not running", Color3.fromRGB(255, 180, 70))
+        end
+        return
     end
     local target = FindPlayerByInput(text)
     if not target then
@@ -479,7 +504,7 @@ if type(env.CreateSlider) == "function" and UpPlayerBox and UpPlayerBox:IsA("Gui
     -- "Return on Stop" inside the same block
     if Settings.UpPlayerReturn == nil then Settings.UpPlayerReturn = true end
     local createToggleRaw = (env.ToxUniversalRawCreators and env.ToxUniversalRawCreators.CreateToggle) or CreateToggle
-    local returnToggle = createToggleRaw("Return to my spot on Stop", FlingPage, Settings.UpPlayerReturn ~= false, function(v)
+    local returnToggle = createToggleRaw("Return to my spot after Down", FlingPage, Settings.UpPlayerReturn ~= false, function(v)
         Settings.UpPlayerReturn = v == true
         if env.AutoSaveConfiguration then env.AutoSaveConfiguration() end
     end, "UpPlayerReturn")
