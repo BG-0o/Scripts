@@ -1840,12 +1840,21 @@ local function NDSIsWeatherEffect(object)
     if camera and object:IsDescendantOf(camera) then
         return true   -- effects glued to the camera = screen effects
     end
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character and object:IsDescendantOf(p.Character) then
-            return false
+    -- Weather emitters are often attached to YOUR character (sandstorm follows you).
+    -- Inside a character only look at the names below the character model, so a player
+    -- called "Sandra"/"Rainbow" doesn't count.
+    local names = {}
+    local current = object
+    local depth = 0
+    while current and current ~= game and depth < 8 do
+        if current:IsA("Model") and Players:GetPlayerFromCharacter(current) then
+            break
         end
+        names[#names + 1] = string.lower(tostring(current.Name))
+        current = current.Parent
+        depth += 1
     end
-    local path = NDSLowerPath(object)
+    local path = table.concat(names, " ")
     for _, word in ipairs(NDS_WEATHER_WORDS) do
         if string.find(path, word, 1, true) then
             return true
@@ -1900,23 +1909,11 @@ local function NDSApplyCleanScreen()
         local clouds = workspace.Terrain:FindFirstChildOfClass("Clouds")
         if clouds then NDSCleanSet(clouds, "Enabled", false) end
     end)
-    local roots = { workspace.CurrentCamera, workspace:FindFirstChild("Structure") }
-    for _, child in ipairs(workspace:GetChildren()) do
-        local lower = string.lower(child.Name)
-        for _, word in ipairs(NDS_WEATHER_WORDS) do
-            if string.find(lower, word, 1, true) then
-                table.insert(roots, child)
-                break
-            end
-        end
-    end
-    for _, rootObj in ipairs(roots) do
-        if rootObj then
-            for _, object in ipairs(rootObj:GetDescendants()) do
-                if NDSIsWeatherEffect(object) then
-                    pcall(NDSCleanSet, object, "Enabled", false)
-                end
-            end
+    -- every particle/beam/trail anywhere (map, disaster models, characters, camera)
+    for _, object in ipairs(workspace:GetDescendants()) do
+        if (object:IsA("ParticleEmitter") or object:IsA("Beam") or object:IsA("Trail"))
+        and NDSIsWeatherEffect(object) then
+            pcall(NDSCleanSet, object, "Enabled", false)
         end
     end
 
@@ -2455,6 +2452,14 @@ do
 end
 
 TrackNDSExtraConnection(game.DescendantAdded:Connect(function(object)
+    if Settings.NDSCleanScreen
+    and (object:IsA("ParticleEmitter") or object:IsA("Beam") or object:IsA("Trail")) then
+        task.defer(function()
+            if Settings.NDSCleanScreen and object.Parent and NDSIsWeatherEffect(object) then
+                pcall(NDSCleanSet, object, "Enabled", false)
+            end
+        end)
+    end
     if Settings.NDSMuteGameSounds and object:IsA("Sound") then
         task.defer(function() pcall(NDSMuteSound, object) end)
     end
