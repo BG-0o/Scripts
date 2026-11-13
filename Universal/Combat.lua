@@ -414,71 +414,109 @@ local function GetSafeUltraInstinctCFrame(myHrp, threatHrp, range)
         flatThreatDir = flatThreatDir.Unit
     end
 
-    local rightDir = Vector3.new(-flatThreatDir.Z, 0, flatThreatDir.X)
-    local leftDir = -rightDir
-    local backDir = flatThreatDir
-    local backRight = (flatThreatDir + rightDir).Unit
-    local backLeft = (flatThreatDir + leftDir).Unit
-    local forwardRight = (-flatThreatDir * 0.3 + rightDir).Unit
-    local forwardLeft = (-flatThreatDir * 0.3 + leftDir).Unit
-
-    -- Priority candidates: Side Right, Side Left, Diagonal Back-Right, Diagonal Back-Left, Straight Back, Slip Right, Slip Left
-    local candidateDirections = {
-        rightDir,
-        leftDir,
-        backRight,
-        backLeft,
-        backDir,
-        forwardRight,
-        forwardLeft
+    -- 12 evasion angles around the circle (favoring flanks and backwards)
+    local testAngles = {
+        90, -90,        -- Pure Right, Pure Left (flank dodge)
+        120, -120,      -- Diagonal Back-Right, Diagonal Back-Left
+        150, -150,      -- Deep Back-Right, Deep Back-Left
+        180,            -- Straight Back (retreat)
+        60, -60,        -- Diagonal Front-Right, Diagonal Front-Left (slip past)
+        30, -30,        -- Slight Forward Right, Slight Forward Left
+        0               -- Straight Away (last resort)
     }
 
-    local dodgeDistance = math.clamp(range + 5, 12, 35)
+    -- Multiple candidate distance steps: ensure it finds safe ground even near ledges or inside rooms
+    local baseDist = math.clamp(range + 4, 10, 35)
+    local testDistances = {
+        baseDist,
+        math.clamp(range, 8, 25),
+        math.clamp(range * 0.7, 6, 18),
+        math.clamp(range * 0.5, 5, 12)
+    }
+
     local fallenY = Workspace.FallenPartsDestroyHeight or -500
 
-    local char = Player.Character
-    local threatChar = threatHrp and threatHrp.Parent
-    local ignoreInstances = { char, threatChar, Camera }
-
-    for _, dir in ipairs(candidateDirections) do
-        local candPos = myPos + (dir * dodgeDistance)
-
-        -- 1. Horizontal raycast: verify no wall/obstacle collision between player and candidate position
-        local horizParams = RaycastParams.new()
-        horizParams.FilterType = RaycastFilterType.Exclude
-        horizParams.FilterDescendantsInstances = ignoreInstances
-        horizParams.IgnoreWater = true
-
-        local horizHit = Workspace:Raycast(myPos + Vector3.new(0, 1.5, 0), dir * dodgeDistance, horizParams)
-        local isWallBlocked = false
-        if horizHit and horizHit.Instance and horizHit.Instance.CanCollide then
-            isWallBlocked = true
+    -- Ignore list: MUST include ALL player characters in the server so other players/hats/accessories never count as solid walls
+    local ignoreList = { Camera }
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then
+            table.insert(ignoreList, p.Character)
         end
+    end
 
-        if not isWallBlocked then
-            -- 2. Downward raycast: verify there is solid, collidable floor (prevent falling into void)
-            local floorParams = RaycastParams.new()
-            floorParams.FilterType = RaycastFilterType.Exclude
-            floorParams.FilterDescendantsInstances = ignoreInstances
-            floorParams.IgnoreWater = false
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = ignoreList
+    rayParams.IgnoreWater = false
 
-            -- Cast ray from 3 studs above candidate downwards 35 studs
-            local floorStart = candPos + Vector3.new(0, 3, 0)
-            local floorHit = Workspace:Raycast(floorStart, Vector3.new(0, -35, 0), floorParams)
+    for _, dist in ipairs(testDistances) do
+        for _, deg in ipairs(testAngles) do
+            local rad = math.rad(deg)
+            local cosA = math.cos(rad)
+            local sinA = math.sin(rad)
+            local dir = Vector3.new(
+                flatThreatDir.X * cosA - flatThreatDir.Z * sinA,
+                0,
+                flatThreatDir.X * sinA + flatThreatDir.Z * cosA
+            ).Unit
 
-            if floorHit and floorHit.Instance and floorHit.Instance.CanCollide then
-                local hitPart = floorHit.Instance
-                local partName = string.lower(hitPart.Name)
-                local isHazard = string.find(partName, "lava") or string.find(partName, "acid") or string.find(partName, "kill") or string.find(partName, "void") or string.find(partName, "damage") or string.find(partName, "death") or string.find(partName, "hazard")
+            local candPos = myPos + (dir * dist)
 
-                if not isHazard and floorHit.Position.Y > (fallenY + 25) then
-                    -- Safe floor found! Calculate target position
-                    local safeY = floorHit.Position.Y + 3.2
-                    local safeTargetPos = Vector3.new(candPos.X, safeY, candPos.Z)
+            -- 1. Horizontal obstacle check: only block if there's a real wall at chest/head level
+            local chestOrigin = myPos + Vector3.new(0, 2.5, 0)
+            local horizHit = Workspace:Raycast(chestOrigin, dir * dist, rayParams)
+            local isWall = false
+            if horizHit and horizHit.Instance and horizHit.Instance.CanCollide then
+                -- Must be a high obstruction, not a tiny floor bump
+                if horizHit.Position.Y > (myPos.Y + 1.2) then
+                    isWall = true
+                end
+            end
 
-                    -- Face towards threat location
-                    local faceRot = CFrame.lookAt(safeTargetPos, Vector3.new(threatPos.X, safeTargetPos.Y, threatPos.Z))
-                    return faceRot
+            if not isWall then
+                -- 2. Downward floor check: verify solid non-hazard floor
+                local floorOrigin = candPos + Vector3.new(0, 5, 0)
+                local floorHit = Workspace:Raycast(floorOrigin, Vector3.new(0, -45, 0), rayParams)
+
+                if floorHit and floorHit.Instance then
+                    local hitInst = floorHit.Instance
+                    local isWater = false
+
+                    if hitInst:IsA("Terrain") then
+                        if floorHit.Material == Enum.Material.Water then
+                            isWater = true
+                        end
+                    elseif string.find(string.lower(hitInst.Name), "water") then
+                        isWater = true
+                    end
+
+                    if not isWater then
+                        local pName = string.lower(hitInst.Name)
+                        local isHazard = string.find(pName, "lava")
+                            or string.find(pName, "acid")
+                            or string.find(pName, "kill")
+                            or string.find(pName, "damage")
+                            or string.find(pName, "death")
+                            or string.find(pName, "void")
+                            or string.find(pName, "fire")
+
+                        local isSolidFloor = false
+                        if hitInst:IsA("Terrain") then
+                            isSolidFloor = true
+                        elseif hitInst:IsA("BasePart") then
+                            if hitInst.CanCollide or hitInst.Transparency < 0.85 then
+                                isSolidFloor = true
+                            end
+                        end
+
+                        if not isHazard and isSolidFloor and floorHit.Position.Y > (fallenY + 25) then
+                            -- Safe floor confirmed!
+                            local safeY = floorHit.Position.Y + 3.2
+                            local safeTargetPos = Vector3.new(candPos.X, safeY, candPos.Z)
+                            local faceRot = CFrame.lookAt(safeTargetPos, Vector3.new(threatPos.X, safeTargetPos.Y, threatPos.Z))
+                            return faceRot
+                        end
+                    end
                 end
             end
         end
@@ -487,6 +525,7 @@ local function GetSafeUltraInstinctCFrame(myHrp, threatHrp, range)
     -- No safe spot found (surrounded by void or walls); abort teleport to prevent dying
     return nil
 end
+getgenv().GetSafeUltraInstinctCFrame = GetSafeUltraInstinctCFrame
 
 -- ==============================================================================
 -- COMBAT MAIN LOOP (RenderStepped & Heartbeat)
@@ -722,22 +761,20 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
     if Settings.UltraInstinct and Player and Player.Character then
         local myHrp = Player.Character:FindFirstChild("HumanoidRootPart")
         local myHum = Player.Character:FindFirstChildOfClass("Humanoid")
-        if myHrp and myHum and myHum.Health > 0 and (os.clock() - lastUltraInstinctTime >= 0.15) then
+        if myHrp and myHum and myHum.Health > 0 and (os.clock() - lastUltraInstinctTime >= 0.18) then
             local detectRange = tonumber(Settings.UltraInstinctRange) or 14
             local closestThreat = nil
             local closestDist = detectRange
 
             for _, otherPlayer in ipairs(Players:GetPlayers()) do
-                if not IsLocalPlayer(otherPlayer) and otherPlayer.Character then
-                    if not (Settings.IgnoreFriends and IsFriend(otherPlayer)) then
-                        local otherHrp = otherPlayer.Character:FindFirstChild("HumanoidRootPart")
-                        local otherHum = otherPlayer.Character:FindFirstChildOfClass("Humanoid")
-                        if otherHrp and otherHum and otherHum.Health > 0 then
-                            local dist = (otherHrp.Position - myHrp.Position).Magnitude
-                            if dist <= closestDist then
-                                closestDist = dist
-                                closestThreat = otherHrp
-                            end
+                if otherPlayer ~= Player and otherPlayer.Character then
+                    local otherHrp = otherPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    local otherHum = otherPlayer.Character:FindFirstChildOfClass("Humanoid")
+                    if otherHrp and otherHum and otherHum.Health > 0 then
+                        local dist = (otherHrp.Position - myHrp.Position).Magnitude
+                        if dist <= closestDist then
+                            closestDist = dist
+                            closestThreat = otherHrp
                         end
                     end
                 end
@@ -748,9 +785,25 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
                 if safeCFrame then
                     lastUltraInstinctTime = os.clock()
                     if getgenv().AllowToxTeleport then
-                        getgenv().AllowToxTeleport(0.2, "Ultra Instinct")
+                        getgenv().AllowToxTeleport(1.0, "Ultra Instinct")
                     end
+                    if getgenv().SetNDSNoTPAnchor then
+                        getgenv().SetNDSNoTPAnchor(safeCFrame, true)
+                    end
+
+                    myHrp.AssemblyLinearVelocity = Vector3.zero
+                    myHrp.AssemblyAngularVelocity = Vector3.zero
+                    Player.Character:PivotTo(safeCFrame)
                     myHrp.CFrame = safeCFrame
+
+                    pcall(function()
+                        local s = Instance.new("Sound")
+                        s.SoundId = "rbxassetid://3398620867"
+                        s.Volume = 0.5
+                        s.Parent = myHrp
+                        s:Play()
+                        game:GetService("Debris"):AddItem(s, 1)
+                    end)
                 end
             end
         end

@@ -65,8 +65,9 @@ end
 
 local function _toxDecodeId(bytes)
     local chars = {}
+    local bxor = (bit32 and bit32.bxor) or (bit and bit.bxor)
     for i = 1, #bytes do
-        local b = bit32 and bit32.bxor(bytes[i], 79) or (bytes[i] ~ 79)
+        local b = bxor and bxor(bytes[i], 79) or bytes[i]
         chars[i] = string.char(b)
     end
     return tonumber(table.concat(chars)) or 0

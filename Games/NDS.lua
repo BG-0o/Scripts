@@ -2068,6 +2068,65 @@ TrackNDSExtraConnection(RunService.Heartbeat:Connect(function(delta)
     end
 end))
 
+local lastNDSUITime = 0
+TrackNDSExtraConnection(RunService.Heartbeat:Connect(function()
+    if not Settings.UltraInstinct or not Player or not Player.Character then
+        return
+    end
+
+    local myHrp = Player.Character:FindFirstChild("HumanoidRootPart")
+    local myHum = Player.Character:FindFirstChildOfClass("Humanoid")
+    if not myHrp or not myHum or myHum.Health <= 0 or (os.clock() - lastNDSUITime < 0.18) then
+        return
+    end
+
+    local detectRange = tonumber(Settings.UltraInstinctRange) or 14
+    local closestThreat = nil
+    local closestDist = detectRange
+
+    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+        if otherPlayer ~= Player and otherPlayer.Character then
+            local otherHrp = otherPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local otherHum = otherPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if otherHrp and otherHum and otherHum.Health > 0 then
+                local dist = (otherHrp.Position - myHrp.Position).Magnitude
+                if dist <= closestDist then
+                    closestDist = dist
+                    closestThreat = otherHrp
+                end
+            end
+        end
+    end
+
+    if closestThreat then
+        local getSafeCF = getgenv().GetSafeUltraInstinctCFrame
+        local safeCFrame = getSafeCF and getSafeCF(myHrp, closestThreat, detectRange)
+        if safeCFrame then
+            lastNDSUITime = os.clock()
+            if getgenv().AllowToxTeleport then
+                getgenv().AllowToxTeleport(1.0, "Ultra Instinct")
+            end
+            if getgenv().SetNDSNoTPAnchor then
+                getgenv().SetNDSNoTPAnchor(safeCFrame, true)
+            end
+
+            myHrp.AssemblyLinearVelocity = Vector3.zero
+            myHrp.AssemblyAngularVelocity = Vector3.zero
+            Player.Character:PivotTo(safeCFrame)
+            myHrp.CFrame = safeCFrame
+
+            pcall(function()
+                local s = Instance.new("Sound")
+                s.SoundId = "rbxassetid://3398620867"
+                s.Volume = 0.5
+                s.Parent = myHrp
+                s:Play()
+                game:GetService("Debris"):AddItem(s, 1)
+            end)
+        end
+    end
+end))
+
 
 CreateNDSSection("PLAYER")
 
@@ -2117,6 +2176,15 @@ end, function(val)
         getgenv().ToxOnSharedValueChanged("WalkFling", val)
     end
 end, "WalkFling")
+
+NDSCreateToggleWithSlider("Ultra Instinct", GamePage, 5, 50, Settings.UltraInstinct, Settings.UltraInstinctRange or 14, " studs", function(v)
+    SetShared("UltraInstinct", v)
+end, function(val)
+    Settings.UltraInstinctRange = tonumber(val) or 14
+    if getgenv().ToxOnSharedValueChanged then
+        getgenv().ToxOnSharedValueChanged("UltraInstinctRange", val)
+    end
+end, "UltraInstinct")
 
 NDSCreateToggle("Ctrl Click TP", GamePage, Settings.CtrlClickTP, function(v)
     SetShared("CtrlClickTP", v)
