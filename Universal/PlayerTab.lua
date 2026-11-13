@@ -71,17 +71,31 @@ CreateToggleWithValue("Smooth Fly", PlayerPage, Settings.SmoothFly, Settings.Fly
         end
     end
 end, function(val) Settings.FlySpeed = val end, "SmoothFly")
-CreateToggleWithValue("Fly Bypass", PlayerPage, Settings.FlyBypass, Settings.FlySpeed, function(v)
-    if getgenv().ToxSetSharedOption then
-        getgenv().ToxSetSharedOption("FlyBypass", v)
-    else
-        Settings.FlyBypass = v
-        if v then
-            Settings.NormalFly = false
-            Settings.SmoothFly = false
+do
+    local function onFlyBypass(v)
+        if getgenv().ToxSetSharedOption then
+            getgenv().ToxSetSharedOption("FlyBypass", v)
+        else
+            Settings.FlyBypass = v
+            if v then
+                Settings.NormalFly = false
+                Settings.SmoothFly = false
+            end
         end
     end
-end, function(val) Settings.FlySpeed = val end, "FlyBypass")
+    local withSlider = env.CreateToggleWithSlider or getgenv().CreateToggleWithSlider
+    if type(withSlider) == "function" then
+        -- Slider 0-100 plus typed value (click the number to type)
+        local control = withSlider("Fly Bypass", PlayerPage, 0, 100, Settings.FlyBypass, Settings.FlySpeed or 10, "", onFlyBypass, function(val)
+            Settings.FlySpeed = tonumber(val) or 10
+        end, "FlyBypass")
+        if env.TrackUniversalControl then
+            pcall(env.TrackUniversalControl, control, PlayerPage)
+        end
+    else
+        CreateToggleWithValue("Fly Bypass", PlayerPage, Settings.FlyBypass, Settings.FlySpeed, onFlyBypass, function(val) Settings.FlySpeed = val end, "FlyBypass")
+    end
+end
 CreateToggleWithValue("Bhop (Auto Jump)", PlayerPage, Settings.Bhop, Settings.BhopInterval, function(v)
     Settings.Bhop = v
 end, function(val)

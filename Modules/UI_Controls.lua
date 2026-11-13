@@ -945,7 +945,7 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
     local minV = tonumber(MinVal) or 0
     local maxV = tonumber(MaxVal) or 100
     if maxV <= minV then maxV = minV + 1 end
-    local curVal = math.clamp(tonumber(DefaultVal) or minV, minV, maxV)
+    local curVal = math.max(math.floor((tonumber(DefaultVal) or minV) + 0.5), minV)
     local unitSuffix = Suffix ~= nil and tostring(Suffix) or "%"
 
     local Container = Instance.new("Frame")
@@ -983,7 +983,10 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
     Label.Parent = Container
     if not risky then RegisterThemedObject(Label, "TextColor3", "Text") else RegisterThemedObject(Label, "TextColor3", "Risky") end
 
-    local ValLabel = Instance.new("TextLabel")
+    -- Editable: click the value and type any number (slider still works next to it)
+    local ValLabel = Instance.new("TextBox")
+    ValLabel.ClearTextOnFocus = true
+    ValLabel.PlaceholderText = tostring(curVal)
     ValLabel.Size = UDim2.new(0, 50, 0, 18)
     ValLabel.Position = UDim2.new(1, -108, 0, 6)
     ValLabel.BackgroundColor3 = Color3.fromRGB(12, 17, 26)
@@ -1073,11 +1076,19 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
             BackgroundColor3 = Enabled and TOGGLE_ON_KNOB or TOGGLE_OFF_KNOB
         }):Play()
     end
-    local function applyValueVisual(val)
-        local clamped = math.clamp(math.floor((tonumber(val) or minV) + 0.5), minV, maxV)
+    local function applyValueVisual(val, allowAboveMax)
+        local num = tonumber(val) or minV
+        local clamped
+        if allowAboveMax then
+            -- typed values may go past the slider's max (knob just stays at the end)
+            clamped = math.max(math.floor(num + 0.5), minV)
+        else
+            clamped = math.clamp(math.floor(num + 0.5), minV, maxV)
+        end
         curVal = clamped
         local rel = math.clamp((clamped - minV) / (maxV - minV), 0, 1)
         ValLabel.Text = tostring(clamped) .. unitSuffix
+        ValLabel.PlaceholderText = tostring(clamped)
         Fill.Size = UDim2.new(rel, 0, 1, 0)
         Knob.Position = UDim2.new(rel, 0, 0.5, 0)
     end
@@ -1103,7 +1114,7 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
         end,
         SetValue = function(Value)
             if tonumber(Value) then
-                applyValueVisual(Value)
+                applyValueVisual(Value, true)
             end
         end
     }
@@ -1125,6 +1136,21 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
         AutoSaveConfiguration()
     end
     ToggleButton.MouseButton1Click:Connect(DoToggle)
+
+    ValLabel.FocusLost:Connect(function()
+        if getgenv().Destroyed then return end
+        local typed = tonumber((string.gsub(ValLabel.Text, "[^%d%.%-]", "")))
+        if not typed then
+            applyValueVisual(curVal, true)   -- invalid / empty: restore
+            return
+        end
+        applyValueVisual(typed, true)
+        if CallbackValue then CallbackValue(curVal) end
+        if SyncKey and getgenv().SyncValueVisuals then
+            getgenv().SyncValueVisuals(SyncKey, curVal)
+        end
+        AutoSaveConfiguration()
+    end)
     AttachToxBind(Name, SyncKey, Container, Label,
         UDim2.new(1, -125, 0, 20), UDim2.new(1, -177, 0, 20),
         UDim2.new(1, -160, 0, 5), DoToggle, function() return Enabled end)

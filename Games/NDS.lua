@@ -2191,10 +2191,10 @@ end, function(value)
     end
 end, "NDSWaterFly")
 
-NDSCreateToggleWithValue("Fly Bypass", GamePage, Settings.FlyBypass, Settings.FlySpeed, function(v)
+NDSCreateToggleWithSlider("Fly Bypass", GamePage, 0, 100, Settings.FlyBypass, Settings.FlySpeed or 10, "", function(v)
     SetShared("FlyBypass", v)
 end, function(value)
-    Settings.FlySpeed = math.clamp(tonumber(value) or 10, 1, 100)
+    Settings.FlySpeed = math.max(tonumber(value) or 10, 0)
 
     if SyncValueVisuals then
         SyncValueVisuals("FlyBypass", Settings.FlySpeed)
