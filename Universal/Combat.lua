@@ -729,11 +729,60 @@ local function AntiSocialStep()
         end
     end
 
-    if away.Magnitude > 0.01 then
-        pcall(function()
-            humanoid:Move(Vector3.new(away.X, 0, away.Z).Unit, false)
-        end)
+    if away.Magnitude <= 0.01 then
+        return
     end
+
+    -- Edge check: only walk where there is ground ahead (otherwise it walked into the void).
+    -- Tries the ideal direction first, then turns gradually (never back towards players).
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = { character, Camera }
+    params.IgnoreWater = false
+
+    local standOffset = 3
+    if humanoid.RigType == Enum.HumanoidRigType.R15 then
+        standOffset = humanoid.HipHeight + root.Size.Y / 2
+    end
+    local feetY = myPos.Y - standOffset
+    local fallenY = Workspace.FallenPartsDestroyHeight or -500
+
+    local function HasGround(dir)
+        for _, ahead in ipairs({ 2.5, 5 }) do
+            local origin = myPos + dir * ahead
+            local hit = Workspace:Raycast(origin, Vector3.new(0, -(standOffset + 10), 0), params)
+            if not hit then
+                return false
+            end
+            -- deep water / drop of more than ~8 studs counts as unsafe
+            if hit.Material == Enum.Material.Water or hit.Position.Y < feetY - 8 or hit.Position.Y < fallenY + 20 then
+                return false
+            end
+        end
+        return true
+    end
+
+    local base = Vector3.new(away.X, 0, away.Z).Unit
+    local chosen = nil
+    for _, deg in ipairs({ 0, 30, -30, 60, -60, 90, -90 }) do
+        local dir = (CFrame.Angles(0, math.rad(deg), 0) * CFrame.new(base)).Position
+        dir = Vector3.new(dir.X, 0, dir.Z)
+        if dir.Magnitude > 0.01 then
+            dir = dir.Unit
+            if HasGround(dir) then
+                chosen = dir
+                break
+            end
+        end
+    end
+
+    pcall(function()
+        if chosen then
+            humanoid:Move(chosen, false)
+        else
+            humanoid:Move(Vector3.zero, false)   -- cornered at an edge: stay put
+        end
+    end)
 end
 
 pcall(function() RunService:UnbindFromRenderStep(ANTISOCIAL_BIND) end)
