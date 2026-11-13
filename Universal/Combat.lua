@@ -445,7 +445,7 @@ local function GetSafeUltraInstinctCFrame(myHrp, threatHrp, range)
     end
 
     local rayParams = RaycastParams.new()
-    rayParams.FilterType = RaycastFilterType.Exclude
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
     rayParams.FilterDescendantsInstances = ignoreList
     rayParams.IgnoreWater = false
 
@@ -526,6 +526,161 @@ local function GetSafeUltraInstinctCFrame(myHrp, threatHrp, range)
     return nil
 end
 getgenv().GetSafeUltraInstinctCFrame = GetSafeUltraInstinctCFrame
+
+-- Ground circle visual (shows the detection radius under the player)
+local UICircleRing = nil
+local UICircleFill = nil
+
+local function GetUICircleParent()
+    local ok, hui = pcall(function()
+        return (typeof(gethui) == "function") and gethui() or nil
+    end)
+    if ok and hui then return hui end
+    local okCore, core = pcall(function() return game:GetService("CoreGui") end)
+    if okCore and core then return core end
+    return Workspace.CurrentCamera or Camera
+end
+
+local function EnsureUltraInstinctCircle()
+    if UICircleRing and UICircleRing.Parent and UICircleFill and UICircleFill.Parent then
+        return true
+    end
+    local ok = pcall(function()
+        local parent = GetUICircleParent()
+
+        UICircleRing = Instance.new("CylinderHandleAdornment")
+        UICircleRing.Name = "ToxUltraInstinctRing"
+        UICircleRing.Height = 0.12
+        UICircleRing.AlwaysOnTop = false
+        UICircleRing.ZIndex = 1
+        UICircleRing.Transparency = 0.15
+        UICircleRing.Adornee = Workspace.Terrain
+        UICircleRing.Visible = false
+        UICircleRing.Parent = parent
+
+        UICircleFill = Instance.new("CylinderHandleAdornment")
+        UICircleFill.Name = "ToxUltraInstinctFill"
+        UICircleFill.Height = 0.06
+        UICircleFill.AlwaysOnTop = false
+        UICircleFill.ZIndex = 0
+        UICircleFill.Transparency = 0.82
+        UICircleFill.Adornee = Workspace.Terrain
+        UICircleFill.Visible = false
+        UICircleFill.Parent = parent
+    end)
+    return ok and UICircleRing ~= nil
+end
+
+local function HideUltraInstinctCircle()
+    if UICircleRing then pcall(function() UICircleRing.Visible = false end) end
+    if UICircleFill then pcall(function() UICircleFill.Visible = false end) end
+end
+
+local function DestroyUltraInstinctCircle()
+    if UICircleRing then pcall(function() UICircleRing:Destroy() end) end
+    if UICircleFill then pcall(function() UICircleFill:Destroy() end) end
+    UICircleRing, UICircleFill = nil, nil
+end
+
+local function UpdateUltraInstinctCircle(character, myHrp, myHum, range, threatInside)
+    if not EnsureUltraInstinctCircle() then return end
+
+    -- Find the ground under the player (fallback: estimated foot height)
+    local footY = myHrp.Position.Y - (myHrp.Size.Y / 2) - (myHum.HipHeight or 2)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = { character, Camera }
+    params.IgnoreWater = false
+    local hit = Workspace:Raycast(myHrp.Position, Vector3.new(0, -12, 0), params)
+    if hit then footY = hit.Position.Y end
+
+    local center = Vector3.new(myHrp.Position.X, footY + 0.08, myHrp.Position.Z)
+    -- Cylinder adornments extend along Z; rotate so they lie flat on the floor
+    local cf = CFrame.new(center) * CFrame.Angles(math.rad(90), 0, 0)
+    local color = threatInside and Color3.fromRGB(255, 60, 70) or (Theme.Accent or Color3.fromRGB(30, 95, 255))
+
+    UICircleRing.CFrame = cf
+    UICircleRing.Radius = range
+    UICircleRing.InnerRadius = math.max(range - 0.35, 0)
+    UICircleRing.Color3 = color
+    UICircleRing.Visible = true
+
+    UICircleFill.CFrame = cf
+    UICircleFill.Radius = range
+    UICircleFill.InnerRadius = 0
+    UICircleFill.Color3 = color
+    UICircleFill.Visible = true
+end
+
+local function UltraInstinctStep()
+    local character = Player and Player.Character
+    if not Settings.UltraInstinct or not character then
+        HideUltraInstinctCircle()
+        return
+    end
+
+    local myHrp = character:FindFirstChild("HumanoidRootPart")
+    local myHum = character:FindFirstChildOfClass("Humanoid")
+    if not myHrp or not myHum or myHum.Health <= 0 then
+        HideUltraInstinctCircle()
+        return
+    end
+
+    local detectRange = tonumber(Settings.UltraInstinctRange) or 14
+    local closestThreat = nil
+    local closestDist = detectRange
+
+    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+        if not IsLocalPlayer(otherPlayer) and otherPlayer.Character then
+            local otherHrp = otherPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local otherHum = otherPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if otherHrp and otherHum and otherHum.Health > 0 then
+                -- Flat (XZ) distance so it matches the circle drawn on the ground
+                local diff = otherHrp.Position - myHrp.Position
+                local dist = Vector3.new(diff.X, 0, diff.Z).Magnitude
+                if dist <= closestDist and math.abs(diff.Y) <= detectRange then
+                    closestDist = dist
+                    closestThreat = otherHrp
+                end
+            end
+        end
+    end
+
+    pcall(UpdateUltraInstinctCircle, character, myHrp, myHum, detectRange, closestThreat ~= nil)
+
+    if not closestThreat then return end
+
+    -- Shared cooldown so Combat + game modules (e.g. NDS) never double-teleport
+    local lastTime = tonumber(getgenv().ToxLastUltraInstinctTime) or 0
+    if os.clock() - math.max(lastTime, lastUltraInstinctTime) < 0.18 then return end
+
+    local safeCFrame = GetSafeUltraInstinctCFrame(myHrp, closestThreat, detectRange)
+    if not safeCFrame then return end
+
+    lastUltraInstinctTime = os.clock()
+    getgenv().ToxLastUltraInstinctTime = lastUltraInstinctTime
+
+    if getgenv().AllowToxTeleport then
+        getgenv().AllowToxTeleport(1.0, "Ultra Instinct")
+    end
+    if getgenv().SetNDSNoTPAnchor then
+        pcall(getgenv().SetNDSNoTPAnchor, safeCFrame, true)
+    end
+
+    myHrp.AssemblyLinearVelocity = Vector3.zero
+    myHrp.AssemblyAngularVelocity = Vector3.zero
+    character:PivotTo(safeCFrame)
+
+    pcall(function()
+        local s = Instance.new("Sound")
+        s.SoundId = "rbxassetid://3398620867"
+        s.Volume = 0.5
+        s.Parent = myHrp
+        s:Play()
+        game:GetService("Debris"):AddItem(s, 1)
+    end)
+end
+getgenv().ToxUltraInstinctStep = UltraInstinctStep
 
 -- ==============================================================================
 -- COMBAT MAIN LOOP (RenderStepped & Heartbeat)
@@ -757,56 +912,11 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    -- 8. Ultra Instinct (Safe Proximity Teleport Evasion)
-    if Settings.UltraInstinct and Player and Player.Character then
-        local myHrp = Player.Character:FindFirstChild("HumanoidRootPart")
-        local myHum = Player.Character:FindFirstChildOfClass("Humanoid")
-        if myHrp and myHum and myHum.Health > 0 and (os.clock() - lastUltraInstinctTime >= 0.18) then
-            local detectRange = tonumber(Settings.UltraInstinctRange) or 14
-            local closestThreat = nil
-            local closestDist = detectRange
-
-            for _, otherPlayer in ipairs(Players:GetPlayers()) do
-                if otherPlayer ~= Player and otherPlayer.Character then
-                    local otherHrp = otherPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    local otherHum = otherPlayer.Character:FindFirstChildOfClass("Humanoid")
-                    if otherHrp and otherHum and otherHum.Health > 0 then
-                        local dist = (otherHrp.Position - myHrp.Position).Magnitude
-                        if dist <= closestDist then
-                            closestDist = dist
-                            closestThreat = otherHrp
-                        end
-                    end
-                end
-            end
-
-            if closestThreat then
-                local safeCFrame = GetSafeUltraInstinctCFrame(myHrp, closestThreat, detectRange)
-                if safeCFrame then
-                    lastUltraInstinctTime = os.clock()
-                    if getgenv().AllowToxTeleport then
-                        getgenv().AllowToxTeleport(1.0, "Ultra Instinct")
-                    end
-                    if getgenv().SetNDSNoTPAnchor then
-                        getgenv().SetNDSNoTPAnchor(safeCFrame, true)
-                    end
-
-                    myHrp.AssemblyLinearVelocity = Vector3.zero
-                    myHrp.AssemblyAngularVelocity = Vector3.zero
-                    Player.Character:PivotTo(safeCFrame)
-                    myHrp.CFrame = safeCFrame
-
-                    pcall(function()
-                        local s = Instance.new("Sound")
-                        s.SoundId = "rbxassetid://3398620867"
-                        s.Volume = 0.5
-                        s.Parent = myHrp
-                        s:Play()
-                        game:GetService("Debris"):AddItem(s, 1)
-                    end)
-                end
-            end
-        end
+    -- 8. Ultra Instinct (Safe Proximity Teleport Evasion + ground circle)
+    local okUI, errUI = pcall(UltraInstinctStep)
+    if not okUI and not env.ToxUIErrorWarned then
+        env.ToxUIErrorWarned = true
+        warn("[ToxHub] Ultra Instinct error: " .. tostring(errUI))
     end
 end)
 
@@ -1091,6 +1201,7 @@ local function BuildCombatUI()
     if type(CreateToggleWithSlider) == "function" then
         CreateToggleWithSlider("Ultra Instinct", CombatPage, 5, 50, Settings.UltraInstinct, Settings.UltraInstinctRange or 14, " studs", function(v)
             Settings.UltraInstinct = v == true
+            if not Settings.UltraInstinct then HideUltraInstinctCircle() end
             AutoSaveConfiguration()
         end, function(val)
             Settings.UltraInstinctRange = tonumber(val) or 14
@@ -1099,6 +1210,7 @@ local function BuildCombatUI()
     else
         CreateToggleWithValue("Ultra Instinct", CombatPage, Settings.UltraInstinct, Settings.UltraInstinctRange, function(v)
             Settings.UltraInstinct = v == true
+            if not Settings.UltraInstinct then HideUltraInstinctCircle() end
             AutoSaveConfiguration()
         end, function(val)
             Settings.UltraInstinctRange = tonumber(val) or 14
@@ -1126,6 +1238,7 @@ local function CleanupCombat()
     if FOVCircle then
         pcall(function() FOVCircle:Remove() end)
     end
+    DestroyUltraInstinctCircle()
     env.ToxCombatLoaded = nil
 end
 

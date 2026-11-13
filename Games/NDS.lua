@@ -2044,9 +2044,15 @@ TrackNDSExtraConnection(RunService.Heartbeat:Connect(function()
         return
     end
 
+    -- Combat module already runs Ultra Instinct (with the ground circle); avoid double teleports
+    if getgenv().ToxCombatLoaded and type(getgenv().ToxUltraInstinctStep) == "function" then
+        return
+    end
+
     local myHrp = Player.Character:FindFirstChild("HumanoidRootPart")
     local myHum = Player.Character:FindFirstChildOfClass("Humanoid")
-    if not myHrp or not myHum or myHum.Health <= 0 or (os.clock() - lastNDSUITime < 0.18) then
+    local sharedLast = tonumber(getgenv().ToxLastUltraInstinctTime) or 0
+    if not myHrp or not myHum or myHum.Health <= 0 or (os.clock() - math.max(lastNDSUITime, sharedLast) < 0.18) then
         return
     end
 
@@ -2073,6 +2079,7 @@ TrackNDSExtraConnection(RunService.Heartbeat:Connect(function()
         local safeCFrame = getSafeCF and getSafeCF(myHrp, closestThreat, detectRange)
         if safeCFrame then
             lastNDSUITime = os.clock()
+            getgenv().ToxLastUltraInstinctTime = lastNDSUITime
             if getgenv().AllowToxTeleport then
                 getgenv().AllowToxTeleport(1.0, "Ultra Instinct")
             end
