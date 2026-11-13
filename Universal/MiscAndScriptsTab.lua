@@ -368,24 +368,23 @@ local function RunUpPlayer(target)
     UpPlayerGeneration = UpPlayerGeneration + 1
     local generation = UpPlayerGeneration
     local startCF = root.CFrame
-    local speed = math.max(tonumber(Settings.UpPlayerSpeed) or 30, 1)
-    local height = math.max(tonumber(Settings.UpPlayerHeight) or 50, 1)
     local RunService = game:GetService("RunService")
 
     -- our root sits so the top of our head touches their feet
     local UNDER = 5.6
-    local startY = tRoot.Position.Y - UNDER
-    local currentY = startY
-    local topY = startY + height
-    local deadline = os.clock() + height / speed + 6
+    local currentY = tRoot.Position.Y - UNDER
+    local reachedTop = false
 
-    CustomNotify("Up Player • " .. target.DisplayName, Color3.fromRGB(100, 255, 160))
+    CustomNotify("Up Player • " .. target.DisplayName .. " (Stop to end)", Color3.fromRGB(100, 255, 160))
 
     -- make sure we can actually push them
     local hadNoclip = Settings.Noclip
     Settings.Noclip = false
+    local yaw = select(2, root.CFrame:ToOrientation())
+    local baseY = currentY
 
-    while generation == UpPlayerGeneration and not env.Destroyed and os.clock() < deadline do
+    -- Only goes UP (never back down), then stays in the air until you press Stop
+    while generation == UpPlayerGeneration and not env.Destroyed do
         local dt = RunService.Heartbeat:Wait()
         if not root.Parent or humanoid.Health <= 0 or not target.Parent then
             break
@@ -396,39 +395,37 @@ local function RunUpPlayer(target)
         end
         if env.AllowToxTeleport then env.AllowToxTeleport(0.3, "Up Player") end
 
-        currentY = math.min(currentY + speed * dt, topY)
-        -- never get above their feet (if they fell off, go back under them)
-        currentY = math.min(currentY, tRoot.Position.Y - UNDER + 0.6)
-        local pos = Vector3.new(tRoot.Position.X, currentY, tRoot.Position.Z)
-        root.CFrame = CFrame.new(pos) * CFrame.Angles(0, select(2, root.CFrame:ToOrientation()), 0)
-        root.AssemblyLinearVelocity = Vector3.new(0, speed, 0)
-        root.AssemblyAngularVelocity = Vector3.zero
-
-        if currentY >= topY - 0.05 then
-            -- hold them at the top for a moment
-            local holdUntil = os.clock() + 1
-            while os.clock() < holdUntil and generation == UpPlayerGeneration and root.Parent do
-                RunService.Heartbeat:Wait()
-                if env.AllowToxTeleport then env.AllowToxTeleport(0.3, "Up Player") end
-                local tr = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-                if tr then
-                    root.CFrame = CFrame.new(tr.Position.X, topY, tr.Position.Z)
-                end
-                root.AssemblyLinearVelocity = Vector3.zero
-            end
-            break
+        -- sliders can be changed while it runs
+        local speed = math.max(tonumber(Settings.UpPlayerSpeed) or 30, 1)
+        local wantedTop = math.max(baseY + math.max(tonumber(Settings.UpPlayerHeight) or 50, 1), currentY)
+        if reachedTop and currentY < wantedTop - 0.05 then
+            reachedTop = false   -- Height slider was raised while holding: keep going up
         end
+        if not reachedTop then
+            currentY = math.min(currentY + speed * dt, wantedTop)
+            if currentY >= wantedTop - 0.05 then
+                reachedTop = true
+                CustomNotify("Up Player • holding in the air", Color3.fromRGB(100, 200, 255))
+            end
+        end
+
+        root.CFrame = CFrame.new(tRoot.Position.X, currentY, tRoot.Position.Z) * CFrame.Angles(0, yaw, 0)
+        root.AssemblyLinearVelocity = reachedTop and Vector3.zero or Vector3.new(0, speed, 0)
+        root.AssemblyAngularVelocity = Vector3.zero
     end
 
     Settings.Noclip = hadNoclip
     if root.Parent then
-        if env.AllowToxTeleport then env.AllowToxTeleport(1, "Up Player return") end
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
-        if env.ToxSafeTeleportToCFrame then
-            pcall(env.ToxSafeTeleportToCFrame, startCF, false)
-        else
-            root.CFrame = startCF
+        if Settings.UpPlayerReturn ~= false then
+            -- back to where you were when you pressed Up
+            if env.AllowToxTeleport then env.AllowToxTeleport(1, "Up Player return") end
+            if env.ToxSafeTeleportToCFrame then
+                pcall(env.ToxSafeTeleportToCFrame, startCF, false)
+            else
+                root.CFrame = startCF
+            end
         end
     end
 end
@@ -478,6 +475,20 @@ if type(env.CreateSlider) == "function" and UpPlayerBox and UpPlayerBox:IsA("Gui
             slider.Size = UDim2.new(1, -16, 0, slider.Size.Y.Offset)
             y = y + slider.Size.Y.Offset + 6
         end
+    end
+    -- "Return on Stop" inside the same block
+    if Settings.UpPlayerReturn == nil then Settings.UpPlayerReturn = true end
+    local createToggleRaw = (env.ToxUniversalRawCreators and env.ToxUniversalRawCreators.CreateToggle) or CreateToggle
+    local returnToggle = createToggleRaw("Return to my spot on Stop", FlingPage, Settings.UpPlayerReturn ~= false, function(v)
+        Settings.UpPlayerReturn = v == true
+        if env.AutoSaveConfiguration then env.AutoSaveConfiguration() end
+    end, "UpPlayerReturn")
+    if returnToggle and returnToggle:IsA("GuiObject") then
+        returnToggle.Parent = UpPlayerBox
+        returnToggle.AnchorPoint = Vector2.new(0, 0)
+        returnToggle.Position = UDim2.new(0, 8, 0, y)
+        returnToggle.Size = UDim2.new(1, -16, 0, returnToggle.Size.Y.Offset)
+        y = y + returnToggle.Size.Y.Offset + 6
     end
     UpPlayerBox.Size = UDim2.new(UpPlayerBox.Size.X.Scale, UpPlayerBox.Size.X.Offset, 0, y + 2)
 end

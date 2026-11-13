@@ -161,6 +161,7 @@ getgenv().Settings = {
     PanicKey = nil,
     UpPlayerSpeed = 30,
     UpPlayerHeight = 50,
+    UpPlayerReturn = true,
     SelectPlayerKey = "LeftAlt",
     MusicAutoPlay = false,
     MusicLoop = false,
