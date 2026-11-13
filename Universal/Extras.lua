@@ -738,17 +738,12 @@ local function StopFreecam()
         end)
     end
 
-    if saved then
-        pcall(function()
-            UserInputService.MouseBehavior = saved.MouseBehavior
-            UserInputService.MouseIconEnabled = saved.MouseIconEnabled
-        end)
-    else
-        pcall(function()
-            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-            UserInputService.MouseIconEnabled = true
-        end)
-    end
+    -- Always release the mouse when leaving freecam; the game's camera scripts re-lock
+    -- it themselves if they need to (shift lock / first person).
+    pcall(function()
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        UserInputService.MouseIconEnabled = true
+    end)
 
     freecamSaved = nil
 end
@@ -809,9 +804,15 @@ local function UpdateFreecam(delta)
             math.rad(-89),
             math.rad(89)
         )
-    elseif freecamSaved then
-        UserInputService.MouseBehavior = freecamSaved.MouseBehavior
-        UserInputService.MouseIconEnabled = freecamSaved.MouseIconEnabled
+    else
+        -- Free cursor while not holding right click. (Before it restored the mouse state
+        -- saved at start, which was LockCenter in shift-lock/first person -> mouse frozen.)
+        if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
+            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        end
+        if not UserInputService.MouseIconEnabled then
+            UserInputService.MouseIconEnabled = true
+        end
     end
 
     local orientation =

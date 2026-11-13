@@ -2381,6 +2381,22 @@ end, function(val)
     end
 end, "UltraInstinct")
 
+-- Walks away from nearby players (logic lives in Universal/Combat.lua)
+NDSCreateToggleWithSlider("Anti Social", GamePage, 5, 60, Settings.AntiSocial == true, Settings.AntiSocialRange or 20, " studs", function(v)
+    Settings.AntiSocial = v == true
+    if SyncToggleVisuals then
+        SyncToggleVisuals("AntiSocial", Settings.AntiSocial)
+    end
+    if AutoSaveConfiguration then
+        AutoSaveConfiguration()
+    end
+end, function(val)
+    Settings.AntiSocialRange = tonumber(val) or 20
+    if SyncValueVisuals then
+        SyncValueVisuals("AntiSocial", Settings.AntiSocialRange)
+    end
+end, "AntiSocial")
+
 CreateNDSSection("DISASTERS")
 
 NDSCreateToggle("Notify Disasters", GamePage, Settings.NDSNotifyDisasters, function(v)

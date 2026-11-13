@@ -77,6 +77,8 @@ Settings.KillAura = Settings.KillAura == true
 Settings.KillAuraRange = tonumber(Settings.KillAuraRange) or 15
 Settings.UltraInstinct = Settings.UltraInstinct == true
 Settings.UltraInstinctRange = tonumber(Settings.UltraInstinctRange) or 14
+Settings.AntiSocial = Settings.AntiSocial == true
+Settings.AntiSocialRange = tonumber(Settings.AntiSocialRange) or 20
 Settings.AimbotBindEnabled = Settings.AimbotBindEnabled == true
 Settings.AimbotKey = Settings.AimbotKey or Enum.KeyCode.E
 Settings.AimbotUseLeftClick = Settings.AimbotUseLeftClick == true
@@ -414,15 +416,16 @@ local function GetSafeUltraInstinctCFrame(myHrp, threatHrp, range)
         flatThreatDir = flatThreatDir.Unit
     end
 
-    -- 12 evasion angles around the circle (favoring flanks and backwards)
+    -- Angles relative to the direction AWAY from the threat (0 = exactly the opposite side
+    -- of where the player came from). Only if that spot is blocked (wall/void/water) it
+    -- tries slightly to the sides, widening step by step. Never towards the threat.
     local testAngles = {
-        90, -90,        -- Pure Right, Pure Left (flank dodge)
-        120, -120,      -- Diagonal Back-Right, Diagonal Back-Left
-        150, -150,      -- Deep Back-Right, Deep Back-Left
-        180,            -- Straight Back (retreat)
-        60, -60,        -- Diagonal Front-Right, Diagonal Front-Left (slip past)
-        30, -30,        -- Slight Forward Right, Slight Forward Left
-        0               -- Straight Away (last resort)
+        0,
+        20, -20,
+        40, -40,
+        60, -60,
+        80, -80,
+        100, -100,
     }
 
     -- Multiple candidate distance steps: ensure it finds safe ground even near ledges or inside rooms
@@ -449,8 +452,9 @@ local function GetSafeUltraInstinctCFrame(myHrp, threatHrp, range)
     rayParams.FilterDescendantsInstances = ignoreList
     rayParams.IgnoreWater = false
 
-    for _, dist in ipairs(testDistances) do
-        for _, deg in ipairs(testAngles) do
+    -- Direction first, distance second: prefer "straight away" even if it has to be a shorter hop
+    for _, deg in ipairs(testAngles) do
+        for _, dist in ipairs(testDistances) do
             local rad = math.rad(deg)
             local cosA = math.cos(rad)
             local sinA = math.sin(rad)
@@ -681,6 +685,61 @@ local function UltraInstinctStep()
     end)
 end
 getgenv().ToxUltraInstinctStep = UltraInstinctStep
+
+-- ==============================================================================
+-- ANTI SOCIAL: WALKS (no teleport) away from every player inside the range.
+-- Runs right after the default control script so it overrides WASD while someone
+-- is close; with nobody in range you move normally.
+-- ==============================================================================
+local ANTISOCIAL_BIND = "ToxAntiSocial"
+
+local function AntiSocialStep()
+    if env.Destroyed or not Settings.AntiSocial then
+        return
+    end
+    local character = Player and Player.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not root or humanoid.Health <= 0 then
+        return
+    end
+
+    local range = math.max(tonumber(Settings.AntiSocialRange) or 20, 1)
+    local myPos = root.Position
+    local away = Vector3.zero
+
+    for _, other in ipairs(Players:GetPlayers()) do
+        if not IsLocalPlayer(other) and other.Character
+        and not (Settings.IgnoreFriends and IsFriend(other)) then
+            local otherRoot = other.Character:FindFirstChild("HumanoidRootPart")
+            local otherHum = other.Character:FindFirstChildOfClass("Humanoid")
+            if otherRoot and otherHum and otherHum.Health > 0 then
+                local diff = myPos - otherRoot.Position
+                local flat = Vector3.new(diff.X, 0, diff.Z)
+                local dist = flat.Magnitude
+                if dist < range and math.abs(diff.Y) < range then
+                    if dist < 0.05 then
+                        flat = root.CFrame.LookVector
+                        dist = 0.05
+                    end
+                    -- closer players push harder
+                    away = away + flat.Unit * ((range - dist) / range + 0.1)
+                end
+            end
+        end
+    end
+
+    if away.Magnitude > 0.01 then
+        pcall(function()
+            humanoid:Move(Vector3.new(away.X, 0, away.Z).Unit, false)
+        end)
+    end
+end
+
+pcall(function() RunService:UnbindFromRenderStep(ANTISOCIAL_BIND) end)
+RunService:BindToRenderStep(ANTISOCIAL_BIND, Enum.RenderPriority.Input.Value + 1, function()
+    pcall(AntiSocialStep)
+end)
 
 -- ==============================================================================
 -- COMBAT MAIN LOOP (RenderStepped & Heartbeat)
@@ -1232,6 +1291,24 @@ local function BuildCombatUI()
         end, "UltraInstinct")
     end
 
+    -- Anti Social: walk away from nearby players (below Ultra Instinct)
+    local function OnAntiSocial(v)
+        Settings.AntiSocial = v == true
+        AutoSaveConfiguration()
+    end
+    local function OnAntiSocialRange(val)
+        Settings.AntiSocialRange = tonumber(val) or 20
+        if getgenv().SyncValueVisuals then
+            getgenv().SyncValueVisuals("AntiSocial", Settings.AntiSocialRange)
+        end
+        AutoSaveConfiguration()
+    end
+    if type(CreateToggleWithSlider) == "function" then
+        CreateToggleWithSlider("Anti Social", CombatPage, 5, 60, Settings.AntiSocial, Settings.AntiSocialRange or 20, " studs", OnAntiSocial, OnAntiSocialRange, "AntiSocial")
+    else
+        CreateToggleWithValue("Anti Social", CombatPage, Settings.AntiSocial, Settings.AntiSocialRange, OnAntiSocial, OnAntiSocialRange, "AntiSocial")
+    end
+
     if type(env.ClearActivePageCard) == "function" then
         pcall(env.ClearActivePageCard, CombatPage)
     end
@@ -1253,6 +1330,7 @@ local function CleanupCombat()
         pcall(function() FOVCircle:Remove() end)
     end
     DestroyUltraInstinctCircle()
+    pcall(function() RunService:UnbindFromRenderStep(ANTISOCIAL_BIND) end)
     env.ToxCombatLoaded = nil
 end
 
