@@ -71,7 +71,7 @@ CreateToggleWithValue("Smooth Fly", PlayerPage, Settings.SmoothFly, Settings.Fly
         end
     end
 end, function(val) Settings.FlySpeed = val end, "SmoothFly")
-CreateToggleWithValue("Fly Bypass (Anti-Cheat)", PlayerPage, Settings.FlyBypass, Settings.FlySpeed, function(v)
+CreateToggleWithValue("Fly Bypass", PlayerPage, Settings.FlyBypass, Settings.FlySpeed, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("FlyBypass", v)
     else
