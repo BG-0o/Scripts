@@ -3419,6 +3419,49 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         MoveAfter(miscSection, "Instant Proximity Prompts", "Anti Fling")
         MoveAfter(miscSection, "Tool Magnet", "Instant Proximity Prompts")
 
+        -- Final, organized order (anything not listed keeps its order after these)
+        MoveControlToSection("No Fall Damage", "PLAYER")
+        MoveControlToSection("Anti Void", "PLAYER")
+        MoveControlToSection("Force Jump", "PLAYER")
+        MoveControlToSection("Camera FOV", "PLAYER")
+        local function SetOrder(section, names)
+            if not section or type(section.Controls) ~= "table" then return end
+            local ordered, used = {}, {}
+            for _, name in ipairs(names) do
+                for _, control in ipairs(section.Controls) do
+                    if not used[control] and ControlHasName(control, name) then
+                        used[control] = true
+                        table.insert(ordered, control)
+                        break
+                    end
+                end
+            end
+            for _, control in ipairs(section.Controls) do
+                if not used[control] then
+                    table.insert(ordered, control)
+                end
+            end
+            section.Controls = ordered
+        end
+        SetOrder(playerSection, {
+            -- movement
+            "Speed", "Jump", "Force Jump", "Infinite Jump", "Bhop (Auto Jump)", "Noclip",
+            -- protection
+            "No Fall Damage", "Anti Void", "Return By Death",
+            -- flying
+            "Normal Fly", "Smooth Fly", "Fly Bypass", "Air Walk (Space Up / Ctrl Down)", "Air Walk Platform",
+            -- vehicles
+            "Car Speed", "Car Fly",
+            -- camera
+            "Freecam", "Camera FOV", "Max Zoom", "Noclip Camera", "XRay",
+        })
+        SetOrder(miscSection, {
+            "Walk Fling", "Anti Fling",
+            "Ctrl Click TP", "Teleport",
+            "Instant Proximity Prompts", "Tool Magnet",
+            "Force Shift Lock", "Fake Lag (%)", "Normalize Animations", "Fix Unanchored Parts",
+        })
+
         local pageToSection = {
             [env.VisualsPage] = visualSection,
             [env.PlayerPage] = playerSection,

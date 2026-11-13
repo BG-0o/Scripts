@@ -200,12 +200,6 @@ end, "ESPSkeleton")
 CreateToggle("Target ESP", VisualsPage, Settings.TargetESP, function(v)
     Settings.TargetESP = v == true
 end, "TargetESP")
-CreateToggle("Spectator List", VisualsPage, Settings.SpectatorList, function(v)
-    Settings.SpectatorList = v == true
-    if getgenv().ToxSpectatorsFrame then
-        getgenv().ToxSpectatorsFrame.Visible = Settings.SpectatorList
-    end
-end, "SpectatorList")
 CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("ESPTeamColors", v)

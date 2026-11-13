@@ -679,6 +679,12 @@ CreateToggle("Keybinds List", ConfigPage, Settings.KeybindsList, function(v)
         getgenv().ToxKeybindsFrame.Visible = Settings.KeybindsList
     end
 end, "KeybindsList")
+CreateToggle("Spectator List", ConfigPage, Settings.SpectatorList, function(v)
+    Settings.SpectatorList = v == true
+    if getgenv().ToxSpectatorsFrame then
+        getgenv().ToxSpectatorsFrame.Visible = Settings.SpectatorList
+    end
+end, "SpectatorList")
 CreateToggle("Start Hidden", ConfigPage, Settings.StartHidden, function(value)
     Settings.StartHidden = value == true
     if getgenv().AutoSaveConfiguration then

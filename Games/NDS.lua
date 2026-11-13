@@ -2137,39 +2137,7 @@ NDSCreateToggle("Anti Void", GamePage, Settings.AntiVoid, function(v)
     SetShared("AntiVoid", v)
 end, "AntiVoid")
 
-NDSCreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
-    SetShared("AntiFling", v)
-end, "AntiFling")
-
 CreateNDSSection("MOVEMENT")
-
-NDSCreateToggleWithSlider("Walk Fling", GamePage, 1, 100, Settings.WalkFling, Settings.WalkFlingPower or 30, "%", function(v)
-    SetShared("WalkFling", v)
-
-    if v then
-        StartNDSNoFall()
-    elseif not Settings.NoFallDamage then
-        StopNDSNoFall()
-    end
-end, function(val)
-    Settings.WalkFlingPower = tonumber(val) or 30
-    if getgenv().ToxOnSharedValueChanged then
-        getgenv().ToxOnSharedValueChanged("WalkFling", val)
-    end
-end, "WalkFling")
-
-NDSCreateToggleWithSlider("Ultra Instinct", GamePage, 5, 50, Settings.UltraInstinct, Settings.UltraInstinctRange or 14, " studs", function(v)
-    SetShared("UltraInstinct", v)
-end, function(val)
-    Settings.UltraInstinctRange = tonumber(val) or 14
-    if getgenv().ToxOnSharedValueChanged then
-        getgenv().ToxOnSharedValueChanged("UltraInstinctRange", val)
-    end
-end, "UltraInstinct")
-
-NDSCreateToggle("Ctrl Click TP", GamePage, Settings.CtrlClickTP, function(v)
-    SetShared("CtrlClickTP", v)
-end, "CtrlClickTP")
 
 NDSCreateToggleWithSlider("Water Fly", GamePage, 5, 250, Settings.NDSWaterFly, Settings.NDSWaterFlySpeed, "", function(v)
     getgenv().SetNDSWaterFly(v, true)
@@ -2205,27 +2173,45 @@ end, function(value)
     end
 end, "CarFly")
 
+NDSCreateToggle("Ctrl Click TP", GamePage, Settings.CtrlClickTP, function(v)
+    SetShared("CtrlClickTP", v)
+end, "CtrlClickTP")
+
+CreateNDSSection("FLING")
+
+NDSCreateToggleWithSlider("Walk Fling", GamePage, 1, 100, Settings.WalkFling, Settings.WalkFlingPower or 30, "%", function(v)
+    SetShared("WalkFling", v)
+
+    if v then
+        StartNDSNoFall()
+    elseif not Settings.NoFallDamage then
+        StopNDSNoFall()
+    end
+end, function(val)
+    Settings.WalkFlingPower = tonumber(val) or 30
+    if getgenv().ToxOnSharedValueChanged then
+        getgenv().ToxOnSharedValueChanged("WalkFling", val)
+    end
+end, "WalkFling")
+
+NDSCreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
+    SetShared("AntiFling", v)
+end, "AntiFling")
+
+NDSCreateToggleWithSlider("Ultra Instinct", GamePage, 5, 50, Settings.UltraInstinct, Settings.UltraInstinctRange or 14, " studs", function(v)
+    SetShared("UltraInstinct", v)
+end, function(val)
+    Settings.UltraInstinctRange = tonumber(val) or 14
+    if getgenv().ToxOnSharedValueChanged then
+        getgenv().ToxOnSharedValueChanged("UltraInstinctRange", val)
+    end
+end, "UltraInstinct")
+
 CreateNDSSection("DISASTERS")
 
 NDSCreateToggle("Notify Disasters", GamePage, Settings.NDSNotifyDisasters, function(v)
     SetNDSNotifyDisasters(v)
 end, "NDSNotifyDisasters")
-
-CreateNDSSection("EXTRAS")
-
-NDSCreateButton("Give Green Balloon", GamePage, function()
-    GiveGreenBalloon()
-end)
-
-NDSCreateButton("Interact All", GamePage, function()
-    InteractAll()
-end)
-
-NDSCreateToggle("Mute Cheer Sound", GamePage, Settings.NDSMuteCheerSound, function(v)
-    SetNDSMuteCheer(v)
-end, "NDSMuteCheerSound")
-
-CreateNDSSection("ISLAND")
 
 NDSCreateToggle("Remove Meteors", GamePage, Settings.NDSRemoveMeteors, function(v)
     SetNDSHazard("Meteors", v)
@@ -2247,9 +2233,25 @@ NDSCreateToggle("Remove Barbed Wire", GamePage, Settings.NDSRemoveBarbedWire, fu
     SetNDSHazard("BarbedWire", v)
 end, "NDSRemoveBarbedWire")
 
+CreateNDSSection("ISLAND")
+
 NDSCreateToggle("Island Rocks Collidable", GamePage, Settings.NDSIslandRocksCollidable, function(v)
     SetNDSIslandRocksCollidable(v)
 end, "NDSIslandRocksCollidable")
+
+CreateNDSSection("EXTRAS")
+
+NDSCreateButton("Give Green Balloon", GamePage, function()
+    GiveGreenBalloon()
+end)
+
+NDSCreateButton("Interact All", GamePage, function()
+    InteractAll()
+end)
+
+NDSCreateToggle("Mute Cheer Sound", GamePage, Settings.NDSMuteCheerSound, function(v)
+    SetNDSMuteCheer(v)
+end, "NDSMuteCheerSound")
 
 CreateNDSSection("TELEPORTS")
 
