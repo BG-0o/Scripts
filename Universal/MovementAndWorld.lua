@@ -1165,21 +1165,23 @@ local function StartWalkFling()
                         moveDir = root.CFrame.LookVector
                     end
 
-                    -- High linear velocity on physics frame: launches target in walking direction + upward
+                    -- Classic walkfling cycle (same order as Infinite Yield):
+                    --  Heartbeat (after physics): set the huge velocity -> this is what replicates and flings whoever touches us
+                    --  RenderStepped: restore our normal velocity
+                    --  Stepped (before physics): normal velocity + tiny jitter, so OUR physics never moves with the huge value
+                    -- Never apply the huge velocity on Stepped, or the local character gets launched across the map.
                     local flingVel = Vector3.new(moveDir.X * mult, mult * 0.75, moveDir.Z * mult)
                     root.AssemblyLinearVelocity = flingVel
 
-                    -- Immediately restore normal velocity on RenderStepped so the local player's walk and camera stay 100% smooth
                     RunService.RenderStepped:Wait()
                     if root and root.Parent then
                         root.AssemblyLinearVelocity = normalVel
                         root.AssemblyAngularVelocity = Vector3.zero
                     end
 
-                    -- Stepped step: right before collision solver to register high contact velocity against the other player
                     RunService.Stepped:Wait()
                     if root and root.Parent then
-                        root.AssemblyLinearVelocity = flingVel + Vector3.new(0, movel, 0)
+                        root.AssemblyLinearVelocity = normalVel + Vector3.new(0, movel, 0)
                         root.AssemblyAngularVelocity = Vector3.zero
                         movel = -movel
                     end
