@@ -1112,6 +1112,13 @@ end
     U.StopAntiVoid = StopAntiVoid
 end
 do
+-- No Fall Damage strength: Settings.NoFallSpeed 0-100%  ->  max fall speed 15..100 studs/s
+-- (0% = floats down very slowly, 100% = almost a normal fall)
+local function GetNoFallMaxSpeed()
+    local pct = math.clamp(tonumber(Settings.NoFallSpeed) or 50, 0, 100)
+    return 15 + pct * 0.85
+end
+getgenv().ToxGetNoFallMaxSpeed = GetNoFallMaxSpeed
 local WalkFlingGeneration = 0
 local WalkFlingImpulseActive = false
 local WalkFlingRunning = false
@@ -1136,8 +1143,9 @@ local function GetSafeWalkVelocity(root, humanoid)
         horizontal = horizontal.Unit * maxHorizontal
     end
     local y = vel.Y
-    if y < -28 then
-        y = -15            -- anti fall damage
+    local maxFall = GetNoFallMaxSpeed()
+    if y < -maxFall then
+        y = -maxFall       -- anti fall damage (strength from No Fall Damage %)
     elseif y > 60 then
         y = 60             -- normal jump still works, no self-launch
     end

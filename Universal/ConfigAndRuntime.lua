@@ -1390,10 +1390,10 @@ AddConnection(RunService.Stepped:Connect(function()
     local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
     if Settings.NoFallDamage and Root then
         local velocity = Root.AssemblyLinearVelocity
-        local triggerVelocity = game.PlaceId == 189707 and -60 or -40
-        local safeVelocity = game.PlaceId == 189707 and -45 or -35
-        if velocity.Y < triggerVelocity then
-            Root.AssemblyLinearVelocity = Vector3.new(velocity.X, safeVelocity, velocity.Z)
+        local maxFall = getgenv().ToxGetNoFallMaxSpeed and getgenv().ToxGetNoFallMaxSpeed()
+            or (15 + math.clamp(tonumber(Settings.NoFallSpeed) or 50, 0, 100) * 0.85)
+        if velocity.Y < -maxFall then
+            Root.AssemblyLinearVelocity = Vector3.new(velocity.X, -maxFall, velocity.Z)
         end
     end
     UpdateAirWalk()
@@ -1483,24 +1483,10 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
                 Vector3.zero
             velocity = velocity + (Camera.CFrame.RightVector * (moveVector.X * flySpeed))
             velocity = velocity - (Camera.CFrame.LookVector * (moveVector.Z * flySpeed))
-            if UserInputService:
-                IsKeyDown(
-                    Enum.KeyCode.Space
-                )
-            or UserInputService:
-                IsKeyDown(
-                    Enum.KeyCode.E
-                ) then
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
                 velocity = velocity + Vector3.new(0, flySpeed * 2, 0)
             end
-            if UserInputService:
-                IsKeyDown(
-                    Enum.KeyCode.LeftShift
-                )
-            or UserInputService:
-                IsKeyDown(
-                    Enum.KeyCode.Q
-                ) then
+            if (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then
                 velocity = velocity - Vector3.new(0, flySpeed * 2, 0)
             end
             if U.SetCarFlyTarget then
@@ -1564,8 +1550,8 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - flatRight end
         if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + flatRight end
         local vertical = 0
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then vertical = vertical + 1 end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then vertical = vertical - 1 end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then vertical = vertical + 1 end
+        if (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then vertical = vertical - 1 end
 
         local step = actualFlySpeed * delta
         if vertical ~= 0 then
@@ -1603,8 +1589,8 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
             if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
             if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Camera.CFrame.RightVector end
             if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.RightVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then moveDir = moveDir + Vector3.new(0, 1, 0) end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then moveDir = moveDir - Vector3.new(0, 1, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
+            if (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then moveDir = moveDir - Vector3.new(0, 1, 0) end
             if moveDir.Magnitude > 0 then
                 moveDir = moveDir.Unit
                 Root.CFrame = Root.CFrame + (moveDir * (actualFlySpeed * delta))
@@ -1627,8 +1613,8 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
             if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - Camera.CFrame.LookVector end
             if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - Camera.CFrame.RightVector end
             if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + Camera.CFrame.RightVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then dir = dir + Vector3.new(0, 1, 0) end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then dir = dir - Vector3.new(0, 1, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0, 1, 0) end
+            if (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then dir = dir - Vector3.new(0, 1, 0) end
             FlyBV.Velocity = dir * actualFlySpeed
             FlyBG.CFrame = Camera.CFrame
         else

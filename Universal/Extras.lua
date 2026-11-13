@@ -833,12 +833,11 @@ local function UpdateFreecam(delta)
         if UserInputService:IsKeyDown(Enum.KeyCode.D) then
             move = move + (orientation.RightVector)
         end
-        if UserInputService:IsKeyDown(Enum.KeyCode.E)
-        or UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
             move = move + (Vector3.yAxis)
         end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Q)
-        or UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)
+        or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
             move = move - (Vector3.yAxis)
         end
     end

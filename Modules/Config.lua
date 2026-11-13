@@ -16,6 +16,7 @@ getgenv().Settings = {
     NormalFly = false,
     FlyBypass = false,
 	NoFallDamage = false,
+	NoFallSpeed = 50,
 	AntiVoid = false,
 	AntiFling = true,
 	WalkFling = false,

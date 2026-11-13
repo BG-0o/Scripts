@@ -29,7 +29,7 @@ CreateToggle("Ctrl Click TP", FlingPage, Settings.CtrlClickTP, function(v)
 end, "CtrlClickTP")
 local toggleWithSlider = CreateToggleWithSlider or (getgenv and getgenv().CreateToggleWithSlider)
 if toggleWithSlider then
-    toggleWithSlider("Walk Fling", FlingPage, 1, 100, Settings.WalkFling, Settings.WalkFlingPower or 30, "%", function(v)
+    local walkFlingControl = toggleWithSlider("Walk Fling", FlingPage, 1, 100, Settings.WalkFling, Settings.WalkFlingPower or 30, "%", function(v)
         if getgenv().ToxSetSharedOption then
             getgenv().ToxSetSharedOption("WalkFling", v)
         else
@@ -41,6 +41,7 @@ if toggleWithSlider then
             getgenv().ToxOnSharedValueChanged("WalkFling", val)
         end
     end, "WalkFling")
+    if env.TrackUniversalControl then pcall(env.TrackUniversalControl, walkFlingControl, FlingPage) end
 else
     CreateToggleWithValue("Walk Fling", FlingPage, Settings.WalkFling, Settings.WalkFlingPower or 30, function(v)
         if getgenv().ToxSetSharedOption then
@@ -55,9 +56,22 @@ else
         end
     end, "WalkFling")
 end
-CreateToggle("No Fall Damage", FlingPage, Settings.NoFallDamage, function(v)
-    if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("NoFallDamage", v) end
-end, "NoFallDamage")
+if toggleWithSlider then
+    -- % = how fast you can fall (0% = very slow float, 100% = almost normal fall)
+    local control = toggleWithSlider("No Fall Damage", FlingPage, 0, 100, Settings.NoFallDamage, Settings.NoFallSpeed or 50, "%", function(v)
+        if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("NoFallDamage", v) end
+    end, function(val)
+        Settings.NoFallSpeed = math.clamp(tonumber(val) or 50, 0, 100)
+        if getgenv().SyncValueVisuals then
+            getgenv().SyncValueVisuals("NoFallDamage", Settings.NoFallSpeed)
+        end
+    end, "NoFallDamage")
+    if env.TrackUniversalControl then pcall(env.TrackUniversalControl, control, FlingPage) end
+else
+    CreateToggle("No Fall Damage", FlingPage, Settings.NoFallDamage, function(v)
+        if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("NoFallDamage", v) end
+    end, "NoFallDamage")
+end
 CreateToggle("Anti Void", FlingPage, Settings.AntiVoid, function(v)
     if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("AntiVoid", v) end
 end, "AntiVoid")

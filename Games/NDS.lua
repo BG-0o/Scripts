@@ -779,23 +779,9 @@ local function StartWaterFly()
 
                     local vertical = 0
 
-                    if UserInputService:
-                        IsKeyDown(
-                            Enum.KeyCode.Space
-                        )
-                    or UserInputService:
-                        IsKeyDown(
-                            Enum.KeyCode.E
-                        ) then
+                    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
                         vertical = speed
-                    elseif UserInputService:
-                        IsKeyDown(
-                            Enum.KeyCode.LeftShift
-                        )
-                    or UserInputService:
-                        IsKeyDown(
-                            Enum.KeyCode.Q
-                        ) then
+                    elseif (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then
                         vertical = -speed
                     end
 
@@ -863,12 +849,14 @@ local function StartNDSNoFall()
             if character and humanoid and humanoid.Health > 0 and root then
                 local velocity = root.AssemblyLinearVelocity
 
-                -- Anti-fall damage protection: clamp downward fall speed
-                if velocity.Y < -28 then
+                -- Anti-fall damage protection: cap downward speed (strength = No Fall Damage %)
+                local maxFall = getgenv().ToxGetNoFallMaxSpeed and getgenv().ToxGetNoFallMaxSpeed()
+                    or (15 + math.clamp(tonumber(Settings.NoFallSpeed) or 50, 0, 100) * 0.85)
+                if velocity.Y < -maxFall then
                     root.AssemblyLinearVelocity =
                         Vector3.new(
                             velocity.X,
-                            -15,
+                            -maxFall,
                             velocity.Z
                         )
                 end
@@ -2135,8 +2123,14 @@ NDSCreateToggle("Noclip", GamePage, Settings.Noclip, function(v)
     SetShared("Noclip", v)
 end, "Noclip")
 
-NDSCreateToggle("No Fall Damage", GamePage, Settings.NoFallDamage, function(v)
+-- % = how fast you can fall (0% = very slow float, 100% = almost normal fall)
+NDSCreateToggleWithSlider("No Fall Damage", GamePage, 0, 100, Settings.NoFallDamage, Settings.NoFallSpeed or 50, "%", function(v)
     SetShared("NoFallDamage", v)
+end, function(val)
+    Settings.NoFallSpeed = math.clamp(tonumber(val) or 50, 0, 100)
+    if getgenv().SyncValueVisuals then
+        getgenv().SyncValueVisuals("NoFallDamage", Settings.NoFallSpeed)
+    end
 end, "NoFallDamage")
 
 NDSCreateToggle("Anti Void", GamePage, Settings.AntiVoid, function(v)
@@ -2177,7 +2171,7 @@ NDSCreateToggle("Ctrl Click TP", GamePage, Settings.CtrlClickTP, function(v)
     SetShared("CtrlClickTP", v)
 end, "CtrlClickTP")
 
-NDSCreateToggleWithValue("Water Fly", GamePage, Settings.NDSWaterFly, Settings.NDSWaterFlySpeed, function(v)
+NDSCreateToggleWithSlider("Water Fly", GamePage, 5, 250, Settings.NDSWaterFly, Settings.NDSWaterFlySpeed, "", function(v)
     getgenv().SetNDSWaterFly(v, true)
 end, function(value)
     Settings.NDSWaterFlySpeed = math.clamp(
@@ -2201,7 +2195,7 @@ end, function(value)
     end
 end, "FlyBypass")
 
-NDSCreateToggleWithValue("Car Fly", GamePage, Settings.CarFly, Settings.CarFlySpeed, function(v)
+NDSCreateToggleWithSlider("Car Fly", GamePage, 5, 300, Settings.CarFly, Settings.CarFlySpeed, "", function(v)
     SetShared("CarFly", v)
 end, function(value)
     Settings.CarFlySpeed = math.clamp(tonumber(value) or 80, 5, 300)

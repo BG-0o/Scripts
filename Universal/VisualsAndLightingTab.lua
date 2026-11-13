@@ -213,7 +213,7 @@ CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
         Settings.ESPTeamColors = v
     end
 end, "ESPTeamColors")
-CreateToggleWithValue("Camera FOV", VisualsPage, Settings.FOVEnabled, Settings.FOVValue, function(v)
+(env.ToxValueSlider or function(n, pg, _, _, t, val, a, b, k) return CreateToggleWithValue(n, pg, t, val, a, b, k) end)("Camera FOV", VisualsPage, 30, 120, Settings.FOVEnabled, Settings.FOVValue, function(v)
     if v then
         CaptureFOVDefault()
     end
