@@ -321,3 +321,220 @@ end
 getgenv().Destroyed = false
 Destroyed = false
 getgenv().__ToxHubReexecCancelled = nil
+
+----------------------------------------------------------------------
+-- TOXHUD KEY SYSTEM ("Tox-BetaUsers")
+----------------------------------------------------------------------
+local VALID_KEY = "Tox-BetaUsers"
+local KEY_FILENAME = "ToxHud_Key.txt"
+local DISCORD_URL = "https://discord.com/invite/A7tZ9VbVvM"
+
+local function ReadSavedKey()
+    if isfile and readfile and isfile(KEY_FILENAME) then
+        local ok, raw = pcall(readfile, KEY_FILENAME)
+        if ok and raw then
+            return string.match(raw, "^%s*(.-)%s*$") or ""
+        end
+    end
+    return ""
+end
+
+local function SaveKey(key)
+    if writefile then
+        pcall(writefile, KEY_FILENAME, tostring(key))
+    end
+end
+
+local savedKey = ReadSavedKey()
+if savedKey == VALID_KEY then
+    getgenv().ToxHasPreviousExecution = true
+    getgenv().ToxKeyVerified = true
+else
+    getgenv().ToxHasPreviousExecution = false
+    getgenv().ToxKeyVerified = false
+
+    local keyGui = Instance.new("ScreenGui")
+    keyGui.Name = "ToxKeySystemGui"
+    keyGui.ResetOnSpawn = false
+    keyGui.IgnoreGuiInset = true
+    keyGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    keyGui.DisplayOrder = 2147483646
+    pcall(function() keyGui.Parent = ToxParentContainer end)
+
+    local blur = Instance.new("BlurEffect")
+    blur.Size = 18
+    pcall(function() blur.Parent = Lighting end)
+
+    local backdrop = Instance.new("Frame")
+    backdrop.Size = UDim2.new(1, 0, 1, 0)
+    backdrop.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    backdrop.BackgroundTransparency = 0.45
+    backdrop.BorderSizePixel = 0
+    backdrop.Parent = keyGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 440, 0, 260)
+    frame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    frame.AnchorPoint = Vector2.new(0.5, 0.5)
+    frame.BackgroundColor3 = Color3.fromRGB(13, 17, 26)
+    frame.BorderSizePixel = 0
+    frame.Parent = keyGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 12)
+    corner.Parent = frame
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(0, 168, 255)
+    stroke.Thickness = 1.2
+    stroke.Transparency = 0.35
+    stroke.Parent = frame
+
+    local headerLogo = Instance.new("ImageLabel")
+    headerLogo.Size = UDim2.new(0, 36, 0, 36)
+    headerLogo.Position = UDim2.new(0, 20, 0, 18)
+    headerLogo.BackgroundTransparency = 1
+    headerLogo.Image = "rbxassetid://10723346959"
+    headerLogo.Parent = frame
+
+    local headerTitle = Instance.new("TextLabel")
+    headerTitle.Size = UDim2.new(0, 100, 0, 20)
+    headerTitle.Position = UDim2.new(0, 64, 0, 16)
+    headerTitle.BackgroundTransparency = 1
+    headerTitle.Text = "ToxHud"
+    headerTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    headerTitle.Font = Enum.Font.GothamBold
+    headerTitle.TextSize = 16
+    headerTitle.TextXAlignment = Enum.TextXAlignment.Left
+    headerTitle.Parent = frame
+
+    local betaBadge = Instance.new("Frame")
+    betaBadge.Size = UDim2.new(0, 84, 0, 18)
+    betaBadge.Position = UDim2.new(0, 150, 0, 17)
+    betaBadge.BackgroundColor3 = Color3.fromRGB(14, 28, 48)
+    betaBadge.BorderSizePixel = 0
+    betaBadge.Parent = frame
+    local bCorner = Instance.new("UICorner") bCorner.CornerRadius = UDim.new(0, 4) bCorner.Parent = betaBadge
+    local bStroke = Instance.new("UIStroke") bStroke.Color = Color3.fromRGB(0, 168, 255) bStroke.Thickness = 1 bStroke.Transparency = 0.5 bStroke.Parent = betaBadge
+
+    local bText = Instance.new("TextLabel")
+    bText.Size = UDim2.new(1, 0, 1, 0)
+    bText.BackgroundTransparency = 1
+    bText.Text = "BETA ACCESS"
+    bText.TextColor3 = Color3.fromRGB(0, 168, 255)
+    bText.Font = Enum.Font.GothamBold
+    bText.TextSize = 9
+    bText.Parent = betaBadge
+
+    local headerSub = Instance.new("TextLabel")
+    headerSub.Size = UDim2.new(1, -80, 0, 16)
+    headerSub.Position = UDim2.new(0, 64, 0, 36)
+    headerSub.BackgroundTransparency = 1
+    headerSub.Text = "Insira sua chave de acesso para iniciar o script"
+    headerSub.TextColor3 = Color3.fromRGB(156, 170, 195)
+    headerSub.Font = Enum.Font.GothamMedium
+    headerSub.TextSize = 11
+    headerSub.TextXAlignment = Enum.TextXAlignment.Left
+    headerSub.Parent = frame
+
+    local inputContainer = Instance.new("Frame")
+    inputContainer.Size = UDim2.new(1, -40, 0, 42)
+    inputContainer.Position = UDim2.new(0, 20, 0, 72)
+    inputContainer.BackgroundColor3 = Color3.fromRGB(19, 25, 38)
+    inputContainer.BorderSizePixel = 0
+    inputContainer.Parent = frame
+    local inCorner = Instance.new("UICorner") inCorner.CornerRadius = UDim.new(0, 8) inCorner.Parent = inputContainer
+    local inStroke = Instance.new("UIStroke") inStroke.Color = Color3.fromRGB(30, 41, 59) inStroke.Thickness = 1 inStroke.Parent = inputContainer
+
+    local textBox = Instance.new("TextBox")
+    textBox.Size = UDim2.new(1, -20, 1, 0)
+    textBox.Position = UDim2.new(0, 12, 0, 0)
+    textBox.BackgroundTransparency = 1
+    textBox.Text = ""
+    textBox.PlaceholderText = "Cole sua key aqui... (Tox-BetaUsers)"
+    textBox.PlaceholderColor3 = Color3.fromRGB(110, 125, 150)
+    textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textBox.Font = Enum.Font.GothamMedium
+    textBox.TextSize = 12
+    textBox.TextXAlignment = Enum.TextXAlignment.Left
+    textBox.ClearTextOnFocus = false
+    textBox.Parent = inputContainer
+
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Size = UDim2.new(1, -40, 0, 20)
+    statusLabel.Position = UDim2.new(0, 20, 0, 122)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Text = ""
+    statusLabel.TextColor3 = Color3.fromRGB(244, 63, 94)
+    statusLabel.Font = Enum.Font.GothamBold
+    statusLabel.TextSize = 11
+    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+    statusLabel.Parent = frame
+
+    local submitBtn = Instance.new("TextButton")
+    submitBtn.Size = UDim2.new(0.55, -16, 0, 38)
+    submitBtn.Position = UDim2.new(0, 20, 1, -54)
+    submitBtn.BackgroundColor3 = Color3.fromRGB(0, 168, 255)
+    submitBtn.BorderSizePixel = 0
+    submitBtn.Text = "VALIDAR KEY"
+    submitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    submitBtn.Font = Enum.Font.GothamBold
+    submitBtn.TextSize = 12
+    submitBtn.Parent = frame
+    local sCorner = Instance.new("UICorner") sCorner.CornerRadius = UDim.new(0, 8) sCorner.Parent = submitBtn
+
+    local getKeyBtn = Instance.new("TextButton")
+    getKeyBtn.Size = UDim2.new(0.45, -20, 0, 38)
+    getKeyBtn.Position = UDim2.new(0.55, 6, 1, -54)
+    getKeyBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+    getKeyBtn.BorderSizePixel = 0
+    getKeyBtn.Text = "GET KEY (DISCORD)"
+    getKeyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    getKeyBtn.Font = Enum.Font.GothamBold
+    getKeyBtn.TextSize = 11
+    getKeyBtn.Parent = frame
+    local gCorner = Instance.new("UICorner") gCorner.CornerRadius = UDim.new(0, 8) gCorner.Parent = getKeyBtn
+
+    submitBtn.MouseButton1Click:Connect(function()
+        local entered = string.match(textBox.Text or "", "^%s*(.-)%s*$") or ""
+        if entered == VALID_KEY then
+            statusLabel.TextColor3 = Color3.fromRGB(34, 197, 94)
+            statusLabel.Text = "✅ Key Válida! Carregando ToxHud..."
+            SaveKey(VALID_KEY)
+            task.wait(0.35)
+            getgenv().ToxKeyVerified = true
+            getgenv().ToxHasPreviousExecution = true
+            pcall(function()
+                if blur then blur:Destroy() end
+                keyGui:Destroy()
+            end)
+        else
+            statusLabel.TextColor3 = Color3.fromRGB(244, 63, 94)
+            statusLabel.Text = "❌ Key Inválida! Obtenha sua key no Discord."
+        end
+    end)
+
+    getKeyBtn.MouseButton1Click:Connect(function()
+        pcall(function()
+            if setclipboard then
+                setclipboard(DISCORD_URL)
+            elseif toclipboard then
+                toclipboard(DISCORD_URL)
+            end
+        end)
+        statusLabel.TextColor3 = Color3.fromRGB(56, 189, 248)
+        statusLabel.Text = "📋 Link do Discord copiado para a área de transferência!"
+    end)
+
+    repeat
+        task.wait(0.1)
+    until getgenv().ToxKeyVerified == true or getgenv().Destroyed == true
+
+    if getgenv().Destroyed then
+        pcall(function()
+            if blur then blur:Destroy() end
+            keyGui:Destroy()
+        end)
+        return
+    end
+end

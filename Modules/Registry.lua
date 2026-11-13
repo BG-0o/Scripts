@@ -240,3 +240,18 @@ getgenv().ToxIsToxTeleportAllowed = function()
         tonumber(getgenv().ToxTeleportWhitelistUntil) or 0
     )
 end
+
+local function ResolveGlobalRequest()
+    local env = getgenv()
+    if type(env.ToxRequestFunction) == "function" then return env.ToxRequestFunction end
+    if type(env.request) == "function" then return env.request end
+    if type(env.http_request) == "function" then return env.http_request end
+    if type(syn) == "table" and type(syn.request) == "function" then return syn.request end
+    if type(http) == "table" and type(http.request) == "function" then return http.request end
+    if type(fluxus) == "table" and type(fluxus.request) == "function" then return fluxus.request end
+    if type(krnl) == "table" and type(krnl.request) == "function" then return krnl.request end
+    if type(http_request) == "function" then return http_request end
+    if type(request) == "function" then return request end
+    return nil
+end
+getgenv().ToxRequestFunction = ResolveGlobalRequest()

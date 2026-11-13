@@ -1149,6 +1149,505 @@ task.spawn(function()
     end
 end)
 
+----------------------------------------------------------------------
+-- TOX NETWORK TELEMETRY & SUPABASE PRESENCE SYNC
+----------------------------------------------------------------------
+local SUPABASE_URL = "https://nlavwcbdqcmoqmojraeu.supabase.co"
+local SUPABASE_KEY = "sb_publishable__HC4Z5_wV2Daf8o-mgt89Q_z_JH2cif"
+
+local function GetCurrentExecutorName()
+    if type(identifyexecutor) == "function" then
+        local name = identifyexecutor()
+        if name and name ~= "" then return tostring(name) end
+    end
+    if type(getexecutorname) == "function" then
+        local name = getexecutorname()
+        if name and name ~= "" then return tostring(name) end
+    end
+    return "Potassium"
+end
+
+local CurrentDetectedExecutor = GetCurrentExecutorName()
+local CachedGameName = "Roblox Game"
+task.spawn(function()
+    pcall(function()
+        local info = MarketplaceService:GetProductInfo(game.PlaceId)
+        if info and info.Name then CachedGameName = info.Name end
+    end)
+end)
+
+local function SyncSupabasePresence()
+    local rf = RequestFunction or (getgenv and getgenv().ToxRequestFunction)
+    if not rf then return false end
+
+    local payload = HttpService:JSONEncode({
+        user_id = Player.UserId,
+        username = Player.Name,
+        executor = tostring(CurrentDetectedExecutor),
+        current_game = tostring(CachedGameName),
+        place_id = game.PlaceId,
+        job_id = tostring(game.JobId),
+        updated_at = os.date("!%Y-%m-%dT%H:%M:%SZ")
+    })
+
+    local ok = pcall(function()
+        rf({
+            Url = SUPABASE_URL .. "/rest/v1/executor_sync?on_conflict=username",
+            Method = "POST",
+            Headers = {
+                ["apikey"] = SUPABASE_KEY,
+                ["Authorization"] = "Bearer " .. SUPABASE_KEY,
+                ["Content-Type"] = "application/json",
+                ["Prefer"] = "resolution=merge-duplicates"
+            },
+            Body = payload
+        })
+    end)
+    return ok
+end
+
+local function FetchSupabaseNetworkUsers()
+    local rf = RequestFunction or (getgenv and getgenv().ToxRequestFunction)
+    if not rf then return {} end
+
+    local res = nil
+    local ok = pcall(function()
+        res = rf({
+            Url = SUPABASE_URL .. "/rest/v1/executor_sync?select=user_id,username,executor,current_game,job_id,place_id,updated_at&order=updated_at.desc&limit=150",
+            Method = "GET",
+            Headers = {
+                ["apikey"] = SUPABASE_KEY,
+                ["Authorization"] = "Bearer " .. SUPABASE_KEY,
+                ["Accept"] = "application/json"
+            }
+        })
+    end)
+
+    if not ok or not res then return {} end
+    local body, okBody = ReadControlRelayResponse(res)
+    if not okBody or not body then return {} end
+    local decoded = DecodeRelayJson(body)
+    if type(decoded) == "table" then
+        return decoded
+    end
+    return {}
+end
+
+task.spawn(function()
+    while not getgenv().Destroyed do
+        pcall(SyncSupabasePresence)
+        task.wait(25)
+    end
+end)
+
+local function ParseIsoTimestamp(iso)
+    if type(iso) ~= "string" then return 0 end
+    local y, m, d, h, min, s = iso:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)")
+    if not y then return 0 end
+    local ok, t = pcall(os.time, {
+        year = tonumber(y),
+        month = tonumber(m),
+        day = tonumber(d),
+        hour = tonumber(h),
+        min = tonumber(min),
+        sec = tonumber(s)
+    })
+    return ok and t or 0
+end
+
+local function GetExecutorBadgeColor(execName)
+    local low = string.lower(tostring(execName or ""))
+    if string.find(low, "potassium") then
+        return Color3.fromRGB(34, 197, 94)
+    elseif string.find(low, "wave") then
+        return Color3.fromRGB(59, 130, 246)
+    elseif string.find(low, "solara") then
+        return Color3.fromRGB(245, 158, 11)
+    elseif string.find(low, "synapse") or string.find(low, "swift") then
+        return Color3.fromRGB(249, 115, 22)
+    elseif string.find(low, "delta") then
+        return Color3.fromRGB(168, 85, 247)
+    elseif string.find(low, "codex") then
+        return Color3.fromRGB(236, 72, 153)
+    elseif string.find(low, "celery") then
+        return Color3.fromRGB(16, 185, 129)
+    elseif string.find(low, "fluxus") then
+        return Color3.fromRGB(6, 182, 212)
+    end
+    return Color3.fromRGB(0, 168, 255)
+end
+
+local ToxNetworkModalGui = nil
+
+local function OpenToxNetworkModal()
+    local role, level = GetToxRole(Player)
+    local canAccess = (level >= TOX_ROLE_LEVELS.Premium) or (Player.UserId == TOX_OWNER_ID)
+    if not canAccess then
+        CustomNotify("🔒 Acesso Restrito: Apenas assinantes Premium & Donos podem visualizar os usuários online e dar Join!", Color3.fromRGB(244, 63, 94), 4)
+        return
+    end
+
+    if ToxNetworkModalGui and ToxNetworkModalGui.Parent then
+        local frame = ToxNetworkModalGui:FindFirstChild("NetworkModalFrame")
+        if frame then frame.Visible = not frame.Visible end
+        return
+    end
+
+    local env = getgenv()
+    local uiTheme = env and env.Theme
+    local modalParent = (gethui and gethui()) or game:GetService("CoreGui") or (Player and Player:FindFirstChild("PlayerGui"))
+
+    local modalGui = Instance.new("ScreenGui")
+    modalGui.Name = "ToxNetworkModalGui"
+    modalGui.ResetOnSpawn = false
+    modalGui.DisplayOrder = 2147483640
+    pcall(function() modalGui.Parent = modalParent end)
+    ToxNetworkModalGui = modalGui
+
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "NetworkModalFrame"
+    mainFrame.Size = UDim2.new(0, 620, 0, 480)
+    mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+    mainFrame.BackgroundColor3 = (uiTheme and uiTheme.Background) or Color3.fromRGB(10, 13, 20)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.ClipsDescendants = true
+    mainFrame.Parent = modalGui
+
+    local mCorner = Instance.new("UICorner") mCorner.CornerRadius = UDim.new(0, 12) mCorner.Parent = mainFrame
+    local mStroke = Instance.new("UIStroke") mStroke.Color = (uiTheme and uiTheme.Accent) or MAIN_COLOR mStroke.Thickness = 1.2 mStroke.Transparency = 0.3 mStroke.Parent = mainFrame
+
+    local mHeader = Instance.new("Frame")
+    mHeader.Size = UDim2.new(1, 0, 0, 50)
+    mHeader.BackgroundColor3 = (uiTheme and uiTheme.Panel) or Color3.fromRGB(13, 17, 26)
+    mHeader.BorderSizePixel = 0
+    mHeader.Parent = mainFrame
+    local hCorner = Instance.new("UICorner") hCorner.CornerRadius = UDim.new(0, 12) hCorner.Parent = mHeader
+    local hMask = Instance.new("Frame") hMask.Size = UDim2.new(1, 0, 0, 12) hMask.Position = UDim2.new(0, 0, 1, -12) hMask.BackgroundColor3 = mHeader.BackgroundColor3 hMask.BorderSizePixel = 0 hMask.Parent = mHeader
+    local hBorder = Instance.new("Frame") hBorder.Size = UDim2.new(1, 0, 0, 1) hBorder.Position = UDim2.new(0, 0, 1, -1) hBorder.BackgroundColor3 = (uiTheme and uiTheme.Outline) or Color3.fromRGB(30, 41, 59) hBorder.BorderSizePixel = 0 hBorder.Parent = mHeader
+
+    local hLogo = Instance.new("ImageLabel")
+    hLogo.Size = UDim2.new(0, 30, 0, 30)
+    hLogo.Position = UDim2.new(0, 14, 0.5, -15)
+    hLogo.BackgroundTransparency = 1
+    hLogo.Image = (Settings and Settings.CustomIconUrl and Settings.CustomIconUrl ~= "") and Settings.CustomIconUrl or "rbxassetid://10723346959"
+    hLogo.Parent = mHeader
+
+    local hTitle = Instance.new("TextLabel")
+    hTitle.Size = UDim2.new(0, 320, 0, 20)
+    hTitle.Position = UDim2.new(0, 52, 0, 8)
+    hTitle.BackgroundTransparency = 1
+    hTitle.Text = "Tox Network • Execuções & Presença"
+    hTitle.TextColor3 = (uiTheme and uiTheme.Text) or Color3.fromRGB(255, 255, 255)
+    hTitle.Font = Enum.Font.GothamBold
+    hTitle.TextSize = 14
+    hTitle.TextXAlignment = Enum.TextXAlignment.Left
+    hTitle.Parent = mHeader
+
+    local hSub = Instance.new("TextLabel")
+    hSub.Size = UDim2.new(0, 320, 0, 16)
+    hSub.Position = UDim2.new(0, 52, 0, 26)
+    hSub.BackgroundTransparency = 1
+    hSub.Text = "Usuários que executaram o ToxHud • Acesso Premium"
+    hSub.TextColor3 = (uiTheme and uiTheme.DimText) or Color3.fromRGB(156, 170, 195)
+    hSub.Font = Enum.Font.GothamMedium
+    hSub.TextSize = 10
+    hSub.TextXAlignment = Enum.TextXAlignment.Left
+    hSub.Parent = mHeader
+
+    local refreshBtn = Instance.new("TextButton")
+    refreshBtn.Size = UDim2.new(0, 95, 0, 26)
+    refreshBtn.Position = UDim2.new(1, -135, 0.5, -13)
+    refreshBtn.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
+    refreshBtn.BorderSizePixel = 0
+    refreshBtn.Text = "🔄 Atualizar"
+    refreshBtn.TextColor3 = (uiTheme and uiTheme.Accent) or MAIN_COLOR
+    refreshBtn.Font = Enum.Font.GothamBold
+    refreshBtn.TextSize = 10
+    refreshBtn.Parent = mHeader
+    local rfCorner = Instance.new("UICorner") rfCorner.CornerRadius = UDim.new(0, 6) rfCorner.Parent = refreshBtn
+    local rfStroke = Instance.new("UIStroke") rfStroke.Color = (uiTheme and uiTheme.Outline) or Color3.fromRGB(30, 41, 59) rfStroke.Thickness = 1 rfStroke.Parent = refreshBtn
+
+    local mClose = Instance.new("TextButton")
+    mClose.Size = UDim2.new(0, 26, 0, 26)
+    mClose.Position = UDim2.new(1, -34, 0.5, -13)
+    mClose.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
+    mClose.BorderSizePixel = 0
+    mClose.Text = "X"
+    mClose.TextColor3 = Color3.fromRGB(244, 63, 94)
+    mClose.Font = Enum.Font.GothamBold
+    mClose.TextSize = 11
+    mClose.Parent = mHeader
+    local cCorner = Instance.new("UICorner") cCorner.CornerRadius = UDim.new(0, 6) cCorner.Parent = mClose
+
+    MakeDraggable(mainFrame, mHeader)
+
+    mClose.MouseButton1Click:Connect(function()
+        mainFrame.Visible = false
+    end)
+
+    local filterBar = Instance.new("Frame")
+    filterBar.Size = UDim2.new(1, -24, 0, 32)
+    filterBar.Position = UDim2.new(0, 12, 0, 58)
+    filterBar.BackgroundTransparency = 1
+    filterBar.Parent = mainFrame
+
+    local searchContainer = Instance.new("Frame")
+    searchContainer.Size = UDim2.new(0.5, -6, 1, 0)
+    searchContainer.Position = UDim2.new(0, 0, 0, 0)
+    searchContainer.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
+    searchContainer.BorderSizePixel = 0
+    searchContainer.Parent = filterBar
+    local scCorner = Instance.new("UICorner") scCorner.CornerRadius = UDim.new(0, 6) scCorner.Parent = searchContainer
+    local scStroke = Instance.new("UIStroke") scStroke.Color = (uiTheme and uiTheme.Outline) or Color3.fromRGB(30, 41, 59) scStroke.Thickness = 1 scStroke.Parent = searchContainer
+
+    local searchBox = Instance.new("TextBox")
+    searchBox.Size = UDim2.new(1, -12, 1, 0)
+    searchBox.Position = UDim2.new(0, 10, 0, 0)
+    searchBox.BackgroundTransparency = 1
+    searchBox.PlaceholderText = "🔍 Pesquisar nick ou executor..."
+    searchBox.PlaceholderColor3 = Color3.fromRGB(120, 135, 160)
+    searchBox.Text = ""
+    searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    searchBox.Font = Enum.Font.GothamMedium
+    searchBox.TextSize = 11
+    searchBox.TextXAlignment = Enum.TextXAlignment.Left
+    searchBox.ClearTextOnFocus = false
+    searchBox.Parent = searchContainer
+
+    local tabAllBtn = Instance.new("TextButton")
+    tabAllBtn.Size = UDim2.new(0.24, -4, 1, 0)
+    tabAllBtn.Position = UDim2.new(0.5, 4, 0, 0)
+    tabAllBtn.BackgroundColor3 = (uiTheme and uiTheme.Accent) or MAIN_COLOR
+    tabAllBtn.BorderSizePixel = 0
+    tabAllBtn.Text = "Todos (0)"
+    tabAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tabAllBtn.Font = Enum.Font.GothamBold
+    tabAllBtn.TextSize = 10
+    tabAllBtn.Parent = filterBar
+    local taCorner = Instance.new("UICorner") taCorner.CornerRadius = UDim.new(0, 6) taCorner.Parent = tabAllBtn
+
+    local tabOnlineBtn = Instance.new("TextButton")
+    tabOnlineBtn.Size = UDim2.new(0.26, -4, 1, 0)
+    tabOnlineBtn.Position = UDim2.new(0.74, 4, 0, 0)
+    tabOnlineBtn.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
+    tabOnlineBtn.BorderSizePixel = 0
+    tabOnlineBtn.Text = "🟢 Online (0)"
+    tabOnlineBtn.TextColor3 = Color3.fromRGB(34, 197, 94)
+    tabOnlineBtn.Font = Enum.Font.GothamBold
+    tabOnlineBtn.TextSize = 10
+    tabOnlineBtn.Parent = filterBar
+    local toCorner = Instance.new("UICorner") toCorner.CornerRadius = UDim.new(0, 6) toCorner.Parent = tabOnlineBtn
+
+    local listScroll = Instance.new("ScrollingFrame")
+    listScroll.Size = UDim2.new(1, -24, 1, -100)
+    listScroll.Position = UDim2.new(0, 12, 0, 96)
+    listScroll.BackgroundTransparency = 1
+    listScroll.BorderSizePixel = 0
+    listScroll.ScrollBarThickness = 3
+    listScroll.ScrollBarImageColor3 = (uiTheme and uiTheme.Outline) or Color3.fromRGB(30, 41, 59)
+    listScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    listScroll.Parent = mainFrame
+
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.Padding = UDim.new(0, 6)
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Parent = listScroll
+
+    listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        listScroll.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 12)
+    end)
+
+    local cachedUsers = {}
+    local currentFilterMode = "ALL"
+
+    local function RenderUsers()
+        for _, child in ipairs(listScroll:GetChildren()) do
+            if child:IsA("GuiObject") then child:Destroy() end
+        end
+
+        local q = string.lower(string.match(searchBox.Text or "", "^%s*(.-)%s*$") or "")
+        local nowUtc = os.time(os.date("!*t"))
+        local onlineCount = 0
+        local totalCount = #cachedUsers
+
+        for _, u in ipairs(cachedUsers) do
+            local ts = ParseIsoTimestamp(u.updated_at)
+            local diff = nowUtc - ts
+            local isOnline = (diff >= -30 and diff <= 95)
+            if isOnline then onlineCount = onlineCount + 1 end
+        end
+
+        tabAllBtn.Text = "Todos (" .. tostring(totalCount) .. ")"
+        tabOnlineBtn.Text = "🟢 Online (" .. tostring(onlineCount) .. ")"
+
+        for _, u in ipairs(cachedUsers) do
+            local uname = tostring(u.username or "Desconhecido")
+            local exec = tostring(u.executor or "Potassium")
+            local gameTitle = tostring(u.current_game or "Roblox Game")
+            local ts = ParseIsoTimestamp(u.updated_at)
+            local diff = nowUtc - ts
+            local isOnline = (diff >= -30 and diff <= 95)
+
+            if currentFilterMode == "ONLINE" and not isOnline then
+                continue
+            end
+
+            if q ~= "" then
+                local matchName = string.find(string.lower(uname), q, 1, true)
+                local matchExec = string.find(string.lower(exec), q, 1, true)
+                local matchGame = string.find(string.lower(gameTitle), q, 1, true)
+                if not matchName and not matchExec and not matchGame then
+                    continue
+                end
+            end
+
+            local card = Instance.new("Frame")
+            card.Size = UDim2.new(1, -6, 0, 64)
+            card.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
+            card.BorderSizePixel = 0
+            card.Parent = listScroll
+            local cardCorner = Instance.new("UICorner") cardCorner.CornerRadius = UDim.new(0, 8) cardCorner.Parent = card
+            local cardStroke = Instance.new("UIStroke") cardStroke.Color = isOnline and Color3.fromRGB(34, 197, 94) or ((uiTheme and uiTheme.Outline) or Color3.fromRGB(30, 41, 59)) cardStroke.Thickness = 1 cardStroke.Transparency = isOnline and 0.4 or 0.7 cardStroke.Parent = card
+
+            local avatar = Instance.new("ImageLabel")
+            avatar.Size = UDim2.new(0, 44, 0, 44)
+            avatar.Position = UDim2.new(0, 10, 0.5, -22)
+            avatar.BackgroundColor3 = (uiTheme and uiTheme.Hover) or Color3.fromRGB(27, 35, 54)
+            avatar.BorderSizePixel = 0
+            avatar.Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(u.user_id or 1) .. "&w=100&h=100"
+            avatar.Parent = card
+            local aCorner = Instance.new("UICorner") aCorner.CornerRadius = UDim.new(0, 8) aCorner.Parent = avatar
+            local aStroke = Instance.new("UIStroke") aStroke.Color = isOnline and Color3.fromRGB(34, 197, 94) or (uiTheme and uiTheme.Accent or MAIN_COLOR) aStroke.Thickness = 1 aStroke.Transparency = 0.5 aStroke.Parent = avatar
+
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Size = UDim2.new(0, 185, 0, 18)
+            nameLabel.Position = UDim2.new(0, 62, 0, 10)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Text = "@" .. uname
+            nameLabel.TextColor3 = (uiTheme and uiTheme.Text) or Color3.fromRGB(255, 255, 255)
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.TextSize = 12
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            nameLabel.Parent = card
+
+            local execBadge = Instance.new("Frame")
+            execBadge.Size = UDim2.new(0, 82, 0, 18)
+            execBadge.Position = UDim2.new(0, 250, 0, 10)
+            execBadge.BackgroundColor3 = Color3.fromRGB(15, 20, 30)
+            execBadge.BorderSizePixel = 0
+            execBadge.Parent = card
+            local ebCorner = Instance.new("UICorner") ebCorner.CornerRadius = UDim.new(0, 4) ebCorner.Parent = execBadge
+            local ebStroke = Instance.new("UIStroke") ebStroke.Color = GetExecutorBadgeColor(exec) ebStroke.Thickness = 1 ebStroke.Transparency = 0.3 ebStroke.Parent = execBadge
+
+            local ebText = Instance.new("TextLabel")
+            ebText.Size = UDim2.new(1, 0, 1, 0)
+            ebText.BackgroundTransparency = 1
+            ebText.Text = exec
+            ebText.TextColor3 = GetExecutorBadgeColor(exec)
+            ebText.Font = Enum.Font.GothamBold
+            ebText.TextSize = 9
+            ebText.TextTruncate = Enum.TextTruncate.AtEnd
+            ebText.Parent = execBadge
+
+            local statusBadge = Instance.new("Frame")
+            statusBadge.Size = UDim2.new(0, 68, 0, 18)
+            statusBadge.Position = UDim2.new(0, 338, 0, 10)
+            statusBadge.BackgroundColor3 = isOnline and Color3.fromRGB(12, 38, 22) or Color3.fromRGB(22, 24, 30)
+            statusBadge.BorderSizePixel = 0
+            statusBadge.Parent = card
+            local sbCorner = Instance.new("UICorner") sbCorner.CornerRadius = UDim.new(0, 4) sbCorner.Parent = statusBadge
+
+            local sbText = Instance.new("TextLabel")
+            sbText.Size = UDim2.new(1, 0, 1, 0)
+            sbText.BackgroundTransparency = 1
+            sbText.Text = isOnline and "🟢 ONLINE" or "⚪ OFFLINE"
+            sbText.TextColor3 = isOnline and Color3.fromRGB(34, 197, 94) or Color3.fromRGB(140, 150, 165)
+            sbText.Font = Enum.Font.GothamBold
+            sbText.TextSize = 9
+            sbText.Parent = statusBadge
+
+            local infoLabel = Instance.new("TextLabel")
+            infoLabel.Size = UDim2.new(0, 350, 0, 16)
+            infoLabel.Position = UDim2.new(0, 62, 0, 34)
+            infoLabel.BackgroundTransparency = 1
+            local timeStr = os.date("%H:%M:%S", ts > 0 and ts or os.time())
+            infoLabel.Text = "🎮 " .. gameTitle .. " • " .. (isOnline and "Ativo agora" or ("Visto às " .. timeStr))
+            infoLabel.TextColor3 = (uiTheme and uiTheme.DimText) or Color3.fromRGB(156, 170, 195)
+            infoLabel.Font = Enum.Font.GothamMedium
+            infoLabel.TextSize = 10
+            infoLabel.TextXAlignment = Enum.TextXAlignment.Left
+            infoLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            infoLabel.Parent = card
+
+            local joinBtn = Instance.new("TextButton")
+            joinBtn.Size = UDim2.new(0, 80, 0, 32)
+            joinBtn.Position = UDim2.new(1, -92, 0.5, -16)
+            joinBtn.BackgroundColor3 = isOnline and Color3.fromRGB(0, 168, 255) or Color3.fromRGB(35, 45, 65)
+            joinBtn.BorderSizePixel = 0
+            joinBtn.Text = "🚀 JOIN"
+            joinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            joinBtn.Font = Enum.Font.GothamBold
+            joinBtn.TextSize = 11
+            joinBtn.Parent = card
+            local jCorner = Instance.new("UICorner") jCorner.CornerRadius = UDim.new(0, 6) jCorner.Parent = joinBtn
+
+            joinBtn.MouseButton1Click:Connect(function()
+                if not u.place_id or tonumber(u.place_id) == 0 then
+                    CustomNotify("Jogo indisponível para este usuário.", Color3.fromRGB(244, 63, 94), 3)
+                    return
+                end
+                if u.job_id and tostring(u.job_id) == tostring(game.JobId) then
+                    CustomNotify("Você já está no mesmo servidor deste jogador!", Color3.fromRGB(255, 180, 70), 3)
+                    return
+                end
+                CustomNotify("Conectando ao servidor de @" .. uname .. "...", Color3.fromRGB(0, 168, 255), 4)
+                if u.job_id and tostring(u.job_id) ~= "" and tostring(u.job_id) ~= "none" then
+                    pcall(function()
+                        TeleportService:TeleportToPlaceInstance(tonumber(u.place_id), tostring(u.job_id), Player)
+                    end)
+                else
+                    pcall(function()
+                        TeleportService:Teleport(tonumber(u.place_id), Player)
+                    end)
+                end
+            end)
+        end
+    end
+
+    local function FetchAndReload()
+        refreshBtn.Text = "⏳ Buscando..."
+        task.spawn(function()
+            local list = FetchSupabaseNetworkUsers()
+            if type(list) == "table" and #list > 0 then
+                cachedUsers = list
+            end
+            RenderUsers()
+            refreshBtn.Text = "🔄 Atualizar"
+        end)
+    end
+
+    refreshBtn.MouseButton1Click:Connect(FetchAndReload)
+    searchBox:GetPropertyChangedSignal("Text"):Connect(RenderUsers)
+
+    tabAllBtn.MouseButton1Click:Connect(function()
+        currentFilterMode = "ALL"
+        tabAllBtn.BackgroundColor3 = (uiTheme and uiTheme.Accent) or MAIN_COLOR
+        tabOnlineBtn.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
+        RenderUsers()
+    end)
+
+    tabOnlineBtn.MouseButton1Click:Connect(function()
+        currentFilterMode = "ONLINE"
+        tabOnlineBtn.BackgroundColor3 = (uiTheme and uiTheme.Accent) or MAIN_COLOR
+        tabAllBtn.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
+        RenderUsers()
+    end)
+
+    FetchAndReload()
+end
+
 local function SendControlAck(
     payload,
     success
@@ -1714,8 +2213,8 @@ local function InitToxControlGui()
 
     title.Size =
         UDim2.new(
-            1,
-            -80,
+            0,
+            120,
             1,
             0
         )
@@ -1745,6 +2244,25 @@ local function InitToxControlGui()
         Enum.TextXAlignment.Left
 
     title.Parent = topBar
+
+    local networkUsersBtn = Instance.new("TextButton")
+    networkUsersBtn.Name = "NetworkUsersButton"
+    networkUsersBtn.Size = UDim2.new(0, 150, 0, 24)
+    networkUsersBtn.Position = UDim2.new(1, -158, 0, 4)
+    networkUsersBtn.BackgroundColor3 = (uiTheme and uiTheme.Accent) or MAIN_COLOR
+    networkUsersBtn.BorderSizePixel = 0
+    networkUsersBtn.Text = "👥 Usuários Online"
+    networkUsersBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    networkUsersBtn.Font = Enum.Font.GothamBold
+    networkUsersBtn.TextSize = 11
+    networkUsersBtn.Parent = topBar
+    MakeCorner(networkUsersBtn, 6)
+    if env.RegisterThemedObject then
+        env.RegisterThemedObject(networkUsersBtn, "BackgroundColor3", "Accent")
+    end
+    networkUsersBtn.MouseButton1Click:Connect(function()
+        OpenToxNetworkModal()
+    end)
 
     local close =
         Instance.new("TextButton")

@@ -376,7 +376,7 @@ Main.Size = defaultInitSize
 Main.Position = defaultInitPos
 Main.BackgroundColor3 = Theme.Background
 Main.BorderSizePixel = 0
-Main.ClipsDescendants = true
+Main.ClipsDescendants = false
 Main.Visible = false
 Main.ZIndex = 2
 Main.Parent = Gui
@@ -391,6 +391,7 @@ local MainStroke = Instance.new("UIStroke")
 MainStroke.Color = Theme.Accent
 MainStroke.Thickness = 1
 MainStroke.Transparency = 0.35
+MainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 MainStroke.Parent = Main
 RegisterThemedObject(MainStroke, "Color", "Accent")
 
@@ -415,6 +416,9 @@ WallpaperImage.Parent = Main
 if Settings.WallpaperUrl and Settings.WallpaperUrl ~= "" then
     WallpaperImage.Image = Settings.WallpaperUrl
 end
+local WallpaperCorner = Instance.new("UICorner")
+WallpaperCorner.CornerRadius = UDim.new(0, 12)
+WallpaperCorner.Parent = WallpaperImage
 
 local WeatherContainer = Instance.new("Frame")
 WeatherContainer.Name = "WeatherContainer"
@@ -424,6 +428,9 @@ WeatherContainer.BackgroundTransparency = 1
 WeatherContainer.ClipsDescendants = true
 WeatherContainer.ZIndex = 4
 WeatherContainer.Parent = Main
+local WeatherCorner = Instance.new("UICorner")
+WeatherCorner.CornerRadius = UDim.new(0, 12)
+WeatherCorner.Parent = WeatherContainer
 
 local ScreenWeatherGui = Instance.new("ScreenGui")
 ScreenWeatherGui.Name = "ToxScreenWeather"

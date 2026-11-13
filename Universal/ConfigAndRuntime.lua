@@ -1654,11 +1654,12 @@ local function ShowCenterLoadSequence()
     TitleLabel.TextSize = 15
     TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
     TitleLabel.Parent = SplashFrame
+    local isCachedUser = (getgenv().ToxHasPreviousExecution == true)
     local SubLabel = Instance.new("TextLabel")
     SubLabel.Size = UDim2.new(1, -85, 0, 20)
     SubLabel.Position = UDim2.new(0, 78, 0, 40)
     SubLabel.BackgroundTransparency = 1
-    SubLabel.Text = "Made by @BG_0o"
+    SubLabel.Text = isCachedUser and "Cache Instalado • Carregando..." or "Made by @BG_0o"
     SubLabel.TextColor3 = Color3.fromRGB(150, 150, 180)
     SubLabel.Font = Enum.Font.GothamMedium
     SubLabel.TextSize = 12
@@ -1687,8 +1688,8 @@ local function ShowCenterLoadSequence()
     PercentLabel.TextSize = 12
     PercentLabel.TextXAlignment = Enum.TextXAlignment.Right
     PercentLabel.Parent = SplashFrame
-    local duration = 0.85
-    local steps = 20
+    local duration = isCachedUser and 2.0 or 0.85
+    local steps = isCachedUser and 35 or 20
     for i = 1, steps do
         if env.Destroyed or getgenv().Destroyed then
             if blur then blur:Destroy() end
