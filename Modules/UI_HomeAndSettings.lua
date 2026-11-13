@@ -338,6 +338,67 @@ AddAnnounceLine("+ Ultra Instinct: ground circle + dodges away", false)
 AddAnnounceLine("+ Fly Bypass, Walk Fling & No Fall Damage reworked", false)
 AddAnnounceLine("+ Flies: Space up / Ctrl down everywhere", false)
 AddAnnounceLine("+ MM2 Auto Farm & many bug fixes", false)
+
+-- Live changelog: replaces the static text above with the latest commits of the
+-- ToxHud repo, so it updates by itself on every push. Falls back to the static text.
+task.spawn(function()
+    local HttpService = game:GetService("HttpService")
+    local url = "https://api.github.com/repos/BG-0o/Scripts/commits?per_page=25"
+    local ok, body = pcall(function()
+        return game:HttpGet(url)
+    end)
+    if (not ok or type(body) ~= "string") then
+        local requestFn = (syn and syn.request) or (http and http.request) or http_request or request
+        if requestFn then
+            local okReq, res = pcall(requestFn, { Url = url, Method = "GET", Headers = { ["User-Agent"] = "ToxHub" } })
+            if okReq and res and res.Body then
+                ok, body = true, res.Body
+            end
+        end
+    end
+    if not ok or type(body) ~= "string" then return end
+    local okJson, commits = pcall(function() return HttpService:JSONDecode(body) end)
+    if not okJson or type(commits) ~= "table" or #commits == 0 then return end
+
+    local lines = {}
+    local newestDate = nil
+    for _, entry in ipairs(commits) do
+        local commit = type(entry) == "table" and entry.commit
+        local message = commit and tostring(commit.message or "") or ""
+        local firstLine = string.match(message, "^[^\n]+") or ""
+        local kind = string.lower(string.match(firstLine, "^(%a+)") or "")
+        -- skip housekeeping / merge commits
+        if firstLine ~= "" and kind ~= "chore" and kind ~= "merge" and kind ~= "docs" then
+            newestDate = newestDate or (commit.author and commit.author.date)
+            -- "fix(walkfling): only apply ..." -> "Walkfling: only apply ..."
+            local scope, rest = string.match(firstLine, "^%a+%(([^%)]+)%)!?:%s*(.+)$")
+            if not rest then
+                rest = string.match(firstLine, "^%a+!?:%s*(.+)$") or firstLine
+            end
+            local text = scope and (scope:gsub("^%l", string.upper) .. ": " .. rest) or (rest:gsub("^%l", string.upper))
+            if #text > 58 then
+                text = string.sub(text, 1, 55) .. "..."
+            end
+            local prefix = (kind == "fix") and "• " or "+ "
+            table.insert(lines, prefix .. text)
+            if #lines >= 8 then break end
+        end
+    end
+    if #lines == 0 or getgenv().Destroyed or not AnnounceBox.Parent then return end
+
+    for _, child in ipairs(AnnounceBox:GetChildren()) do
+        if child:IsA("TextLabel") then
+            child:Destroy()
+        end
+    end
+    AddAnnounceLine("Latest Updates", true)
+    if newestDate then
+        AddAnnounceLine(string.sub(tostring(newestDate), 1, 10), false)
+    end
+    for _, line in ipairs(lines) do
+        AddAnnounceLine(line, false)
+    end
+end)
 end
 do
 local StatsCard = CreateCard(HomePage, "Stats", "📊", 4, "Home_Stats")
