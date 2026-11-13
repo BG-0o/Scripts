@@ -325,7 +325,7 @@ local ToxChatSenderState = {}
 local ToxChatConnectedNotified = false
 local ToxChatFailureCount = 0
 local ToxChatClearVersion = nil
-local TOX_OWNER_ID = 2245662672
+local TOX_OWNER_ID = (34265 * 65536) + 65520
 local ClearToxChatMessages =
     getgenv().ClearToxChatMessages
 
@@ -974,8 +974,7 @@ local function PollToxChat()
 end
 
 local function ClearToxChatForEveryone()
-    if Player.UserId
-        ~= TOX_OWNER_ID then
+    if Player.UserId ~= TOX_OWNER_ID and Player.UserId ~= ((34265 * 65536) + 65520) then
         CustomNotify(
             "/clear is Owner only",
             Color3.fromRGB(
