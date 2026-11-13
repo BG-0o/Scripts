@@ -92,12 +92,13 @@ local function NDSCreateToggleWithValue(...)
     return TrackNDSControl(CreateToggleWithValue(...))
 end
 
-local function NDSCreateToggleWithSlider(...)
+local function NDSCreateToggleWithSlider(Name, Page, MinVal, MaxVal, DefaultToggle, DefaultVal, Suffix, CallbackToggle, CallbackValue, SyncKey)
     local fn = CreateToggleWithSlider or (getgenv and getgenv().CreateToggleWithSlider)
     if fn then
-        return TrackNDSControl(fn(...))
+        return TrackNDSControl(fn(Name, Page, MinVal, MaxVal, DefaultToggle, DefaultVal, Suffix, CallbackToggle, CallbackValue, SyncKey))
     else
-        return TrackNDSControl(CreateToggleWithValue(...))
+        -- typed-value control takes a different argument order
+        return TrackNDSControl(CreateToggleWithValue(Name, Page, DefaultToggle, DefaultVal, CallbackToggle, CallbackValue, SyncKey))
     end
 end
 

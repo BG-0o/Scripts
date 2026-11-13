@@ -686,6 +686,8 @@ getgenv().ToxUltraInstinctStep = UltraInstinctStep
 -- COMBAT MAIN LOOP (RenderStepped & Heartbeat)
 -- ==============================================================================
 local lastTriggerTime = 0
+local lastKillAuraTime = 0
+local KILL_AURA_INTERVAL = 0.12   -- max ~8 swings/s (was every frame, per player)
 local spinAngle = 0
 
 local combatConnection = RunService.RenderStepped:Connect(function(dt)
@@ -897,15 +899,27 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         local myHrp = Player.Character:FindFirstChild("HumanoidRootPart")
         if myHrp then
             local range = tonumber(Settings.KillAuraRange) or 15
-            for _, p in ipairs(Players:GetPlayers()) do
-                if not IsLocalPlayer(p) and p.Character then
-                    local tHrp = p.Character:FindFirstChild("HumanoidRootPart")
-                    local tHum = p.Character:FindFirstChildOfClass("Humanoid")
-                    if tHrp and tHum and tHum.Health > 0 then
-                        if (myHrp.Position - tHrp.Position).Magnitude <= range then
-                            local tool = Player.Character and Player.Character:FindFirstChildOfClass("Tool")
-                            if tool then tool:Activate() end
+            -- One swing per interval if ANY valid target is in range
+            -- (before: tool:Activate() every frame for every player in range)
+            if os.clock() - lastKillAuraTime >= KILL_AURA_INTERVAL then
+                local hasTarget = false
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if not IsLocalPlayer(p) and p.Character
+                    and not (Settings.IgnoreFriends and IsFriend and IsFriend(p)) then
+                        local tHrp = p.Character:FindFirstChild("HumanoidRootPart")
+                        local tHum = p.Character:FindFirstChildOfClass("Humanoid")
+                        if tHrp and tHum and tHum.Health > 0
+                        and (myHrp.Position - tHrp.Position).Magnitude <= range then
+                            hasTarget = true
+                            break
                         end
+                    end
+                end
+                if hasTarget then
+                    local tool = Player.Character:FindFirstChildOfClass("Tool")
+                    if tool then
+                        lastKillAuraTime = os.clock()
+                        pcall(function() tool:Activate() end)
                     end
                 end
             end

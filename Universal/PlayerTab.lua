@@ -133,43 +133,13 @@ end, function(val)
     Settings.CarFlySpeed = val
 end, "CarFly")
 
-local airPlatform = nil
-CreateToggle("Air Walk Platform", PlayerPage, Settings.AirWalkPlatform == true, function(v)
-    Settings.AirWalkPlatform = v
-    if v then
-        task.spawn(function()
-            while Settings.AirWalkPlatform and not getgenv().Destroyed do
-                local char = Player.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    if not airPlatform or not airPlatform.Parent then
-                        airPlatform = Instance.new("Part")
-                        airPlatform.Name = "ToxAirPlatform"
-                        airPlatform.Size = Vector3.new(6, 1, 6)
-                        airPlatform.Anchored = true
-                        airPlatform.Transparency = 0.8
-                        airPlatform.CanCollide = true
-                        local activeTheme = getgenv().Theme
-                        airPlatform.Color = (activeTheme and activeTheme.Accent) or Color3.fromRGB(45, 95, 255)
-                        airPlatform.Parent = workspace
-                    end
-                    -- Top of the platform exactly at the feet (it used to sit 0.1 stud too high
-                    -- and kept pushing the player up)
-                    local hum = char:FindFirstChildOfClass("Humanoid")
-                    local standOffset = 3
-                    if hum and hum.RigType == Enum.HumanoidRigType.R15 then
-                        standOffset = hum.HipHeight + hrp.Size.Y / 2
-                    end
-                    airPlatform.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y - standOffset - 0.55, hrp.Position.Z)
-                end
-                task.wait(0.03)
-            end
-            if airPlatform then pcall(function() airPlatform:Destroy() end) airPlatform = nil end
-        end)
-    else
-        if airPlatform then pcall(function() airPlatform:Destroy() end) airPlatform = nil end
-    end
-end, "AirWalkPlatform")
+-- "Air Walk Platform" removed: it duplicated "Air Walk" (same floor under the feet).
+-- Clean up a platform left by older versions.
+Settings.AirWalkPlatform = false
+pcall(function()
+    local old = workspace:FindFirstChild("ToxAirPlatform")
+    if old then old:Destroy() end
+end)
 
 local lastDeathCFrame = nil
 Player.CharacterAdded:Connect(function(char)

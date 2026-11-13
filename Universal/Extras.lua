@@ -3364,7 +3364,6 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         MoveControlToSection("Fullbright", "LIGHTING")
         MoveControlToSection("XRay", "PLAYER")
         MoveControlToSection("Noclip Camera", "PLAYER")
-        MoveControlToSection("Air Walk Platform", "PLAYER")
         MoveControlToSection("Return By Death", "PLAYER")
         MoveControlToSection("Instant Proximity Prompts", "MISC")
         MoveControlToSection("Tool Magnet", "MISC")
@@ -3388,8 +3387,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         MoveAfter(playerSection, "XRay", "Freecam")
         MoveAfter(playerSection, "Noclip Camera", "XRay")
         MoveAfter(playerSection, "Max Zoom", "Noclip Camera")
-        MoveAfter(playerSection, "Air Walk Platform", "Max Zoom")
-        MoveAfter(playerSection, "Return By Death", "Air Walk Platform")
+        MoveAfter(playerSection, "Return By Death", "Max Zoom")
 
         MoveAfter(visualSection, "Show Health", "Names")
         MoveBefore(visualSection, "Rainbow", "ESP Color")
@@ -3449,7 +3447,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             -- protection
             "No Fall Damage", "Anti Void", "Return By Death",
             -- flying
-            "Normal Fly", "Smooth Fly", "Fly Bypass", "Air Walk (Space Up / Ctrl Down)", "Air Walk Platform",
+            "Normal Fly", "Smooth Fly", "Fly Bypass", "Air Walk (Space Up / Ctrl Down)",
             -- vehicles
             "Car Speed", "Car Fly",
             -- camera

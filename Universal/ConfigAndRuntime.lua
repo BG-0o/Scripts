@@ -1504,7 +1504,8 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
     else
         DestroyCarFlyMovers()
     end
-    if Settings.Spinbot and Root then
+    -- Fallback only: Combat.lua has the real Spinbot (running both made it spin twice/irregular)
+    if Settings.Spinbot and Root and not getgenv().ToxCombatLoaded then
         Root.CFrame = Root.CFrame * CFrame.Angles(0, math.rad(Settings.SpinSpeed or 50), 0)
     end
     local actualFlySpeed = (Settings.FlySpeed or 10) * 10
