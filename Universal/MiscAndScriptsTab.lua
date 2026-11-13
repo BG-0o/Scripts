@@ -284,6 +284,170 @@ CreateInputWithTwoButtons(
 )
 CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
 
+
+if toggleWithSlider then
+    local partMagnetControl = toggleWithSlider("Part Magnet", FlingPage, 5, 300, Settings.PartMagnet, Settings.PartMagnetRange or 80, " studs", function(v)
+        Settings.PartMagnet = v == true
+        if not Settings.PartMagnet and env.ToxReleasePartMagnet then
+            env.ToxReleasePartMagnet()
+        end
+    end, function(val)
+        Settings.PartMagnetRange = tonumber(val) or 80
+        if getgenv().SyncValueVisuals then
+            getgenv().SyncValueVisuals("PartMagnet", Settings.PartMagnetRange)
+        end
+    end, "PartMagnet")
+    if env.TrackUniversalControl then pcall(env.TrackUniversalControl, partMagnetControl, FlingPage) end
+end
+
+-- ==============================================================================
+-- PART MAGNET: pulls the unanchored parts around you and keeps them orbiting you.
+-- Real for everyone (not visual): it only moves parts YOUR client simulates (network
+-- ownership). The Roblox server gives you the parts near you; it also tries to raise
+-- the simulation radius when the executor allows it, and keeps the parts "awake" so
+-- the ownership isn't taken back.
+-- ==============================================================================
+do
+    local RunService = game:GetService("RunService")
+    local MAX_PARTS = 70
+    local Controlled = {}      -- part -> { Att = Attachment, Align = AlignPosition, Index = n }
+    local controlledCount = 0
+    local scanClock, radiusClock = 0, 0
+    local nextIndex = 0
+    local rootAttachment = nil
+
+    local function Release(part)
+        local data = Controlled[part]
+        if not data then return end
+        Controlled[part] = nil
+        controlledCount = math.max(controlledCount - 1, 0)
+        pcall(function() data.Align:Destroy() end)
+        pcall(function() data.Att:Destroy() end)
+        if part.Parent and data.CanCollide ~= nil then
+            pcall(function() part.CanCollide = data.CanCollide end)
+        end
+    end
+
+    local function ReleaseAll()
+        for part in pairs(Controlled) do
+            Release(part)
+        end
+        controlledCount = 0
+    end
+    env.ToxReleasePartMagnet = ReleaseAll
+
+    local function IsCharacterPart(part)
+        local model = part:FindFirstAncestorOfClass("Model")
+        while model do
+            if model:FindFirstChildOfClass("Humanoid") then
+                return true
+            end
+            model = model.Parent and model.Parent:FindFirstAncestorOfClass("Model")
+        end
+        return false
+    end
+
+    local function IsMagnetCandidate(part)
+        if not part:IsA("BasePart") or part.Anchored or Controlled[part] then return false end
+        if string.sub(part.Name, 1, 3) == "Tox" then return false end
+        local ok, grounded = pcall(function() return part:IsGrounded() end)
+        if not ok or grounded then return false end      -- welded to something anchored
+        local size = part.Size
+        if math.max(size.X, size.Y, size.Z) > 80 then return false end
+        if IsCharacterPart(part) then return false end
+        if part:FindFirstAncestorOfClass("Tool") then return false end
+        return true
+    end
+
+    local function Grab(part)
+        if controlledCount >= MAX_PARTS then return end
+        local att = Instance.new("Attachment")
+        att.Name = "ToxMagnetAttachment"
+        att.Parent = part
+        local align = Instance.new("AlignPosition")
+        align.Name = "ToxMagnetAlign"
+        align.Mode = Enum.PositionAlignmentMode.OneAttachment
+        align.Attachment0 = att
+        align.MaxForce = math.huge
+        align.MaxVelocity = math.huge
+        align.Responsiveness = 120
+        align.Parent = part
+        nextIndex += 1
+        Controlled[part] = { Att = att, Align = align, Index = nextIndex, CanCollide = part.CanCollide }
+        controlledCount += 1
+        pcall(function() part.CanCollide = false end)   -- so they don't hit you while orbiting
+    end
+
+    local function TryRaiseSimulationRadius()
+        local setter = sethiddenproperty or set_hidden_property or sethiddenprop
+        if setter then
+            pcall(setter, Player, "SimulationRadius", 1e9)
+            pcall(setter, Player, "MaximumSimulationRadius", 1e9)
+        end
+        pcall(function() Player.SimulationRadius = 1e9 end)
+    end
+
+    AddConnection(RunService.Heartbeat:Connect(function(delta)
+        if env.Destroyed then return end
+        if not Settings.PartMagnet then
+            if controlledCount > 0 then ReleaseAll() end
+            return
+        end
+        local character = Player.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+
+        radiusClock += delta
+        if radiusClock >= 1 then
+            radiusClock = 0
+            TryRaiseSimulationRadius()
+        end
+
+        local range = math.clamp(tonumber(Settings.PartMagnetRange) or 80, 5, 1000)
+
+        scanClock += delta
+        if scanClock >= 0.4 then
+            scanClock = 0
+            -- drop parts that got anchored / destroyed / too far
+            for part in pairs(Controlled) do
+                if not part.Parent or part.Anchored or (part.Position - root.Position).Magnitude > range * 2 + 50 then
+                    Release(part)
+                end
+            end
+            local params = OverlapParams.new()
+            params.FilterType = Enum.RaycastFilterType.Exclude
+            params.FilterDescendantsInstances = { character }
+            local ok, parts = pcall(function()
+                return workspace:GetPartBoundsInRadius(root.Position, range, params)
+            end)
+            if ok and parts then
+                for _, part in ipairs(parts) do
+                    if controlledCount >= MAX_PARTS then break end
+                    if IsMagnetCandidate(part) then
+                        Grab(part)
+                    end
+                end
+            end
+        end
+
+        -- orbit targets: rings around you, slowly spinning
+        local t = os.clock()
+        local center = root.Position
+        for part, data in pairs(Controlled) do
+            local i = data.Index
+            local ring = i % 4
+            local radius = 7 + ring * 3
+            local angle = i * 2.399963 + t * (1.2 - ring * 0.2)
+            local height = ((i % 5) - 2) * 1.6
+            data.Align.Position = center + Vector3.new(math.cos(angle) * radius, height, math.sin(angle) * radius)
+            -- keeps the part "awake" so the server doesn't take ownership back
+            pcall(function()
+                part.AssemblyAngularVelocity = Vector3.new(0, 4, 0)
+            end)
+        end
+    end))
+end
+
 -- ==============================================================================
 -- Shared player lookup (same matching as Fling / Teleport: name or display name)
 -- ==============================================================================

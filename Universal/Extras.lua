@@ -3460,7 +3460,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             -- players
             "Teleport", "Spectate", "Up Player", "Select Player (Hold + Click)", "Ctrl Click TP",
             -- utilities
-            "Instant Proximity Prompts", "Tool Magnet",
+            "Instant Proximity Prompts", "Tool Magnet", "Part Magnet",
             "Force Shift Lock", "Fake Lag (%)", "Normalize Animations", "Fix Unanchored Parts",
         })
         -- the two window buttons always at the very end
