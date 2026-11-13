@@ -1146,8 +1146,20 @@ local function GetSafeWalkVelocity(root, humanoid)
     local maxFall = GetNoFallMaxSpeed()
     if y < -maxFall then
         y = -maxFall       -- anti fall damage (strength from No Fall Damage %)
-    elseif y > 60 then
-        y = 60             -- normal jump still works, no self-launch
+    else
+        -- Upward cap must allow the player's real jump (Jump option can raise JumpPower a lot)
+        local jumpVelocity = 50
+        pcall(function()
+            if humanoid.UseJumpPower then
+                jumpVelocity = tonumber(humanoid.JumpPower) or 50
+            else
+                jumpVelocity = math.sqrt(2 * workspace.Gravity * (tonumber(humanoid.JumpHeight) or 7.2))
+            end
+        end)
+        local maxUp = math.max(60, jumpVelocity * 1.2)
+        if y > maxUp then
+            y = maxUp      -- real jumps still work, no self-launch from collisions
+        end
     end
     return Vector3.new(horizontal.X, y, horizontal.Z)
 end

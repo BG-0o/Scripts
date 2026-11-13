@@ -1574,6 +1574,11 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         if FlyBypassFloor then
             pcall(function() FlyBypassFloor:Destroy() end)
             FlyBypassFloor = nil
+            -- Fly Bypass forced RunningNoPhysics; give the humanoid its normal states back
+            -- (otherwise jumping could stay broken after turning it off)
+            if Hum and Hum.Health > 0 then
+                pcall(function() Hum:ChangeState(Enum.HumanoidStateType.Freefall) end)
+            end
         end
         if Settings.SmoothFly and Root and Hum and Hum.Health > 0 then
             DisableNormalFlyPhysics()
