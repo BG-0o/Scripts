@@ -471,6 +471,35 @@ local UpPlayerBox = CreateInputWithTwoButtons("Up Player", FlingPage, "", "Up", 
     task.spawn(RunUpPlayer, target)
 end)
 
+-- Third button: instant Stop (cancels right away, no lowering)
+if UpPlayerBox and UpPlayerBox:IsA("GuiObject") then
+    local stopBtn = Instance.new("TextButton")
+    stopBtn.Name = "ToxUpPlayerStop"
+    stopBtn.Size = UDim2.new(0, 48, 0, 24)
+    stopBtn.Position = UDim2.new(1, -242, 0.5, -12)
+    stopBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 50)
+    stopBtn.BorderSizePixel = 0
+    stopBtn.Text = "Stop"
+    stopBtn.TextColor3 = Color3.new(1, 1, 1)
+    stopBtn.Font = Enum.Font.GothamBold
+    stopBtn.TextSize = 11
+    stopBtn.Parent = UpPlayerBox
+    local sc = Instance.new("UICorner") sc.CornerRadius = UDim.new(0, 4) sc.Parent = stopBtn
+    for _, child in ipairs(UpPlayerBox:GetChildren()) do
+        if child:IsA("TextLabel") and child.Text == "Up Player" then
+            child.Size = UDim2.new(1, -256, child.Size.Y.Scale, child.Size.Y.Offset)
+        end
+    end
+    stopBtn.MouseButton1Click:Connect(function()
+        if UpPlayerRunning then
+            StopUpPlayer()
+            CustomNotify("Up Player stopped", Color3.fromRGB(255, 120, 120))
+        else
+            CustomNotify("Up Player is not running", Color3.fromRGB(255, 180, 70))
+        end
+    end)
+end
+
 -- Speed / Height sliders live INSIDE the Up Player option (one block instead of 3 rows)
 if type(env.CreateSlider) == "function" and UpPlayerBox and UpPlayerBox:IsA("GuiObject") then
     local ROW = 42
