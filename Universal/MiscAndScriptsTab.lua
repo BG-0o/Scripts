@@ -869,26 +869,39 @@ do
     env.ToxAvatarItemsGui = gui
     env.ToxAvatarItemsLoad = AvatarItemsLoad
 
-    -- Hide/collapse together with the main UI and get the "-" minimize button,
-    -- like Music Player / Waypoints (Core may load after this file, so retry).
+    -- Follows the main window by itself: hides when the main UI hides and comes back
+    -- (only if it was open) when the main UI shows again. Plus the "-" minimize button.
+    if env.ToxLinkedSubGuis then
+        env.ToxLinkedSubGuis.AvatarItems = nil   -- avoid two systems fighting over Visible
+    end
     task.spawn(function()
-        local linked, minimized = false, false
-        for _ = 1, 50 do
+        local minimizeDone, mainHooked = false, false
+        for _ = 1, 100 do
             if env.Destroyed then return end
-            if not linked and env.RegisterToxLinkedSubGui then
-                pcall(env.RegisterToxLinkedSubGui, "AvatarItems", gui)
-                linked = true
-            end
-            if not minimized and env.RegisterToxSubGuiMinimize then
+            if not minimizeDone and env.RegisterToxSubGuiMinimize then
                 pcall(env.RegisterToxSubGuiMinimize, gui, -52)
-                minimized = true
+                minimizeDone = true
             end
-            if linked and minimized then return end
+            local main = env.Main
+            if not mainHooked and main then
+                mainHooked = true
+                local reopenWithMain = false
+                AddConnection(main:GetPropertyChangedSignal("Visible"):Connect(function()
+                    if env.Destroyed then return end
+                    if not main.Visible then
+                        if gui.Visible then
+                            reopenWithMain = true
+                            gui.Visible = false
+                        end
+                    elseif reopenWithMain then
+                        reopenWithMain = false
+                        gui.Visible = true
+                    end
+                end))
+            end
+            if minimizeDone and mainHooked then return end
             task.wait(0.2)
         end
-        -- fallback: at least hide with the main window
-        env.ToxLinkedSubGuis = env.ToxLinkedSubGuis or {}
-        env.ToxLinkedSubGuis.AvatarItems = gui
     end)
 end
 CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
