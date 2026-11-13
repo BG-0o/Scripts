@@ -433,7 +433,7 @@ local function RunUpPlayer(target)
     end
 end
 
-CreateInputWithTwoButtons("Up Player", FlingPage, "", "Up", "Stop", function(text, mode)
+local UpPlayerBox = CreateInputWithTwoButtons("Up Player", FlingPage, "", "Up", "Stop", function(text, mode)
     if mode ~= "TP" then
         StopUpPlayer()
         return CustomNotify("Up Player stopped", Color3.fromRGB(255, 120, 120))
@@ -445,15 +445,41 @@ CreateInputWithTwoButtons("Up Player", FlingPage, "", "Up", "Stop", function(tex
     task.spawn(RunUpPlayer, target)
 end)
 
-if type(env.CreateSlider) == "function" then
-    env.CreateSlider("Up Player Speed", FlingPage, 5, 200, Settings.UpPlayerSpeed, " studs/s", function(v)
+-- Speed / Height sliders live INSIDE the Up Player option (one block instead of 3 rows)
+if type(env.CreateSlider) == "function" and UpPlayerBox and UpPlayerBox:IsA("GuiObject") then
+    local ROW = 42
+    local speedSlider = env.CreateSlider("Speed", FlingPage, 5, 200, Settings.UpPlayerSpeed, " studs/s", function(v)
         Settings.UpPlayerSpeed = tonumber(v) or 30
         if env.AutoSaveConfiguration then env.AutoSaveConfiguration() end
     end, "UpPlayerSpeed", true)
-    env.CreateSlider("Up Player Height", FlingPage, 5, 500, Settings.UpPlayerHeight, " studs", function(v)
+    local heightSlider = env.CreateSlider("Height", FlingPage, 5, 500, Settings.UpPlayerHeight, " studs", function(v)
         Settings.UpPlayerHeight = tonumber(v) or 50
         if env.AutoSaveConfiguration then env.AutoSaveConfiguration() end
     end, "UpPlayerHeight", true)
+
+    -- keep the original row (name, box, buttons) pinned to the top
+    for _, child in ipairs(UpPlayerBox:GetChildren()) do
+        if child:IsA("GuiObject") then
+            if child.Position.Y.Scale == 0.5 then
+                child.Position = UDim2.new(child.Position.X.Scale, child.Position.X.Offset, 0, ROW / 2 + child.Position.Y.Offset)
+            end
+            if child.Size.Y.Scale == 1 then
+                child.Size = UDim2.new(child.Size.X.Scale, child.Size.X.Offset, 0, ROW)
+            end
+        end
+    end
+
+    local y = ROW
+    for _, slider in ipairs({ speedSlider, heightSlider }) do
+        if slider and slider:IsA("GuiObject") then
+            slider.Parent = UpPlayerBox
+            slider.AnchorPoint = Vector2.new(0, 0)
+            slider.Position = UDim2.new(0, 8, 0, y)
+            slider.Size = UDim2.new(1, -16, 0, slider.Size.Y.Offset)
+            y = y + slider.Size.Y.Offset + 6
+        end
+    end
+    UpPlayerBox.Size = UDim2.new(UpPlayerBox.Size.X.Scale, UpPlayerBox.Size.X.Offset, 0, y + 2)
 end
 
 -- ==============================================================================

@@ -3455,11 +3455,26 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             "Freecam", "Camera FOV", "Max Zoom", "Noclip Camera", "XRay",
         })
         SetOrder(miscSection, {
-            "Walk Fling", "Anti Fling",
-            "Ctrl Click TP", "Teleport",
+            -- fling
+            "Walk Fling", "Anti Fling", "Fling",
+            -- players
+            "Teleport", "Spectate", "Up Player", "Select Player (Hold + Click)", "Ctrl Click TP",
+            -- utilities
             "Instant Proximity Prompts", "Tool Magnet",
             "Force Shift Lock", "Fake Lag (%)", "Normalize Animations", "Fix Unanchored Parts",
         })
+        -- the two window buttons always at the very end
+        if miscSection and type(miscSection.Controls) == "table" then
+            for _, name in ipairs({ "Tox Music Player", "Tox Waypoints" }) do
+                for index, control in ipairs(miscSection.Controls) do
+                    if ControlHasName(control, name) then
+                        table.remove(miscSection.Controls, index)
+                        table.insert(miscSection.Controls, control)
+                        break
+                    end
+                end
+            end
+        end
 
         local pageToSection = {
             [env.VisualsPage] = visualSection,
