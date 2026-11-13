@@ -1077,192 +1077,122 @@ end
 end
 do
 local WalkFlingGeneration = 0
-local WalkFlingCollisionDefaults =
-    setmetatable({}, {__mode = "k"})
 local WalkFlingImpulseActive = false
-local WalkFlingRestoreVelocity = nil
 getgenv().ToxWalkFlingImpulseActive = false
-local function RestoreWalkFlingCollisions()
-    local character = Player.Character
-    for part, oldCanCollide in pairs(
-        WalkFlingCollisionDefaults
-    ) do
-        if part
-        and part.Parent
-        and character
-        and part:IsDescendantOf(character) then
-            if Settings.Noclip then
-                part.CanCollide = false
-            else
-                part.CanCollide =
-                    oldCanCollide
-            end
-        end
-    end
-    ClearToxTable(
-        WalkFlingCollisionDefaults
-    )
-end
-local function ApplyWalkFlingNoclip(
-    character
-)
-    for _, part in ipairs(
-        character:GetDescendants()
-    ) do
-        if part:IsA("BasePart") then
-            if WalkFlingCollisionDefaults[part]
-            == nil then
-                WalkFlingCollisionDefaults[part] =
-                    part.CanCollide
-            end
-            part.CanCollide = false
-        end
-    end
-end
+
 local function StopWalkFling()
     WalkFlingGeneration = WalkFlingGeneration + 1
-    local wasImpulseActive =
-        WalkFlingImpulseActive
     WalkFlingImpulseActive = false
     getgenv().ToxWalkFlingImpulseActive = false
-    local character =
-        Player.Character
-    local root =
-        character
-        and character:
-            FindFirstChild(
-                "HumanoidRootPart"
-            )
-    if wasImpulseActive
-    and root
-    and WalkFlingRestoreVelocity then
-        root.Velocity =
-            WalkFlingRestoreVelocity
-        root.AssemblyLinearVelocity =
-            WalkFlingRestoreVelocity
-    end
-    WalkFlingRestoreVelocity = nil
-    if root
-    and getgenv().SetNDSNoTPAnchor then
+    local character = Player.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    if root then
         pcall(function()
-            getgenv().SetNDSNoTPAnchor(
-                root.CFrame,
-                true
-            )
+            root.AssemblyAngularVelocity = Vector3.zero
         end)
     end
-    RestoreWalkFlingCollisions()
 end
+
 local function StartWalkFling()
     StopWalkFling()
-    if not Settings.WalkFling
-    or env.Destroyed then
+    if not Settings.WalkFling or env.Destroyed then
         return
     end
-    if Settings.AntiFling then
-        RestoreAntiFlingDefaults()
-    end
-    local generation =
-        WalkFlingGeneration
+
+    local generation = WalkFlingGeneration
     task.spawn(function()
-        local moveLift = 0.1
         while Settings.WalkFling
         and not env.Destroyed
         and env.ScriptLoaded
-        and generation
-            == WalkFlingGeneration do
-            RunService.Heartbeat:Wait()
-            local character =
-                Player.Character
-            local humanoid =
-                character
-                and character:
-                    FindFirstChildOfClass(
-                        "Humanoid"
-                    )
-            local root =
-                character
-                and character:
-                    FindFirstChild(
-                        "HumanoidRootPart"
-                    )
-            local velocity = nil
-            if not character
-            or not character.Parent
-            or not humanoid
-            or humanoid.Health <= 0
-            or not root
-            or not root.Parent then
+        and generation == WalkFlingGeneration do
+            RunService.Stepped:Wait()
+
+            local character = Player.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+
+            if not character or not character.Parent or not humanoid or humanoid.Health <= 0 or not root or not root.Parent then
                 task.wait()
             else
-                ApplyWalkFlingNoclip(
-                    character
-                )
-                velocity =
-                    root.Velocity
-                WalkFlingRestoreVelocity =
-                    velocity
-                WalkFlingImpulseActive = true
-                getgenv().ToxWalkFlingImpulseActive = true
-                local power = math.clamp(tonumber(Settings.WalkFlingPower) or 50, 5, 100)
-                local multScale = power / 50
-                local multiplier =
-                    (game.PlaceId == NDSPlaceId
-                    and 18
-                    or 2500) * multScale
-                local verticalBoost =
-                    (game.PlaceId == NDSPlaceId
-                    and 8
-                    or 1500) * multScale
-                root.Velocity =
-                    velocity * multiplier
-                    + Vector3.new(
-                        0,
-                        verticalBoost,
-                        0
-                    )
-                RunService.RenderStepped:Wait()
-                if character.Parent
-                and root.Parent then
-                    root.Velocity =
-                        velocity
-                    root.AssemblyLinearVelocity =
-                        velocity
+                -- 1. Ensure solid collision with the ground (NEVER fall through the island, floors, or into water)
+                local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
+                if torso and not Settings.Noclip then
+                    torso.CanCollide = true
                 end
-                WalkFlingImpulseActive = false
-                getgenv().ToxWalkFlingImpulseActive = false
-                WalkFlingRestoreVelocity = nil
-            end
-            if generation
-                ~= WalkFlingGeneration
-            or not Settings.WalkFling then
-                break
-            end
-            RunService.Stepped:Wait()
-            if generation
-                ~= WalkFlingGeneration
-            or not Settings.WalkFling then
-                break
-            end
-            if velocity and character.Parent
-            and root.Parent then
-                root.Velocity =
-                    velocity
-                    + Vector3.new(
-                        0,
-                        moveLift,
-                        0
+
+                -- 2. Anti-Fall Damage clamp: prevents lethal fall damage across NDS & all games
+                if root.AssemblyLinearVelocity.Y < -28 then
+                    root.AssemblyLinearVelocity = Vector3.new(
+                        root.AssemblyLinearVelocity.X,
+                        -15,
+                        root.AssemblyLinearVelocity.Z
                     )
-                moveLift =
-                    moveLift * -1
+                end
+
+                -- 3. Proximity detection: only activate fling when another player is in close contact (< 6.5 studs)
+                local myPos = root.Position
+                local targetFound = nil
+                local targetDist = 6.5
+
+                for _, otherPlayer in ipairs(Players:GetPlayers()) do
+                    if otherPlayer ~= Player and otherPlayer.Character then
+                        local otherRoot = otherPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        local otherHum = otherPlayer.Character:FindFirstChildOfClass("Humanoid")
+                        if otherRoot and otherHum and otherHum.Health > 0 then
+                            local d = (otherRoot.Position - myPos).Magnitude
+                            if d < targetDist then
+                                targetDist = d
+                                targetFound = otherRoot
+                            end
+                        end
+                    end
+                end
+
+                local power = math.clamp(tonumber(Settings.WalkFlingPower) or 30, 1, 100)
+
+                if targetFound then
+                    -- Contact detected: apply safe rotational torque to fling other player upon collision
+                    WalkFlingImpulseActive = true
+                    getgenv().ToxWalkFlingImpulseActive = true
+
+                    -- Scaled torque: at 1% = 100, at 5% = 500, at 30% = 3000, at 50% = 5000, at 100% = 10000
+                    local torqueForce = power * 100
+                    root.AssemblyAngularVelocity = Vector3.new(0, torqueForce, 0)
+
+                    -- Gentle horizontal nudge in target direction for firm physical contact without launching self
+                    local toTarget = (targetFound.Position - myPos)
+                    local flatDir = Vector3.new(toTarget.X, 0, toTarget.Z)
+                    if flatDir.Magnitude > 0.1 then
+                        flatDir = flatDir.Unit
+                    else
+                        flatDir = root.CFrame.LookVector
+                    end
+                    local nudgeSpeed = math.clamp(power * 0.15, 0.5, 10)
+                    local currentVel = root.AssemblyLinearVelocity
+                    root.AssemblyLinearVelocity = Vector3.new(
+                        flatDir.X * nudgeSpeed,
+                        math.clamp(currentVel.Y, -15, 8),
+                        flatDir.Z * nudgeSpeed
+                    )
+                else
+                    -- No player nearby: reset torque, maintain 100% normal stable walking
+                    if WalkFlingImpulseActive then
+                        root.AssemblyAngularVelocity = Vector3.zero
+                    end
+                    WalkFlingImpulseActive = false
+                    getgenv().ToxWalkFlingImpulseActive = false
+                end
             end
         end
+
         WalkFlingImpulseActive = false
         getgenv().ToxWalkFlingImpulseActive = false
-        WalkFlingRestoreVelocity = nil
-        if generation
-        == WalkFlingGeneration then
-            RestoreWalkFlingCollisions()
+        local character = Player.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+        if root then
+            pcall(function()
+                root.AssemblyAngularVelocity = Vector3.zero
+            end)
         end
     end)
 end

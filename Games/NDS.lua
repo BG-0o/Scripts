@@ -863,49 +863,43 @@ local function StartNDSNoFall()
             if character and humanoid and humanoid.Health > 0 and root then
                 local velocity = root.AssemblyLinearVelocity
 
-                local walkPulse =
-                    getgenv().ToxWalkFlingImpulseActive
-                    == true
+                local minY =
+                    Settings.WalkFling
+                    and -20
+                    or -45
 
-                if not walkPulse then
-                    local minY =
-                        Settings.WalkFling
-                        and -24
-                        or -45
+                local triggerY =
+                    Settings.WalkFling
+                    and -28
+                    or -60
 
-                    local triggerY =
-                        Settings.WalkFling
-                        and -32
-                        or -60
+                if velocity.Y < triggerY then
+                    root.AssemblyLinearVelocity =
+                        Vector3.new(
+                            velocity.X,
+                            minY,
+                            velocity.Z
+                        )
+                end
 
-                    if velocity.Y < triggerY then
+                if Settings.WalkFling then
+                    local horizontal =
+                        Vector3.new(
+                            velocity.X,
+                            0,
+                            velocity.Z
+                        )
+
+                    if horizontal.Magnitude > 85 then
+                        horizontal =
+                            horizontal.Unit * 85
+
                         root.AssemblyLinearVelocity =
                             Vector3.new(
-                                velocity.X,
-                                minY,
-                                velocity.Z
+                                horizontal.X,
+                                root.AssemblyLinearVelocity.Y,
+                                horizontal.Z
                             )
-                    end
-
-                    if Settings.WalkFling then
-                        local horizontal =
-                            Vector3.new(
-                                velocity.X,
-                                0,
-                                velocity.Z
-                            )
-
-                        if horizontal.Magnitude > 110 then
-                            horizontal =
-                                horizontal.Unit * 110
-
-                            root.AssemblyLinearVelocity =
-                                Vector3.new(
-                                    horizontal.X,
-                                    root.AssemblyLinearVelocity.Y,
-                                    horizontal.Z
-                                )
-                        end
                     end
                 end
             end
@@ -1411,8 +1405,9 @@ local NDSHazardDefaults = {
     BarbedWire = {}
 }
 local NDSRockDefaults = {}
-local NDSDisasterSeen = {}
-local NDSDisasterStructure = nil
+local NDSCurrentDisaster = nil
+local NDSCurrentMap = nil
+local NDSLastDisasterNotify = ""
 local NDSDisasterClock = 0
 
 local NDSHazardSettingKeys = {
@@ -1684,8 +1679,9 @@ local function SetNDSMuteCheer(enabled)
 end
 
 local function NDSDetectDisaster(text)
-    local lower = string.lower(tostring(text or ""))
-    if lower == "" then
+    local raw = tostring(text or "")
+    local lower = string.lower(raw):gsub("%s+", " "):match("^%s*(.-)%s*$")
+    if not lower or #lower < 3 then
         return nil
     end
 
@@ -1710,30 +1706,30 @@ local function NDSDetectDisaster(text)
         return canonical[lower]
     end
 
-    -- Warning text pattern detection (from PlayerGui text labels)
-    if string.find(lower, "tsunami") then
+    -- Warning text pattern detection (from PlayerGui text labels and Status banner)
+    if string.find(lower, "tsunami") or string.find(lower, "higher ground") or string.find(lower, "tidal wave") then
         return "Tsunami"
     elseif string.find(lower, "flash flood") or (string.find(lower, "flood") and not string.find(lower, "light")) then
         return "Flash Flood"
+    elseif string.find(lower, "volcan") or string.find(lower, "eruption") or (string.find(lower, "lava") and not string.find(lower, "lamp")) then
+        return "Volcanic Eruption"
+    elseif string.find(lower, "meteor") then
+        return "Meteor Shower"
     elseif string.find(lower, "tornado") or string.find(lower, "cyclone") or string.find(lower, "twister") then
         return "Tornado"
     elseif string.find(lower, "acid rain") or string.find(lower, "acidic") then
         return "Acid Rain"
-    elseif string.find(lower, "blizzard") or string.find(lower, "snow storm") then
+    elseif string.find(lower, "deadly virus") or (string.find(lower, "virus") and not string.find(lower, "antivirus")) or string.find(lower, "infection") then
+        return "Deadly Virus"
+    elseif string.find(lower, "blizzard") or string.find(lower, "snow storm") or string.find(lower, "snowstorm") or string.find(lower, "freezing") then
         return "Blizzard"
     elseif string.find(lower, "sandstorm") or string.find(lower, "sand storm") then
         return "Sandstorm"
     elseif string.find(lower, "thunderstorm") or string.find(lower, "thunder storm") or string.find(lower, "lightning") then
         return "Thunderstorm"
-    elseif string.find(lower, "meteor") then
-        return "Meteor Shower"
-    elseif string.find(lower, "volcan") or string.find(lower, "eruption") or (string.find(lower, "lava") and not string.find(lower, "lamp")) then
-        return "Volcanic Eruption"
     elseif string.find(lower, "earthquake") or string.find(lower, "tremor") then
         return "Earthquake"
-    elseif string.find(lower, "deadly virus") or (string.find(lower, "virus") and not string.find(lower, "antivirus")) then
-        return "Deadly Virus"
-    elseif string.find(lower, "fire") and (string.find(lower, "warning") or string.find(lower, "fire!") or string.find(lower, "extinguish") or string.find(lower, "spread") or string.find(lower, "flame")) then
+    elseif string.find(lower, "fire disaster") or string.find(lower, "disaster fire") or (string.find(lower, "fire") and (string.find(lower, "spread") or string.find(lower, "flame") or string.find(lower, "extinguish") or string.find(lower, "burn"))) then
         return "Fire"
     end
 
@@ -1741,21 +1737,30 @@ local function NDSDetectDisaster(text)
 end
 
 local function NDSNotifyDisaster(disaster, mapName)
-    if not disaster or NDSDisasterSeen[disaster] then
+    if not disaster then
         return
     end
 
-    NDSDisasterSeen[disaster] = true
+    local key = tostring(disaster) .. "::" .. tostring(mapName or "")
+    if NDSLastDisasterNotify == key then
+        return
+    end
+
+    NDSCurrentDisaster = disaster
+    if mapName and tostring(mapName) ~= "" and tostring(mapName) ~= "none" then
+        NDSCurrentMap = tostring(mapName)
+    end
+    NDSLastDisasterNotify = key
 
     if CustomNotify then
         local msg = "Disaster: " .. tostring(disaster)
-        if mapName and tostring(mapName) ~= "" and tostring(mapName) ~= "none" then
-            msg = msg .. " • " .. tostring(mapName)
+        if NDSCurrentMap and NDSCurrentMap ~= "" and NDSCurrentMap ~= "none" then
+            msg = msg .. " • " .. tostring(NDSCurrentMap)
         end
         CustomNotify(
             msg,
             Color3.fromRGB(255, 190, 80),
-            6
+            7
         )
     end
 end
@@ -1765,40 +1770,70 @@ local function NDSScanDisasters()
         return
     end
 
-    local structure = workspace:FindFirstChild("Structure")
-
-    if structure ~= NDSDisasterStructure then
-        NDSDisasterStructure = structure
-        NDSDisasterSeen = {}
+    -- 1. Check LocalPlayer's SurvivalTag first (immediate RNG server selection upon round spawn)
+    local myChar = Player.Character
+    if myChar then
+        local myTag = myChar:FindFirstChild("SurvivalTag")
+        if myTag and myTag:IsA("StringValue") and myTag.Value ~= "" then
+            local mapVal = myTag:FindFirstChild("MapName") and myTag.MapName.Value or NDSCurrentMap
+            local detected = NDSDetectDisaster(myTag.Value)
+            if detected then
+                NDSNotifyDisaster(detected, mapVal)
+                return
+            end
+        end
     end
 
-    -- 1. Check SurvivalTag (official NDS server tag attached to player characters)
-    local players = Players:GetPlayers()
-    for _, plr in ipairs(players) do
-        local char = plr.Character
-        if char then
-            local tag = char:FindFirstChild("SurvivalTag")
-            if tag and tag:IsA("StringValue") and tag.Value ~= "" then
-                local mapVal = tag:FindFirstChild("MapName") and tag.MapName.Value or nil
-                local detected = NDSDetectDisaster(tag.Value)
+    -- 2. Check PlayerGui.MainGui (Status label & official Disaster Warning banner)
+    local pg = Player:FindFirstChildOfClass("PlayerGui")
+    local mainGui = pg and pg:FindFirstChild("MainGui")
+    if mainGui then
+        local statusLabel = mainGui:FindFirstChild("Status")
+        if statusLabel and statusLabel:IsA("TextLabel") and statusLabel.Visible then
+            local text = tostring(statusLabel.Text or "")
+            local lower = string.lower(text)
+            if string.find(lower, "intermission") or string.find(lower, "waiting") or string.find(lower, "loading") then
+                NDSCurrentDisaster = nil
+                NDSCurrentMap = nil
+                NDSLastDisasterNotify = ""
+            else
+                local detected = NDSDetectDisaster(text)
                 if detected then
-                    NDSNotifyDisaster(detected, mapVal)
+                    NDSNotifyDisaster(detected, NDSCurrentMap)
                     return
+                end
+            end
+        end
+
+        -- Check descendants of MainGui specifically (ignoring chat, ToxHub, foreign notifications)
+        for _, obj in ipairs(mainGui:GetDescendants()) do
+            if obj:IsA("TextLabel") and obj.Visible then
+                local text = tostring(obj.Text or "")
+                if #text > 4 then
+                    local detected = NDSDetectDisaster(text)
+                    if detected then
+                        NDSNotifyDisaster(detected, NDSCurrentMap)
+                        return
+                    end
                 end
             end
         end
     end
 
-    -- 2. Check PlayerGui for official Disaster Warning banner
-    local pg = Player:FindFirstChildOfClass("PlayerGui")
-    if pg then
-        for _, obj in ipairs(pg:GetDescendants()) do
-            if obj:IsA("TextLabel") and obj.Visible then
-                local text = tostring(obj.Text or "")
-                if #text > 3 then
-                    local detected = NDSDetectDisaster(text)
+    -- 3. Spectator fallback: Only check players who are ALIVE and ON THE ISLAND (never AFK in lobby tower)
+    local islandCenter = Vector3.new(-2, 45, 10)
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= Player and plr.Character then
+            local char = plr.Character
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hrp and hum and hum.Health > 0 and hrp.Position.Y < 120 and (hrp.Position - islandCenter).Magnitude < 400 then
+                local tag = char:FindFirstChild("SurvivalTag")
+                if tag and tag:IsA("StringValue") and tag.Value ~= "" then
+                    local mapVal = tag:FindFirstChild("MapName") and tag.MapName.Value or NDSCurrentMap
+                    local detected = NDSDetectDisaster(tag.Value)
                     if detected then
-                        NDSNotifyDisaster(detected)
+                        NDSNotifyDisaster(detected, mapVal)
                         return
                     end
                 end
@@ -1812,17 +1847,32 @@ local function HookCharacterForSurvivalTag(char)
     TrackNDSExtraConnection(char.ChildAdded:Connect(function(child)
         if child.Name == "SurvivalTag" and child:IsA("StringValue") then
             task.defer(function()
-                local mapVal = child:FindFirstChild("MapName") and child.MapName.Value or nil
+                local mapVal = child:FindFirstChild("MapName") and child.MapName.Value or NDSCurrentMap
                 local detected = NDSDetectDisaster(child.Value)
                 if detected then
                     NDSNotifyDisaster(detected, mapVal)
                 end
             end)
+            TrackNDSExtraConnection(child.Changed:Connect(function()
+                local mapVal = child:FindFirstChild("MapName") and child.MapName.Value or NDSCurrentMap
+                local detected = NDSDetectDisaster(child.Value)
+                if detected then
+                    NDSNotifyDisaster(detected, mapVal)
+                end
+            end))
         end
     end))
+    TrackNDSExtraConnection(char.ChildRemoved:Connect(function(child)
+        if child.Name == "SurvivalTag" then
+            NDSCurrentDisaster = nil
+            NDSCurrentMap = nil
+            NDSLastDisasterNotify = ""
+        end
+    end))
+
     local existing = char:FindFirstChild("SurvivalTag")
     if existing and existing:IsA("StringValue") then
-        local mapVal = existing:FindFirstChild("MapName") and existing.MapName.Value or nil
+        local mapVal = existing:FindFirstChild("MapName") and existing.MapName.Value or NDSCurrentMap
         local detected = NDSDetectDisaster(existing.Value)
         if detected then
             NDSNotifyDisaster(detected, mapVal)
@@ -1830,22 +1880,51 @@ local function HookCharacterForSurvivalTag(char)
     end
 end
 
-local function HookPlayerForSurvivalTag(plr)
-    if plr.Character then
-        HookCharacterForSurvivalTag(plr.Character)
+if Player.Character then
+    HookCharacterForSurvivalTag(Player.Character)
+end
+TrackNDSExtraConnection(Player.CharacterAdded:Connect(HookCharacterForSurvivalTag))
+
+local function HookNDSMainGui()
+    local pg = Player:FindFirstChildOfClass("PlayerGui")
+    if not pg then return end
+    local mainGui = pg:FindFirstChild("MainGui")
+    if not mainGui then return end
+
+    local status = mainGui:FindFirstChild("Status")
+    if status and status:IsA("TextLabel") then
+        TrackNDSExtraConnection(status:GetPropertyChangedSignal("Text"):Connect(function()
+            local text = tostring(status.Text or "")
+            local lower = string.lower(text)
+            if string.find(lower, "intermission") or string.find(lower, "waiting") or string.find(lower, "loading") then
+                NDSCurrentDisaster = nil
+                NDSCurrentMap = nil
+                NDSLastDisasterNotify = ""
+            else
+                local detected = NDSDetectDisaster(text)
+                if detected then
+                    NDSNotifyDisaster(detected, NDSCurrentMap)
+                end
+            end
+        end))
     end
-    TrackNDSExtraConnection(plr.CharacterAdded:Connect(HookCharacterForSurvivalTag))
 end
 
-for _, plr in ipairs(Players:GetPlayers()) do
-    HookPlayerForSurvivalTag(plr)
+task.defer(HookNDSMainGui)
+local pgObj = Player:FindFirstChildOfClass("PlayerGui")
+if pgObj then
+    TrackNDSExtraConnection(pgObj.ChildAdded:Connect(function(child)
+        if child.Name == "MainGui" then
+            task.defer(HookNDSMainGui)
+        end
+    end))
 end
-TrackNDSExtraConnection(Players.PlayerAdded:Connect(HookPlayerForSurvivalTag))
 
 local function SetNDSNotifyDisasters(enabled)
     Settings.NDSNotifyDisasters = enabled == true
-    NDSDisasterSeen = {}
-    NDSDisasterStructure = workspace:FindFirstChild("Structure")
+    NDSCurrentDisaster = nil
+    NDSCurrentMap = nil
+    NDSLastDisasterNotify = ""
     NDSDisasterClock = 0
 
     if Settings.NDSNotifyDisasters then
@@ -2024,7 +2103,7 @@ end, "AntiFling")
 
 CreateNDSSection("MOVEMENT")
 
-NDSCreateToggleWithSlider("Walk Fling", GamePage, 5, 100, Settings.WalkFling, Settings.WalkFlingPower or 50, "%", function(v)
+NDSCreateToggleWithSlider("Walk Fling", GamePage, 1, 100, Settings.WalkFling, Settings.WalkFlingPower or 30, "%", function(v)
     SetShared("WalkFling", v)
 
     if v then
@@ -2033,7 +2112,7 @@ NDSCreateToggleWithSlider("Walk Fling", GamePage, 5, 100, Settings.WalkFling, Se
         StopNDSNoFall()
     end
 end, function(val)
-    Settings.WalkFlingPower = tonumber(val) or 50
+    Settings.WalkFlingPower = tonumber(val) or 30
     if getgenv().ToxOnSharedValueChanged then
         getgenv().ToxOnSharedValueChanged("WalkFling", val)
     end

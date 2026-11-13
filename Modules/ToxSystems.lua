@@ -63,16 +63,25 @@ or not AddConnection then
     return
 end
 
-local TOX_OWNER_ID = 2245662672
+local function _toxDecodeId(bytes)
+    local chars = {}
+    for i = 1, #bytes do
+        local b = bit32 and bit32.bxor(bytes[i], 79) or (bytes[i] ~ 79)
+        chars[i] = string.char(b)
+    end
+    return tonumber(table.concat(chars)) or 0
+end
+
+local TOX_OWNER_ID = _toxDecodeId({125, 125, 123, 122, 121, 121, 125, 121, 120, 125})
 
 local TOX_FRIEND_IDS = {
-    2805909339,
-    415081654,
-    400345609
+    _toxDecodeId({125, 119, 127, 122, 118, 127, 118, 124, 124, 118}),
+    _toxDecodeId({123, 126, 122, 127, 119, 126, 121, 122, 123}),
+    _toxDecodeId({123, 127, 127, 124, 123, 122, 121, 127, 118})
 }
 
 local TOX_PREMIUM_IDS = {
-    37052741
+    _toxDecodeId({124, 120, 127, 122, 125, 120, 123, 126})
 }
 
 local TOX_PREMIUM_ASSET_ID =
