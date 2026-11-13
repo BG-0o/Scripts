@@ -661,6 +661,24 @@ CreateKeybindButton("Panic Key", ConfigPage, Settings.PanicKey, function(key)
         getgenv().AutoSaveConfiguration()
     end
 end)
+CreateToggle("Keybinds", ConfigPage, Settings.ShowToxBinds == true, function(value)
+    -- ON: every option shows a "[ key ]" button to set its bind
+    -- OFF: buttons are hidden, binds you already set keep working
+    if getgenv().SetShowToxBinds then
+        getgenv().SetShowToxBinds(value == true)
+    else
+        Settings.ShowToxBinds = value == true
+    end
+    if getgenv().AutoSaveConfiguration then
+        getgenv().AutoSaveConfiguration()
+    end
+end, "ShowToxBinds")
+CreateToggle("Keybinds List", ConfigPage, Settings.KeybindsList, function(v)
+    Settings.KeybindsList = v == true
+    if getgenv().ToxKeybindsFrame then
+        getgenv().ToxKeybindsFrame.Visible = Settings.KeybindsList
+    end
+end, "KeybindsList")
 CreateToggle("Start Hidden", ConfigPage, Settings.StartHidden, function(value)
     Settings.StartHidden = value == true
     if getgenv().AutoSaveConfiguration then

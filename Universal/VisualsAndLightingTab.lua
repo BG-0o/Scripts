@@ -206,12 +206,6 @@ CreateToggle("Spectator List", VisualsPage, Settings.SpectatorList, function(v)
         getgenv().ToxSpectatorsFrame.Visible = Settings.SpectatorList
     end
 end, "SpectatorList")
-CreateToggle("Keybinds List", VisualsPage, Settings.KeybindsList, function(v)
-    Settings.KeybindsList = v == true
-    if getgenv().ToxKeybindsFrame then
-        getgenv().ToxKeybindsFrame.Visible = Settings.KeybindsList
-    end
-end, "KeybindsList")
 CreateToggle("Team Colors", VisualsPage, Settings.ESPTeamColors, function(v)
     if getgenv().ToxSetSharedOption then
         getgenv().ToxSetSharedOption("ESPTeamColors", v)

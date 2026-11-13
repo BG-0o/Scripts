@@ -490,39 +490,13 @@ local function ToxUpdateKeybinds()
     if now - lastKeyUpdate < 0.3 then return end
     lastKeyUpdate = now
 
+    -- Binds the user set with the "[ key ]" buttons (Config > Keybinds)
     local activeBinds = {}
-
-    local function resolveKeyString(key)
-        if typeof(key) == "EnumItem" then
-            return key.Name
-        elseif type(key) == "string" and key ~= "" then
-            return key
+    if getgenv().GetToxBindList then
+        local ok, list = pcall(getgenv().GetToxBindList)
+        if ok and type(list) == "table" then
+            activeBinds = list
         end
-        return nil
-    end
-
-    if Settings.Aimbot then
-        local k = resolveKeyString(Settings.AimbotKey) or "RMB"
-        table.insert(activeBinds, { Name = "Aimbot", Key = k, Active = Settings.Aimbot == true })
-    end
-    if Settings.Speed then
-        table.insert(activeBinds, { Name = "Speed", Key = "Toggle", Active = Settings.Speed == true })
-    end
-    if Settings.NormalFly or Settings.SmoothFly or Settings.FlyBypass then
-        table.insert(activeBinds, { Name = "Fly", Key = "Toggle", Active = true })
-    end
-    if Settings.Noclip then
-        table.insert(activeBinds, { Name = "Noclip", Key = "Toggle", Active = Settings.Noclip == true })
-    end
-    if Settings.CtrlClickTP then
-        table.insert(activeBinds, { Name = "Ctrl TP", Key = "Ctrl+Click", Active = Settings.CtrlClickTP == true })
-    end
-    if Settings.ForceShiftLock then
-        local k = Settings.ShiftLockKey or "Shift"
-        table.insert(activeBinds, { Name = "ShiftLock", Key = k, Active = Settings.ForceShiftLock == true })
-    end
-    if Settings.TargetESP then
-        table.insert(activeBinds, { Name = "Target ESP", Key = "Active", Active = Settings.TargetESP == true })
     end
 
     for _, child in ipairs(KeybindsContainer:GetChildren()) do
@@ -538,7 +512,7 @@ local function ToxUpdateKeybinds()
         emptyLbl.Font = Enum.Font.Gotham
         emptyLbl.TextSize = 10
         emptyLbl.TextColor3 = Theme_DimText
-        emptyLbl.Text = "No active binds"
+        emptyLbl.Text = "No binds set"
         emptyLbl.TextXAlignment = Enum.TextXAlignment.Center
         emptyLbl.ZIndex = 999992
         emptyLbl.Parent = KeybindsContainer

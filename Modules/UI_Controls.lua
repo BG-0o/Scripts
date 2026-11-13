@@ -270,6 +270,208 @@ do
     getgenv().ShowToxDropdownOverlay = ShowToxDropdownOverlay
     getgenv().CloseToxDropdownOverlay = CloseToxDropdownOverlay
 end
+-- ==============================================================================
+-- OPTION KEYBINDS: "[ - ]" button on every toggle (Config > "Keybinds" shows/hides them).
+-- Hiding the buttons keeps every bind working. Binds live in Settings.ToxBinds
+-- as { [option id] = "KeyCodeName" } and are saved with the config.
+-- ==============================================================================
+if type(Settings.ToxBinds) ~= "table" then
+    Settings.ToxBinds = {}
+end
+Settings.ShowToxBinds = Settings.ShowToxBinds == true
+
+local ToxBindEntries = env.ToxBindEntries or {}
+env.ToxBindEntries = ToxBindEntries
+local ToxBindCapturing = false
+
+local function GetToxBindId(Name, SyncKey)
+    if SyncKey ~= nil and tostring(SyncKey) ~= "" then
+        return tostring(SyncKey)
+    end
+    return "opt:" .. tostring(Name)
+end
+
+local function GetToxBindKeyName(id)
+    local key = Settings.ToxBinds and Settings.ToxBinds[id]
+    if typeof(key) == "EnumItem" then
+        return key.Name
+    elseif type(key) == "string" and key ~= "" and key ~= "NONE" then
+        return key
+    end
+    return nil
+end
+
+local function ShortKeyName(keyName)
+    if not keyName then return "-" end
+    local short = {
+        LeftShift = "LShift", RightShift = "RShift",
+        LeftControl = "LCtrl", RightControl = "RCtrl",
+        LeftAlt = "LAlt", RightAlt = "RAlt",
+        CapsLock = "Caps", Backquote = "`",
+        One = "1", Two = "2", Three = "3", Four = "4", Five = "5",
+        Six = "6", Seven = "7", Eight = "8", Nine = "9", Zero = "0",
+    }
+    return short[keyName] or keyName
+end
+
+local function RefreshToxBindButtons()
+    for id, entry in pairs(ToxBindEntries) do
+        for index = #entry.Widgets, 1, -1 do
+            local w = entry.Widgets[index]
+            if not w.Button or not w.Button.Parent then
+                table.remove(entry.Widgets, index)
+            else
+                local keyName = GetToxBindKeyName(id)
+                w.Button.Text = "[ " .. ShortKeyName(keyName) .. " ]"
+                w.Button.TextColor3 = keyName and Theme.Accent or Theme.DimText or Color3.fromRGB(165, 165, 185)
+                w.Button.Visible = Settings.ShowToxBinds == true
+                if w.Label then
+                    w.Label.Size = Settings.ShowToxBinds and w.LabelSizeWithBind or w.LabelSizeDefault
+                end
+            end
+        end
+    end
+end
+getgenv().RefreshToxBindButtons = RefreshToxBindButtons
+
+getgenv().SetShowToxBinds = function(value)
+    Settings.ShowToxBinds = value == true
+    RefreshToxBindButtons()
+end
+
+-- Returns { {Id, Name, Key, Active}, ... } for the Keybinds List HUD
+getgenv().GetToxBindList = function()
+    local list = {}
+    for id, keyName in pairs(Settings.ToxBinds or {}) do
+        local name = nil
+        if GetToxBindKeyName(id) then
+            if ToxBindEntries[id] and ToxBindEntries[id].Name then
+                name = ToxBindEntries[id].Name
+            else
+                name = (string.gsub(tostring(id), "^opt:", ""))
+            end
+        end
+        if name then
+            local entry = ToxBindEntries[id]
+            local active = false
+            if entry and entry.IsOn then
+                local ok, on = pcall(entry.IsOn)
+                active = ok and on == true
+            end
+            table.insert(list, { Id = id, Name = name, Key = ShortKeyName(GetToxBindKeyName(id)), Active = active })
+        end
+    end
+    table.sort(list, function(a, b) return tostring(a.Name) < tostring(b.Name) end)
+    return list
+end
+
+--[[ AttachToxBind
+    Container      : the option row
+    Label          : its name label (shrunk while the bind button is shown)
+    LabelSizeDefault / LabelSizeWithBind : UDim2 for both states
+    BindPosition   : UDim2 position of the "[ key ]" button
+    Trigger        : function that flips the option exactly like clicking its switch
+    IsOn           : function returning the current state
+]]
+local function AttachToxBind(Name, SyncKey, Container, Label, LabelSizeDefault, LabelSizeWithBind, BindPosition, Trigger, IsOn)
+    local id = GetToxBindId(Name, SyncKey)
+    local entry = ToxBindEntries[id]
+    if not entry then
+        entry = { Widgets = {} }
+        ToxBindEntries[id] = entry
+    end
+    entry.Name = Name
+    entry.Trigger = Trigger
+    entry.IsOn = IsOn
+
+    local BindBtn = Instance.new("TextButton")
+    BindBtn.Name = "ToxBindButton"
+    BindBtn.Size = UDim2.new(0, 46, 0, 20)
+    BindBtn.Position = BindPosition
+    BindBtn.BackgroundColor3 = Color3.fromRGB(12, 17, 26)
+    BindBtn.BorderSizePixel = 0
+    BindBtn.AutoButtonColor = false
+    BindBtn.Font = Enum.Font.GothamBold
+    BindBtn.TextSize = 10
+    BindBtn.TextTruncate = Enum.TextTruncate.AtEnd
+    BindBtn.ZIndex = (Container.ZIndex or 1) + 3
+    BindBtn.Parent = Container
+    local bbCorner = Instance.new("UICorner") bbCorner.CornerRadius = UDim.new(0, 5) bbCorner.Parent = BindBtn
+    local bbStroke = Instance.new("UIStroke") bbStroke.Color = Theme.Outline bbStroke.Thickness = 1 bbStroke.Transparency = 0.4 bbStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border bbStroke.Parent = BindBtn
+    RegisterThemedObject(bbStroke, "Color", "Outline")
+
+    table.insert(entry.Widgets, {
+        Button = BindBtn,
+        Label = Label,
+        LabelSizeDefault = LabelSizeDefault,
+        LabelSizeWithBind = LabelSizeWithBind,
+    })
+
+    local capturing = false
+    BindBtn.MouseButton1Click:Connect(function()
+        if getgenv().Destroyed or capturing or ToxBindCapturing then return end
+        capturing = true
+        ToxBindCapturing = true
+        BindBtn.Text = "[ ... ]"
+        BindBtn.TextColor3 = Theme.Accent
+        local conn
+        conn = UserInputService.InputBegan:Connect(function(input)
+            local isKey = input.UserInputType == Enum.UserInputType.Keyboard
+            local isMouse = input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.MouseButton2
+            if not isKey and not isMouse then return end
+            conn:Disconnect()
+            if isKey then
+                if input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.Backspace then
+                    Settings.ToxBinds[id] = nil          -- Esc / Backspace removes the bind
+                else
+                    Settings.ToxBinds[id] = input.KeyCode.Name
+                end
+                AutoSaveConfiguration()
+            end
+            -- mouse click just cancels
+            task.defer(function()
+                capturing = false
+                ToxBindCapturing = false
+            end)
+            RefreshToxBindButtons()
+        end)
+    end)
+    -- Right click on the button clears the bind
+    BindBtn.MouseButton2Click:Connect(function()
+        if getgenv().Destroyed or capturing then return end
+        Settings.ToxBinds[id] = nil
+        AutoSaveConfiguration()
+        RefreshToxBindButtons()
+    end)
+
+    RefreshToxBindButtons()
+    return BindBtn
+end
+UI.AttachToxBind = AttachToxBind
+
+-- One global listener fires the bound options (works even with the bind buttons hidden)
+if env.ToxBindInputConn then
+    pcall(function() env.ToxBindInputConn:Disconnect() end)
+end
+env.ToxBindInputConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if getgenv().Destroyed or gameProcessed or ToxBindCapturing then return end
+    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+    if UserInputService:GetFocusedTextBox() then return end
+    if getgenv().ToxOptionsReady == false then return end
+    local pressed = input.KeyCode.Name
+    for id in pairs(Settings.ToxBinds or {}) do
+        if GetToxBindKeyName(id) == pressed then
+            local entry = ToxBindEntries[id]
+            if entry and entry.Trigger then
+                task.spawn(function()
+                    pcall(entry.Trigger)
+                end)
+            end
+        end
+    end
+end)
+
 getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     local parentTarget = ResolveElementParent(Page)
     local Container = Instance.new("Frame")
@@ -375,7 +577,7 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
     }
     RegisterSharedToggle(SyncKey, Controller)
     RegisterStartupToggleCallback(SyncKey, Callback)
-    ClickBtn.MouseButton1Click:Connect(function()
+    local function DoToggle()
         if getgenv().Destroyed then return end
         Enabled = not Enabled
         Update()
@@ -387,7 +589,11 @@ getgenv().CreateToggle = function(Name, Page, DefaultValue, Callback, SyncKey)
             CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(80, 255, 120) or Color3.fromRGB(255, 80, 90))
         end
         AutoSaveConfiguration()
-    end)
+    end
+    ClickBtn.MouseButton1Click:Connect(DoToggle)
+    AttachToxBind(Name, SyncKey, Container, Label,
+        UDim2.new(1, -65, 1, 0), UDim2.new(1, -117, 1, 0),
+        UDim2.new(1, -104, 0.5, -10), DoToggle, function() return Enabled end)
     Update()
     if Enabled and Callback then
         RunWhenLoaded(function()
@@ -520,7 +726,7 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
     RegisterSharedToggle(SyncKey, Controller)
     RegisterSharedValue(SyncKey, Controller)
     RegisterStartupToggleCallback(SyncKey, CallbackToggle)
-    ToggleButton.MouseButton1Click:Connect(function()
+    local function DoToggle()
         if getgenv().Destroyed  then return end
         Enabled = not Enabled
         UpdateToggle()
@@ -532,7 +738,11 @@ getgenv().CreateToggleWithValue = function(Name, Page, DefaultToggle, DefaultVal
             CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(80, 255, 120) or Color3.fromRGB(255, 80, 90))
         end
         AutoSaveConfiguration()
-    end)
+    end
+    ToggleButton.MouseButton1Click:Connect(DoToggle)
+    AttachToxBind(Name, SyncKey, Container, Label,
+        UDim2.new(1, -135, 1, 0), UDim2.new(1, -187, 1, 0),
+        UDim2.new(1, -162, 0.5, -10), DoToggle, function() return Enabled end)
     Input.FocusLost:Connect(function()
         if getgenv().Destroyed  then return end
         local num = tonumber(Input.Text)
@@ -901,7 +1111,7 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
     RegisterSharedValue(SyncKey, Controller)
     RegisterStartupToggleCallback(SyncKey, CallbackToggle)
 
-    ToggleButton.MouseButton1Click:Connect(function()
+    local function DoToggle()
         if getgenv().Destroyed then return end
         Enabled = not Enabled
         UpdateToggle()
@@ -913,7 +1123,11 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
             CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(80, 255, 120) or Color3.fromRGB(255, 80, 90))
         end
         AutoSaveConfiguration()
-    end)
+    end
+    ToggleButton.MouseButton1Click:Connect(DoToggle)
+    AttachToxBind(Name, SyncKey, Container, Label,
+        UDim2.new(1, -125, 0, 20), UDim2.new(1, -177, 0, 20),
+        UDim2.new(1, -160, 0, 5), DoToggle, function() return Enabled end)
 
     local function updateFromX(inpX)
         local width = math.max(Track.AbsoluteSize.X, 1)
@@ -1094,7 +1308,7 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     RegisterSharedToggle(SyncKey, Controller)
     RegisterSharedValue(SyncKey, Controller)
     RegisterStartupToggleCallback(SyncKey, CallbackToggle)
-    ToggleButton.MouseButton1Click:Connect(function()
+    local function DoToggle()
         if getgenv().Destroyed  then return end
         Enabled = not Enabled
         UpdateToggle()
@@ -1106,7 +1320,11 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
             CustomNotify(Name .. (Enabled and " Enabled" or " Disabled"), Enabled and Color3.fromRGB(80, 255, 120) or Color3.fromRGB(255, 80, 90))
         end
         AutoSaveConfiguration()
-    end)
+    end
+    ToggleButton.MouseButton1Click:Connect(DoToggle)
+    AttachToxBind(Name, SyncKey, Container, Label,
+        UDim2.new(1, -170, 1, 0), UDim2.new(1, -222, 1, 0),
+        UDim2.new(1, -206, 0.5, -10), DoToggle, function() return Enabled end)
     UpdateToggle()
     if Enabled and CallbackToggle then
         RunWhenLoaded(function()
@@ -1719,6 +1937,10 @@ local function ApplyStagedOptionsAfterLoadScreen()
     for _, runFn in ipairs(DeferredStartupCallbacks) do
         task.defer(runFn)
     end
+    if type(Settings.ToxBinds) ~= "table" then
+        Settings.ToxBinds = {}
+    end
+    task.defer(RefreshToxBindButtons)
     DeferredStartupCallbacks = {}
     getgenv().ToxStartupBooleanState = nil
     getgenv().ToxStartupToggleCallbacks = nil

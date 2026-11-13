@@ -102,6 +102,8 @@ getgenv().Settings = {
     TargetESPColor = Color3.fromRGB(255, 30, 30),
     SpectatorList = false,
     KeybindsList = false,
+    ShowToxBinds = false,
+    ToxBinds = {},
     Crosshair = false,
     MouseIconID = "",
     MouseIconSize = 150,
@@ -243,6 +245,8 @@ getgenv().Settings = {
     ADAutoFarm = false
 }
 local UIPreferenceKeys = {
+    ShowToxBinds = true,
+    KeybindsList = true,
     Theme = true,
     ToxUITheme = true,
     ToxUITransparency = true,
