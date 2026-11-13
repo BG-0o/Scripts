@@ -1545,8 +1545,14 @@ local function NDSIsIslandRock(object)
         return false
     end
 
-    local structure = workspace:FindFirstChild("Structure")
-    return not structure or object:IsDescendantOf(structure)
+    -- The island (and its rocks) is NOT inside workspace.Structure (that is only the
+    -- map building), so the old check skipped every island rock once a map loaded.
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character and object:IsDescendantOf(p.Character) then
+            return false
+        end
+    end
+    return true
 end
 
 -- Island Rocks: instead of forcing CanCollide on the rock meshes (their collision shape is
@@ -1581,6 +1587,11 @@ local function SetNDSIslandRocksCollidable(enabled)
     if enabled then
         for _, object in ipairs(workspace:GetDescendants()) do
             NDSApplyRock(object)
+        end
+        local count = 0
+        for _ in pairs(NDSRockSet) do count += 1 end
+        if CustomNotify and getgenv().ScriptLoaded then
+            CustomNotify("Island Rocks • " .. count .. " rocks found", count > 0 and Color3.fromRGB(100, 200, 255) or Color3.fromRGB(255, 180, 70), 4)
         end
     else
         local copy = {}
@@ -1643,6 +1654,23 @@ local function NDSScanWaterLevel()
                         bestName = object:GetFullName()
                     end
                 end
+            end
+        end
+    end
+    if best then
+        return best, bestName
+    end
+    -- Fallback: the ocean is usually the biggest flat, non-collidable sheet in the game
+    local bestArea = 0
+    for _, object in ipairs(workspace:GetDescendants()) do
+        if object:IsA("BasePart") and not object.CanCollide
+        and not (myCharacter and object:IsDescendantOf(myCharacter)) then
+            local size = object.Size
+            local area = size.X * size.Z
+            if math.min(size.X, size.Z) >= 400 and size.Y <= 60 and area > bestArea then
+                bestArea = area
+                best = object.Position.Y + size.Y / 2
+                bestName = object:GetFullName() .. " [biggest sheet]"
             end
         end
     end
@@ -1713,7 +1741,8 @@ local function NDSGetSupport()
     return NDSSupportPart
 end
 
-TrackNDSExtraConnection(RunService.Heartbeat:Connect(function(delta)
+local NDSSupportWarned = false
+local function NDSSupportStep(delta)
     local wantRocks = Settings.NDSIslandRocksCollidable == true
     local wantWater = Settings.NDSWaterWalk == true and not Settings.NDSWaterFly
     if not wantRocks and not wantWater then
@@ -1778,6 +1807,17 @@ TrackNDSExtraConnection(RunService.Heartbeat:Connect(function(delta)
         NDSGetSupport().CFrame = CFrame.new(root.Position.X, bestY - 0.25, root.Position.Z)
     else
         NDSHideSupport()
+    end
+end
+
+TrackNDSExtraConnection(RunService.Heartbeat:Connect(function(delta)
+    local ok, err = pcall(NDSSupportStep, delta)
+    if not ok and not NDSSupportWarned then
+        NDSSupportWarned = true
+        warn("[ToxHub] Walk on Water / Island Rocks error: " .. tostring(err))
+        if CustomNotify then
+            CustomNotify("Walk on Water / Rocks error (see F9)", Color3.fromRGB(255, 100, 100), 5)
+        end
     end
 end))
 
