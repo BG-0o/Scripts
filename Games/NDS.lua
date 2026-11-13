@@ -1421,7 +1421,15 @@ local function NDSMatchesHazard(feature, object)
     elseif feature == "VolcanicLava" then
         return string.find(path, "lava", 1, true) ~= nil
     elseif feature == "VirusParticles" then
-        return string.find(path, "virus", 1, true) ~= nil
+        if string.find(path, "antivirus", 1, true) then
+            return false
+        end
+        for _, word in ipairs({ "virus", "infect", "germ", "bacteria", "disease", "plague", "contagio" }) do
+            if string.find(path, word, 1, true) then
+                return true
+            end
+        end
+        return false
     elseif feature == "TsunamiWave" then
         return string.find(path, "tsunami", 1, true) ~= nil
             or string.find(path, "tsunami wave", 1, true) ~= nil
@@ -1439,11 +1447,6 @@ local function NDSApplyHazardObject(feature, object)
     end
 
     local store = NDSHazardDefaults[feature]
-
-    if feature == "VirusParticles"
-    and object:IsA("BasePart") then
-        return
-    end
 
     if object:IsA("BasePart") then
         if store[object] == nil then
@@ -1546,17 +1549,28 @@ local function NDSIsIslandRock(object)
     return not structure or object:IsDescendantOf(structure)
 end
 
+-- Island Rocks: instead of forcing CanCollide on the rock meshes (their collision shape is
+-- irregular, so standing on them made the character glitch/"teleport"), we raycast to the
+-- rock surface under the feet and put a flat invisible support there. Same support is used
+-- by "Walk on Water".
+local NDSRockSet = setmetatable({}, { __mode = "k" })
+local NDSRockList = {}
+local NDSRockListDirty = true
+
 local function NDSApplyRock(object)
-    if not NDSIsIslandRock(object) then
+    if not NDSIsIslandRock(object) or NDSRockSet[object] then
         return
     end
 
+    NDSRockSet[object] = true
+    NDSRockListDirty = true
+
     if NDSRockDefaults[object] == nil then
-        NDSRockDefaults[object] = object.CanCollide
+        NDSRockDefaults[object] = { CanQuery = object.CanQuery }
     end
 
     pcall(function()
-        object.CanCollide = true
+        object.CanQuery = true   -- raycasts must see the rock
     end)
 end
 
@@ -1579,12 +1593,126 @@ local function SetNDSIslandRocksCollidable(enabled)
         for object, value in pairs(copy) do
             if object and object.Parent then
                 pcall(function()
-                    object.CanCollide = value
+                    if type(value) == "table" then
+                        object.CanQuery = value.CanQuery
+                    else
+                        object.CanCollide = value   -- left by older versions
+                    end
                 end)
             end
         end
+
+        for object in pairs(NDSRockSet) do
+            NDSRockSet[object] = nil
+        end
+        NDSRockListDirty = true
     end
 end
+
+local function NDSIsWaterPart(part)
+    if not part or not part:IsA("BasePart") then
+        return false
+    end
+    if part.Material == Enum.Material.Water then
+        return true
+    end
+    local lower = string.lower(part.Name)
+    return string.find(lower, "water", 1, true) ~= nil
+        or string.find(lower, "ocean", 1, true) ~= nil
+end
+
+local NDSSupportPart = nil
+
+local function NDSHideSupport()
+    if NDSSupportPart then
+        pcall(function() NDSSupportPart:Destroy() end)
+        NDSSupportPart = nil
+    end
+end
+
+local function NDSGetSupport()
+    if not NDSSupportPart or not NDSSupportPart.Parent then
+        local part = Instance.new("Part")
+        part.Name = "ToxNDSSupport"
+        part.Size = Vector3.new(6, 0.5, 6)
+        part.Anchored = true
+        part.CanCollide = true
+        part.CanQuery = false
+        part.CanTouch = false
+        part.Transparency = 1
+        part.Parent = workspace
+        NDSSupportPart = part
+    end
+    return NDSSupportPart
+end
+
+TrackNDSExtraConnection(RunService.Heartbeat:Connect(function(delta)
+    local wantRocks = Settings.NDSIslandRocksCollidable == true
+    local wantWater = Settings.NDSWaterWalk == true and not Settings.NDSWaterFly
+    if not wantRocks and not wantWater then
+        NDSHideSupport()
+        return
+    end
+
+    local character, humanoid, root = GetCharacterState()
+    if not character or not humanoid or humanoid.Health <= 0 or not root then
+        NDSHideSupport()
+        return
+    end
+
+    local standOffset = 3
+    if humanoid.RigType == Enum.HumanoidRigType.R15 then
+        standOffset = humanoid.HipHeight + root.Size.Y / 2
+    end
+
+    local velocity = root.AssemblyLinearVelocity
+    local reach = standOffset + 2.5 + math.max(0, -velocity.Y) * math.max(tonumber(delta) or 0.016, 0.016) * 2
+    local feetY = root.Position.Y - standOffset
+    local bestY = nil
+
+    if wantRocks then
+        if NDSRockListDirty then
+            table.clear(NDSRockList)
+            for object in pairs(NDSRockSet) do
+                if object.Parent then
+                    table.insert(NDSRockList, object)
+                end
+            end
+            NDSRockListDirty = false
+        end
+        if #NDSRockList > 0 then
+            local params = RaycastParams.new()
+            params.FilterType = Enum.RaycastFilterType.Include
+            params.FilterDescendantsInstances = NDSRockList
+            local hit = workspace:Raycast(root.Position, Vector3.new(0, -reach, 0), params)
+            if hit and feetY >= hit.Position.Y - 1 then
+                bestY = hit.Position.Y
+            end
+        end
+    end
+
+    if wantWater then
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = { character, NDSSupportPart, workspace.CurrentCamera }
+        params.IgnoreWater = false
+        local hit = workspace:Raycast(root.Position + Vector3.new(0, 2, 0), Vector3.new(0, -(reach + 2), 0), params)
+        if hit then
+            local isWater = (hit.Instance:IsA("Terrain") and hit.Material == Enum.Material.Water)
+                or NDSIsWaterPart(hit.Instance)
+            -- also lifts you back up if you are just under the surface
+            if isWater and feetY >= hit.Position.Y - 2.5 then
+                bestY = math.max(bestY or -math.huge, hit.Position.Y)
+            end
+        end
+    end
+
+    if bestY then
+        NDSGetSupport().CFrame = CFrame.new(root.Position.X, bestY - 0.25, root.Position.Z)
+    else
+        NDSHideSupport()
+    end
+end))
 
 local function NDSIsCheerSound(object)
     if not object:IsA("Sound") then
@@ -2018,6 +2146,46 @@ TrackNDSExtraConnection(workspace.DescendantAdded:Connect(function(object)
     end
 end))
 
+-- Virus effects are often created first and renamed/parented later, so DescendantAdded
+-- misses them: rescan the likely places every 1.5s while the option is on.
+do
+    local virusClock = 0
+    TrackNDSExtraConnection(RunService.Heartbeat:Connect(function(delta)
+        if not Settings.NDSRemoveVirusParticles then
+            return
+        end
+        virusClock += math.max(tonumber(delta) or 0, 0)
+        if virusClock < 1.5 then
+            return
+        end
+        virusClock = 0
+        local roots = { workspace:FindFirstChild("Structure"), workspace.CurrentCamera }
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.Character then
+                table.insert(roots, p.Character)
+            end
+        end
+        for _, rootObj in ipairs(roots) do
+            if rootObj then
+                for _, object in ipairs(rootObj:GetDescendants()) do
+                    NDSApplyHazardObject("VirusParticles", object)
+                end
+            end
+        end
+        for _, object in ipairs(workspace:GetChildren()) do
+            NDSApplyHazardObject("VirusParticles", object)
+            if object:IsA("Model") or object:IsA("Folder") then
+                local lower = string.lower(object.Name)
+                if string.find(lower, "virus", 1, true) or string.find(lower, "infect", 1, true) then
+                    for _, d in ipairs(object:GetDescendants()) do
+                        NDSApplyHazardObject("VirusParticles", d)
+                    end
+                end
+            end
+        end
+    end))
+end
+
 TrackNDSExtraConnection(game.DescendantAdded:Connect(function(object)
     if Settings.NDSMuteCheerSound then
         task.defer(NDSMuteCheerObject, object)
@@ -2153,6 +2321,11 @@ end, function(value)
         SyncValueVisuals("NDSWaterFly", Settings.NDSWaterFlySpeed)
     end
 end, "NDSWaterFly")
+
+NDSCreateToggle("Walk on Water", GamePage, Settings.NDSWaterWalk == true, function(v)
+    -- Invisible flat support on the water surface under your feet (turn off to swim)
+    Settings.NDSWaterWalk = v == true
+end, "NDSWaterWalk")
 
 NDSCreateToggleWithSlider("Fly Bypass", GamePage, 0, 100, Settings.FlyBypass, Settings.FlySpeed or 10, "", function(v)
     SetShared("FlyBypass", v)
