@@ -616,6 +616,26 @@ local function UpdateUltraInstinctCircle(character, myHrp, myHum, range, threatI
     UICircleFill.Visible = true
 end
 
+-- A player only counts as "near" if they are on (about) the same floor and nothing solid
+-- is between us. Players on the floor below/above or behind a wall are ignored.
+local NEARBY_MAX_HEIGHT = 8
+local function IsReachableNearby(myRoot, otherRoot, myCharacter, otherCharacter)
+    local dy = otherRoot.Position.Y - myRoot.Position.Y
+    if math.abs(dy) > NEARBY_MAX_HEIGHT then
+        return false
+    end
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = { myCharacter, otherCharacter, Camera }
+    params.IgnoreWater = true
+    local direction = otherRoot.Position - myRoot.Position
+    local hit = Workspace:Raycast(myRoot.Position, direction, params)
+    if hit and hit.Instance and hit.Instance.CanCollide then
+        return false
+    end
+    return true
+end
+
 local function UltraInstinctStep()
     local character = Player and Player.Character
     if not Settings.UltraInstinct or not character then
@@ -642,7 +662,8 @@ local function UltraInstinctStep()
                 -- Flat (XZ) distance so it matches the circle drawn on the ground
                 local diff = otherHrp.Position - myHrp.Position
                 local dist = Vector3.new(diff.X, 0, diff.Z).Magnitude
-                if dist <= closestDist and math.abs(diff.Y) <= detectRange then
+                if dist <= closestDist
+                and IsReachableNearby(myHrp, otherHrp, character, otherPlayer.Character) then
                     closestDist = dist
                     closestThreat = otherHrp
                 end
@@ -717,7 +738,8 @@ local function AntiSocialStep()
                 local diff = myPos - otherRoot.Position
                 local flat = Vector3.new(diff.X, 0, diff.Z)
                 local dist = flat.Magnitude
-                if dist < range and math.abs(diff.Y) < range then
+                if dist < range
+                and IsReachableNearby(root, otherRoot, character, other.Character) then
                     if dist < 0.05 then
                         flat = root.CFrame.LookVector
                         dist = 0.05
