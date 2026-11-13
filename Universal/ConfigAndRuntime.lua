@@ -945,7 +945,9 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     Settings.ForceShiftLock = false
     Settings.SmoothFly = false
     Settings.NormalFly = false
+    Settings.FlyBypass = false
     Settings.CarFly = false
+    if FlyBypassFloor then pcall(function() FlyBypassFloor:Destroy() end) FlyBypassFloor = nil end
     DestroyCarFlyMovers()
     Settings.ChatLogs = false
     Settings.MusicAutoPlay = false
@@ -1381,10 +1383,12 @@ AddConnection(RunService.Stepped:Connect(function()
 end))
 local FlyBV = nil
 local FlyBG = nil
+local FlyBypassFloor = nil
 local function DisableNormalFlyPhysics()
     local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
     if FlyBV then FlyBV:Destroy() FlyBV = nil end
     if FlyBG then FlyBG:Destroy() FlyBG = nil end
+    if FlyBypassFloor then pcall(function() FlyBypassFloor:Destroy() end) FlyBypassFloor = nil end
     if Hum then Hum.PlatformStand = false end
 end
 AddConnection(RunService.RenderStepped:Connect(function(delta)
@@ -1492,11 +1496,24 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         Root.CFrame = Root.CFrame * CFrame.Angles(0, math.rad(Settings.SpinSpeed or 50), 0)
     end
     local actualFlySpeed = (Settings.FlySpeed or 10) * 10
-    if Settings.SmoothFly and Root and Hum and Hum.Health > 0 then
-        DisableNormalFlyPhysics()
-        Hum.PlatformStand = true
-        Root.AssemblyLinearVelocity = Vector3.zero
-        Root.AssemblyAngularVelocity = Vector3.zero
+    if Settings.FlyBypass and Root and Hum and Hum.Health > 0 then
+        if FlyBV then FlyBV:Destroy() FlyBV = nil end
+        if FlyBG then FlyBG:Destroy() FlyBG = nil end
+        Hum.PlatformStand = false
+        pcall(function()
+            Hum:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
+        end)
+        if not FlyBypassFloor or not FlyBypassFloor.Parent then
+            FlyBypassFloor = Instance.new("Part")
+            FlyBypassFloor.Name = "ToxBypassFloor"
+            FlyBypassFloor.Size = Vector3.new(4, 0.5, 4)
+            FlyBypassFloor.Transparency = 1
+            FlyBypassFloor.CanCollide = true
+            FlyBypassFloor.Anchored = true
+            pcall(function() FlyBypassFloor.Parent = workspace end)
+        end
+        FlyBypassFloor.CFrame = CFrame.new(Root.Position.X, Root.Position.Y - 3.2, Root.Position.Z)
+
         local moveDir = Vector3.zero
         if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.LookVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
@@ -1507,31 +1524,57 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         if moveDir.Magnitude > 0 then
             moveDir = moveDir.Unit
             Root.CFrame = Root.CFrame + (moveDir * (actualFlySpeed * delta))
+            Root.AssemblyLinearVelocity = moveDir * (actualFlySpeed * 0.2)
+        else
+            Root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         end
-    elseif Settings.NormalFly and Root and Hum and Hum.Health > 0 then
-        if not FlyBV or FlyBV.Parent ~= Root then
-            DisableNormalFlyPhysics()
-            FlyBV = Instance.new("BodyVelocity")
-            FlyBV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-            FlyBV.Velocity = Vector3.zero
-            FlyBV.Parent = Root
-            FlyBG = Instance.new("BodyGyro")
-            FlyBG.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-            FlyBG.CFrame = Root.CFrame
-            FlyBG.Parent = Root
-        end
-        Hum.PlatformStand = true
-        local dir = Vector3.zero
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then dir = dir + Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then dir = dir - Vector3.new(0, 1, 0) end
-        FlyBV.Velocity = dir * actualFlySpeed
-        FlyBG.CFrame = Camera.CFrame
+        Root.AssemblyAngularVelocity = Vector3.zero
     else
-        DisableNormalFlyPhysics()
+        if FlyBypassFloor then
+            pcall(function() FlyBypassFloor:Destroy() end)
+            FlyBypassFloor = nil
+        end
+        if Settings.SmoothFly and Root and Hum and Hum.Health > 0 then
+            DisableNormalFlyPhysics()
+            Hum.PlatformStand = true
+            Root.AssemblyLinearVelocity = Vector3.zero
+            Root.AssemblyAngularVelocity = Vector3.zero
+            local moveDir = Vector3.zero
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Camera.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then moveDir = moveDir + Vector3.new(0, 1, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then moveDir = moveDir - Vector3.new(0, 1, 0) end
+            if moveDir.Magnitude > 0 then
+                moveDir = moveDir.Unit
+                Root.CFrame = Root.CFrame + (moveDir * (actualFlySpeed * delta))
+            end
+        elseif Settings.NormalFly and Root and Hum and Hum.Health > 0 then
+            if not FlyBV or FlyBV.Parent ~= Root then
+                DisableNormalFlyPhysics()
+                FlyBV = Instance.new("BodyVelocity")
+                FlyBV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+                FlyBV.Velocity = Vector3.zero
+                FlyBV.Parent = Root
+                FlyBG = Instance.new("BodyGyro")
+                FlyBG.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+                FlyBG.CFrame = Root.CFrame
+                FlyBG.Parent = Root
+            end
+            Hum.PlatformStand = true
+            local dir = Vector3.zero
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + Camera.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - Camera.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - Camera.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + Camera.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then dir = dir + Vector3.new(0, 1, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then dir = dir - Vector3.new(0, 1, 0) end
+            FlyBV.Velocity = dir * actualFlySpeed
+            FlyBG.CFrame = Camera.CFrame
+        else
+            DisableNormalFlyPhysics()
+        end
     end
     if FOVCircle then
         FOVCircle.Visible = Settings.Aimbot and Settings.ShowFOV

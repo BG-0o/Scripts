@@ -27,14 +27,34 @@ BeginUniversalSection("Misc")
 CreateToggle("Ctrl Click TP", FlingPage, Settings.CtrlClickTP, function(v)
     if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("CtrlClickTP", v) end
 end, "CtrlClickTP")
-CreateToggle("Walk Fling", FlingPage, Settings.WalkFling, function(v)
-    if getgenv().ToxSetSharedOption then
-        getgenv().ToxSetSharedOption(
-            "WalkFling",
-            v
-        )
-    end
-end, "WalkFling")
+local toggleWithSlider = CreateToggleWithSlider or (getgenv and getgenv().CreateToggleWithSlider)
+if toggleWithSlider then
+    toggleWithSlider("Walk Fling", FlingPage, 5, 100, Settings.WalkFling, Settings.WalkFlingPower or 50, "%", function(v)
+        if getgenv().ToxSetSharedOption then
+            getgenv().ToxSetSharedOption("WalkFling", v)
+        else
+            Settings.WalkFling = v
+        end
+    end, function(val)
+        Settings.WalkFlingPower = tonumber(val) or 50
+        if getgenv().ToxOnSharedValueChanged then
+            getgenv().ToxOnSharedValueChanged("WalkFling", val)
+        end
+    end, "WalkFling")
+else
+    CreateToggleWithValue("Walk Fling", FlingPage, Settings.WalkFling, Settings.WalkFlingPower or 50, function(v)
+        if getgenv().ToxSetSharedOption then
+            getgenv().ToxSetSharedOption("WalkFling", v)
+        else
+            Settings.WalkFling = v
+        end
+    end, function(val)
+        Settings.WalkFlingPower = tonumber(val) or 50
+        if getgenv().ToxOnSharedValueChanged then
+            getgenv().ToxOnSharedValueChanged("WalkFling", val)
+        end
+    end, "WalkFling")
+end
 CreateToggle("No Fall Damage", FlingPage, Settings.NoFallDamage, function(v)
     if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("NoFallDamage", v) end
 end, "NoFallDamage")

@@ -508,7 +508,7 @@ local function ToxUpdateKeybinds()
     if Settings.Speed then
         table.insert(activeBinds, { Name = "Speed", Key = "Toggle", Active = Settings.Speed == true })
     end
-    if Settings.NormalFly or Settings.SmoothFly then
+    if Settings.NormalFly or Settings.SmoothFly or Settings.FlyBypass then
         table.insert(activeBinds, { Name = "Fly", Key = "Toggle", Active = true })
     end
     if Settings.Noclip then

@@ -54,7 +54,10 @@ CreateToggleWithValue("Normal Fly", PlayerPage, Settings.NormalFly, Settings.Fly
         getgenv().ToxSetSharedOption("NormalFly", v)
     else
         Settings.NormalFly = v
-        if v then Settings.SmoothFly = false end
+        if v then
+            Settings.SmoothFly = false
+            Settings.FlyBypass = false
+        end
     end
 end, function(val) Settings.FlySpeed = val end, "NormalFly")
 CreateToggleWithValue("Smooth Fly", PlayerPage, Settings.SmoothFly, Settings.FlySpeed, function(v)
@@ -62,9 +65,23 @@ CreateToggleWithValue("Smooth Fly", PlayerPage, Settings.SmoothFly, Settings.Fly
         getgenv().ToxSetSharedOption("SmoothFly", v)
     else
         Settings.SmoothFly = v
-        if v then Settings.NormalFly = false end
+        if v then
+            Settings.NormalFly = false
+            Settings.FlyBypass = false
+        end
     end
 end, function(val) Settings.FlySpeed = val end, "SmoothFly")
+CreateToggleWithValue("Fly Bypass (Anti-Cheat)", PlayerPage, Settings.FlyBypass, Settings.FlySpeed, function(v)
+    if getgenv().ToxSetSharedOption then
+        getgenv().ToxSetSharedOption("FlyBypass", v)
+    else
+        Settings.FlyBypass = v
+        if v then
+            Settings.NormalFly = false
+            Settings.SmoothFly = false
+        end
+    end
+end, function(val) Settings.FlySpeed = val end, "FlyBypass")
 CreateToggleWithValue("Bhop (Auto Jump)", PlayerPage, Settings.Bhop, Settings.BhopInterval, function(v)
     Settings.Bhop = v
 end, function(val)

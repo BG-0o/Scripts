@@ -92,6 +92,15 @@ local function NDSCreateToggleWithValue(...)
     return TrackNDSControl(CreateToggleWithValue(...))
 end
 
+local function NDSCreateToggleWithSlider(...)
+    local fn = CreateToggleWithSlider or (getgenv and getgenv().CreateToggleWithSlider)
+    if fn then
+        return TrackNDSControl(fn(...))
+    else
+        return TrackNDSControl(CreateToggleWithValue(...))
+    end
+end
+
 local function NDSCreateButton(...)
     return TrackNDSControl(CreateButton(...))
 end
@@ -2015,13 +2024,18 @@ end, "AntiFling")
 
 CreateNDSSection("MOVEMENT")
 
-NDSCreateToggle("Walk Fling", GamePage, Settings.WalkFling, function(v)
+NDSCreateToggleWithSlider("Walk Fling", GamePage, 5, 100, Settings.WalkFling, Settings.WalkFlingPower or 50, "%", function(v)
     SetShared("WalkFling", v)
 
     if v then
         StartNDSNoFall()
     elseif not Settings.NoFallDamage then
         StopNDSNoFall()
+    end
+end, function(val)
+    Settings.WalkFlingPower = tonumber(val) or 50
+    if getgenv().ToxOnSharedValueChanged then
+        getgenv().ToxOnSharedValueChanged("WalkFling", val)
     end
 end, "WalkFling")
 

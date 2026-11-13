@@ -1204,14 +1204,16 @@ local function StartWalkFling()
                     velocity
                 WalkFlingImpulseActive = true
                 getgenv().ToxWalkFlingImpulseActive = true
+                local power = math.clamp(tonumber(Settings.WalkFlingPower) or 50, 5, 100)
+                local multScale = power / 50
                 local multiplier =
-                    game.PlaceId == NDSPlaceId
+                    (game.PlaceId == NDSPlaceId
                     and 18
-                    or 2500
+                    or 2500) * multScale
                 local verticalBoost =
-                    game.PlaceId == NDSPlaceId
+                    (game.PlaceId == NDSPlaceId
                     and 8
-                    or 1500
+                    or 1500) * multScale
                 root.Velocity =
                     velocity * multiplier
                     + Vector3.new(
@@ -1472,13 +1474,16 @@ local SharedToggleSettingMap = {
     ESPNames = "ESPNames",
     ESPTeamColors = "ESPTeamColors",
     SmoothFly = "SmoothFly",
-    NormalFly = "NormalFly"
+    NormalFly = "NormalFly",
+    FlyBypass = "FlyBypass"
 }
 local SharedValueSettingMap = {
     Speed = "SpeedValue",
     CarFly = "CarFlySpeed",
     SmoothFly = "FlySpeed",
-    NormalFly = "FlySpeed"
+    NormalFly = "FlySpeed",
+    FlyBypass = "FlySpeed",
+    WalkFling = "WalkFlingPower"
 }
 local function GetGlobalSharedState()
     getgenv().BaseSharedSettings =
@@ -1559,12 +1564,27 @@ getgenv().ToxSetSharedOption = function(Key, Value)
         if not enabled then
             DestroyCarFlyMovers()
         end
+    elseif Key == "FlyBypass" then
+        Settings.FlyBypass = enabled
+        if enabled then
+            Settings.SmoothFly = false
+            Settings.NormalFly = false
+            if getgenv().SyncToggleVisuals then
+                getgenv().SyncToggleVisuals("SmoothFly", false)
+                getgenv().SyncToggleVisuals("NormalFly", false)
+            end
+            if getgenv().SetNDSWaterFly then
+                getgenv().SetNDSWaterFly(false, true)
+            end
+        end
     elseif Key == "SmoothFly" then
         Settings.SmoothFly = enabled
         if enabled then
             Settings.NormalFly = false
+            Settings.FlyBypass = false
             if getgenv().SyncToggleVisuals then
                 getgenv().SyncToggleVisuals("NormalFly", false)
+                getgenv().SyncToggleVisuals("FlyBypass", false)
             end
             if getgenv().SetNDSWaterFly then
                 getgenv().SetNDSWaterFly(false, true)
@@ -1574,8 +1594,10 @@ getgenv().ToxSetSharedOption = function(Key, Value)
         Settings.NormalFly = enabled
         if enabled then
             Settings.SmoothFly = false
+            Settings.FlyBypass = false
             if getgenv().SyncToggleVisuals then
                 getgenv().SyncToggleVisuals("SmoothFly", false)
+                getgenv().SyncToggleVisuals("FlyBypass", false)
             end
             if getgenv().SetNDSWaterFly then
                 getgenv().SetNDSWaterFly(false, true)

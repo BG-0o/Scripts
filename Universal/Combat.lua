@@ -75,6 +75,8 @@ Settings.HeadHitboxExpander = Settings.HeadHitboxExpander == true
 Settings.HeadHitboxSize = tonumber(Settings.HeadHitboxSize) or 7
 Settings.KillAura = Settings.KillAura == true
 Settings.KillAuraRange = tonumber(Settings.KillAuraRange) or 15
+Settings.UltraInstinct = Settings.UltraInstinct == true
+Settings.UltraInstinctRange = tonumber(Settings.UltraInstinctRange) or 14
 Settings.AimbotBindEnabled = Settings.AimbotBindEnabled == true
 Settings.AimbotKey = Settings.AimbotKey or Enum.KeyCode.E
 Settings.AimbotUseLeftClick = Settings.AimbotUseLeftClick == true
@@ -396,6 +398,97 @@ if Settings.MagicBullet or Settings.SilentAim then
 end
 
 -- ==============================================================================
+-- ULTRA INSTINCT (Safe Circular Proximity Evasion)
+-- ==============================================================================
+local lastUltraInstinctTime = 0
+
+local function GetSafeUltraInstinctCFrame(myHrp, threatHrp, range)
+    local myPos = myHrp.Position
+    local threatPos = threatHrp.Position
+
+    local threatDiff = myPos - threatPos
+    local flatThreatDir = Vector3.new(threatDiff.X, 0, threatDiff.Z)
+    if flatThreatDir.Magnitude < 0.1 then
+        flatThreatDir = myHrp.CFrame.LookVector
+    else
+        flatThreatDir = flatThreatDir.Unit
+    end
+
+    local rightDir = Vector3.new(-flatThreatDir.Z, 0, flatThreatDir.X)
+    local leftDir = -rightDir
+    local backDir = flatThreatDir
+    local backRight = (flatThreatDir + rightDir).Unit
+    local backLeft = (flatThreatDir + leftDir).Unit
+    local forwardRight = (-flatThreatDir * 0.3 + rightDir).Unit
+    local forwardLeft = (-flatThreatDir * 0.3 + leftDir).Unit
+
+    -- Priority candidates: Side Right, Side Left, Diagonal Back-Right, Diagonal Back-Left, Straight Back, Slip Right, Slip Left
+    local candidateDirections = {
+        rightDir,
+        leftDir,
+        backRight,
+        backLeft,
+        backDir,
+        forwardRight,
+        forwardLeft
+    }
+
+    local dodgeDistance = math.clamp(range + 5, 12, 35)
+    local fallenY = Workspace.FallenPartsDestroyHeight or -500
+
+    local char = Player.Character
+    local threatChar = threatHrp and threatHrp.Parent
+    local ignoreInstances = { char, threatChar, Camera }
+
+    for _, dir in ipairs(candidateDirections) do
+        local candPos = myPos + (dir * dodgeDistance)
+
+        -- 1. Horizontal raycast: verify no wall/obstacle collision between player and candidate position
+        local horizParams = RaycastParams.new()
+        horizParams.FilterType = RaycastFilterType.Exclude
+        horizParams.FilterDescendantsInstances = ignoreInstances
+        horizParams.IgnoreWater = true
+
+        local horizHit = Workspace:Raycast(myPos + Vector3.new(0, 1.5, 0), dir * dodgeDistance, horizParams)
+        local isWallBlocked = false
+        if horizHit and horizHit.Instance and horizHit.Instance.CanCollide then
+            isWallBlocked = true
+        end
+
+        if not isWallBlocked then
+            -- 2. Downward raycast: verify there is solid, collidable floor (prevent falling into void)
+            local floorParams = RaycastParams.new()
+            floorParams.FilterType = RaycastFilterType.Exclude
+            floorParams.FilterDescendantsInstances = ignoreInstances
+            floorParams.IgnoreWater = false
+
+            -- Cast ray from 3 studs above candidate downwards 35 studs
+            local floorStart = candPos + Vector3.new(0, 3, 0)
+            local floorHit = Workspace:Raycast(floorStart, Vector3.new(0, -35, 0), floorParams)
+
+            if floorHit and floorHit.Instance and floorHit.Instance.CanCollide then
+                local hitPart = floorHit.Instance
+                local partName = string.lower(hitPart.Name)
+                local isHazard = string.find(partName, "lava") or string.find(partName, "acid") or string.find(partName, "kill") or string.find(partName, "void") or string.find(partName, "damage") or string.find(partName, "death") or string.find(partName, "hazard")
+
+                if not isHazard and floorHit.Position.Y > (fallenY + 25) then
+                    -- Safe floor found! Calculate target position
+                    local safeY = floorHit.Position.Y + 3.2
+                    local safeTargetPos = Vector3.new(candPos.X, safeY, candPos.Z)
+
+                    -- Face towards threat location
+                    local faceRot = CFrame.lookAt(safeTargetPos, Vector3.new(threatPos.X, safeTargetPos.Y, threatPos.Z))
+                    return faceRot
+                end
+            end
+        end
+    end
+
+    -- No safe spot found (surrounded by void or walls); abort teleport to prevent dying
+    return nil
+end
+
+-- ==============================================================================
 -- COMBAT MAIN LOOP (RenderStepped & Heartbeat)
 -- ==============================================================================
 local lastTriggerTime = 0
@@ -620,6 +713,44 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
                             if tool then tool:Activate() end
                         end
                     end
+                end
+            end
+        end
+    end
+
+    -- 8. Ultra Instinct (Safe Proximity Teleport Evasion)
+    if Settings.UltraInstinct and Player and Player.Character then
+        local myHrp = Player.Character:FindFirstChild("HumanoidRootPart")
+        local myHum = Player.Character:FindFirstChildOfClass("Humanoid")
+        if myHrp and myHum and myHum.Health > 0 and (os.clock() - lastUltraInstinctTime >= 0.15) then
+            local detectRange = tonumber(Settings.UltraInstinctRange) or 14
+            local closestThreat = nil
+            local closestDist = detectRange
+
+            for _, otherPlayer in ipairs(Players:GetPlayers()) do
+                if not IsLocalPlayer(otherPlayer) and otherPlayer.Character then
+                    if not (Settings.IgnoreFriends and IsFriend(otherPlayer)) then
+                        local otherHrp = otherPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        local otherHum = otherPlayer.Character:FindFirstChildOfClass("Humanoid")
+                        if otherHrp and otherHum and otherHum.Health > 0 then
+                            local dist = (otherHrp.Position - myHrp.Position).Magnitude
+                            if dist <= closestDist then
+                                closestDist = dist
+                                closestThreat = otherHrp
+                            end
+                        end
+                    end
+                end
+            end
+
+            if closestThreat then
+                local safeCFrame = GetSafeUltraInstinctCFrame(myHrp, closestThreat, detectRange)
+                if safeCFrame then
+                    lastUltraInstinctTime = os.clock()
+                    if getgenv().AllowToxTeleport then
+                        getgenv().AllowToxTeleport(0.2, "Ultra Instinct")
+                    end
+                    myHrp.CFrame = safeCFrame
                 end
             end
         end
@@ -899,6 +1030,27 @@ local function BuildCombatUI()
             Settings.HeadHitboxSize = tonumber(val) or 7
             AutoSaveConfiguration()
         end, "HeadHitboxExpander")
+    end
+
+    -- Card 4: Evasion & Defense
+    CreateSection(CombatPage, "Evasion & Defense", "⚡")
+
+    if type(CreateToggleWithSlider) == "function" then
+        CreateToggleWithSlider("Ultra Instinct", CombatPage, 5, 50, Settings.UltraInstinct, Settings.UltraInstinctRange or 14, " studs", function(v)
+            Settings.UltraInstinct = v == true
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.UltraInstinctRange = tonumber(val) or 14
+            AutoSaveConfiguration()
+        end, "UltraInstinct")
+    else
+        CreateToggleWithValue("Ultra Instinct", CombatPage, Settings.UltraInstinct, Settings.UltraInstinctRange, function(v)
+            Settings.UltraInstinct = v == true
+            AutoSaveConfiguration()
+        end, function(val)
+            Settings.UltraInstinctRange = tonumber(val) or 14
+            AutoSaveConfiguration()
+        end, "UltraInstinct")
     end
 
     if type(env.ClearActivePageCard) == "function" then

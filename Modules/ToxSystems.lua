@@ -1183,7 +1183,8 @@ local function SyncSupabasePresence()
     local payload = HttpService:JSONEncode({
         user_id = Player.UserId,
         username = Player.Name,
-        executor = tostring(CurrentDetectedExecutor),
+        executor = "ToxHud | " .. tostring(CurrentDetectedExecutor),
+        active_effect = "ToxHud",
         current_game = tostring(CachedGameName),
         place_id = game.PlaceId,
         job_id = tostring(game.JobId),
@@ -1206,6 +1207,14 @@ local function SyncSupabasePresence()
     return ok
 end
 
+local function IsToxHudUser(u)
+    if not u then return false end
+    if tostring(u.active_effect) == "ToxHud" then return true end
+    local execLow = string.lower(tostring(u.executor or ""))
+    if string.find(execLow, "toxhud", 1, true) then return true end
+    return false
+end
+
 local function FetchSupabaseNetworkUsers()
     local rf = RequestFunction or (getgenv and getgenv().ToxRequestFunction)
     if not rf then return {} end
@@ -1213,7 +1222,7 @@ local function FetchSupabaseNetworkUsers()
     local res = nil
     local ok = pcall(function()
         res = rf({
-            Url = SUPABASE_URL .. "/rest/v1/executor_sync?select=user_id,username,executor,current_game,job_id,place_id,updated_at&order=updated_at.desc&limit=150",
+            Url = SUPABASE_URL .. "/rest/v1/executor_sync?select=user_id,username,executor,current_game,job_id,place_id,active_effect,updated_at&order=updated_at.desc&limit=150",
             Method = "GET",
             Headers = {
                 ["apikey"] = SUPABASE_KEY,
@@ -1283,7 +1292,7 @@ local function OpenToxNetworkModal()
     local role, level = GetToxRole(Player)
     local canAccess = (level >= TOX_ROLE_LEVELS.Premium) or (Player.UserId == TOX_OWNER_ID)
     if not canAccess then
-        CustomNotify("🔒 Acesso Restrito: Apenas assinantes Premium & Donos podem visualizar os usuários online e dar Join!", Color3.fromRGB(244, 63, 94), 4)
+        CustomNotify("🔒 Access Restricted: Premium and Owner tiers only!", Color3.fromRGB(244, 63, 94), 4)
         return
     end
 
@@ -1337,7 +1346,7 @@ local function OpenToxNetworkModal()
     hTitle.Size = UDim2.new(0, 320, 0, 20)
     hTitle.Position = UDim2.new(0, 52, 0, 8)
     hTitle.BackgroundTransparency = 1
-    hTitle.Text = "Tox Network • Execuções & Presença"
+    hTitle.Text = "Network Users • Live Hub Presence"
     hTitle.TextColor3 = (uiTheme and uiTheme.Text) or Color3.fromRGB(255, 255, 255)
     hTitle.Font = Enum.Font.GothamBold
     hTitle.TextSize = 14
@@ -1348,7 +1357,7 @@ local function OpenToxNetworkModal()
     hSub.Size = UDim2.new(0, 320, 0, 16)
     hSub.Position = UDim2.new(0, 52, 0, 26)
     hSub.BackgroundTransparency = 1
-    hSub.Text = "Usuários que executaram o ToxHud • Acesso Premium"
+    hSub.Text = "Active instances across ToxHud & WASOR network"
     hSub.TextColor3 = (uiTheme and uiTheme.DimText) or Color3.fromRGB(156, 170, 195)
     hSub.Font = Enum.Font.GothamMedium
     hSub.TextSize = 10
@@ -1360,7 +1369,7 @@ local function OpenToxNetworkModal()
     refreshBtn.Position = UDim2.new(1, -135, 0.5, -13)
     refreshBtn.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
     refreshBtn.BorderSizePixel = 0
-    refreshBtn.Text = "🔄 Atualizar"
+    refreshBtn.Text = "🔄 Refresh"
     refreshBtn.TextColor3 = (uiTheme and uiTheme.Accent) or MAIN_COLOR
     refreshBtn.Font = Enum.Font.GothamBold
     refreshBtn.TextSize = 10
@@ -1393,7 +1402,7 @@ local function OpenToxNetworkModal()
     filterBar.Parent = mainFrame
 
     local searchContainer = Instance.new("Frame")
-    searchContainer.Size = UDim2.new(0.5, -6, 1, 0)
+    searchContainer.Size = UDim2.new(0.35, -4, 1, 0)
     searchContainer.Position = UDim2.new(0, 0, 0, 0)
     searchContainer.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
     searchContainer.BorderSizePixel = 0
@@ -1405,7 +1414,7 @@ local function OpenToxNetworkModal()
     searchBox.Size = UDim2.new(1, -12, 1, 0)
     searchBox.Position = UDim2.new(0, 10, 0, 0)
     searchBox.BackgroundTransparency = 1
-    searchBox.PlaceholderText = "🔍 Pesquisar nick ou executor..."
+    searchBox.PlaceholderText = "🔍 Search player, game..."
     searchBox.PlaceholderColor3 = Color3.fromRGB(120, 135, 160)
     searchBox.Text = ""
     searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1416,20 +1425,44 @@ local function OpenToxNetworkModal()
     searchBox.Parent = searchContainer
 
     local tabAllBtn = Instance.new("TextButton")
-    tabAllBtn.Size = UDim2.new(0.24, -4, 1, 0)
-    tabAllBtn.Position = UDim2.new(0.5, 4, 0, 0)
+    tabAllBtn.Size = UDim2.new(0.14, -3, 1, 0)
+    tabAllBtn.Position = UDim2.new(0.35, 3, 0, 0)
     tabAllBtn.BackgroundColor3 = (uiTheme and uiTheme.Accent) or MAIN_COLOR
     tabAllBtn.BorderSizePixel = 0
-    tabAllBtn.Text = "Todos (0)"
+    tabAllBtn.Text = "All (0)"
     tabAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     tabAllBtn.Font = Enum.Font.GothamBold
     tabAllBtn.TextSize = 10
     tabAllBtn.Parent = filterBar
     local taCorner = Instance.new("UICorner") taCorner.CornerRadius = UDim.new(0, 6) taCorner.Parent = tabAllBtn
 
+    local tabToxHudBtn = Instance.new("TextButton")
+    tabToxHudBtn.Size = UDim2.new(0.17, -3, 1, 0)
+    tabToxHudBtn.Position = UDim2.new(0.49, 3, 0, 0)
+    tabToxHudBtn.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
+    tabToxHudBtn.BorderSizePixel = 0
+    tabToxHudBtn.Text = "🛡️ ToxHud (0)"
+    tabToxHudBtn.TextColor3 = Color3.fromRGB(56, 189, 248)
+    tabToxHudBtn.Font = Enum.Font.GothamBold
+    tabToxHudBtn.TextSize = 10
+    tabToxHudBtn.Parent = filterBar
+    local thCorner = Instance.new("UICorner") thCorner.CornerRadius = UDim.new(0, 6) thCorner.Parent = tabToxHudBtn
+
+    local tabWasorBtn = Instance.new("TextButton")
+    tabWasorBtn.Size = UDim2.new(0.17, -3, 1, 0)
+    tabWasorBtn.Position = UDim2.new(0.66, 3, 0, 0)
+    tabWasorBtn.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
+    tabWasorBtn.BorderSizePixel = 0
+    tabWasorBtn.Text = "⚡ WASOR (0)"
+    tabWasorBtn.TextColor3 = Color3.fromRGB(216, 180, 254)
+    tabWasorBtn.Font = Enum.Font.GothamBold
+    tabWasorBtn.TextSize = 10
+    tabWasorBtn.Parent = filterBar
+    local twCorner = Instance.new("UICorner") twCorner.CornerRadius = UDim.new(0, 6) twCorner.Parent = tabWasorBtn
+
     local tabOnlineBtn = Instance.new("TextButton")
-    tabOnlineBtn.Size = UDim2.new(0.26, -4, 1, 0)
-    tabOnlineBtn.Position = UDim2.new(0.74, 4, 0, 0)
+    tabOnlineBtn.Size = UDim2.new(0.17, -3, 1, 0)
+    tabOnlineBtn.Position = UDim2.new(0.83, 3, 0, 0)
     tabOnlineBtn.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
     tabOnlineBtn.BorderSizePixel = 0
     tabOnlineBtn.Text = "🟢 Online (0)"
@@ -1469,6 +1502,8 @@ local function OpenToxNetworkModal()
         local q = string.lower(string.match(searchBox.Text or "", "^%s*(.-)%s*$") or "")
         local nowUtc = os.time(os.date("!*t"))
         local onlineCount = 0
+        local toxCount = 0
+        local wasorCount = 0
         local totalCount = #cachedUsers
 
         for _, u in ipairs(cachedUsers) do
@@ -1476,20 +1511,32 @@ local function OpenToxNetworkModal()
             local diff = nowUtc - ts
             local isOnline = (diff >= -30 and diff <= 95)
             if isOnline then onlineCount = onlineCount + 1 end
+            if IsToxHudUser(u) then
+                toxCount = toxCount + 1
+            else
+                wasorCount = wasorCount + 1
+            end
         end
 
-        tabAllBtn.Text = "Todos (" .. tostring(totalCount) .. ")"
+        tabAllBtn.Text = "All (" .. tostring(totalCount) .. ")"
+        tabToxHudBtn.Text = "🛡️ ToxHud (" .. tostring(toxCount) .. ")"
+        tabWasorBtn.Text = "⚡ WASOR (" .. tostring(wasorCount) .. ")"
         tabOnlineBtn.Text = "🟢 Online (" .. tostring(onlineCount) .. ")"
 
         for _, u in ipairs(cachedUsers) do
-            local uname = tostring(u.username or "Desconhecido")
-            local exec = tostring(u.executor or "Potassium")
+            local uname = tostring(u.username or "Unknown")
+            local exec = tostring(u.executor or "Executor")
             local gameTitle = tostring(u.current_game or "Roblox Game")
             local ts = ParseIsoTimestamp(u.updated_at)
             local diff = nowUtc - ts
             local isOnline = (diff >= -30 and diff <= 95)
+            local isTox = IsToxHudUser(u)
 
-            if currentFilterMode == "ONLINE" and not isOnline then
+            if currentFilterMode == "TOXHUD" and not isTox then
+                continue
+            elseif currentFilterMode == "WASOR" and isTox then
+                continue
+            elseif currentFilterMode == "ONLINE" and not isOnline then
                 continue
             end
 
@@ -1497,10 +1544,14 @@ local function OpenToxNetworkModal()
                 local matchName = string.find(string.lower(uname), q, 1, true)
                 local matchExec = string.find(string.lower(exec), q, 1, true)
                 local matchGame = string.find(string.lower(gameTitle), q, 1, true)
-                if not matchName and not matchExec and not matchGame then
+                local matchOrigin = (isTox and string.find("toxhud", q, 1, true)) or (not isTox and string.find("wasor", q, 1, true))
+                if not matchName and not matchExec and not matchGame and not matchOrigin then
                     continue
                 end
             end
+
+            local cleanExec = string.gsub(exec, "^ToxHud%s*|%s*", "")
+            if cleanExec == "" then cleanExec = "ToxHud" end
 
             local card = Instance.new("Frame")
             card.Size = UDim2.new(1, -6, 0, 64)
@@ -1521,7 +1572,7 @@ local function OpenToxNetworkModal()
             local aStroke = Instance.new("UIStroke") aStroke.Color = isOnline and Color3.fromRGB(34, 197, 94) or (uiTheme and uiTheme.Accent or MAIN_COLOR) aStroke.Thickness = 1 aStroke.Transparency = 0.5 aStroke.Parent = avatar
 
             local nameLabel = Instance.new("TextLabel")
-            nameLabel.Size = UDim2.new(0, 185, 0, 18)
+            nameLabel.Size = UDim2.new(0, 140, 0, 18)
             nameLabel.Position = UDim2.new(0, 62, 0, 10)
             nameLabel.BackgroundTransparency = 1
             nameLabel.Text = "@" .. uname
@@ -1532,28 +1583,50 @@ local function OpenToxNetworkModal()
             nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
             nameLabel.Parent = card
 
+            local originBadge = Instance.new("Frame")
+            originBadge.Size = UDim2.new(0, 75, 0, 18)
+            originBadge.Position = UDim2.new(0, 208, 0, 10)
+            originBadge.BackgroundColor3 = isTox and Color3.fromRGB(12, 32, 54) or Color3.fromRGB(36, 16, 52)
+            originBadge.BorderSizePixel = 0
+            originBadge.Parent = card
+            local obCorner = Instance.new("UICorner") obCorner.CornerRadius = UDim.new(0, 4) obCorner.Parent = originBadge
+            local obStroke = Instance.new("UIStroke")
+            obStroke.Color = isTox and Color3.fromRGB(0, 168, 255) or Color3.fromRGB(168, 85, 247)
+            obStroke.Thickness = 1
+            obStroke.Transparency = 0.3
+            obStroke.Parent = originBadge
+
+            local obText = Instance.new("TextLabel")
+            obText.Size = UDim2.new(1, 0, 1, 0)
+            obText.BackgroundTransparency = 1
+            obText.Text = isTox and "🛡️ ToxHud" or "⚡ WASOR"
+            obText.TextColor3 = isTox and Color3.fromRGB(56, 189, 248) or Color3.fromRGB(216, 180, 254)
+            obText.Font = Enum.Font.GothamBold
+            obText.TextSize = 9
+            obText.Parent = originBadge
+
             local execBadge = Instance.new("Frame")
-            execBadge.Size = UDim2.new(0, 82, 0, 18)
-            execBadge.Position = UDim2.new(0, 250, 0, 10)
+            execBadge.Size = UDim2.new(0, 75, 0, 18)
+            execBadge.Position = UDim2.new(0, 288, 0, 10)
             execBadge.BackgroundColor3 = Color3.fromRGB(15, 20, 30)
             execBadge.BorderSizePixel = 0
             execBadge.Parent = card
             local ebCorner = Instance.new("UICorner") ebCorner.CornerRadius = UDim.new(0, 4) ebCorner.Parent = execBadge
-            local ebStroke = Instance.new("UIStroke") ebStroke.Color = GetExecutorBadgeColor(exec) ebStroke.Thickness = 1 ebStroke.Transparency = 0.3 ebStroke.Parent = execBadge
+            local ebStroke = Instance.new("UIStroke") ebStroke.Color = GetExecutorBadgeColor(cleanExec) ebStroke.Thickness = 1 ebStroke.Transparency = 0.3 ebStroke.Parent = execBadge
 
             local ebText = Instance.new("TextLabel")
             ebText.Size = UDim2.new(1, 0, 1, 0)
             ebText.BackgroundTransparency = 1
-            ebText.Text = exec
-            ebText.TextColor3 = GetExecutorBadgeColor(exec)
+            ebText.Text = cleanExec
+            ebText.TextColor3 = GetExecutorBadgeColor(cleanExec)
             ebText.Font = Enum.Font.GothamBold
             ebText.TextSize = 9
             ebText.TextTruncate = Enum.TextTruncate.AtEnd
             ebText.Parent = execBadge
 
             local statusBadge = Instance.new("Frame")
-            statusBadge.Size = UDim2.new(0, 68, 0, 18)
-            statusBadge.Position = UDim2.new(0, 338, 0, 10)
+            statusBadge.Size = UDim2.new(0, 72, 0, 18)
+            statusBadge.Position = UDim2.new(0, 368, 0, 10)
             statusBadge.BackgroundColor3 = isOnline and Color3.fromRGB(12, 38, 22) or Color3.fromRGB(22, 24, 30)
             statusBadge.BorderSizePixel = 0
             statusBadge.Parent = card
@@ -1573,7 +1646,7 @@ local function OpenToxNetworkModal()
             infoLabel.Position = UDim2.new(0, 62, 0, 34)
             infoLabel.BackgroundTransparency = 1
             local timeStr = os.date("%H:%M:%S", ts > 0 and ts or os.time())
-            infoLabel.Text = "🎮 " .. gameTitle .. " • " .. (isOnline and "Ativo agora" or ("Visto às " .. timeStr))
+            infoLabel.Text = "🎮 " .. gameTitle .. " • " .. (isOnline and "Active Now" or ("Seen at " .. timeStr))
             infoLabel.TextColor3 = (uiTheme and uiTheme.DimText) or Color3.fromRGB(156, 170, 195)
             infoLabel.Font = Enum.Font.GothamMedium
             infoLabel.TextSize = 10
@@ -1595,14 +1668,14 @@ local function OpenToxNetworkModal()
 
             joinBtn.MouseButton1Click:Connect(function()
                 if not u.place_id or tonumber(u.place_id) == 0 then
-                    CustomNotify("Jogo indisponível para este usuário.", Color3.fromRGB(244, 63, 94), 3)
+                    CustomNotify("Game unavailable for this user.", Color3.fromRGB(244, 63, 94), 3)
                     return
                 end
                 if u.job_id and tostring(u.job_id) == tostring(game.JobId) then
-                    CustomNotify("Você já está no mesmo servidor deste jogador!", Color3.fromRGB(255, 180, 70), 3)
+                    CustomNotify("You are already in the same server as this player!", Color3.fromRGB(255, 180, 70), 3)
                     return
                 end
-                CustomNotify("Conectando ao servidor de @" .. uname .. "...", Color3.fromRGB(0, 168, 255), 4)
+                CustomNotify("Connecting to @" .. uname .. "'s server...", Color3.fromRGB(0, 168, 255), 4)
                 if u.job_id and tostring(u.job_id) ~= "" and tostring(u.job_id) ~= "none" then
                     pcall(function()
                         TeleportService:TeleportToPlaceInstance(tonumber(u.place_id), tostring(u.job_id), Player)
@@ -1617,15 +1690,24 @@ local function OpenToxNetworkModal()
     end
 
     local function FetchAndReload()
-        refreshBtn.Text = "⏳ Buscando..."
+        refreshBtn.Text = "⏳ Loading..."
         task.spawn(function()
             local list = FetchSupabaseNetworkUsers()
             if type(list) == "table" and #list > 0 then
                 cachedUsers = list
             end
             RenderUsers()
-            refreshBtn.Text = "🔄 Atualizar"
+            refreshBtn.Text = "🔄 Refresh"
         end)
+    end
+
+    local function UpdateFilterTabStyles()
+        local activeBg = (uiTheme and uiTheme.Accent) or MAIN_COLOR
+        local inactiveBg = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
+        tabAllBtn.BackgroundColor3 = (currentFilterMode == "ALL") and activeBg or inactiveBg
+        tabToxHudBtn.BackgroundColor3 = (currentFilterMode == "TOXHUD") and activeBg or inactiveBg
+        tabWasorBtn.BackgroundColor3 = (currentFilterMode == "WASOR") and activeBg or inactiveBg
+        tabOnlineBtn.BackgroundColor3 = (currentFilterMode == "ONLINE") and activeBg or inactiveBg
     end
 
     refreshBtn.MouseButton1Click:Connect(FetchAndReload)
@@ -1633,15 +1715,25 @@ local function OpenToxNetworkModal()
 
     tabAllBtn.MouseButton1Click:Connect(function()
         currentFilterMode = "ALL"
-        tabAllBtn.BackgroundColor3 = (uiTheme and uiTheme.Accent) or MAIN_COLOR
-        tabOnlineBtn.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
+        UpdateFilterTabStyles()
+        RenderUsers()
+    end)
+
+    tabToxHudBtn.MouseButton1Click:Connect(function()
+        currentFilterMode = "TOXHUD"
+        UpdateFilterTabStyles()
+        RenderUsers()
+    end)
+
+    tabWasorBtn.MouseButton1Click:Connect(function()
+        currentFilterMode = "WASOR"
+        UpdateFilterTabStyles()
         RenderUsers()
     end)
 
     tabOnlineBtn.MouseButton1Click:Connect(function()
         currentFilterMode = "ONLINE"
-        tabOnlineBtn.BackgroundColor3 = (uiTheme and uiTheme.Accent) or MAIN_COLOR
-        tabAllBtn.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
+        UpdateFilterTabStyles()
         RenderUsers()
     end)
 
@@ -2247,11 +2339,11 @@ local function InitToxControlGui()
 
     local networkUsersBtn = Instance.new("TextButton")
     networkUsersBtn.Name = "NetworkUsersButton"
-    networkUsersBtn.Size = UDim2.new(0, 150, 0, 24)
-    networkUsersBtn.Position = UDim2.new(1, -158, 0, 4)
+    networkUsersBtn.Size = UDim2.new(0, 130, 0, 24)
+    networkUsersBtn.Position = UDim2.new(1, -170, 0, 4)
     networkUsersBtn.BackgroundColor3 = (uiTheme and uiTheme.Accent) or MAIN_COLOR
     networkUsersBtn.BorderSizePixel = 0
-    networkUsersBtn.Text = "👥 Usuários Online"
+    networkUsersBtn.Text = "👥 Online Users"
     networkUsersBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     networkUsersBtn.Font = Enum.Font.GothamBold
     networkUsersBtn.TextSize = 11

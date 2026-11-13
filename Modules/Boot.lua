@@ -430,7 +430,7 @@ else
     headerSub.Size = UDim2.new(1, -80, 0, 16)
     headerSub.Position = UDim2.new(0, 64, 0, 36)
     headerSub.BackgroundTransparency = 1
-    headerSub.Text = "Insira sua chave de acesso para iniciar o script"
+    headerSub.Text = "Enter your access key to start the script"
     headerSub.TextColor3 = Color3.fromRGB(156, 170, 195)
     headerSub.Font = Enum.Font.GothamMedium
     headerSub.TextSize = 11
@@ -451,7 +451,7 @@ else
     textBox.Position = UDim2.new(0, 12, 0, 0)
     textBox.BackgroundTransparency = 1
     textBox.Text = ""
-    textBox.PlaceholderText = "Cole sua key aqui... (Tox-BetaUsers)"
+    textBox.PlaceholderText = "Paste your key here... (Tox-BetaUsers)"
     textBox.PlaceholderColor3 = Color3.fromRGB(110, 125, 150)
     textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
     textBox.Font = Enum.Font.GothamMedium
@@ -476,7 +476,7 @@ else
     submitBtn.Position = UDim2.new(0, 20, 1, -54)
     submitBtn.BackgroundColor3 = Color3.fromRGB(0, 168, 255)
     submitBtn.BorderSizePixel = 0
-    submitBtn.Text = "VALIDAR KEY"
+    submitBtn.Text = "VALIDATE KEY"
     submitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     submitBtn.Font = Enum.Font.GothamBold
     submitBtn.TextSize = 12
@@ -499,7 +499,7 @@ else
         local entered = string.match(textBox.Text or "", "^%s*(.-)%s*$") or ""
         if string.lower(entered) == string.lower(VALID_KEY) then
             statusLabel.TextColor3 = Color3.fromRGB(34, 197, 94)
-            statusLabel.Text = "✅ Key Válida! Carregando ToxHud..."
+            statusLabel.Text = "✅ Valid Key! Loading ToxHud..."
             SaveKey(VALID_KEY)
             task.wait(0.35)
             getgenv().ToxKeyVerified = true
@@ -510,7 +510,7 @@ else
             end)
         else
             statusLabel.TextColor3 = Color3.fromRGB(244, 63, 94)
-            statusLabel.Text = "❌ Key Inválida! Obtenha sua key no Discord."
+            statusLabel.Text = "❌ Invalid Key! Get your key on Discord."
         end
     end)
 
@@ -523,7 +523,7 @@ else
             end
         end)
         statusLabel.TextColor3 = Color3.fromRGB(56, 189, 248)
-        statusLabel.Text = "📋 Link do Discord copiado para a área de transferência!"
+        statusLabel.Text = "📋 Discord link copied to clipboard!"
     end)
 
     repeat
