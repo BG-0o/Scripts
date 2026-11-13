@@ -1116,7 +1116,8 @@ local WalkFlingGeneration = 0
 local WalkFlingImpulseActive = false
 local WalkFlingRunning = false
 local WalkFlingRampStart = 0          -- > 0 while the power is being lowered after disabling
-local WALKFLING_RAMP_TIME = 1.6       -- seconds to fade the power from current to 0
+local WALKFLING_RAMP_TIME = 3.5       -- seconds to fade the power from current to 0
+local WALKFLING_SAFE_TIME = 4.0       -- seconds of fall protection after the fling fully stops
 getgenv().ToxWalkFlingImpulseActive = false
 
 local function SetWalkFlingImpulse(active)
@@ -1208,7 +1209,8 @@ local function StartWalkFling()
                 if t >= 1 then
                     break
                 end
-                factor = (1 - t) * (1 - t)
+                -- Cubic fade: drops fast at first, then stays very weak until it reaches 0
+                factor = (1 - t) * (1 - t) * (1 - t)
             else
                 WalkFlingRampStart = 0
             end
@@ -1242,7 +1244,7 @@ local function StartWalkFling()
 
                 local power = math.clamp(tonumber(Settings.WalkFlingPower) or 30, 1, 100) * factor
 
-                if power < 0.5 then
+                if power < 1 then
                     SetWalkFlingImpulse(false)
                     root.AssemblyLinearVelocity = normalVel
                 else
@@ -1259,7 +1261,9 @@ local function StartWalkFling()
                     --  RenderStepped: back to our normal (clamped) velocity
                     --  Stepped (before physics): normal velocity + tiny jitter, so OUR physics never uses the huge value
                     -- Never apply the huge velocity on Stepped, or the local character gets launched.
-                    root.AssemblyLinearVelocity = Vector3.new(moveDir.X * mult, mult * 0.75, moveDir.Z * mult)
+                    -- While fading out, the upward part drops even faster (it is what launches us on stop)
+                    local upMult = mult * 0.75 * factor
+                    root.AssemblyLinearVelocity = Vector3.new(moveDir.X * mult, upMult, moveDir.Z * mult)
 
                     RunService.RenderStepped:Wait()
                     if root.Parent then
@@ -1283,10 +1287,23 @@ local function StartWalkFling()
         end
         SetWalkFlingImpulse(false)
 
-        -- Keep the character stable for a moment after the fling stops
-        for _ = 1, 15 do
+        -- Safe period: keep fall protection / no ragdoll for a few seconds after it fully stops
+        local safeUntil = tick() + WALKFLING_SAFE_TIME
+        getgenv().ToxWalkFlingSafeUntil = safeUntil
+        while tick() < safeUntil and not WalkFlingRunning and not env.Destroyed do
             RunService.Heartbeat:Wait()
-            if WalkFlingRunning then break end
+            local character = Player.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+            if root and humanoid and humanoid.Health > 0 then
+                SetWalkFlingStates(humanoid, false)
+                pcall(function()
+                    root.AssemblyLinearVelocity = GetSafeWalkVelocity(root, humanoid)
+                    root.AssemblyAngularVelocity = Vector3.zero
+                end)
+            end
+        end
+        if not WalkFlingRunning then
             SettleCharacterAfterWalkFling()
         end
     end)
