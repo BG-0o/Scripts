@@ -3847,6 +3847,50 @@ end
 MM2CoinCache = {}
 MM2CoinScanTime = 0
 MM2CoinBlacklist = setmetatable({}, {__mode = "k"})
+AutoFarmExternalTPAt = 0                                   -- last time the GAME teleported us
+AutoFarmCoinAttempts = setmetatable({}, {__mode = "k"})   -- coin -> failed reach attempts
+AutoFarmMapBoundsCache = nil
+
+-- The game moved us (round start TP to the map / round end TP to the lobby) while farming.
+-- Accept it instead of dragging the character back to where the farm was.
+function ToxMM2CheckExternalTeleport()
+    if not AutoFarmRoot or not AutoFarmRoot.Parent or not AutoFarmHoldPosition then
+        return false
+    end
+    if getgenv().ToxIsToxTeleportAllowed and getgenv().ToxIsToxTeleportAllowed() then
+        return false
+    end
+    if (AutoFarmRoot.Position - AutoFarmHoldPosition).Magnitude > 25 then
+        AutoFarmExternalTPAt = os.clock()
+        AutoFarmHoldPosition = nil
+        AutoFarmWaitHoldPosition = nil
+        return true
+    end
+    return false
+end
+
+-- True when the character is actually on/around the loaded map (not in the lobby
+-- before the round TP, and not back in the lobby after the round ended).
+function ToxMM2IsPlayerOnMap(position)
+    local map = GetLoadedMM2MapModel()
+    if not map or typeof(position) ~= "Vector3" then
+        return false
+    end
+    local now = os.clock()
+    if not AutoFarmMapBoundsCache or AutoFarmMapBoundsCache.Map ~= map or now - AutoFarmMapBoundsCache.Time > 3 then
+        local ok, cf, size = pcall(function() return map:GetBoundingBox() end)
+        if not ok or not cf then
+            return true   -- can't measure: don't block farming
+        end
+        AutoFarmMapBoundsCache = { Map = map, CF = cf, Size = size, Time = now }
+    end
+    local localPos = AutoFarmMapBoundsCache.CF:PointToObjectSpace(position)
+    local half = AutoFarmMapBoundsCache.Size / 2
+    local margin = 60
+    return math.abs(localPos.X) <= half.X + margin
+        and math.abs(localPos.Z) <= half.Z + margin
+        and math.abs(localPos.Y) <= half.Y + 150
+end
 AutoFarmTween = nil
 AutoFarmRoot = nil
 AutoFarmHumanoid = nil
@@ -6145,6 +6189,11 @@ function SetAutoFarmCoinPosition(position, velocity, direction)
         return false
     end
 
+    -- Game teleported us mid-tween: stop this tween so the loop restarts from the new spot
+    if ToxMM2CheckExternalTeleport() then
+        return false
+    end
+
     AutoFarmHoldPosition = position
     AutoFarmRoot.Anchored = false -- must stay unanchored or the server stops receiving our position
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
@@ -6637,6 +6686,9 @@ AddConnection(RunService.Heartbeat:Connect(function()
     AutoFarmHumanoid.Sit = false
     AutoFarmHumanoid.AutoRotate = false
 
+    -- Respect game teleports instead of pinning back to the old spot
+    ToxMM2CheckExternalTeleport()
+
     -- Unanchored hold: re-pin every frame so gravity never builds up (no falling, position still replicates)
     if AutoFarmHoldPosition and not AutoFarmActivelyTweening then
         AutoFarmRoot.CFrame = CFrame.new(AutoFarmHoldPosition)
@@ -6732,6 +6784,22 @@ task.spawn(function()
                 end
 
                 task.wait(0.2)
+            elseif os.clock() - AutoFarmExternalTPAt < 2.5 then
+                -- the game just teleported us (round start/end): let it settle first
+                if AutoFarmPrepared then
+                    StopAutoFarm(false)
+                end
+
+                task.wait(0.15)
+            elseif root and not ToxMM2IsPlayerOnMap(root.Position)
+            and not (AutoFarmRoot and AutoFarmRoot.Parent and ToxMM2IsPlayerOnMap(AutoFarmRoot.Position)) then
+                -- still in the lobby (before the round TP) or back in the lobby (round over):
+                -- coins of that map are not collectable from here
+                if AutoFarmPrepared then
+                    StopAutoFarm(false)
+                end
+
+                task.wait(0.2)
             elseif IsFarmBagFull() then
                 CompleteAutoFarm()
                 task.wait(0.2)
@@ -6751,8 +6819,21 @@ task.spawn(function()
                 elseif coin then
                     AutoFarmWaitHoldPosition = nil
                     local ok = AutoFarmCoin(coin)
+                    if IsCoinValid(coin) then
+                        -- reached it but it didn't get collected (ghost coin / round over):
+                        -- after 2 tries ignore it for a while instead of looping forever
+                        AutoFarmCoinAttempts[coin] = (AutoFarmCoinAttempts[coin] or 0) + 1
+                        if AutoFarmCoinAttempts[coin] >= 2 then
+                            AutoFarmCoinAttempts[coin] = nil
+                            MM2CoinBlacklist[coin] = os.clock() + 10
+                        end
+                    else
+                        AutoFarmCoinAttempts[coin] = nil
+                    end
                     if not ok then
-                        MM2CoinBlacklist[coin] = os.clock() + 0.8
+                        if not MM2CoinBlacklist[coin] then
+                            MM2CoinBlacklist[coin] = os.clock() + 0.8
+                        end
                         task.wait(0.06)
                     else
                         task.wait(0.02)
