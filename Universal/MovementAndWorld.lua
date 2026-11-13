@@ -1115,9 +1115,6 @@ do
 local WalkFlingGeneration = 0
 local WalkFlingImpulseActive = false
 local WalkFlingRunning = false
-local WalkFlingRampStart = 0          -- > 0 while the power is being lowered after disabling
-local WALKFLING_RAMP_TIME = 3.5       -- seconds to fade the power from current to 0
-local WALKFLING_SAFE_TIME = 4.0       -- seconds of fall protection after the fling fully stops
 getgenv().ToxWalkFlingImpulseActive = false
 
 local function SetWalkFlingImpulse(active)
@@ -1167,11 +1164,91 @@ local function SettleCharacterAfterWalkFling()
     end
 end
 
+-- ==========================================================================
+-- External teleport guard: when the GAME teleports us (round start, spawn...),
+-- the server moves a part we own while we are pushing fling velocity / falling,
+-- which can kill instantly. Detect jumps we didn't cause and stabilize for a moment.
+-- ==========================================================================
+local EXTERNAL_TP_DISTANCE = 30     -- studs in a single frame
+local EXTERNAL_TP_GUARD_TIME = 2.0  -- seconds of protection after a game teleport
+local GuardLastRoot = nil
+local GuardLastPos = nil
+getgenv().ToxExternalTeleportUntil = 0
+
+local function IsOwnTeleportActive()
+    if getgenv().ToxIsToxTeleportAllowed and getgenv().ToxIsToxTeleportAllowed() then
+        return true
+    end
+    if tick() < (tonumber(getgenv().ToxFlingBypassUntil) or 0) then
+        return true
+    end
+    if getgenv().ToxFlingBusy and tick() < (tonumber(getgenv().ToxFlingBusyUntil) or 0) then
+        return true
+    end
+    return false
+end
+
+local function CheckExternalTeleport(root)
+    local pos = root.Position
+    if GuardLastRoot ~= root or not GuardLastPos then
+        GuardLastRoot = root
+        GuardLastPos = pos
+        return false
+    end
+    local jumped = (pos - GuardLastPos).Magnitude > EXTERNAL_TP_DISTANCE
+    GuardLastPos = pos
+    if jumped and not IsOwnTeleportActive() then
+        getgenv().ToxExternalTeleportUntil = tick() + EXTERNAL_TP_GUARD_TIME
+        return true
+    end
+    return false
+end
+
+local function IsExternalTeleportGuardActive()
+    return tick() < (tonumber(getgenv().ToxExternalTeleportUntil) or 0)
+end
+getgenv().ToxIsExternalTeleportGuardActive = IsExternalTeleportGuardActive
+
+AddConnection(RunService.Heartbeat:Connect(function()
+    if env.Destroyed then return end
+    local character = Player.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    if not root or not humanoid or humanoid.Health <= 0 then
+        return
+    end
+
+    local justTeleported = CheckExternalTeleport(root)
+
+    if justTeleported or IsExternalTeleportGuardActive() then
+        -- Land softly: no leftover fling / fall velocity, no spin, no ragdoll
+        pcall(function()
+            root.AssemblyLinearVelocity = GetSafeWalkVelocity(root, humanoid)
+            root.AssemblyAngularVelocity = Vector3.zero
+        end)
+        SetWalkFlingStates(humanoid, false)
+        if justTeleported then
+            pcall(function()
+                root.AssemblyLinearVelocity = Vector3.zero
+                humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+            end)
+            if getgenv().SetNDSNoTPAnchor then
+                -- Accept the game's teleport as the new anchor instead of fighting it
+                pcall(getgenv().SetNDSNoTPAnchor, root.CFrame, true)
+            end
+        end
+    elseif not WalkFlingRunning then
+        -- Guard just ended and walkfling is off: give normal states back
+        if humanoid:GetStateEnabled(Enum.HumanoidStateType.FallingDown) == false then
+            SetWalkFlingStates(humanoid, true)
+        end
+    end
+end))
+
 -- Immediate stop (script unload / restart). Normal disabling uses the ramp in SetWalkFling.
 local function StopWalkFling()
     WalkFlingGeneration = WalkFlingGeneration + 1
     WalkFlingRunning = false
-    WalkFlingRampStart = 0
     SetWalkFlingImpulse(false)
     SettleCharacterAfterWalkFling()
 end
@@ -1181,16 +1258,13 @@ local function StartWalkFling()
         return
     end
 
-    -- Already running (maybe fading out): just cancel the fade
     if WalkFlingRunning then
-        WalkFlingRampStart = 0
         return
     end
 
     WalkFlingGeneration = WalkFlingGeneration + 1
     local generation = WalkFlingGeneration
     WalkFlingRunning = true
-    WalkFlingRampStart = 0
 
     task.spawn(function()
         local movel = 0.1
@@ -1199,20 +1273,8 @@ local function StartWalkFling()
         while generation == WalkFlingGeneration
         and not env.Destroyed
         and env.ScriptLoaded do
-            -- Power factor: 1 while enabled, fades to 0 after disabling
-            local factor = 1
             if not Settings.WalkFling then
-                if WalkFlingRampStart == 0 then
-                    WalkFlingRampStart = tick()
-                end
-                local t = (tick() - WalkFlingRampStart) / WALKFLING_RAMP_TIME
-                if t >= 1 then
-                    break
-                end
-                -- Cubic fade: drops fast at first, then stays very weak until it reaches 0
-                factor = (1 - t) * (1 - t) * (1 - t)
-            else
-                WalkFlingRampStart = 0
+                break
             end
 
             RunService.Heartbeat:Wait()
@@ -1242,7 +1304,13 @@ local function StartWalkFling()
                 local normalVel = GetSafeWalkVelocity(root, humanoid)
                 root.AssemblyAngularVelocity = Vector3.zero
 
-                local power = math.clamp(tonumber(Settings.WalkFlingPower) or 30, 1, 100) * factor
+                local power = math.clamp(tonumber(Settings.WalkFlingPower) or 30, 1, 100)
+
+                -- Game just teleported us: no fling impulse until we've landed safely
+                if CheckExternalTeleport(root) or IsExternalTeleportGuardActive() then
+                    power = 0
+                    normalVel = Vector3.zero
+                end
 
                 if power < 1 then
                     SetWalkFlingImpulse(false)
@@ -1261,9 +1329,7 @@ local function StartWalkFling()
                     --  RenderStepped: back to our normal (clamped) velocity
                     --  Stepped (before physics): normal velocity + tiny jitter, so OUR physics never uses the huge value
                     -- Never apply the huge velocity on Stepped, or the local character gets launched.
-                    -- While fading out, the upward part drops even faster (it is what launches us on stop)
-                    local upMult = mult * 0.75 * factor
-                    root.AssemblyLinearVelocity = Vector3.new(moveDir.X * mult, upMult, moveDir.Z * mult)
+                    root.AssemblyLinearVelocity = Vector3.new(moveDir.X * mult, mult * 0.75, moveDir.Z * mult)
 
                     RunService.RenderStepped:Wait()
                     if root.Parent then
@@ -1283,26 +1349,9 @@ local function StartWalkFling()
 
         if generation == WalkFlingGeneration then
             WalkFlingRunning = false
-            WalkFlingRampStart = 0
         end
         SetWalkFlingImpulse(false)
 
-        -- Safe period: keep fall protection / no ragdoll for a few seconds after it fully stops
-        local safeUntil = tick() + WALKFLING_SAFE_TIME
-        getgenv().ToxWalkFlingSafeUntil = safeUntil
-        while tick() < safeUntil and not WalkFlingRunning and not env.Destroyed do
-            RunService.Heartbeat:Wait()
-            local character = Player.Character
-            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-            local root = character and character:FindFirstChild("HumanoidRootPart")
-            if root and humanoid and humanoid.Health > 0 then
-                SetWalkFlingStates(humanoid, false)
-                pcall(function()
-                    root.AssemblyLinearVelocity = GetSafeWalkVelocity(root, humanoid)
-                    root.AssemblyAngularVelocity = Vector3.zero
-                end)
-            end
-        end
         if not WalkFlingRunning then
             SettleCharacterAfterWalkFling()
         end
@@ -1316,9 +1365,8 @@ getgenv().SetWalkFling = function(
     Settings.WalkFling = enabled
     if enabled then
         StartWalkFling()
-    elseif WalkFlingRunning and WalkFlingRampStart == 0 then
-        -- Don't cut instantly: the loop sees WalkFling = false and fades the power to 0
-        WalkFlingRampStart = tick()
+    else
+        StopWalkFling()
     end
     if getgenv().SyncToggleVisuals then
         getgenv().SyncToggleVisuals(
