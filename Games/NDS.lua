@@ -1621,6 +1621,68 @@ local function NDSIsWaterPart(part)
         or string.find(lower, "ocean", 1, true) ~= nil
 end
 
+-- Finds the sea level once per map. Works even if the water part ignores raycasts
+-- (CanQuery off), which is why the old raycast-only version let you fall into the void.
+local NDSWaterCache = { Map = false, Level = nil, Time = 0, Notified = false }
+
+local function NDSScanWaterLevel()
+    local best = nil
+    local bestName = nil
+    local myCharacter = Player.Character
+    for _, object in ipairs(workspace:GetDescendants()) do
+        if object:IsA("BasePart") and not (myCharacter and object:IsDescendantOf(myCharacter)) then
+            local size = object.Size
+            if math.max(size.X, size.Z) >= 150 then
+                local lower = string.lower(object.Name)
+                local named = string.find(lower, "water", 1, true) or string.find(lower, "ocean", 1, true)
+                    or lower == "sea" or string.find(lower, "sea ", 1, true)
+                if object.Material == Enum.Material.Water or named then
+                    local top = object.Position.Y + size.Y / 2
+                    if not best or top > best then
+                        best = top
+                        bestName = object:GetFullName()
+                    end
+                end
+            end
+        end
+    end
+    return best, bestName
+end
+
+function NDSGetWaterLevel(position, character)
+    local map = workspace:FindFirstChild("Structure")
+    local now = os.clock()
+    if NDSWaterCache.Map ~= map or (not NDSWaterCache.Level and now - NDSWaterCache.Time > 3) then
+        if NDSWaterCache.Map ~= map then
+            NDSWaterCache.Notified = false   -- tell the sea level again on a new map
+        end
+        NDSWaterCache.Map = map
+        NDSWaterCache.Time = now
+        local level, name = NDSScanWaterLevel()
+        if not level then
+            -- Terrain water: raycast straight down from high above, water not ignored
+            local params = RaycastParams.new()
+            params.FilterType = Enum.RaycastFilterType.Exclude
+            params.FilterDescendantsInstances = { character, workspace.CurrentCamera, NDSSupportPart }
+            params.IgnoreWater = false
+            local hit = workspace:Raycast(position + Vector3.new(0, 400, 0), Vector3.new(0, -1200, 0), params)
+            if hit and hit.Instance:IsA("Terrain") and hit.Material == Enum.Material.Water then
+                level, name = hit.Position.Y, "Terrain water"
+            end
+        end
+        NDSWaterCache.Level = level
+        if not NDSWaterCache.Notified and CustomNotify then
+            NDSWaterCache.Notified = true
+            if level then
+                CustomNotify(string.format("Walk on Water • sea level %.1f (%s)", level, tostring(name)), Color3.fromRGB(100, 200, 255), 4)
+            else
+                CustomNotify("Walk on Water • no water found on this map", Color3.fromRGB(255, 180, 70), 4)
+            end
+        end
+    end
+    return NDSWaterCache.Level
+end
+
 local NDSSupportPart = nil
 
 local function NDSHideSupport(destroy)
@@ -1697,24 +1759,17 @@ TrackNDSExtraConnection(RunService.Heartbeat:Connect(function(delta)
     end
 
     if wantWater then
-        local params = RaycastParams.new()
-        params.FilterType = Enum.RaycastFilterType.Exclude
-        params.FilterDescendantsInstances = { character, NDSSupportPart, workspace.CurrentCamera }
-        params.IgnoreWater = false
-        local hit = workspace:Raycast(root.Position + Vector3.new(0, 2, 0), Vector3.new(0, -(reach + 2), 0), params)
-        if hit then
-            local isWater = (hit.Instance:IsA("Terrain") and hit.Material == Enum.Material.Water)
-                or NDSIsWaterPart(hit.Instance)
-            if isWater then
-                -- Stand a bit ABOVE the water: with the legs inside the water the humanoid
-                -- switches to swimming and the character kept jumping/"teleporting".
-                local surfaceTop = hit.Position.Y + 1
-                if feetY >= surfaceTop - 0.6 then
-                    bestY = math.max(bestY or -math.huge, surfaceTop)
-                elseif feetY >= hit.Position.Y - 5 then
-                    -- just under the surface: float up smoothly instead of popping out
-                    root.AssemblyLinearVelocity = Vector3.new(velocity.X, math.max(velocity.Y, 22), velocity.Z)
-                end
+        local surfaceY = NDSGetWaterLevel(root.Position, character)
+        if surfaceY then
+            -- Stand a bit ABOVE the water (legs out of it -> no swimming jitter).
+            -- The support follows you at water level everywhere, so it also catches you
+            -- when you walk off the island (under the island it is just below the ground).
+            local surfaceTop = surfaceY + 1
+            if feetY >= surfaceTop - 0.6 then
+                bestY = math.max(bestY or -math.huge, surfaceTop)
+            elseif feetY >= surfaceY - 6 then
+                -- sunk a little: float up smoothly instead of popping out
+                root.AssemblyLinearVelocity = Vector3.new(velocity.X, math.max(velocity.Y, 24), velocity.Z)
             end
         end
     end
