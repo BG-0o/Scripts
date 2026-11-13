@@ -1978,7 +1978,17 @@ end
 local function InteractAll()
     local count = 0
 
-    for _, object in ipairs(workspace:GetDescendants()) do
+    -- Only the current round map (workspace.Structure). Scanning all of workspace also
+    -- fired the lobby prompts/click detectors (shop menus, ad video, etc).
+    local map = workspace:FindFirstChild("Structure")
+    if not map then
+        if CustomNotify then
+            CustomNotify("No map loaded • wait for the round", Color3.fromRGB(255, 180, 70), 4)
+        end
+        return
+    end
+
+    for _, object in ipairs(map:GetDescendants()) do
         if object:IsA("ProximityPrompt")
         and type(fireproximityprompt) == "function" then
             local ok = pcall(fireproximityprompt, object)
