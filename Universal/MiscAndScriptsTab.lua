@@ -681,14 +681,14 @@ do
     local copyAllBtn = Button("Copy All", UDim2.new(0, 64, 0, 26), UDim2.new(1, -70, 0, 40), gui)
 
     local status = Instance.new("TextLabel")
-    status.Size = UDim2.new(1, -16, 0, 16) status.Position = UDim2.new(0, 8, 0, 70)
+    status.Size = UDim2.new(1, -16, 0, 16) status.Position = UDim2.new(0, 8, 0, 100)
     status.BackgroundTransparency = 1 status.Font = Enum.Font.Gotham status.TextSize = 10
     status.TextXAlignment = Enum.TextXAlignment.Left status.Text = "Type a nick and press Load"
     Themed(status, "TextColor3", "DimText", Color3.fromRGB(160, 160, 180))
     status.Parent = gui
 
     local list = Instance.new("ScrollingFrame")
-    list.Size = UDim2.new(1, -16, 1, -96) list.Position = UDim2.new(0, 8, 0, 88)
+    list.Size = UDim2.new(1, -16, 1, -126) list.Position = UDim2.new(0, 8, 0, 118)
     list.BackgroundTransparency = 1 list.BorderSizePixel = 0
     list.ScrollBarThickness = 4 list.CanvasSize = UDim2.new()
     list.AutomaticCanvasSize = Enum.AutomaticSize.Y
@@ -698,6 +698,21 @@ do
 
     local currentIds = {}
     local loadToken = 0
+
+    -- Source: "Server" = what they are wearing right now in this server (also changes
+    -- made with in-game avatar editors / Catalog Avatar Creator), "Roblox" = their real
+    -- saved Roblox avatar.
+    local itemSource = "Server"
+    local serverTab = Button("Server (now)", UDim2.new(0.5, -12, 0, 24), UDim2.new(0, 8, 0, 72), gui)
+    local robloxTab = Button("Roblox (profile)", UDim2.new(0.5, -12, 0, 24), UDim2.new(0.5, 4, 0, 72), gui)
+    local function PaintTabs()
+        for _, pair in ipairs({ { serverTab, "Server" }, { robloxTab, "Roblox" } }) do
+            local active = itemSource == pair[2]
+            pair[1].BackgroundColor3 = active and (Theme.Accent or Color3.fromRGB(30, 95, 255)) or (Theme.Element or Color3.fromRGB(25, 30, 40))
+            pair[1].TextColor3 = active and Color3.new(1, 1, 1) or (Theme.DimText or Color3.fromRGB(160, 160, 180))
+        end
+    end
+    PaintTabs()
 
     local ACCESSORY_FIELDS = {
         { "HatAccessory", "Hat" }, { "HairAccessory", "Hair" }, { "FaceAccessory", "Face Acc." },
@@ -713,7 +728,7 @@ do
         { "SwimAnimation", "Swim Anim" },
     }
 
-    local function CollectItems(target)
+    local function CollectItems(target, source)
         local items, seen = {}, {}
         local function add(id, kind)
             id = tonumber(id)
@@ -723,10 +738,11 @@ do
             end
         end
         local desc = nil
-        local hum = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
-        if hum then pcall(function() desc = hum:GetAppliedDescription() end) end
-        if not desc then
+        if source == "Roblox" then
             pcall(function() desc = Players:GetHumanoidDescriptionFromUserId(target.UserId) end)
+        else
+            local hum = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
+            if hum then pcall(function() desc = hum:GetAppliedDescription() end) end
         end
         if not desc then return items end
         for _, f in ipairs(ACCESSORY_FIELDS) do
@@ -810,21 +826,33 @@ do
             if child:IsA("Frame") then child:Destroy() end
         end
         currentIds = {}
-        status.Text = "Loading items of " .. target.DisplayName .. "..."
+        local source = itemSource
+        status.Text = "Loading " .. (source == "Roblox" and "Roblox avatar" or "server skin") .. " of " .. target.DisplayName .. "..."
         task.spawn(function()
-            local items = CollectItems(target)
+            local items = CollectItems(target, source)
             if token ~= loadToken then return end
             for index, item in ipairs(items) do
                 table.insert(currentIds, tostring(item.Id))
                 MakeRow(item, index)
             end
+            local where = source == "Roblox" and "Roblox" or "Server"
             status.Text = (#items > 0)
-                and (#items .. " items • " .. target.DisplayName .. " (@" .. target.Name .. ")")
-                or ("No items found for " .. target.DisplayName)
+                and (where .. " • " .. #items .. " items • " .. target.DisplayName .. " (@" .. target.Name .. ")")
+                or (where .. " • no items found for " .. target.DisplayName)
         end)
     end
 
     loadBtn.MouseButton1Click:Connect(function() AvatarItemsLoad(nameBox.Text) end)
+    serverTab.MouseButton1Click:Connect(function()
+        itemSource = "Server"
+        PaintTabs()
+        if nameBox.Text ~= "" then AvatarItemsLoad(nameBox.Text) end
+    end)
+    robloxTab.MouseButton1Click:Connect(function()
+        itemSource = "Roblox"
+        PaintTabs()
+        if nameBox.Text ~= "" then AvatarItemsLoad(nameBox.Text) end
+    end)
     nameBox.FocusLost:Connect(function(enter) if enter then AvatarItemsLoad(nameBox.Text) end end)
     copyAllBtn.MouseButton1Click:Connect(function()
         if #currentIds == 0 then
@@ -840,6 +868,28 @@ do
     AvatarItemsGui = gui
     env.ToxAvatarItemsGui = gui
     env.ToxAvatarItemsLoad = AvatarItemsLoad
+
+    -- Hide/collapse together with the main UI and get the "-" minimize button,
+    -- like Music Player / Waypoints (Core may load after this file, so retry).
+    task.spawn(function()
+        local linked, minimized = false, false
+        for _ = 1, 50 do
+            if env.Destroyed then return end
+            if not linked and env.RegisterToxLinkedSubGui then
+                pcall(env.RegisterToxLinkedSubGui, "AvatarItems", gui)
+                linked = true
+            end
+            if not minimized and env.RegisterToxSubGuiMinimize then
+                pcall(env.RegisterToxSubGuiMinimize, gui, -52)
+                minimized = true
+            end
+            if linked and minimized then return end
+            task.wait(0.2)
+        end
+        -- fallback: at least hide with the main window
+        env.ToxLinkedSubGuis = env.ToxLinkedSubGuis or {}
+        env.ToxLinkedSubGuis.AvatarItems = gui
+    end)
 end
 CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
 CreateButton("Tox Waypoints", FlingPage, function() WaypointsGui.Visible = not WaypointsGui.Visible end)
