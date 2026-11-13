@@ -1676,29 +1676,62 @@ end
 
 local function NDSDetectDisaster(text)
     local lower = string.lower(tostring(text or ""))
-
     if lower == "" then
         return nil
     end
 
-    if lower == "fire" then
-        return "Fire"
-    elseif lower == "virus" then
-        return "Deadly Virus"
+    -- Canonical name map (from SurvivalTag.Value)
+    local canonical = {
+        ["acid rain"] = "Acid Rain",
+        ["blizzard"] = "Blizzard",
+        ["deadly virus"] = "Deadly Virus",
+        ["earthquake"] = "Earthquake",
+        ["fire"] = "Fire",
+        ["flash flood"] = "Flash Flood",
+        ["meteor shower"] = "Meteor Shower",
+        ["sandstorm"] = "Sandstorm",
+        ["thunderstorm"] = "Thunderstorm",
+        ["thunder storm"] = "Thunderstorm",
+        ["tornado"] = "Tornado",
+        ["tsunami"] = "Tsunami",
+        ["volcanic eruption"] = "Volcanic Eruption"
+    }
+
+    if canonical[lower] then
+        return canonical[lower]
     end
 
-    for disaster, patterns in pairs(NDSDisasterPatterns) do
-        for _, pattern in ipairs(patterns) do
-            if string.find(lower, pattern, 1, true) then
-                return disaster
-            end
-        end
+    -- Warning text pattern detection (from PlayerGui text labels)
+    if string.find(lower, "tsunami") then
+        return "Tsunami"
+    elseif string.find(lower, "flash flood") or (string.find(lower, "flood") and not string.find(lower, "light")) then
+        return "Flash Flood"
+    elseif string.find(lower, "tornado") or string.find(lower, "cyclone") or string.find(lower, "twister") then
+        return "Tornado"
+    elseif string.find(lower, "acid rain") or string.find(lower, "acidic") then
+        return "Acid Rain"
+    elseif string.find(lower, "blizzard") or string.find(lower, "snow storm") then
+        return "Blizzard"
+    elseif string.find(lower, "sandstorm") or string.find(lower, "sand storm") then
+        return "Sandstorm"
+    elseif string.find(lower, "thunderstorm") or string.find(lower, "thunder storm") or string.find(lower, "lightning") then
+        return "Thunderstorm"
+    elseif string.find(lower, "meteor") then
+        return "Meteor Shower"
+    elseif string.find(lower, "volcan") or string.find(lower, "eruption") or (string.find(lower, "lava") and not string.find(lower, "lamp")) then
+        return "Volcanic Eruption"
+    elseif string.find(lower, "earthquake") or string.find(lower, "tremor") then
+        return "Earthquake"
+    elseif string.find(lower, "deadly virus") or (string.find(lower, "virus") and not string.find(lower, "antivirus")) then
+        return "Deadly Virus"
+    elseif string.find(lower, "fire") and (string.find(lower, "warning") or string.find(lower, "fire!") or string.find(lower, "extinguish") or string.find(lower, "spread") or string.find(lower, "flame")) then
+        return "Fire"
     end
 
     return nil
 end
 
-local function NDSNotifyDisaster(disaster)
+local function NDSNotifyDisaster(disaster, mapName)
     if not disaster or NDSDisasterSeen[disaster] then
         return
     end
@@ -1706,44 +1739,15 @@ local function NDSNotifyDisaster(disaster)
     NDSDisasterSeen[disaster] = true
 
     if CustomNotify then
+        local msg = "Disaster: " .. tostring(disaster)
+        if mapName and tostring(mapName) ~= "" and tostring(mapName) ~= "none" then
+            msg = msg .. " • " .. tostring(mapName)
+        end
         CustomNotify(
-            "Disaster: " .. tostring(disaster),
+            msg,
             Color3.fromRGB(255, 190, 80),
             6
         )
-    end
-end
-
-local function NDSInspectDisasterObject(object)
-    if not Settings.NDSNotifyDisasters or not object then
-        return
-    end
-
-    if not workspace:FindFirstChild("Structure") then
-        return
-    end
-
-    local toxGui = getgenv().Gui
-    local notifGui = getgenv().NotifGui
-
-    if typeof(toxGui) == "Instance"
-    and (object == toxGui or object:IsDescendantOf(toxGui)) then
-        return
-    end
-
-    if typeof(notifGui) == "Instance"
-    and (object == notifGui or object:IsDescendantOf(notifGui)) then
-        return
-    end
-
-    NDSNotifyDisaster(NDSDetectDisaster(object.Name))
-
-    if object:IsA("StringValue") then
-        NDSNotifyDisaster(NDSDetectDisaster(object.Value))
-    elseif object:IsA("TextLabel")
-    or object:IsA("TextButton")
-    or object:IsA("TextBox") then
-        NDSNotifyDisaster(NDSDetectDisaster(object.Text))
     end
 end
 
@@ -1759,24 +1763,75 @@ local function NDSScanDisasters()
         NDSDisasterSeen = {}
     end
 
-    if not structure then
-        return
-    end
-
-    for _, root in ipairs({ReplicatedStorage, Lighting, Player:FindFirstChildOfClass("PlayerGui")}) do
-        if root then
-            NDSInspectDisasterObject(root)
-
-            for _, object in ipairs(root:GetDescendants()) do
-                NDSInspectDisasterObject(object)
+    -- 1. Check SurvivalTag (official NDS server tag attached to player characters)
+    local players = Players:GetPlayers()
+    for _, plr in ipairs(players) do
+        local char = plr.Character
+        if char then
+            local tag = char:FindFirstChild("SurvivalTag")
+            if tag and tag:IsA("StringValue") and tag.Value ~= "" then
+                local mapVal = tag:FindFirstChild("MapName") and tag.MapName.Value or nil
+                local detected = NDSDetectDisaster(tag.Value)
+                if detected then
+                    NDSNotifyDisaster(detected, mapVal)
+                    return
+                end
             end
         end
     end
 
-    for _, object in ipairs(workspace:GetChildren()) do
-        NDSInspectDisasterObject(object)
+    -- 2. Check PlayerGui for official Disaster Warning banner
+    local pg = Player:FindFirstChildOfClass("PlayerGui")
+    if pg then
+        for _, obj in ipairs(pg:GetDescendants()) do
+            if obj:IsA("TextLabel") and obj.Visible then
+                local text = tostring(obj.Text or "")
+                if #text > 3 then
+                    local detected = NDSDetectDisaster(text)
+                    if detected then
+                        NDSNotifyDisaster(detected)
+                        return
+                    end
+                end
+            end
+        end
     end
 end
+
+local function HookCharacterForSurvivalTag(char)
+    if not char then return end
+    TrackNDSExtraConnection(char.ChildAdded:Connect(function(child)
+        if child.Name == "SurvivalTag" and child:IsA("StringValue") then
+            task.defer(function()
+                local mapVal = child:FindFirstChild("MapName") and child.MapName.Value or nil
+                local detected = NDSDetectDisaster(child.Value)
+                if detected then
+                    NDSNotifyDisaster(detected, mapVal)
+                end
+            end)
+        end
+    end))
+    local existing = char:FindFirstChild("SurvivalTag")
+    if existing and existing:IsA("StringValue") then
+        local mapVal = existing:FindFirstChild("MapName") and existing.MapName.Value or nil
+        local detected = NDSDetectDisaster(existing.Value)
+        if detected then
+            NDSNotifyDisaster(detected, mapVal)
+        end
+    end
+end
+
+local function HookPlayerForSurvivalTag(plr)
+    if plr.Character then
+        HookCharacterForSurvivalTag(plr.Character)
+    end
+    TrackNDSExtraConnection(plr.CharacterAdded:Connect(HookCharacterForSurvivalTag))
+end
+
+for _, plr in ipairs(Players:GetPlayers()) do
+    HookPlayerForSurvivalTag(plr)
+end
+TrackNDSExtraConnection(Players.PlayerAdded:Connect(HookPlayerForSurvivalTag))
 
 local function SetNDSNotifyDisasters(enabled)
     Settings.NDSNotifyDisasters = enabled == true
@@ -1903,22 +1958,6 @@ TrackNDSExtraConnection(workspace.DescendantAdded:Connect(function(object)
 
     if Settings.NDSMuteCheerSound then
         task.defer(NDSMuteCheerObject, object)
-    end
-
-    if Settings.NDSNotifyDisasters then
-        task.defer(NDSInspectDisasterObject, object)
-    end
-end))
-
-TrackNDSExtraConnection(ReplicatedStorage.DescendantAdded:Connect(function(object)
-    if Settings.NDSNotifyDisasters then
-        task.defer(NDSInspectDisasterObject, object)
-    end
-end))
-
-TrackNDSExtraConnection(Lighting.DescendantAdded:Connect(function(object)
-    if Settings.NDSNotifyDisasters then
-        task.defer(NDSInspectDisasterObject, object)
     end
 end))
 
@@ -2068,6 +2107,28 @@ end)
 
 NDSCreateButton("ISLAND", GamePage, function()
     TeleportTo(IslandCFrame, "ISLAND")
+end)
+
+NDSCreateButton("Tower Safe Spot", GamePage, function()
+    TeleportTo(CFrame.new(-262, 205, 313), "Tower Safe Spot")
+end)
+
+NDSCreateButton("Quick Rejoin (Instant Reset)", GamePage, function()
+    local ts = game:GetService("TeleportService")
+    if ts and game.PlaceId then
+        if CustomNotify then
+            CustomNotify("Reconectando ao servidor...", Color3.fromRGB(0, 168, 255), 3)
+        end
+        if game.JobId and game.JobId ~= "" then
+            pcall(function()
+                ts:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player)
+            end)
+        else
+            pcall(function()
+                ts:Teleport(game.PlaceId, Player)
+            end)
+        end
+    end
 end)
 
 if Settings.NDSAutoWin then
