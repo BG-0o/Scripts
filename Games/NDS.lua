@@ -863,44 +863,14 @@ local function StartNDSNoFall()
             if character and humanoid and humanoid.Health > 0 and root then
                 local velocity = root.AssemblyLinearVelocity
 
-                local minY =
-                    Settings.WalkFling
-                    and -20
-                    or -45
-
-                local triggerY =
-                    Settings.WalkFling
-                    and -28
-                    or -60
-
-                if velocity.Y < triggerY then
+                -- Anti-fall damage protection: clamp downward fall speed
+                if velocity.Y < -28 then
                     root.AssemblyLinearVelocity =
                         Vector3.new(
                             velocity.X,
-                            minY,
+                            -15,
                             velocity.Z
                         )
-                end
-
-                if Settings.WalkFling then
-                    local horizontal =
-                        Vector3.new(
-                            velocity.X,
-                            0,
-                            velocity.Z
-                        )
-
-                    if horizontal.Magnitude > 85 then
-                        horizontal =
-                            horizontal.Unit * 85
-
-                        root.AssemblyLinearVelocity =
-                            Vector3.new(
-                                horizontal.X,
-                                root.AssemblyLinearVelocity.Y,
-                                horizontal.Z
-                            )
-                    end
                 end
             end
         end

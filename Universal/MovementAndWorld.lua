@@ -1101,18 +1101,19 @@ local function StartWalkFling()
 
     local generation = WalkFlingGeneration
     task.spawn(function()
+        local movel = 0.1
         while Settings.WalkFling
         and not env.Destroyed
         and env.ScriptLoaded
         and generation == WalkFlingGeneration do
-            RunService.Stepped:Wait()
+            RunService.Heartbeat:Wait()
 
             local character = Player.Character
             local humanoid = character and character:FindFirstChildOfClass("Humanoid")
             local root = character and character:FindFirstChild("HumanoidRootPart")
 
             if not character or not character.Parent or not humanoid or humanoid.Health <= 0 or not root or not root.Parent then
-                task.wait()
+                task.wait(0.1)
             else
                 -- 1. Ensure solid collision with the ground (NEVER fall through the island, floors, or into water)
                 local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
@@ -1129,10 +1130,13 @@ local function StartWalkFling()
                     )
                 end
 
-                -- 3. Proximity detection: only activate fling when another player is in close contact (< 6.5 studs)
+                -- ZERO SPINNING: Keep angular velocity strictly at zero so the character walks normally without rotating
+                root.AssemblyAngularVelocity = Vector3.zero
+
+                -- 3. Proximity detection: check if another player is in close contact (<= 7 studs)
                 local myPos = root.Position
-                local targetFound = nil
-                local targetDist = 6.5
+                local targetFound = false
+                local targetDist = 7.0
 
                 for _, otherPlayer in ipairs(Players:GetPlayers()) do
                     if otherPlayer ~= Player and otherPlayer.Character then
@@ -1140,45 +1144,46 @@ local function StartWalkFling()
                         local otherHum = otherPlayer.Character:FindFirstChildOfClass("Humanoid")
                         if otherRoot and otherHum and otherHum.Health > 0 then
                             local d = (otherRoot.Position - myPos).Magnitude
-                            if d < targetDist then
-                                targetDist = d
-                                targetFound = otherRoot
+                            if d <= targetDist then
+                                targetFound = true
+                                break
                             end
                         end
                     end
                 end
 
-                local power = math.clamp(tonumber(Settings.WalkFlingPower) or 30, 1, 100)
-
                 if targetFound then
-                    -- Contact detected: apply safe rotational torque to fling other player upon collision
                     WalkFlingImpulseActive = true
                     getgenv().ToxWalkFlingImpulseActive = true
 
-                    -- Scaled torque: at 1% = 100, at 5% = 500, at 30% = 3000, at 50% = 5000, at 100% = 10000
-                    local torqueForce = power * 100
-                    root.AssemblyAngularVelocity = Vector3.new(0, torqueForce, 0)
+                    local power = math.clamp(tonumber(Settings.WalkFlingPower) or 30, 1, 100)
+                    local mult = power * 200
 
-                    -- Gentle horizontal nudge in target direction for firm physical contact without launching self
-                    local toTarget = (targetFound.Position - myPos)
-                    local flatDir = Vector3.new(toTarget.X, 0, toTarget.Z)
-                    if flatDir.Magnitude > 0.1 then
-                        flatDir = flatDir.Unit
-                    else
-                        flatDir = root.CFrame.LookVector
+                    local normalVel = root.AssemblyLinearVelocity
+                    local moveDir = humanoid.MoveDirection
+                    if moveDir.Magnitude < 0.1 then
+                        moveDir = root.CFrame.LookVector
                     end
-                    local nudgeSpeed = math.clamp(power * 0.15, 0.5, 10)
-                    local currentVel = root.AssemblyLinearVelocity
-                    root.AssemblyLinearVelocity = Vector3.new(
-                        flatDir.X * nudgeSpeed,
-                        math.clamp(currentVel.Y, -15, 8),
-                        flatDir.Z * nudgeSpeed
-                    )
-                else
-                    -- No player nearby: reset torque, maintain 100% normal stable walking
-                    if WalkFlingImpulseActive then
+
+                    -- High linear velocity on physics frame: launches target in walking direction + upward
+                    local flingVel = Vector3.new(moveDir.X * mult, mult * 0.75, moveDir.Z * mult)
+                    root.AssemblyLinearVelocity = flingVel
+
+                    -- Immediately restore normal velocity on RenderStepped so the local player's walk and camera stay 100% smooth
+                    RunService.RenderStepped:Wait()
+                    if root and root.Parent then
+                        root.AssemblyLinearVelocity = normalVel
                         root.AssemblyAngularVelocity = Vector3.zero
                     end
+
+                    -- Stepped step: right before collision solver to register high contact velocity against the other player
+                    RunService.Stepped:Wait()
+                    if root and root.Parent then
+                        root.AssemblyLinearVelocity = flingVel + Vector3.new(0, movel, 0)
+                        root.AssemblyAngularVelocity = Vector3.zero
+                        movel = -movel
+                    end
+                else
                     WalkFlingImpulseActive = false
                     getgenv().ToxWalkFlingImpulseActive = false
                 end
@@ -1413,7 +1418,9 @@ local SharedValueSettingMap = {
     SmoothFly = "FlySpeed",
     NormalFly = "FlySpeed",
     FlyBypass = "FlySpeed",
-    WalkFling = "WalkFlingPower"
+    WalkFling = "WalkFlingPower",
+    WalkFlingPower = "WalkFlingPower",
+    UltraInstinctRange = "UltraInstinctRange"
 }
 local function GetGlobalSharedState()
     getgenv().BaseSharedSettings =
