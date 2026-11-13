@@ -2826,17 +2826,17 @@ NDSCreateToggle("Mute Cheer Sound", GamePage, Settings.NDSMuteCheerSound, functi
     SetNDSMuteCheer(v)
 end, "NDSMuteCheerSound")
 
-NDSCreateToggleWithSlider("Part Magnet", GamePage, 5, 300, Settings.PartMagnet == true, Settings.PartMagnetRange or 80, " studs", function(v)
-    -- pulls the loose map parts around you (real, everyone sees it)
-    Settings.PartMagnet = v == true
-    if SyncToggleVisuals then SyncToggleVisuals("PartMagnet", Settings.PartMagnet) end
-    if not Settings.PartMagnet and getgenv().ToxReleasePartMagnet then
-        getgenv().ToxReleasePartMagnet()
+do
+    local createButton = CreateButton or (getgenv and getgenv().CreateButton)
+    if createButton then
+        TrackNDSControl(createButton("Tox Magnet", GamePage, function()
+            local magnet = getgenv().ToxMagnetGui
+            if magnet then
+                magnet.Visible = not magnet.Visible
+            end
+        end))
     end
-end, function(val)
-    Settings.PartMagnetRange = tonumber(val) or 80
-    if SyncValueVisuals then SyncValueVisuals("PartMagnet", Settings.PartMagnetRange) end
-end, "PartMagnet")
+end
 
 NDSCreateToggle("Mute Game Sounds", GamePage, Settings.NDSMuteGameSounds == true, function(v)
     -- every game sound (disasters, wind, alarms...). Voice chat keeps working.

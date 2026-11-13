@@ -285,36 +285,29 @@ CreateInputWithTwoButtons(
 CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
 
 
-if toggleWithSlider then
-    local partMagnetControl = toggleWithSlider("Part Magnet", FlingPage, 5, 300, Settings.PartMagnet, Settings.PartMagnetRange or 80, " studs", function(v)
-        Settings.PartMagnet = v == true
-        if not Settings.PartMagnet and env.ToxReleasePartMagnet then
-            env.ToxReleasePartMagnet()
-        end
-    end, function(val)
-        Settings.PartMagnetRange = tonumber(val) or 80
-        if getgenv().SyncValueVisuals then
-            getgenv().SyncValueVisuals("PartMagnet", Settings.PartMagnetRange)
-        end
-    end, "PartMagnet")
-    if env.TrackUniversalControl then pcall(env.TrackUniversalControl, partMagnetControl, FlingPage) end
-end
+-- ==============================================================================
+-- TOX MAGNET: pulls the unanchored parts around you and moves them in formations.
+-- Real for everyone (not visual): only moves parts YOUR client simulates (network
+-- ownership). Roblox gives you the parts near you; it also tries to raise the
+-- simulation radius when the executor allows it, and keeps the parts "awake".
+-- All options live in the "Tox Magnet" window.
+-- ==============================================================================
+Settings.MagnetMode = Settings.MagnetMode or "Orbit"
+Settings.PartMagnetRange = tonumber(Settings.PartMagnetRange) or 80
+Settings.MagnetRadius = tonumber(Settings.MagnetRadius) or 10
+Settings.MagnetSpeed = tonumber(Settings.MagnetSpeed) or 3
+Settings.MagnetMaxParts = tonumber(Settings.MagnetMaxParts) or 70
+Settings.PartMagnet = false   -- never auto-starts on load
 
--- ==============================================================================
--- PART MAGNET: pulls the unanchored parts around you and keeps them orbiting you.
--- Real for everyone (not visual): it only moves parts YOUR client simulates (network
--- ownership). The Roblox server gives you the parts near you; it also tries to raise
--- the simulation radius when the executor allows it, and keeps the parts "awake" so
--- the ownership isn't taken back.
--- ==============================================================================
+local MagnetGui = nil
 do
     local RunService = game:GetService("RunService")
-    local MAX_PARTS = 70
-    local Controlled = {}      -- part -> { Att = Attachment, Align = AlignPosition, Index = n }
+    local Controlled = {}      -- part -> { Att, Align, Index, CanCollide }
     local controlledCount = 0
     local scanClock, radiusClock = 0, 0
     local nextIndex = 0
-    local rootAttachment = nil
+    local statusLabel = nil
+    local magnetTargetBox = nil
 
     local function Release(part)
         local data = Controlled[part]
@@ -360,7 +353,6 @@ do
     end
 
     local function Grab(part)
-        if controlledCount >= MAX_PARTS then return end
         local att = Instance.new("Attachment")
         att.Name = "ToxMagnetAttachment"
         att.Parent = part
@@ -375,7 +367,7 @@ do
         nextIndex += 1
         Controlled[part] = { Att = att, Align = align, Index = nextIndex, CanCollide = part.CanCollide }
         controlledCount += 1
-        pcall(function() part.CanCollide = false end)   -- so they don't hit you while orbiting
+        pcall(function() part.CanCollide = false end)   -- so they don't hit you
     end
 
     local function TryRaiseSimulationRadius()
@@ -384,7 +376,62 @@ do
             pcall(setter, Player, "SimulationRadius", 1e9)
             pcall(setter, Player, "MaximumSimulationRadius", 1e9)
         end
-        pcall(function() Player.SimulationRadius = 1e9 end)
+    end
+
+    local function GetMagnetTargetRoot()
+        local text = string.lower(magnetTargetBox and magnetTargetBox.Text or "")
+        if text == "" then return nil end
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= Player and (string.find(string.lower(p.Name), text, 1, true)
+            or string.find(string.lower(p.DisplayName), text, 1, true)) then
+                return p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+            end
+        end
+        return nil
+    end
+
+    -- Formation position for part number i (of n) at time t
+    local function FormationPosition(mode, i, n, t, root)
+        local radius = math.max(tonumber(Settings.MagnetRadius) or 10, 1)
+        local speed = tonumber(Settings.MagnetSpeed) or 3
+        local center = root.Position
+        if mode == "Ball" then
+            -- sphere above your head
+            local y = 1 - (i - 0.5) / n * 2
+            local r = math.sqrt(math.max(1 - y * y, 0))
+            local theta = i * 2.399963 + t * speed * 0.4
+            center = center + Vector3.new(0, radius + 4, 0)
+            return center + Vector3.new(math.cos(theta) * r, y, math.sin(theta) * r) * (radius * 0.6)
+        elseif mode == "Wall" then
+            -- shield in front of you
+            local cols = math.max(math.ceil(math.sqrt(n)), 1)
+            local col = (i - 1) % cols
+            local row = math.floor((i - 1) / cols)
+            local spacing = 3
+            local cf = CFrame.new(center, center + Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z))
+            return (cf * CFrame.new((col - (cols - 1) / 2) * spacing, row * spacing - 1, -radius)).Position
+        elseif mode == "Mouse" then
+            local mouse = Player:GetMouse()
+            center = (mouse and mouse.Hit and mouse.Hit.Position or center) + Vector3.new(0, 3, 0)
+            local angle = i * 2.399963 + t * speed
+            local rr = 3 + (i % 3) * 1.5
+            return center + Vector3.new(math.cos(angle) * rr, ((i % 4) - 1.5) * 1.2, math.sin(angle) * rr)
+        elseif mode == "Attack" then
+            local tRoot = GetMagnetTargetRoot()
+            if tRoot then
+                center = tRoot.Position
+                local angle = i * 2.399963 + t * speed * 3
+                local rr = 2 + (i % 3)
+                return center + Vector3.new(math.cos(angle) * rr, ((i % 5) - 2) * 0.9, math.sin(angle) * rr)
+            end
+            -- no target: fall back to orbit
+        end
+        -- Orbit (default): spinning rings around you
+        local ring = i % 4
+        local rr = radius * 0.7 + ring * (radius * 0.3)
+        local angle = i * 2.399963 + t * speed * (0.4 - ring * 0.05)
+        local height = ((i % 5) - 2) * 1.6
+        return center + Vector3.new(math.cos(angle) * rr, height, math.sin(angle) * rr)
     end
 
     AddConnection(RunService.Heartbeat:Connect(function(delta)
@@ -404,13 +451,20 @@ do
         end
 
         local range = math.clamp(tonumber(Settings.PartMagnetRange) or 80, 5, 1000)
+        local maxParts = math.clamp(math.floor(tonumber(Settings.MagnetMaxParts) or 70), 1, 300)
 
         scanClock += delta
         if scanClock >= 0.4 then
             scanClock = 0
-            -- drop parts that got anchored / destroyed / too far
             for part in pairs(Controlled) do
-                if not part.Parent or part.Anchored or (part.Position - root.Position).Magnitude > range * 2 + 50 then
+                if not part.Parent or part.Anchored then
+                    Release(part)
+                end
+            end
+            -- too many (Max Parts lowered): let some go
+            if controlledCount > maxParts then
+                for part in pairs(Controlled) do
+                    if controlledCount <= maxParts then break end
                     Release(part)
                 end
             end
@@ -422,30 +476,259 @@ do
             end)
             if ok and parts then
                 for _, part in ipairs(parts) do
-                    if controlledCount >= MAX_PARTS then break end
+                    if controlledCount >= maxParts then break end
                     if IsMagnetCandidate(part) then
                         Grab(part)
                     end
                 end
             end
+            if statusLabel then
+                statusLabel.Text = "ON • controlling " .. controlledCount .. " parts • " .. tostring(Settings.MagnetMode)
+            end
         end
 
-        -- orbit targets: rings around you, slowly spinning
         local t = os.clock()
-        local center = root.Position
+        local mode = tostring(Settings.MagnetMode or "Orbit")
+        -- stable numbering 1..n for the formation
+        local ordered = {}
         for part, data in pairs(Controlled) do
-            local i = data.Index
-            local ring = i % 4
-            local radius = 7 + ring * 3
-            local angle = i * 2.399963 + t * (1.2 - ring * 0.2)
-            local height = ((i % 5) - 2) * 1.6
-            data.Align.Position = center + Vector3.new(math.cos(angle) * radius, height, math.sin(angle) * radius)
-            -- keeps the part "awake" so the server doesn't take ownership back
+            ordered[#ordered + 1] = { part, data }
+        end
+        table.sort(ordered, function(x, y) return x[2].Index < y[2].Index end)
+        local n = #ordered
+        for i, entry in ipairs(ordered) do
+            local part, data = entry[1], entry[2]
+            data.Align.Position = FormationPosition(mode, i, n, t, root)
             pcall(function()
+                -- keeps the part "awake" so the server doesn't take ownership back
                 part.AssemblyAngularVelocity = Vector3.new(0, 4, 0)
             end)
         end
     end))
+
+    -- ---------------------------------------------------------------- window
+    local Theme = env.Theme or {}
+    local RegisterThemedObject = env.RegisterThemedObject or function() end
+    local function Themed(obj, prop, key, fallback)
+        obj[prop] = Theme[key] or fallback
+        RegisterThemedObject(obj, prop, key)
+    end
+    local function Corner(obj, r)
+        local c = Instance.new("UICorner") c.CornerRadius = UDim.new(0, r or 6) c.Parent = obj
+    end
+    local function Stroke(obj, key)
+        local st = Instance.new("UIStroke") st.Thickness = 1 st.Transparency = 0.35
+        st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        Themed(st, "Color", key or "Outline", Color3.fromRGB(60, 60, 80))
+        st.Parent = obj
+        return st
+    end
+    local function Label(text, size, pos, parent, dim)
+        local l = Instance.new("TextLabel")
+        l.Size = size l.Position = pos l.BackgroundTransparency = 1
+        l.Font = dim and Enum.Font.Gotham or Enum.Font.GothamMedium
+        l.TextSize = dim and 10 or 11 l.TextXAlignment = Enum.TextXAlignment.Left
+        l.Text = text
+        Themed(l, "TextColor3", dim and "DimText" or "Text", dim and Color3.fromRGB(160, 160, 180) or Color3.new(1, 1, 1))
+        l.Parent = parent
+        return l
+    end
+    local function Button(text, size, pos, parent)
+        local b = Instance.new("TextButton")
+        b.Size = size b.Position = pos b.BorderSizePixel = 0 b.AutoButtonColor = true
+        b.Text = text b.Font = Enum.Font.GothamBold b.TextSize = 10
+        b.BackgroundColor3 = Theme.Element or Color3.fromRGB(25, 30, 40)
+        b.TextColor3 = Theme.Text or Color3.new(1, 1, 1)
+        Corner(b, 4) Stroke(b) b.Parent = parent
+        return b
+    end
+    -- small slider: label + value + bar; also accepts typed values (click the number)
+    local function Slider(text, y, minV, maxV, getValue, setValue, suffix, parent)
+        Label(text, UDim2.new(0.5, 0, 0, 16), UDim2.new(0, 10, 0, y), parent)
+        local valueBox = Instance.new("TextBox")
+        valueBox.Size = UDim2.new(0, 70, 0, 16) valueBox.Position = UDim2.new(1, -80, 0, y)
+        valueBox.BackgroundTransparency = 1 valueBox.Font = Enum.Font.GothamBold valueBox.TextSize = 11
+        valueBox.TextXAlignment = Enum.TextXAlignment.Right valueBox.ClearTextOnFocus = true
+        Themed(valueBox, "TextColor3", "Accent", Color3.fromRGB(30, 95, 255))
+        valueBox.Parent = parent
+        local bar = Instance.new("Frame")
+        bar.Size = UDim2.new(1, -20, 0, 6) bar.Position = UDim2.new(0, 10, 0, y + 20)
+        bar.BorderSizePixel = 0
+        Themed(bar, "BackgroundColor3", "Element", Color3.fromRGB(25, 30, 40))
+        Corner(bar, 3) bar.Parent = parent
+        local fill = Instance.new("Frame")
+        fill.BorderSizePixel = 0 fill.Size = UDim2.new(0, 0, 1, 0)
+        Themed(fill, "BackgroundColor3", "Accent", Color3.fromRGB(30, 95, 255))
+        Corner(fill, 3) fill.Parent = bar
+        local function Show(v)
+            valueBox.Text = tostring(v) .. suffix
+            fill.Size = UDim2.new(math.clamp((v - minV) / (maxV - minV), 0, 1), 0, 1, 0)
+        end
+        local function Apply(v, allowAbove)
+            v = math.floor((tonumber(v) or minV) + 0.5)
+            v = allowAbove and math.max(v, minV) or math.clamp(v, minV, maxV)
+            setValue(v)
+            Show(v)
+            if env.AutoSaveConfiguration then env.AutoSaveConfiguration() end
+        end
+        Show(getValue())
+        local dragging = false
+        local function FromInput(x)
+            local rel = math.clamp((x - bar.AbsolutePosition.X) / math.max(bar.AbsoluteSize.X, 1), 0, 1)
+            Apply(minV + (maxV - minV) * rel)
+        end
+        bar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                FromInput(input.Position.X)
+            end
+        end)
+        AddConnection(UserInputService.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                FromInput(input.Position.X)
+            end
+        end))
+        AddConnection(UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = false
+            end
+        end))
+        valueBox.FocusLost:Connect(function()
+            local typed = tonumber((string.gsub(valueBox.Text, "[^%d%.%-]", "")))
+            if typed then Apply(typed, true) else Show(getValue()) end
+        end)
+    end
+
+    local gui = Instance.new("Frame")
+    gui.Name = "ToxMagnetFrame"
+    gui.Size = UDim2.new(0, 330, 0, 384)
+    gui.Position = UDim2.new(0.5, -165, 0.5, -192)
+    gui.BorderSizePixel = 0
+    gui.ClipsDescendants = true
+    gui.Visible = false
+    Themed(gui, "BackgroundColor3", "Panel", Color3.fromRGB(15, 18, 26))
+    gui.Parent = env.Gui
+    Corner(gui, 8)
+    local gStroke = Stroke(gui, "Accent") gStroke.Transparency = 0.25
+    if env.ApplySavedGuiPosition then pcall(env.ApplySavedGuiPosition, "ToxMagnet", gui) end
+    if env.TrackGuiPosition then pcall(env.TrackGuiPosition, "ToxMagnet", gui) end
+
+    local top = Instance.new("Frame")
+    top.Size = UDim2.new(1, 0, 0, 32) top.BorderSizePixel = 0
+    Themed(top, "BackgroundColor3", "Element", Color3.fromRGB(25, 30, 40))
+    top.Parent = gui
+    if env.ToxRoundTopBar then env.ToxRoundTopBar(top) end
+    if env.MakeDraggable then pcall(env.MakeDraggable, gui, top) end
+    local title = Label("Tox Magnet", UDim2.new(1, -40, 1, 0), UDim2.new(0, 10, 0, 0), top)
+    title.Font = Enum.Font.GothamBold title.TextSize = 13
+    local close = Button("X", UDim2.new(0, 22, 0, 20), UDim2.new(1, -26, 0.5, -10), top)
+    close.MouseButton1Click:Connect(function() gui.Visible = false end)
+
+    -- On / Off + Release
+    local power = Button("Magnet: OFF", UDim2.new(0.5, -14, 0, 28), UDim2.new(0, 10, 0, 40), gui)
+    local release = Button("Release All", UDim2.new(0.5, -14, 0, 28), UDim2.new(0.5, 4, 0, 40), gui)
+    local function PaintPower()
+        power.Text = Settings.PartMagnet and "Magnet: ON" or "Magnet: OFF"
+        power.BackgroundColor3 = Settings.PartMagnet and Color3.fromRGB(40, 150, 80) or (Theme.Element or Color3.fromRGB(25, 30, 40))
+    end
+    PaintPower()
+    power.MouseButton1Click:Connect(function()
+        Settings.PartMagnet = not Settings.PartMagnet
+        if not Settings.PartMagnet then ReleaseAll() end
+        PaintPower()
+        if statusLabel and not Settings.PartMagnet then statusLabel.Text = "OFF" end
+    end)
+    release.MouseButton1Click:Connect(function()
+        ReleaseAll()
+        CustomNotify("Tox Magnet • released all parts", Color3.fromRGB(255, 200, 120))
+    end)
+
+    statusLabel = Label("OFF", UDim2.new(1, -20, 0, 14), UDim2.new(0, 10, 0, 72), gui, true)
+
+    -- Modes
+    Label("Mode", UDim2.new(1, -20, 0, 14), UDim2.new(0, 10, 0, 90), gui)
+    local modes = { "Orbit", "Ball", "Wall", "Mouse", "Attack" }
+    local modeButtons = {}
+    local function PaintModes()
+        for name, btn in pairs(modeButtons) do
+            local active = Settings.MagnetMode == name
+            btn.BackgroundColor3 = active and (Theme.Accent or Color3.fromRGB(30, 95, 255)) or (Theme.Element or Color3.fromRGB(25, 30, 40))
+        end
+    end
+    for index, name in ipairs(modes) do
+        local w = 1 / #modes
+        local b = Button(name, UDim2.new(w, -6, 0, 24), UDim2.new(w * (index - 1), index == 1 and 10 or 4, 0, 106), gui)
+        if index == #modes then b.Size = UDim2.new(w, -14, 0, 24) end
+        modeButtons[name] = b
+        b.MouseButton1Click:Connect(function()
+            Settings.MagnetMode = name
+            PaintModes()
+            if env.AutoSaveConfiguration then env.AutoSaveConfiguration() end
+        end)
+    end
+    PaintModes()
+
+    -- Target (Attack mode)
+    Label("Attack target", UDim2.new(0.4, 0, 0, 24), UDim2.new(0, 10, 0, 136), gui)
+    magnetTargetBox = Instance.new("TextBox")
+    magnetTargetBox.Size = UDim2.new(0.6, -20, 0, 24) magnetTargetBox.Position = UDim2.new(0.4, 10, 0, 136)
+    magnetTargetBox.BorderSizePixel = 0 magnetTargetBox.ClearTextOnFocus = false
+    magnetTargetBox.PlaceholderText = "nick (or Select Player)"
+    magnetTargetBox.Text = "" magnetTargetBox.Font = Enum.Font.Gotham magnetTargetBox.TextSize = 11
+    Themed(magnetTargetBox, "BackgroundColor3", "Element", Color3.fromRGB(25, 30, 40))
+    Themed(magnetTargetBox, "TextColor3", "Text", Color3.new(1, 1, 1))
+    Corner(magnetTargetBox, 4) Stroke(magnetTargetBox) magnetTargetBox.Parent = gui
+    env.ToxNamedInputs = env.ToxNamedInputs or {}
+    env.ToxNamedInputs["Magnet"] = magnetTargetBox
+
+    -- Sliders
+    Slider("Range (grab parts within)", 170, 5, 300, function() return Settings.PartMagnetRange end,
+        function(v) Settings.PartMagnetRange = v end, " studs", gui)
+    Slider("Formation size", 222, 2, 60, function() return Settings.MagnetRadius end,
+        function(v) Settings.MagnetRadius = v end, " studs", gui)
+    Slider("Spin speed", 274, 0, 20, function() return Settings.MagnetSpeed end,
+        function(v) Settings.MagnetSpeed = v end, "", gui)
+    Slider("Max parts", 326, 1, 200, function() return Settings.MagnetMaxParts end,
+        function(v) Settings.MagnetMaxParts = v end, "", gui)
+
+    MagnetGui = gui
+    env.ToxMagnetGui = gui
+    env.ToxSetPartMagnet = function(v)
+        Settings.PartMagnet = v == true
+        if not Settings.PartMagnet then ReleaseAll() end
+        PaintPower()
+    end
+
+    -- follow main UI visibility + minimize button (same as Tox Avatar Items)
+    task.spawn(function()
+        local minimizeDone, mainHooked = false, false
+        for _ = 1, 100 do
+            if env.Destroyed then return end
+            if not minimizeDone and env.RegisterToxSubGuiMinimize then
+                pcall(env.RegisterToxSubGuiMinimize, gui, -52)
+                minimizeDone = true
+            end
+            local main = env.Main
+            if not mainHooked and main then
+                mainHooked = true
+                local reopenWithMain = false
+                AddConnection(main:GetPropertyChangedSignal("Visible"):Connect(function()
+                    if env.Destroyed then return end
+                    if not main.Visible then
+                        if gui.Visible then
+                            reopenWithMain = true
+                            gui.Visible = false
+                        end
+                    elseif reopenWithMain then
+                        reopenWithMain = false
+                        gui.Visible = true
+                    end
+                end))
+            end
+            if minimizeDone and mainHooked then return end
+            task.wait(0.2)
+        end
+    end)
 end
 
 -- ==============================================================================
@@ -779,7 +1062,7 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if AvatarItemsGui and AvatarItemsGui.Visible and AvatarItemsLoad then
         task.spawn(AvatarItemsLoad, target.Name)
     end
-    for _, name in ipairs({ "Fling", "Teleport", "Spectate", "Up Player", "Avatar Items" }) do
+    for _, name in ipairs({ "Fling", "Teleport", "Spectate", "Up Player", "Avatar Items", "Magnet" }) do
         local box = boxes[name]
         if box and box.Parent then
             box.Text = target.Name
@@ -1143,6 +1426,11 @@ do
 end
 CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
 CreateButton("Tox Waypoints", FlingPage, function() WaypointsGui.Visible = not WaypointsGui.Visible end)
+CreateButton("Tox Magnet", FlingPage, function()
+    if MagnetGui then
+        MagnetGui.Visible = not MagnetGui.Visible
+    end
+end)
 CreateButton("Tox Avatar Items", FlingPage, function()
     if AvatarItemsGui then
         AvatarItemsGui.Visible = not AvatarItemsGui.Visible

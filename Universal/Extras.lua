@@ -3460,12 +3460,12 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             -- players
             "Teleport", "Spectate", "Up Player", "Select Player (Hold + Click)", "Ctrl Click TP",
             -- utilities
-            "Instant Proximity Prompts", "Tool Magnet", "Part Magnet",
+            "Instant Proximity Prompts", "Tool Magnet",
             "Force Shift Lock", "Fake Lag (%)", "Normalize Animations", "Fix Unanchored Parts",
         })
         -- the two window buttons always at the very end
         if miscSection and type(miscSection.Controls) == "table" then
-            for _, name in ipairs({ "Tox Music Player", "Tox Waypoints", "Tox Avatar Items" }) do
+            for _, name in ipairs({ "Tox Music Player", "Tox Waypoints", "Tox Avatar Items", "Tox Magnet" }) do
                 for index, control in ipairs(miscSection.Controls) do
                     if ControlHasName(control, name) then
                         table.remove(miscSection.Controls, index)
