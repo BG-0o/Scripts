@@ -1524,9 +1524,10 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
             FlyBypassFloor.Anchored = true
             pcall(function() FlyBypassFloor.Parent = workspace end)
         end
-        -- Height is locked to FlyBypassY; it only changes with Space/E (up) or Shift/Q (down).
-        -- Before, the floor followed the root every frame 0.05 stud too high, so the
-        -- character kept "stepping up" on it and drifted upward forever.
+        -- Original movement (W/A/S/D follow the camera, Space up, Ctrl down).
+        -- Anti-drift: the floor sits exactly at the feet (before it was 0.05 stud too high
+        -- and kept pushing the character up), and while no key is held the height is
+        -- held at the last position so it never climbs on its own.
         local standOffset
         if Hum.RigType == Enum.HumanoidRigType.R15 then
             standOffset = Hum.HipHeight + Root.Size.Y / 2
@@ -1543,40 +1544,29 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
             getgenv().AllowToxTeleport(0.25, "Fly Bypass")
         end
 
-        local look = Camera.CFrame.LookVector
-        local right = Camera.CFrame.RightVector
-        local flatLook = Vector3.new(look.X, 0, look.Z)
-        local flatRight = Vector3.new(right.X, 0, right.Z)
-        if flatLook.Magnitude > 0.01 then flatLook = flatLook.Unit end
-        if flatRight.Magnitude > 0.01 then flatRight = flatRight.Unit end
-
         local moveDir = Vector3.zero
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + flatLook end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - flatLook end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - flatRight end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + flatRight end
-        local vertical = 0
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then vertical = vertical + 1 end
-        if (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then vertical = vertical - 1 end
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Camera.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then moveDir = moveDir - Vector3.new(0, 1, 0) end
 
-        local step = actualFlySpeed * delta
-        if vertical ~= 0 then
-            FlyBypassY = FlyBypassY + vertical * step
-        end
-
-        local horizontal = Vector3.zero
         if moveDir.Magnitude > 0 then
-            horizontal = moveDir.Unit * step
+            moveDir = moveDir.Unit
+            Root.CFrame = Root.CFrame + (moveDir * (actualFlySpeed * delta))
+            Root.AssemblyLinearVelocity = moveDir * (actualFlySpeed * 0.2)
+            FlyBypassY = Root.Position.Y
+        else
+            Root.AssemblyLinearVelocity = Vector3.zero
+            local drift = FlyBypassY - Root.Position.Y
+            if math.abs(drift) > 0.05 then
+                Root.CFrame = Root.CFrame + Vector3.new(0, drift, 0)
+            end
         end
 
-        local pos = Root.Position
-        local target = Vector3.new(pos.X + horizontal.X, FlyBypassY, pos.Z + horizontal.Z)
-        local _, yaw, _ = Root.CFrame:ToOrientation()
-        Root.CFrame = CFrame.new(target) * CFrame.Angles(0, yaw, 0)
-        Root.AssemblyLinearVelocity = Vector3.zero
-
-        -- Floor top sits exactly where the feet are (tiny gap so it never pushes us up)
-        FlyBypassFloor.CFrame = CFrame.new(target.X, FlyBypassY - standOffset - 0.25 - 0.05, target.Z)
+        -- Floor top exactly at the feet (small gap so it never pushes us up)
+        FlyBypassFloor.CFrame = CFrame.new(Root.Position.X, Root.Position.Y - standOffset - 0.25 - 0.05, Root.Position.Z)
         Root.AssemblyAngularVelocity = Vector3.zero
     else
         FlyBypassY = nil
