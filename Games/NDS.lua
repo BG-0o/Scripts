@@ -1765,6 +1765,195 @@ local function SetNDSMuteCheer(enabled)
     end
 end
 
+
+-- ==============================================================================
+-- MUTE GAME SOUNDS: every game Sound goes to volume 0 (disasters, wind, music, alarms...).
+-- Voice chat is not a Sound instance, so it keeps working. ToxHub's own sounds are kept.
+-- ==============================================================================
+local NDSMutedSounds = setmetatable({}, { __mode = "k" })
+
+local function NDSIsToxSound(sound)
+    local gui = getgenv().Gui
+    if gui and sound:IsDescendantOf(gui) then
+        return true
+    end
+    local current = sound.Parent
+    while current and current ~= game do
+        if string.sub(tostring(current.Name), 1, 3) == "Tox" then
+            return true
+        end
+        current = current.Parent
+    end
+    return false
+end
+
+local function NDSMuteSound(sound)
+    if not Settings.NDSMuteGameSounds or not sound:IsA("Sound") or NDSMutedSounds[sound] then
+        return
+    end
+    local ok, isTox = pcall(NDSIsToxSound, sound)
+    if not ok or isTox then
+        return
+    end
+    local entry = { Volume = sound.Volume }
+    NDSMutedSounds[sound] = entry
+    pcall(function() sound.Volume = 0 end)
+    -- the game often resets Volume when it plays a sound again
+    entry.Conn = sound:GetPropertyChangedSignal("Volume"):Connect(function()
+        if Settings.NDSMuteGameSounds and sound.Volume ~= 0 then
+            entry.Volume = sound.Volume
+            sound.Volume = 0
+        end
+    end)
+end
+
+local function SetNDSMuteGameSounds(enabled)
+    Settings.NDSMuteGameSounds = enabled == true
+    if Settings.NDSMuteGameSounds then
+        for _, object in ipairs(game:GetDescendants()) do
+            pcall(NDSMuteSound, object)
+        end
+    else
+        for sound, entry in pairs(NDSMutedSounds) do
+            if entry.Conn then pcall(function() entry.Conn:Disconnect() end) end
+            if sound and sound.Parent then
+                pcall(function() sound.Volume = entry.Volume end)
+            end
+            NDSMutedSounds[sound] = nil
+        end
+    end
+end
+
+-- ==============================================================================
+-- CLEAN SCREEN: removes weather/disaster screen effects (fog, atmosphere haze, blur,
+-- color tint, clouds, wind/rain/snow/sand particles). Restores everything when off.
+-- ==============================================================================
+local NDSCleanDefaults = setmetatable({}, { __mode = "k" })
+local NDSCleanLighting = nil
+local NDS_WEATHER_WORDS = { "wind", "rain", "snow", "blizzard", "sand", "dust", "fog", "storm", "cloud", "hail", "acid", "mist", "haze" }
+
+local function NDSIsWeatherEffect(object)
+    if not (object:IsA("ParticleEmitter") or object:IsA("Beam") or object:IsA("Trail")) then
+        return false
+    end
+    local camera = workspace.CurrentCamera
+    if camera and object:IsDescendantOf(camera) then
+        return true   -- effects glued to the camera = screen effects
+    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character and object:IsDescendantOf(p.Character) then
+            return false
+        end
+    end
+    local path = NDSLowerPath(object)
+    for _, word in ipairs(NDS_WEATHER_WORDS) do
+        if string.find(path, word, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+local function NDSCleanSet(object, prop, value)
+    local store = NDSCleanDefaults[object]
+    if not store then
+        store = {}
+        NDSCleanDefaults[object] = store
+    end
+    if store[prop] == nil then
+        store[prop] = object[prop]
+    end
+    if object[prop] ~= value then
+        object[prop] = value
+    end
+end
+
+local function NDSApplyCleanScreen()
+    if not NDSCleanLighting then
+        NDSCleanLighting = { FogEnd = Lighting.FogEnd, FogStart = Lighting.FogStart }
+    end
+    pcall(function()
+        if Lighting.FogEnd < 100000 then Lighting.FogEnd = 100000 end
+        if Lighting.FogStart < 100000 then Lighting.FogStart = 100000 end
+    end)
+    for _, object in ipairs(Lighting:GetChildren()) do
+        if string.sub(object.Name, 1, 3) ~= "Tox" then
+            pcall(function()
+                if object:IsA("Atmosphere") then
+                    NDSCleanSet(object, "Density", 0)
+                    NDSCleanSet(object, "Haze", 0)
+                    NDSCleanSet(object, "Glare", 0)
+                elseif object:IsA("BlurEffect") or object:IsA("ColorCorrectionEffect")
+                or object:IsA("DepthOfFieldEffect") or object:IsA("SunRaysEffect")
+                or object:IsA("BloomEffect") then
+                    NDSCleanSet(object, "Enabled", false)
+                end
+            end)
+        end
+    end
+    pcall(function()
+        local clouds = workspace.Terrain:FindFirstChildOfClass("Clouds")
+        if clouds then NDSCleanSet(clouds, "Enabled", false) end
+    end)
+    local roots = { workspace.CurrentCamera, workspace:FindFirstChild("Structure") }
+    for _, child in ipairs(workspace:GetChildren()) do
+        local lower = string.lower(child.Name)
+        for _, word in ipairs(NDS_WEATHER_WORDS) do
+            if string.find(lower, word, 1, true) then
+                table.insert(roots, child)
+                break
+            end
+        end
+    end
+    for _, rootObj in ipairs(roots) do
+        if rootObj then
+            for _, object in ipairs(rootObj:GetDescendants()) do
+                if NDSIsWeatherEffect(object) then
+                    pcall(NDSCleanSet, object, "Enabled", false)
+                end
+            end
+        end
+    end
+end
+
+local function SetNDSCleanScreen(enabled)
+    Settings.NDSCleanScreen = enabled == true
+    if Settings.NDSCleanScreen then
+        NDSApplyCleanScreen()
+    else
+        for object, store in pairs(NDSCleanDefaults) do
+            if object and object.Parent then
+                for prop, value in pairs(store) do
+                    pcall(function() object[prop] = value end)
+                end
+            end
+            NDSCleanDefaults[object] = nil
+        end
+        if NDSCleanLighting then
+            pcall(function()
+                Lighting.FogEnd = NDSCleanLighting.FogEnd
+                Lighting.FogStart = NDSCleanLighting.FogStart
+            end)
+            NDSCleanLighting = nil
+        end
+    end
+end
+
+do
+    -- disasters change lighting/effects every round: re-apply twice a second
+    local cleanClock = 0
+    TrackNDSExtraConnection(RunService.Heartbeat:Connect(function(delta)
+        if not Settings.NDSCleanScreen then
+            return
+        end
+        cleanClock += math.max(tonumber(delta) or 0, 0)
+        if cleanClock >= 0.5 then
+            cleanClock = 0
+            pcall(NDSApplyCleanScreen)
+        end
+    end))
+end
+
 local function NDSDetectDisaster(text)
     local raw = tostring(text or "")
     local lower = string.lower(raw):gsub("%s+", " "):match("^%s*(.-)%s*$")
@@ -2187,6 +2376,9 @@ do
 end
 
 TrackNDSExtraConnection(game.DescendantAdded:Connect(function(object)
+    if Settings.NDSMuteGameSounds and object:IsA("Sound") then
+        task.defer(function() pcall(NDSMuteSound, object) end)
+    end
     if Settings.NDSMuteCheerSound then
         task.defer(NDSMuteCheerObject, object)
     end
@@ -2443,6 +2635,16 @@ NDSCreateToggle("Mute Cheer Sound", GamePage, Settings.NDSMuteCheerSound, functi
     SetNDSMuteCheer(v)
 end, "NDSMuteCheerSound")
 
+NDSCreateToggle("Mute Game Sounds", GamePage, Settings.NDSMuteGameSounds == true, function(v)
+    -- every game sound (disasters, wind, alarms...). Voice chat keeps working.
+    SetNDSMuteGameSounds(v)
+end, "NDSMuteGameSounds")
+
+NDSCreateToggle("Clean Screen", GamePage, Settings.NDSCleanScreen == true, function(v)
+    -- no fog / haze / blur / tint / clouds / wind-rain-snow-sand particles
+    SetNDSCleanScreen(v)
+end, "NDSCleanScreen")
+
 CreateNDSSection("TELEPORTS")
 
 NDSCreateButton("SPAWN", GamePage, function()
@@ -2505,6 +2707,14 @@ if Settings.NDSMuteCheerSound then
     SetNDSMuteCheer(true)
 end
 
+if Settings.NDSMuteGameSounds then
+    SetNDSMuteGameSounds(true)
+end
+
+if Settings.NDSCleanScreen then
+    SetNDSCleanScreen(true)
+end
+
 for feature, settingKey in pairs(NDSHazardSettingKeys) do
     if Settings[settingKey] then
         SetNDSHazard(feature, true)
@@ -2537,6 +2747,11 @@ getgenv().ToxNDSCleanup =
 
         pcall(function()
             SetNDSMuteCheer(false)
+        end)
+
+        pcall(function()
+            SetNDSMuteGameSounds(false)
+            SetNDSCleanScreen(false)
         end)
 
         for feature in pairs(NDSHazardSettingKeys) do
