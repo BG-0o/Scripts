@@ -253,6 +253,7 @@ getgenv().Settings = {
 }
 local UIPreferenceKeys = {
     ShowToxBinds = true,
+    ToxBinds = true,          -- option keybinds follow you to every game
     KeybindsList = true,
     Theme = true,
     ToxUITheme = true,
