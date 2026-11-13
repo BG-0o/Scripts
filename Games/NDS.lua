@@ -1880,13 +1880,18 @@ local function NDSApplyCleanScreen()
         if string.sub(object.Name, 1, 3) ~= "Tox" then
             pcall(function()
                 if object:IsA("Atmosphere") then
-                    NDSCleanSet(object, "Density", 0)
-                    NDSCleanSet(object, "Haze", 0)
-                    NDSCleanSet(object, "Glare", 0)
-                elseif object:IsA("BlurEffect") or object:IsA("ColorCorrectionEffect")
-                or object:IsA("DepthOfFieldEffect") or object:IsA("SunRaysEffect")
-                or object:IsA("BloomEffect") then
+                    -- thin the storm air but keep the normal sky look (not fullbright)
+                    NDSCleanSet(object, "Density", math.min(object.Density, 0.3))
+                    NDSCleanSet(object, "Haze", math.min(object.Haze, 1))
+                    NDSCleanSet(object, "Glare", math.min(object.Glare, 1))
+                elseif object:IsA("BlurEffect") or object:IsA("DepthOfFieldEffect") then
                     NDSCleanSet(object, "Enabled", false)
+                elseif object:IsA("ColorCorrectionEffect") then
+                    -- remove only strong disaster tints/darkening, keep the normal look
+                    local tinted = object.TintColor.R < 0.9 or object.TintColor.G < 0.9 or object.TintColor.B < 0.9
+                    if tinted or object.Brightness < -0.05 or object.Contrast > 0.3 then
+                        NDSCleanSet(object, "Enabled", false)
+                    end
                 end
             end)
         end
@@ -1910,6 +1915,80 @@ local function NDSApplyCleanScreen()
             for _, object in ipairs(rootObj:GetDescendants()) do
                 if NDSIsWeatherEffect(object) then
                     pcall(NDSCleanSet, object, "Enabled", false)
+                end
+            end
+        end
+    end
+
+    -- Wind / sandstorm / rain "streak" walls: big non-collidable parts with scrolling
+    -- textures around the map or glued to the camera. Hide the part and its textures.
+    local characters = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then characters[#characters + 1] = p.Character end
+    end
+    local function IsCharacterPart(object)
+        for _, character in ipairs(characters) do
+            if object:IsDescendantOf(character) then return true end
+        end
+        return false
+    end
+    local function HideOverlayPart(part)
+        pcall(NDSCleanSet, part, "LocalTransparencyModifier", 1)
+        for _, child in ipairs(part:GetChildren()) do
+            if child:IsA("Texture") or child:IsA("Decal") then
+                pcall(NDSCleanSet, child, "Transparency", 1)
+            elseif child:IsA("SurfaceGui") then
+                pcall(NDSCleanSet, child, "Enabled", false)
+            end
+        end
+    end
+    local camera = workspace.CurrentCamera
+    local scan = {}
+    for _, child in ipairs(workspace:GetChildren()) do
+        if child ~= workspace.Terrain and child:FindFirstChild("Humanoid") == nil then
+            scan[#scan + 1] = child
+        end
+    end
+    for _, top in ipairs(scan) do
+        local list = top:IsA("BasePart") and { top } or {}
+        if not top:IsA("BasePart") and top.Name ~= "Structure" then
+            for _, d in ipairs(top:GetDescendants()) do
+                if d:IsA("BasePart") then list[#list + 1] = d end
+            end
+        end
+        for _, part in ipairs(list) do
+            if not part.CanCollide and not IsCharacterPart(part) then
+                local hasTexture = part:FindFirstChildWhichIsA("Texture") or part:FindFirstChildWhichIsA("Decal")
+                local size = part.Size
+                local huge = math.max(size.X, size.Y, size.Z) >= 150
+                local path = NDSLowerPath(part)
+                local weatherName = false
+                for _, word in ipairs(NDS_WEATHER_WORDS) do
+                    if string.find(path, word, 1, true) then weatherName = true break end
+                end
+                if (hasTexture and huge) or (weatherName and (hasTexture or part.Transparency < 1)) then
+                    HideOverlayPart(part)
+                end
+            end
+        end
+    end
+    if camera then
+        for _, d in ipairs(camera:GetDescendants()) do
+            if d:IsA("BasePart") then HideOverlayPart(d) end
+        end
+    end
+
+    -- Screen overlays the game puts in the PlayerGui for weather (tint / dust images)
+    local playerGui = Player:FindFirstChildOfClass("PlayerGui")
+    if playerGui then
+        for _, gui in ipairs(playerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and string.sub(gui.Name, 1, 3) ~= "Tox" then
+                local lower = string.lower(gui.Name)
+                for _, word in ipairs(NDS_WEATHER_WORDS) do
+                    if string.find(lower, word, 1, true) then
+                        pcall(NDSCleanSet, gui, "Enabled", false)
+                        break
+                    end
                 end
             end
         end
@@ -1947,7 +2026,7 @@ do
             return
         end
         cleanClock += math.max(tonumber(delta) or 0, 0)
-        if cleanClock >= 0.5 then
+        if cleanClock >= 1 then
             cleanClock = 0
             pcall(NDSApplyCleanScreen)
         end
