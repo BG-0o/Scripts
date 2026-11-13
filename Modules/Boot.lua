@@ -346,7 +346,7 @@ local function SaveKey(key)
 end
 
 local savedKey = ReadSavedKey()
-if savedKey == VALID_KEY then
+if string.lower(savedKey) == string.lower(VALID_KEY) then
     getgenv().ToxHasPreviousExecution = true
     getgenv().ToxKeyVerified = true
 else
@@ -497,7 +497,7 @@ else
 
     submitBtn.MouseButton1Click:Connect(function()
         local entered = string.match(textBox.Text or "", "^%s*(.-)%s*$") or ""
-        if entered == VALID_KEY then
+        if string.lower(entered) == string.lower(VALID_KEY) then
             statusLabel.TextColor3 = Color3.fromRGB(34, 197, 94)
             statusLabel.Text = "✅ Key Válida! Carregando ToxHud..."
             SaveKey(VALID_KEY)
