@@ -1623,10 +1623,15 @@ end
 
 local NDSSupportPart = nil
 
-local function NDSHideSupport()
+local function NDSHideSupport(destroy)
     if NDSSupportPart then
-        pcall(function() NDSSupportPart:Destroy() end)
-        NDSSupportPart = nil
+        if destroy then
+            pcall(function() NDSSupportPart:Destroy() end)
+            NDSSupportPart = nil
+        else
+            -- just park it far away (destroying/recreating every frame made it flicker)
+            NDSSupportPart.CFrame = CFrame.new(0, -10000, 0)
+        end
     end
 end
 
@@ -1650,7 +1655,7 @@ TrackNDSExtraConnection(RunService.Heartbeat:Connect(function(delta)
     local wantRocks = Settings.NDSIslandRocksCollidable == true
     local wantWater = Settings.NDSWaterWalk == true and not Settings.NDSWaterFly
     if not wantRocks and not wantWater then
-        NDSHideSupport()
+        NDSHideSupport(true)
         return
     end
 
@@ -1700,9 +1705,16 @@ TrackNDSExtraConnection(RunService.Heartbeat:Connect(function(delta)
         if hit then
             local isWater = (hit.Instance:IsA("Terrain") and hit.Material == Enum.Material.Water)
                 or NDSIsWaterPart(hit.Instance)
-            -- also lifts you back up if you are just under the surface
-            if isWater and feetY >= hit.Position.Y - 2.5 then
-                bestY = math.max(bestY or -math.huge, hit.Position.Y)
+            if isWater then
+                -- Stand a bit ABOVE the water: with the legs inside the water the humanoid
+                -- switches to swimming and the character kept jumping/"teleporting".
+                local surfaceTop = hit.Position.Y + 1
+                if feetY >= surfaceTop - 0.6 then
+                    bestY = math.max(bestY or -math.huge, surfaceTop)
+                elseif feetY >= hit.Position.Y - 5 then
+                    -- just under the surface: float up smoothly instead of popping out
+                    root.AssemblyLinearVelocity = Vector3.new(velocity.X, math.max(velocity.Y, 22), velocity.Z)
+                end
             end
         end
     end
