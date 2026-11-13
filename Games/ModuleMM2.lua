@@ -4434,7 +4434,11 @@ function GetActiveAutoFarmMode()
 end
 
 function GetAutoFarmUndergroundDepth()
-    return math.clamp(tonumber(Settings.MM2AutoFarmDepth) or 6, 3, 15)
+    local depth = tonumber(Settings.MM2AutoFarmDepth)
+    if not depth or depth <= 0 or depth == 6 then
+        depth = 3.2
+    end
+    return math.clamp(depth, 2.0, 12)
 end
 
 function IsInSafeLobbyArea(pos)
@@ -5551,12 +5555,12 @@ function PrepareAutoFarm()
     end
 
     if AutoFarmPrepared and AutoFarmRoot == root then
-        root.Anchored = false
+        root.Anchored = true
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
-        humanoid.PlatformStand = false
+        humanoid.PlatformStand = true
         humanoid.Sit = false
-        humanoid.AutoRotate = true
+        humanoid.AutoRotate = false
         SetFarmCollision(false)
         return true
     end
@@ -5589,10 +5593,10 @@ function PrepareAutoFarm()
     AutoFarmLastTravelY = nil
     AutoFarmSessionCollected = 0
 
-    humanoid.PlatformStand = false
+    humanoid.PlatformStand = true
     humanoid.Sit = false
-    humanoid.AutoRotate = true
-    root.Anchored = false
+    humanoid.AutoRotate = false
+    root.Anchored = true
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
     SetFarmCollision(false)
@@ -6074,8 +6078,8 @@ function SetAutoFarmCoinPosition(position, velocity, direction)
     end
 
     AutoFarmHoldPosition = position
-    AutoFarmRoot.Anchored = false
-    AutoFarmRoot.AssemblyLinearVelocity = velocity or Vector3.zero
+    AutoFarmRoot.Anchored = true
+    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
 
     if direction and direction.Magnitude > 0.05 then
@@ -6089,9 +6093,9 @@ function SetAutoFarmCoinPosition(position, velocity, direction)
         AutoFarmRoot.CFrame = CFrame.new(position)
     end
 
-    AutoFarmHumanoid.PlatformStand = false
+    AutoFarmHumanoid.PlatformStand = true
     AutoFarmHumanoid.Sit = false
-    AutoFarmHumanoid.AutoRotate = true
+    AutoFarmHumanoid.AutoRotate = false
 
     return true
 end
@@ -6202,30 +6206,7 @@ function TweenToCoinByMethod(coin, speed, mode)
     if mode == "Underground" then
         local depth = GetAutoFarmUndergroundDepth()
         local underPos = Vector3.new(coinPos.X, coinPos.Y - depth, coinPos.Z)
-        local horizDist = Vector3.new(underPos.X - startPos.X, 0, underPos.Z - startPos.Z).Magnitude
-        local dy = underPos.Y - startPos.Y
-
-        if dy > 3.5 and horizDist > 10 then
-            local flatPos = Vector3.new(underPos.X, startPos.Y, underPos.Z)
-            if not TweenSegment(startPos, flatPos, speed, coin) then
-                return false
-            end
-            if not IsCoinValid(coin) then
-                return true
-            end
-            return TweenSegment(AutoFarmRoot.Position, underPos, speed, coin)
-        elseif dy < -3.5 and horizDist > 10 then
-            local dropPos = Vector3.new(startPos.X, underPos.Y, startPos.Z)
-            if not TweenSegment(startPos, dropPos, speed, coin) then
-                return false
-            end
-            if not IsCoinValid(coin) then
-                return true
-            end
-            return TweenSegment(AutoFarmRoot.Position, underPos, speed, coin)
-        else
-            return TweenSegment(startPos, underPos, speed, coin)
-        end
+        return TweenSegment(startPos, underPos, speed, coin)
     elseif mode == "Sky" then
         local travelY = math.max(startPos.Y, coinPos.Y + AutoFarmSkyHeight)
         local horizDist = Vector3.new(coinPos.X - startPos.X, 0, coinPos.Z - startPos.Z).Magnitude
@@ -6275,10 +6256,13 @@ function TouchCoin(coin)
 
     local coinParts = ToxMM2GetCoinTouchParts(coin)
     local touchSources = { root }
-    local headPart = character and character:FindFirstChild("Head")
-    local torsoPart = character and (character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso"))
-    if headPart and headPart:IsA("BasePart") then table.insert(touchSources, headPart) end
-    if torsoPart and torsoPart:IsA("BasePart") then table.insert(touchSources, torsoPart) end
+    if character then
+        for _, p in ipairs(character:GetChildren()) do
+            if p:IsA("BasePart") and p ~= root then
+                table.insert(touchSources, p)
+            end
+        end
+    end
 
     local touched = false
 
@@ -6360,9 +6344,9 @@ function CollectFarmCoin(coin, mode)
     end
 
     AutoFarmAtCoin = true
-    SetAutoFarmCoinPosition(holdPos, Vector3.new(0, 0.1, 0))
+    SetAutoFarmCoinPosition(holdPos, Vector3.zero)
 
-    local holdUntil = os.clock() + 0.06
+    local holdUntil = os.clock() + 0.12
 
     while Settings.MM2AutoFarmV2
     and generation == AutoFarmGeneration
@@ -6383,27 +6367,6 @@ function CollectFarmCoin(coin, mode)
         end
 
         RunService.Heartbeat:Wait()
-    end
-
-    -- Smooth close-reach rise only if touch from deeper Underground did not collect yet
-    if mode == "Underground"
-    and Settings.MM2AutoFarmV2
-    and generation == AutoFarmGeneration
-    and not IsFarmBagFull()
-    and IsCoinValid(coin)
-    and AutoFarmRoot
-    and AutoFarmRoot.Parent
-    and IsAutoFarmPlayerEligible() then
-        local closePos = coinPos - Vector3.new(0, 3.0, 0)
-        local speedValue = math.clamp(tonumber(Settings.MM2AutoFarmSpeed) or 5, 1, 250)
-        local nudgeSpeed = math.clamp(math.max(speedValue * 4, 24), AutoFarmMinTweenSpeed, 120)
-        if AutoFarmRoot.Position.Y < closePos.Y - 0.5 then
-            TweenSegment(AutoFarmRoot.Position, closePos, nudgeSpeed, coin)
-        end
-        if IsCoinValid(coin) and not IsFarmBagFull() and AutoFarmRoot and AutoFarmRoot.Parent and IsAutoFarmPlayerEligible() then
-            TouchCoin(coin)
-            RegisterFarmCoinCollected(coin, serialBefore, bagBefore)
-        end
     end
 
     AutoFarmAtCoin = false
@@ -6573,17 +6536,15 @@ AddConnection(RunService.Heartbeat:Connect(function()
         return
     end
 
-    AutoFarmRoot.Anchored = false
+    AutoFarmRoot.Anchored = true
+    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
-    AutoFarmHumanoid.PlatformStand = false
+    AutoFarmHumanoid.PlatformStand = true
     AutoFarmHumanoid.Sit = false
-    AutoFarmHumanoid.AutoRotate = true
+    AutoFarmHumanoid.AutoRotate = false
 
-    if not AutoFarmActivelyTweening and not AutoFarmAtCoin then
-        local vel = AutoFarmRoot.AssemblyLinearVelocity
-        if vel.Y < -0.5 then
-            AutoFarmRoot.AssemblyLinearVelocity = Vector3.new(vel.X, 0, vel.Z)
-        end
+    if AutoFarmHoldPosition and not AutoFarmActivelyTweening then
+        AutoFarmRoot.CFrame = CFrame.new(AutoFarmHoldPosition)
     end
 end))
 

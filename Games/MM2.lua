@@ -178,7 +178,7 @@ local function GetMM2AutoFarmDisplayValue(mode)
     if mode == "Teleport" then
         return Settings.MM2AutoFarmTeleportDelay or 1.2
     elseif mode == "Underground" then
-        return Settings.MM2AutoFarmDepth or 6
+        return Settings.MM2AutoFarmDepth or 3.2
     else
         return Settings.MM2AutoFarmSpeed or 5
     end
@@ -224,7 +224,7 @@ end, function(value)
     if mode == "Teleport" then
         Settings.MM2AutoFarmTeleportDelay = math.clamp(num or 1.2, 0.2, 10)
     elseif mode == "Underground" then
-        Settings.MM2AutoFarmDepth = math.clamp(num or 6, 3, 15)
+        Settings.MM2AutoFarmDepth = math.clamp(num or 3.2, 2.0, 12)
     else
         Settings.MM2AutoFarmSpeed = math.clamp(num or 5, 1, 250)
         WarnAutoFarmSpeed(Settings.MM2AutoFarmSpeed)
