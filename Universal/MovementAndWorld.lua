@@ -1114,128 +1114,180 @@ end
 do
 local WalkFlingGeneration = 0
 local WalkFlingImpulseActive = false
+local WalkFlingRunning = false
+local WalkFlingRampStart = 0          -- > 0 while the power is being lowered after disabling
+local WALKFLING_RAMP_TIME = 1.6       -- seconds to fade the power from current to 0
 getgenv().ToxWalkFlingImpulseActive = false
 
-local function StopWalkFling()
-    WalkFlingGeneration = WalkFlingGeneration + 1
-    WalkFlingImpulseActive = false
-    getgenv().ToxWalkFlingImpulseActive = false
+local function SetWalkFlingImpulse(active)
+    WalkFlingImpulseActive = active
+    getgenv().ToxWalkFlingImpulseActive = active
+end
+
+-- Our own "walking" velocity, clamped. Touching a flung player gives us a huge collision
+-- impulse; if we reused that raw value every frame we would launch ourselves and die
+-- from fall damage (this is what was killing in NDS).
+local function GetSafeWalkVelocity(root, humanoid)
+    local vel = root.AssemblyLinearVelocity
+    if vel.X ~= vel.X or vel.Y ~= vel.Y or vel.Z ~= vel.Z then
+        return Vector3.zero
+    end
+    local maxHorizontal = math.max(tonumber(humanoid.WalkSpeed) or 16, 16) * 1.5
+    local horizontal = Vector3.new(vel.X, 0, vel.Z)
+    if horizontal.Magnitude > maxHorizontal then
+        horizontal = horizontal.Unit * maxHorizontal
+    end
+    local y = vel.Y
+    if y < -28 then
+        y = -15            -- anti fall damage
+    elseif y > 60 then
+        y = 60             -- normal jump still works, no self-launch
+    end
+    return Vector3.new(horizontal.X, y, horizontal.Z)
+end
+
+local function SetWalkFlingStates(humanoid, enabled)
+    pcall(function()
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, enabled)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, enabled)
+    end)
+end
+
+local function SettleCharacterAfterWalkFling()
     local character = Player.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
     local root = character and character:FindFirstChild("HumanoidRootPart")
-    if root then
+    if root and humanoid then
         pcall(function()
+            root.AssemblyLinearVelocity = GetSafeWalkVelocity(root, humanoid)
             root.AssemblyAngularVelocity = Vector3.zero
         end)
+        SetWalkFlingStates(humanoid, true)
     end
 end
 
+-- Immediate stop (script unload / restart). Normal disabling uses the ramp in SetWalkFling.
+local function StopWalkFling()
+    WalkFlingGeneration = WalkFlingGeneration + 1
+    WalkFlingRunning = false
+    WalkFlingRampStart = 0
+    SetWalkFlingImpulse(false)
+    SettleCharacterAfterWalkFling()
+end
+
 local function StartWalkFling()
-    StopWalkFling()
     if not Settings.WalkFling or env.Destroyed then
         return
     end
 
+    -- Already running (maybe fading out): just cancel the fade
+    if WalkFlingRunning then
+        WalkFlingRampStart = 0
+        return
+    end
+
+    WalkFlingGeneration = WalkFlingGeneration + 1
     local generation = WalkFlingGeneration
+    WalkFlingRunning = true
+    WalkFlingRampStart = 0
+
     task.spawn(function()
         local movel = 0.1
-        while Settings.WalkFling
+        local statesCharacter = nil
+
+        while generation == WalkFlingGeneration
         and not env.Destroyed
-        and env.ScriptLoaded
-        and generation == WalkFlingGeneration do
+        and env.ScriptLoaded do
+            -- Power factor: 1 while enabled, fades to 0 after disabling
+            local factor = 1
+            if not Settings.WalkFling then
+                if WalkFlingRampStart == 0 then
+                    WalkFlingRampStart = tick()
+                end
+                local t = (tick() - WalkFlingRampStart) / WALKFLING_RAMP_TIME
+                if t >= 1 then
+                    break
+                end
+                factor = (1 - t) * (1 - t)
+            else
+                WalkFlingRampStart = 0
+            end
+
             RunService.Heartbeat:Wait()
+            if generation ~= WalkFlingGeneration then
+                break
+            end
 
             local character = Player.Character
             local humanoid = character and character:FindFirstChildOfClass("Humanoid")
             local root = character and character:FindFirstChild("HumanoidRootPart")
 
             if not character or not character.Parent or not humanoid or humanoid.Health <= 0 or not root or not root.Parent then
+                SetWalkFlingImpulse(false)
                 task.wait(0.1)
             else
-                -- 1. Ensure solid collision with the ground (NEVER fall through the island, floors, or into water)
+                if statesCharacter ~= character then
+                    statesCharacter = character
+                    SetWalkFlingStates(humanoid, false)
+                end
+
+                -- Solid ground collision (never fall through floors / islands)
                 local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
                 if torso and not Settings.Noclip then
                     torso.CanCollide = true
                 end
 
-                -- 2. Anti-Fall Damage clamp: prevents lethal fall damage across NDS & all games
-                if root.AssemblyLinearVelocity.Y < -28 then
-                    root.AssemblyLinearVelocity = Vector3.new(
-                        root.AssemblyLinearVelocity.X,
-                        -15,
-                        root.AssemblyLinearVelocity.Z
-                    )
-                end
-
-                -- ZERO SPINNING: Keep angular velocity strictly at zero so the character walks normally without rotating
+                local normalVel = GetSafeWalkVelocity(root, humanoid)
                 root.AssemblyAngularVelocity = Vector3.zero
 
-                -- 3. Proximity detection: check if another player is in close contact (<= 7 studs)
-                local myPos = root.Position
-                local targetFound = false
-                local targetDist = 7.0
+                local power = math.clamp(tonumber(Settings.WalkFlingPower) or 30, 1, 100) * factor
 
-                for _, otherPlayer in ipairs(Players:GetPlayers()) do
-                    if otherPlayer ~= Player and otherPlayer.Character then
-                        local otherRoot = otherPlayer.Character:FindFirstChild("HumanoidRootPart")
-                        local otherHum = otherPlayer.Character:FindFirstChildOfClass("Humanoid")
-                        if otherRoot and otherHum and otherHum.Health > 0 then
-                            local d = (otherRoot.Position - myPos).Magnitude
-                            if d <= targetDist then
-                                targetFound = true
-                                break
-                            end
-                        end
-                    end
-                end
-
-                if targetFound then
-                    WalkFlingImpulseActive = true
-                    getgenv().ToxWalkFlingImpulseActive = true
-
-                    local power = math.clamp(tonumber(Settings.WalkFlingPower) or 30, 1, 100)
+                if power < 0.5 then
+                    SetWalkFlingImpulse(false)
+                    root.AssemblyLinearVelocity = normalVel
+                else
+                    SetWalkFlingImpulse(true)
                     local mult = power * 200
 
-                    local normalVel = root.AssemblyLinearVelocity
                     local moveDir = humanoid.MoveDirection
                     if moveDir.Magnitude < 0.1 then
                         moveDir = root.CFrame.LookVector
                     end
 
                     -- Classic walkfling cycle (same order as Infinite Yield):
-                    --  Heartbeat (after physics): set the huge velocity -> this is what replicates and flings whoever touches us
-                    --  RenderStepped: restore our normal velocity
-                    --  Stepped (before physics): normal velocity + tiny jitter, so OUR physics never moves with the huge value
-                    -- Never apply the huge velocity on Stepped, or the local character gets launched across the map.
-                    local flingVel = Vector3.new(moveDir.X * mult, mult * 0.75, moveDir.Z * mult)
-                    root.AssemblyLinearVelocity = flingVel
+                    --  Heartbeat (after physics): huge velocity -> replicates and flings whoever touches us
+                    --  RenderStepped: back to our normal (clamped) velocity
+                    --  Stepped (before physics): normal velocity + tiny jitter, so OUR physics never uses the huge value
+                    -- Never apply the huge velocity on Stepped, or the local character gets launched.
+                    root.AssemblyLinearVelocity = Vector3.new(moveDir.X * mult, mult * 0.75, moveDir.Z * mult)
 
                     RunService.RenderStepped:Wait()
-                    if root and root.Parent then
+                    if root.Parent then
                         root.AssemblyLinearVelocity = normalVel
                         root.AssemblyAngularVelocity = Vector3.zero
                     end
 
                     RunService.Stepped:Wait()
-                    if root and root.Parent then
+                    if root.Parent then
                         root.AssemblyLinearVelocity = normalVel + Vector3.new(0, movel, 0)
                         root.AssemblyAngularVelocity = Vector3.zero
                         movel = -movel
                     end
-                else
-                    WalkFlingImpulseActive = false
-                    getgenv().ToxWalkFlingImpulseActive = false
                 end
             end
         end
 
-        WalkFlingImpulseActive = false
-        getgenv().ToxWalkFlingImpulseActive = false
-        local character = Player.Character
-        local root = character and character:FindFirstChild("HumanoidRootPart")
-        if root then
-            pcall(function()
-                root.AssemblyAngularVelocity = Vector3.zero
-            end)
+        if generation == WalkFlingGeneration then
+            WalkFlingRunning = false
+            WalkFlingRampStart = 0
+        end
+        SetWalkFlingImpulse(false)
+
+        -- Keep the character stable for a moment after the fling stops
+        for _ = 1, 15 do
+            RunService.Heartbeat:Wait()
+            if WalkFlingRunning then break end
+            SettleCharacterAfterWalkFling()
         end
     end)
 end
@@ -1247,8 +1299,9 @@ getgenv().SetWalkFling = function(
     Settings.WalkFling = enabled
     if enabled then
         StartWalkFling()
-    else
-        StopWalkFling()
+    elseif WalkFlingRunning and WalkFlingRampStart == 0 then
+        -- Don't cut instantly: the loop sees WalkFling = false and fades the power to 0
+        WalkFlingRampStart = tick()
     end
     if getgenv().SyncToggleVisuals then
         getgenv().SyncToggleVisuals(
