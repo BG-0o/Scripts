@@ -3465,7 +3465,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         })
         -- the two window buttons always at the very end
         if miscSection and type(miscSection.Controls) == "table" then
-            for _, name in ipairs({ "Tox Music Player", "Tox Waypoints" }) do
+            for _, name in ipairs({ "Tox Music Player", "Tox Waypoints", "Tox Avatar Items" }) do
                 for index, control in ipairs(miscSection.Controls) do
                     if ControlHasName(control, name) then
                         table.remove(miscSection.Controls, index)

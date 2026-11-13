@@ -34,6 +34,7 @@ ToxChatTopBar.BorderSizePixel = 0
 ToxChatTopBar.Parent = ToxChatGui
 getgenv().ToxChatTopBar = ToxChatTopBar
 RegisterThemedObject(ToxChatTopBar, "BackgroundColor3", "Element")
+if getgenv().ToxRoundTopBar then getgenv().ToxRoundTopBar(ToxChatTopBar) end
 local ToxChatTitle = Instance.new("TextLabel")
 ToxChatTitle.Size = UDim2.new(1, -70, 1, 0)
 ToxChatTitle.Position = UDim2.new(0, 10, 0, 0)

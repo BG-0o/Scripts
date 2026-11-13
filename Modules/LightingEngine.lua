@@ -28,6 +28,24 @@ local MAIN_COLOR = env.MAIN_COLOR or Color3.fromRGB(0, 170, 255)
 local SavedWaypoints = env.SavedWaypoints or {}
 local SavedIDs = env.SavedIDs or {}
 local function MakeDraggable(...) if env.MakeDraggable then return env.MakeDraggable(...) end end
+-- Window title bars are square frames on top of a rounded window: their square corners
+-- poked out of the rounded edge. Round the bar's top and fill its bottom corners.
+local function RoundTopBar(bar)
+    if not bar or bar:FindFirstChild("ToxCornerFiller") then return end
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = bar
+    local filler = Instance.new("Frame")
+    filler.Name = "ToxCornerFiller"
+    filler.BorderSizePixel = 0
+    filler.Size = UDim2.new(1, 0, 0, 10)
+    filler.Position = UDim2.new(0, 0, 1, -10)
+    filler.BackgroundColor3 = bar.BackgroundColor3
+    filler.ZIndex = 0
+    filler.Parent = bar
+    RegisterThemedObject(filler, "BackgroundColor3", "Element")
+end
+getgenv().ToxRoundTopBar = RoundTopBar
 local function CustomNotify(...) if env.CustomNotify then return env.CustomNotify(...) end end
 local function AutoSaveConfiguration(...) if env.AutoSaveConfiguration then return env.AutoSaveConfiguration(...) end end
 local function AddConnection(...) if env.AddConnection then return env.AddConnection(...) end end
@@ -63,6 +81,7 @@ ChatLogTopBar.BackgroundColor3 = Theme.Element
 RegisterThemedObject(ChatLogTopBar, "BackgroundColor3", "Element")
 ChatLogTopBar.BorderSizePixel = 0
 ChatLogTopBar.Parent = ChatLogGui
+RoundTopBar(ChatLogTopBar)
 local ChatLogTopBorder = Instance.new("Frame")
 ChatLogTopBorder.Size = UDim2.new(1, 0, 0, 1)
 ChatLogTopBorder.Position = UDim2.new(0, 0, 1, -1)
@@ -181,6 +200,7 @@ WayTopBar.BackgroundColor3 = Theme.Element
 RegisterThemedObject(WayTopBar, "BackgroundColor3", "Element")
 WayTopBar.BorderSizePixel = 0
 WayTopBar.Parent = WaypointsGui
+RoundTopBar(WayTopBar)
 local WayTopBorder = Instance.new("Frame")
 WayTopBorder.Size = UDim2.new(1, 0, 0, 1)
 WayTopBorder.Position = UDim2.new(0, 0, 1, -1)
@@ -460,6 +480,7 @@ MusicTopBar.BackgroundColor3 = Theme.Element
 RegisterThemedObject(MusicTopBar, "BackgroundColor3", "Element")
 MusicTopBar.BorderSizePixel = 0
 MusicTopBar.Parent = MusicGui
+RoundTopBar(MusicTopBar)
 local MusicTopBorder = Instance.new("Frame")
 MusicTopBorder.Size = UDim2.new(1, 0, 0, 1)
 MusicTopBorder.Position = UDim2.new(0, 0, 1, -1)

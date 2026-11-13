@@ -287,6 +287,10 @@ CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(t
 -- ==============================================================================
 -- Shared player lookup (same matching as Fling / Teleport: name or display name)
 -- ==============================================================================
+-- forward declared: used by Select Player, built further below
+local AvatarItemsGui = nil
+local AvatarItemsLoad = nil
+
 local function FindPlayerByInput(text)
     text = string.lower(tostring(text or ""))
     if text == "" then return nil end
@@ -579,7 +583,10 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
         return CustomNotify("No player under the mouse", Color3.fromRGB(255, 180, 70))
     end
     local boxes = env.ToxNamedInputs or {}
-    for _, name in ipairs({ "Fling", "Teleport", "Spectate", "Up Player" }) do
+    if AvatarItemsGui and AvatarItemsGui.Visible and AvatarItemsLoad then
+        task.spawn(AvatarItemsLoad, target.Name)
+    end
+    for _, name in ipairs({ "Fling", "Teleport", "Spectate", "Up Player", "Avatar Items" }) do
         local box = boxes[name]
         if box and box.Parent then
             box.Text = target.Name
@@ -587,8 +594,260 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
     CustomNotify("Selected • " .. target.DisplayName .. " (@" .. target.Name .. ")", Color3.fromRGB(100, 200, 255))
 end))
+
+-- ==============================================================================
+-- TOX AVATAR ITEMS: window with everything a player is wearing (thumbnail, name,
+-- Copy ID, Copy All). Player = typed nick or picked with Select Player.
+-- ==============================================================================
+do
+    local Theme = env.Theme or {}
+    local RegisterThemedObject = env.RegisterThemedObject or function() end
+    local MarketplaceService = game:GetService("MarketplaceService")
+    local AssetNameCache = {}
+
+    local function Themed(obj, prop, key, fallback)
+        obj[prop] = Theme[key] or fallback
+        RegisterThemedObject(obj, prop, key)
+    end
+    local function Corner(obj, r)
+        local c = Instance.new("UICorner") c.CornerRadius = UDim.new(0, r or 6) c.Parent = obj
+    end
+    local function Stroke(obj, key)
+        local st = Instance.new("UIStroke") st.Thickness = 1 st.Transparency = 0.35
+        st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        Themed(st, "Color", key or "Outline", Color3.fromRGB(60, 60, 80))
+        st.Parent = obj
+        return st
+    end
+    local function Button(text, size, pos, parent)
+        local b = Instance.new("TextButton")
+        b.Size = size b.Position = pos b.BorderSizePixel = 0 b.AutoButtonColor = true
+        b.Text = text b.Font = Enum.Font.GothamBold b.TextSize = 10
+        Themed(b, "BackgroundColor3", "Element", Color3.fromRGB(25, 30, 40))
+        Themed(b, "TextColor3", "Text", Color3.new(1, 1, 1))
+        Corner(b, 4) Stroke(b) b.Parent = parent
+        return b
+    end
+    local function CopyText(text)
+        local fn = setclipboard or toclipboard or (Clipboard and Clipboard.set)
+        if fn then
+            pcall(fn, text)
+            return true
+        end
+        return false
+    end
+
+    local gui = Instance.new("Frame")
+    gui.Name = "ToxAvatarItemsFrame"
+    gui.Size = UDim2.new(0, 380, 0, 380)
+    gui.Position = UDim2.new(0.5, -190, 0.5, -190)
+    gui.BorderSizePixel = 0
+    gui.ClipsDescendants = true
+    gui.Visible = false
+    Themed(gui, "BackgroundColor3", "Panel", Color3.fromRGB(15, 18, 26))
+    gui.Parent = env.Gui
+    Corner(gui, 8)
+    local gStroke = Stroke(gui, "Accent") gStroke.Transparency = 0.25
+    if env.ApplySavedGuiPosition then pcall(env.ApplySavedGuiPosition, "AvatarItems", gui) end
+    if env.TrackGuiPosition then pcall(env.TrackGuiPosition, "AvatarItems", gui) end
+
+    local top = Instance.new("Frame")
+    top.Size = UDim2.new(1, 0, 0, 32) top.BorderSizePixel = 0
+    Themed(top, "BackgroundColor3", "Element", Color3.fromRGB(25, 30, 40))
+    top.Parent = gui
+    if env.ToxRoundTopBar then env.ToxRoundTopBar(top) end
+    if env.MakeDraggable then pcall(env.MakeDraggable, gui, top) end
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -40, 1, 0) title.Position = UDim2.new(0, 10, 0, 0)
+    title.BackgroundTransparency = 1 title.Text = "Tox Avatar Items"
+    title.Font = Enum.Font.GothamBold title.TextSize = 13 title.TextXAlignment = Enum.TextXAlignment.Left
+    Themed(title, "TextColor3", "Text", Color3.new(1, 1, 1))
+    title.Parent = top
+    local close = Button("X", UDim2.new(0, 22, 0, 20), UDim2.new(1, -26, 0.5, -10), top)
+    close.MouseButton1Click:Connect(function() gui.Visible = false end)
+
+    local nameBox = Instance.new("TextBox")
+    nameBox.Size = UDim2.new(1, -150, 0, 26) nameBox.Position = UDim2.new(0, 8, 0, 40)
+    nameBox.BorderSizePixel = 0 nameBox.ClearTextOnFocus = false
+    nameBox.PlaceholderText = "Player nick (or Select Player)"
+    nameBox.Text = "" nameBox.Font = Enum.Font.Gotham nameBox.TextSize = 11
+    Themed(nameBox, "BackgroundColor3", "Element", Color3.fromRGB(25, 30, 40))
+    Themed(nameBox, "TextColor3", "Text", Color3.new(1, 1, 1))
+    Corner(nameBox, 4) Stroke(nameBox) nameBox.Parent = gui
+    env.ToxNamedInputs = env.ToxNamedInputs or {}
+    env.ToxNamedInputs["Avatar Items"] = nameBox
+
+    local loadBtn = Button("Load", UDim2.new(0, 64, 0, 26), UDim2.new(1, -138, 0, 40), gui)
+    local copyAllBtn = Button("Copy All", UDim2.new(0, 64, 0, 26), UDim2.new(1, -70, 0, 40), gui)
+
+    local status = Instance.new("TextLabel")
+    status.Size = UDim2.new(1, -16, 0, 16) status.Position = UDim2.new(0, 8, 0, 70)
+    status.BackgroundTransparency = 1 status.Font = Enum.Font.Gotham status.TextSize = 10
+    status.TextXAlignment = Enum.TextXAlignment.Left status.Text = "Type a nick and press Load"
+    Themed(status, "TextColor3", "DimText", Color3.fromRGB(160, 160, 180))
+    status.Parent = gui
+
+    local list = Instance.new("ScrollingFrame")
+    list.Size = UDim2.new(1, -16, 1, -96) list.Position = UDim2.new(0, 8, 0, 88)
+    list.BackgroundTransparency = 1 list.BorderSizePixel = 0
+    list.ScrollBarThickness = 4 list.CanvasSize = UDim2.new()
+    list.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    list.Parent = gui
+    local layout = Instance.new("UIListLayout") layout.Padding = UDim.new(0, 4)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder layout.Parent = list
+
+    local currentIds = {}
+    local loadToken = 0
+
+    local ACCESSORY_FIELDS = {
+        { "HatAccessory", "Hat" }, { "HairAccessory", "Hair" }, { "FaceAccessory", "Face Acc." },
+        { "NeckAccessory", "Neck" }, { "ShouldersAccessory", "Shoulders" }, { "FrontAccessory", "Front" },
+        { "BackAccessory", "Back" }, { "WaistAccessory", "Waist" },
+    }
+    local SINGLE_FIELDS = {
+        { "Shirt", "Shirt" }, { "Pants", "Pants" }, { "GraphicTShirt", "T-Shirt" }, { "Face", "Face" },
+        { "Head", "Head" }, { "Torso", "Torso" }, { "LeftArm", "Left Arm" }, { "RightArm", "Right Arm" },
+        { "LeftLeg", "Left Leg" }, { "RightLeg", "Right Leg" },
+        { "IdleAnimation", "Idle Anim" }, { "WalkAnimation", "Walk Anim" }, { "RunAnimation", "Run Anim" },
+        { "JumpAnimation", "Jump Anim" }, { "FallAnimation", "Fall Anim" }, { "ClimbAnimation", "Climb Anim" },
+        { "SwimAnimation", "Swim Anim" },
+    }
+
+    local function CollectItems(target)
+        local items, seen = {}, {}
+        local function add(id, kind)
+            id = tonumber(id)
+            if id and id > 0 and not seen[id] then
+                seen[id] = true
+                table.insert(items, { Id = id, Kind = kind })
+            end
+        end
+        local desc = nil
+        local hum = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
+        if hum then pcall(function() desc = hum:GetAppliedDescription() end) end
+        if not desc then
+            pcall(function() desc = Players:GetHumanoidDescriptionFromUserId(target.UserId) end)
+        end
+        if not desc then return items end
+        for _, f in ipairs(ACCESSORY_FIELDS) do
+            for id in string.gmatch(tostring(desc[f[1]] or ""), "%d+") do add(id, f[2]) end
+        end
+        pcall(function()
+            for _, acc in ipairs(desc:GetAccessories(true)) do
+                add(acc.AssetId, tostring(acc.AccessoryType.Name))
+            end
+        end)
+        for _, f in ipairs(SINGLE_FIELDS) do
+            local ok, value = pcall(function() return desc[f[1]] end)
+            if ok then add(value, f[2]) end
+        end
+        return items
+    end
+
+    local function MakeRow(item, order)
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, -6, 0, 46) row.BorderSizePixel = 0 row.LayoutOrder = order
+        Themed(row, "BackgroundColor3", "Element", Color3.fromRGB(25, 30, 40))
+        Corner(row, 6) row.Parent = list
+
+        local thumb = Instance.new("ImageLabel")
+        thumb.Size = UDim2.new(0, 38, 0, 38) thumb.Position = UDim2.new(0, 4, 0.5, -19)
+        thumb.BackgroundTransparency = 1
+        thumb.Image = "rbxthumb://type=Asset&id=" .. item.Id .. "&w=150&h=150"
+        Corner(thumb, 4) thumb.Parent = row
+
+        local name = Instance.new("TextLabel")
+        name.Size = UDim2.new(1, -130, 0, 18) name.Position = UDim2.new(0, 48, 0, 5)
+        name.BackgroundTransparency = 1 name.Font = Enum.Font.GothamMedium name.TextSize = 11
+        name.TextXAlignment = Enum.TextXAlignment.Left name.TextTruncate = Enum.TextTruncate.AtEnd
+        name.Text = AssetNameCache[item.Id] or "Loading..."
+        Themed(name, "TextColor3", "Text", Color3.new(1, 1, 1))
+        name.Parent = row
+
+        local info = Instance.new("TextLabel")
+        info.Size = UDim2.new(1, -130, 0, 14) info.Position = UDim2.new(0, 48, 0, 25)
+        info.BackgroundTransparency = 1 info.Font = Enum.Font.Gotham info.TextSize = 10
+        info.TextXAlignment = Enum.TextXAlignment.Left
+        info.Text = item.Kind .. " • " .. item.Id
+        Themed(info, "TextColor3", "DimText", Color3.fromRGB(160, 160, 180))
+        info.Parent = row
+
+        local copy = Button("Copy ID", UDim2.new(0, 70, 0, 24), UDim2.new(1, -76, 0.5, -12), row)
+        copy.MouseButton1Click:Connect(function()
+            if CopyText(tostring(item.Id)) then
+                CustomNotify("Copied ID " .. item.Id, Color3.fromRGB(100, 255, 130))
+            else
+                CustomNotify("Your executor can't copy to clipboard", Color3.fromRGB(255, 120, 120))
+            end
+        end)
+
+        if not AssetNameCache[item.Id] then
+            task.spawn(function()
+                local ok, info2 = pcall(function()
+                    return MarketplaceService:GetProductInfo(item.Id, Enum.InfoType.Asset)
+                end)
+                local label = (ok and info2 and info2.Name) or ("Asset " .. item.Id)
+                AssetNameCache[item.Id] = label
+                if name.Parent then name.Text = label end
+            end)
+        end
+    end
+
+    AvatarItemsLoad = function(text)
+        text = tostring(text or nameBox.Text)
+        local target = FindPlayerByInput(text)
+        if not target and string.lower(text) == string.lower(Player.Name) then
+            target = Player
+        end
+        if not target then
+            status.Text = "Player not found"
+            return
+        end
+        nameBox.Text = target.Name
+        loadToken = loadToken + 1
+        local token = loadToken
+        for _, child in ipairs(list:GetChildren()) do
+            if child:IsA("Frame") then child:Destroy() end
+        end
+        currentIds = {}
+        status.Text = "Loading items of " .. target.DisplayName .. "..."
+        task.spawn(function()
+            local items = CollectItems(target)
+            if token ~= loadToken then return end
+            for index, item in ipairs(items) do
+                table.insert(currentIds, tostring(item.Id))
+                MakeRow(item, index)
+            end
+            status.Text = (#items > 0)
+                and (#items .. " items • " .. target.DisplayName .. " (@" .. target.Name .. ")")
+                or ("No items found for " .. target.DisplayName)
+        end)
+    end
+
+    loadBtn.MouseButton1Click:Connect(function() AvatarItemsLoad(nameBox.Text) end)
+    nameBox.FocusLost:Connect(function(enter) if enter then AvatarItemsLoad(nameBox.Text) end end)
+    copyAllBtn.MouseButton1Click:Connect(function()
+        if #currentIds == 0 then
+            return CustomNotify("Load a player first", Color3.fromRGB(255, 180, 70))
+        end
+        if CopyText(table.concat(currentIds, "\n")) then
+            CustomNotify("Copied " .. #currentIds .. " IDs", Color3.fromRGB(100, 255, 130))
+        else
+            CustomNotify("Your executor can't copy to clipboard", Color3.fromRGB(255, 120, 120))
+        end
+    end)
+
+    AvatarItemsGui = gui
+    env.ToxAvatarItemsGui = gui
+    env.ToxAvatarItemsLoad = AvatarItemsLoad
+end
 CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
 CreateButton("Tox Waypoints", FlingPage, function() WaypointsGui.Visible = not WaypointsGui.Visible end)
+CreateButton("Tox Avatar Items", FlingPage, function()
+    if AvatarItemsGui then
+        AvatarItemsGui.Visible = not AvatarItemsGui.Visible
+    end
+end)
 do
     local SCRIPTS_BASE = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Scripts/"
     local function RunCommunityScript(label, relFile)
