@@ -86,8 +86,15 @@ local function SkidFling(TargetPlayer)
     local Accessory = TCharacter and TCharacter:FindFirstChildOfClass("Accessory")
     local Handle = Accessory and Accessory:FindFirstChild("Handle")
     if not (Character and Humanoid and RootPart and TCharacter) then return false end
-    getgenv().OldPos = RootPart.CFrame
     if THumanoid and THumanoid.Sit then return false end
+    -- One fling at a time: overlapping flings overwrite the return position and the saved FPDH
+    if getgenv().ToxFlingBusy and tick() < (tonumber(getgenv().ToxFlingBusyUntil) or 0) then
+        return false, "busy"
+    end
+    getgenv().ToxFlingBusy = true
+    getgenv().ToxFlingBusyUntil = tick() + 8
+    local FlingStartCFrame = RootPart.CFrame
+    getgenv().OldPos = FlingStartCFrame
     local oldCameraSubject = Camera.CameraSubject
     if THead then
         Camera.CameraSubject = THead
@@ -99,10 +106,19 @@ local function SkidFling(TargetPlayer)
     local targetBasePart = TRootPart or THead or Handle
     if not targetBasePart then
         Camera.CameraSubject = oldCameraSubject
+        getgenv().ToxFlingBusy = false
         return false
     end
     ToxActiveFlingTargets[TargetPlayer] = tick() + 4
-    getgenv().FPDH = workspace.FallenPartsDestroyHeight
+    do
+        local currentFPDH = workspace.FallenPartsDestroyHeight
+        -- Only remember a real value; a previous/overlapping fling may have left it as NaN
+        if typeof(currentFPDH) == "number" and currentFPDH == currentFPDH then
+            getgenv().FPDH = currentFPDH
+        elseif typeof(getgenv().FPDH) ~= "number" or getgenv().FPDH ~= getgenv().FPDH then
+            getgenv().FPDH = -500
+        end
+    end
     getgenv().ToxFlingBypassUntil =
         math.max(
             tonumber(
@@ -186,40 +202,59 @@ local function SkidFling(TargetPlayer)
     BAV.P = 1e9
     BAV.Parent = RootPart
     Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
-    if TRootPart and THead then
-        if (TRootPart.Position - THead.Position).Magnitude > 5 then
-            SFBasePart(THead)
-        else
+
+    -- Protected: if anything errors mid-fling we must still remove the 9e8 BodyVelocity,
+    -- restore FallenPartsDestroyHeight and bring the player back. Otherwise the player
+    -- gets launched into the void and never dies (FPDH stays NaN) -> "stuck in the middle of nothing".
+    local flingOk, flingErr = pcall(function()
+        if TRootPart and THead then
+            if (TRootPart.Position - THead.Position).Magnitude > 5 then
+                SFBasePart(THead)
+            else
+                SFBasePart(TRootPart)
+            end
+        elseif TRootPart then
             SFBasePart(TRootPart)
+        elseif THead then
+            SFBasePart(THead)
+        elseif Handle then
+            SFBasePart(Handle)
         end
-    elseif TRootPart then
-        SFBasePart(TRootPart)
-    elseif THead then
-        SFBasePart(THead)
-    elseif Handle then
-        SFBasePart(Handle)
+    end)
+    if not flingOk then
+        warn("[ToxHub] Fling error (recovered): " .. tostring(flingErr))
     end
-    if BAV and BAV.Parent then pcall(function() BAV:Destroy() end) end
-    BV:Destroy()
-    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
-    Camera.CameraSubject = Humanoid
-    local OldPos = getgenv().OldPos or RootPart.CFrame
+
+    pcall(function() if BAV and BAV.Parent then BAV:Destroy() end end)
+    pcall(function() if BV and BV.Parent then BV:Destroy() end end)
+    pcall(function() Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true) end)
+    pcall(function() Camera.CameraSubject = Humanoid end)
+
+    local OldPos = FlingStartCFrame
+    local returnDeadline = tick() + 2.5
     repeat
+        -- Stop if we died / respawned: the new character spawns normally
+        if Player.Character ~= Character or not RootPart.Parent or Humanoid.Health <= 0 then
+            break
+        end
         RootPart.CFrame = OldPos * CFrame.new(0, 0.5, 0)
         pcall(function()
             Character:SetPrimaryPartCFrame(OldPos * CFrame.new(0, 0.5, 0))
         end)
-        Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        pcall(function() Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp) end)
         for _, x in ipairs(Character:GetChildren()) do
             if x:IsA("BasePart") then
-                x.Velocity = Vector3.zero
-                x.RotVelocity = Vector3.zero
+                x.AssemblyLinearVelocity = Vector3.zero
+                x.AssemblyAngularVelocity = Vector3.zero
             end
         end
         task.wait()
-    until (RootPart.Position - OldPos.Position).Magnitude < 25
+    until (RootPart.Position - OldPos.Position).Magnitude < 25 or tick() > returnDeadline
+
     pcall(function()
-        workspace.FallenPartsDestroyHeight = getgenv().FPDH
+        local saved = getgenv().FPDH
+        if typeof(saved) ~= "number" or saved ~= saved then saved = -500 end
+        workspace.FallenPartsDestroyHeight = saved
     end)
     getgenv().ToxFlingBypassUntil =
         math.max(
@@ -237,6 +272,7 @@ local function SkidFling(TargetPlayer)
         end)
     end
     ToxActiveFlingTargets[TargetPlayer] = nil
+    getgenv().ToxFlingBusy = false
     return true
 end
 getgenv().ToxFlingBypassUntil =

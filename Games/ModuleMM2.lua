@@ -5419,6 +5419,67 @@ end
 
 getgenv().ToxMM2RunKillOnFull = ToxMM2RunKillOnFull
 
+-- Watchdog: if a fling was interrupted (leftover 9e8 BodyVelocity / NaN FPDH) or we ended up
+-- far outside the map with nothing running that explains it, clean up and return to the lobby.
+task.spawn(function()
+    local lostSince = nil
+    while not getgenv().Destroyed and game.PlaceId == 142823291 do
+        task.wait(0.5)
+        local flinging = getgenv().ToxFlingBusy and tick() < (tonumber(getgenv().ToxFlingBusyUntil) or 0)
+        if not flinging then
+            pcall(function()
+                local fpdh = workspace.FallenPartsDestroyHeight
+                if typeof(fpdh) == "number" and fpdh ~= fpdh then
+                    local saved = getgenv().FPDH
+                    if typeof(saved) ~= "number" or saved ~= saved then saved = -500 end
+                    workspace.FallenPartsDestroyHeight = saved
+                end
+            end)
+
+            local character = Player.Character
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            if root and humanoid and humanoid.Health > 0 then
+                for _, name in ipairs({ "EpixVel", "ToxFlingSpin" }) do
+                    local leftover = root:FindFirstChild(name)
+                    if leftover then pcall(function() leftover:Destroy() end) end
+                end
+
+                local pos = root.Position
+                local broken = pos.X ~= pos.X or pos.Y ~= pos.Y or pos.Z ~= pos.Z
+                local tooFar = broken or math.abs(pos.X) > 10000 or math.abs(pos.Z) > 10000 or pos.Y > 5000
+                local resetting = tick() < (tonumber(getgenv().ToxTeleportBypassUntil) or 0)
+                if tooFar and not resetting then
+                    lostSince = lostSince or tick()
+                    if tick() - lostSince > 1.5 then
+                        lostSince = nil
+                        -- Prefer the current map spawn (round running), otherwise the lobby
+                        local spawnCF = nil
+                        pcall(function()
+                            local pos = FindSafeMapSpawnPosition()
+                            if not pos then
+                                local lobby = workspace:FindFirstChild("Lobby")
+                                if lobby then pos = FindSafeMapSpawnPosition(lobby) end
+                            end
+                            if pos then spawnCF = CFrame.new(pos) end
+                        end)
+                        if spawnCF then
+                            if getgenv().AllowToxTeleport then getgenv().AllowToxTeleport(1, "MM2 Lost Recovery") end
+                            root.Anchored = false
+                            root.AssemblyLinearVelocity = Vector3.zero
+                            root.AssemblyAngularVelocity = Vector3.zero
+                            pcall(function() character:PivotTo(spawnCF) end)
+                            pcall(function() CustomNotify("Recovered from void/fling", Color3.fromRGB(255, 180, 70)) end)
+                        end
+                    end
+                else
+                    lostSince = nil
+                end
+            end
+        end
+    end
+end)
+
 local function ForceResetCharacter(char, hum)
     char = char or Player.Character
     hum = hum or (char and char:FindFirstChildOfClass("Humanoid"))
@@ -5455,6 +5516,13 @@ local function ForceResetCharacter(char, hum)
                 getgenv().AllowToxTeleport(2.5, "Character Reset")
             end
             local fallY = -2500
+            -- If a fling left FallenPartsDestroyHeight as NaN, the void never kills us: restore it first
+            local currentFPDH = workspace.FallenPartsDestroyHeight
+            if typeof(currentFPDH) ~= "number" or currentFPDH ~= currentFPDH then
+                local saved = getgenv().FPDH
+                if typeof(saved) ~= "number" or saved ~= saved then saved = -500 end
+                pcall(function() workspace.FallenPartsDestroyHeight = saved end)
+            end
             local fpdh = workspace.FallenPartsDestroyHeight
             if typeof(fpdh) == "number" and fpdh < 0 then
                 fallY = math.min(fpdh - 300, -2500)
