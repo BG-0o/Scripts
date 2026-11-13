@@ -5555,7 +5555,7 @@ function PrepareAutoFarm()
     end
 
     if AutoFarmPrepared and AutoFarmRoot == root then
-        root.Anchored = true
+        root.Anchored = false -- must stay unanchored or the server stops receiving our position
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
         humanoid.PlatformStand = true
@@ -5596,7 +5596,7 @@ function PrepareAutoFarm()
     humanoid.PlatformStand = true
     humanoid.Sit = false
     humanoid.AutoRotate = false
-    root.Anchored = true
+    root.Anchored = false -- must stay unanchored or the server stops receiving our position
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
     SetFarmCollision(false)
@@ -6078,7 +6078,7 @@ function SetAutoFarmCoinPosition(position, velocity, direction)
     end
 
     AutoFarmHoldPosition = position
-    AutoFarmRoot.Anchored = true
+    AutoFarmRoot.Anchored = false -- must stay unanchored or the server stops receiving our position
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
 
@@ -6369,6 +6369,32 @@ function CollectFarmCoin(coin, mode)
         RunService.Heartbeat:Wait()
     end
 
+    -- Underground fallback: rise close under the coin if the touch from depth didn't register
+    if mode == "Underground"
+    and Settings.MM2AutoFarmV2
+    and generation == AutoFarmGeneration
+    and not IsFarmBagFull()
+    and IsCoinValid(coin)
+    and AutoFarmRoot
+    and AutoFarmRoot.Parent
+    and IsAutoFarmPlayerEligible() then
+        local closePos = coinPos - Vector3.new(0, 1.6, 0)
+        SetAutoFarmCoinPosition(closePos, Vector3.zero)
+        local riseUntil = os.clock() + 0.2
+        while os.clock() <= riseUntil
+        and Settings.MM2AutoFarmV2
+        and generation == AutoFarmGeneration
+        and IsCoinValid(coin)
+        and AutoFarmRoot
+        and AutoFarmRoot.Parent do
+            TouchCoin(coin)
+            if RegisterFarmCoinCollected(coin, serialBefore, bagBefore) then
+                break
+            end
+            RunService.Heartbeat:Wait()
+        end
+    end
+
     AutoFarmAtCoin = false
     AutoFarmHoldPosition = nil
     return not IsCoinValid(coin)
@@ -6536,16 +6562,29 @@ AddConnection(RunService.Heartbeat:Connect(function()
         return
     end
 
-    AutoFarmRoot.Anchored = true
+    AutoFarmRoot.Anchored = false -- must stay unanchored or the server stops receiving our position
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
     AutoFarmHumanoid.PlatformStand = true
     AutoFarmHumanoid.Sit = false
     AutoFarmHumanoid.AutoRotate = false
 
+    -- Unanchored hold: re-pin every frame so gravity never builds up (no falling, position still replicates)
     if AutoFarmHoldPosition and not AutoFarmActivelyTweening then
         AutoFarmRoot.CFrame = CFrame.new(AutoFarmHoldPosition)
     end
+end))
+
+AddConnection(RunService.Stepped:Connect(function()
+    if not Settings.MM2AutoFarmV2
+    or not AutoFarmPrepared
+    or not AutoFarmRoot
+    or not AutoFarmRoot.Parent then
+        return
+    end
+    -- Cancel gravity right before the physics step as well
+    AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
+    AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
 end))
 
 task.spawn(function()
