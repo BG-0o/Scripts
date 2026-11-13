@@ -633,6 +633,26 @@ do
     local RegisterThemedObject = env.RegisterThemedObject or function() end
     local MarketplaceService = game:GetService("MarketplaceService")
     local AssetNameCache = {}
+    local AssetPriceCache = {}   -- id -> { Text = "R$ 75", Robux = 75 or nil }
+
+    local function DescribePrice(productInfo)
+        if type(productInfo) ~= "table" then
+            return { Text = "?", Robux = nil }
+        end
+        local price = tonumber(productInfo.PriceInRobux)
+        local limited = productInfo.IsLimited or productInfo.IsLimitedUnique
+            or (productInfo.CollectiblesItemDetails ~= nil)
+        if productInfo.IsForSale and price then
+            if price == 0 then
+                return { Text = "Free", Robux = 0 }
+            end
+            return { Text = (limited and "Limited R$ " or "R$ ") .. price, Robux = price }
+        end
+        if productInfo.IsPublicDomain then
+            return { Text = "Free", Robux = 0 }
+        end
+        return { Text = limited and "Limited (resale)" or "Off sale", Robux = nil }
+    end
 
     local function Themed(obj, prop, key, fallback)
         obj[prop] = Theme[key] or fallback
@@ -789,7 +809,7 @@ do
         return items
     end
 
-    local function MakeRow(item, order)
+    local function MakeRow(item, order, onPrice)
         local row = Instance.new("Frame")
         row.Size = UDim2.new(1, -6, 0, 46) row.BorderSizePixel = 0 row.LayoutOrder = order
         Themed(row, "BackgroundColor3", "Element", Color3.fromRGB(25, 30, 40))
@@ -813,7 +833,11 @@ do
         info.Size = UDim2.new(1, -130, 0, 14) info.Position = UDim2.new(0, 48, 0, 25)
         info.BackgroundTransparency = 1 info.Font = Enum.Font.Gotham info.TextSize = 10
         info.TextXAlignment = Enum.TextXAlignment.Left
-        info.Text = item.Kind .. " • " .. item.Id
+        local function InfoText()
+            local price = AssetPriceCache[item.Id]
+            return item.Kind .. " • " .. item.Id .. " • " .. (price and price.Text or "...")
+        end
+        info.Text = InfoText()
         Themed(info, "TextColor3", "DimText", Color3.fromRGB(160, 160, 180))
         info.Parent = row
 
@@ -826,14 +850,19 @@ do
             end
         end)
 
-        if not AssetNameCache[item.Id] then
+        if AssetNameCache[item.Id] and AssetPriceCache[item.Id] then
+            if onPrice then onPrice(AssetPriceCache[item.Id]) end
+        else
             task.spawn(function()
                 local ok, info2 = pcall(function()
                     return MarketplaceService:GetProductInfo(item.Id, Enum.InfoType.Asset)
                 end)
                 local label = (ok and info2 and info2.Name) or ("Asset " .. item.Id)
                 AssetNameCache[item.Id] = label
+                AssetPriceCache[item.Id] = DescribePrice(ok and info2 or nil)
                 if name.Parent then name.Text = label end
+                if info.Parent then info.Text = InfoText() end
+                if onPrice then onPrice(AssetPriceCache[item.Id]) end
             end)
         end
     end
@@ -860,14 +889,29 @@ do
         task.spawn(function()
             local items = CollectItems(target, source)
             if token ~= loadToken then return end
+            local where = source == "Roblox" and "Roblox" or "Server"
+            local baseText = (#items > 0)
+                and (where .. " • " .. #items .. " items • " .. target.DisplayName)
+                or (where .. " • no items found for " .. target.DisplayName)
+            status.Text = baseText
+            -- running total of what is buyable right now
+            local total, priced, offSale = 0, 0, 0
+            local function OnPrice(price)
+                if token ~= loadToken then return end
+                priced += 1
+                if price and price.Robux then
+                    total += price.Robux
+                else
+                    offSale += 1
+                end
+                status.Text = baseText .. " • Total R$ " .. total
+                    .. (offSale > 0 and (" (+" .. offSale .. " off sale)") or "")
+                    .. (priced < #items and " ..." or "")
+            end
             for index, item in ipairs(items) do
                 table.insert(currentIds, tostring(item.Id))
-                MakeRow(item, index)
+                MakeRow(item, index, OnPrice)
             end
-            local where = source == "Roblox" and "Roblox" or "Server"
-            status.Text = (#items > 0)
-                and (where .. " • " .. #items .. " items • " .. target.DisplayName .. " (@" .. target.Name .. ")")
-                or (where .. " • no items found for " .. target.DisplayName)
         end)
     end
 
