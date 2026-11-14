@@ -36,8 +36,12 @@ local function HasRunningToxHub()
     and notifGui.Parent then
         return true
     end
+    -- Some executors keep getgenv() between teleports: the "active" flag from the
+    -- previous game made Join think ToxHub was still running here, so it waited on the
+    -- "already running" prompt and nothing loaded. Only count it for THIS game.
     if getgenv().ToxHubActive == true
-    and getgenv().Destroyed ~= true then
+    and getgenv().Destroyed ~= true
+    and getgenv().ToxHubGame == game then
         return true
     end
     for _, object in ipairs(ToxParentContainer:GetChildren()) do

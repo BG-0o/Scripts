@@ -313,6 +313,7 @@ getgenv().ToxStartupBooleanState = {}
 getgenv().ToxStartupToggleCallbacks = {}
 getgenv().ToxStartupOptionsApplied = false
 getgenv().ToxHubActive = true
+getgenv().ToxHubGame = game   -- which server/game this running copy belongs to
 getgenv().__ToxHubBootLock = nil
 getgenv().ToxModule1SplitVersion = "2026-10-19-kick-autoreexec-persist-v12"
 getgenv().ToxUniversalLoaded = nil
