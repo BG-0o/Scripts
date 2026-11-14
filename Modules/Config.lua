@@ -250,12 +250,8 @@ getgenv().Settings = {
     ReturnByDeath = false,
     InstantPrompts = false,
     ToolMagnet = false,
-    TACAutoFarm = false,
-    SSAutoFarm = false,
-    MEAutoFarm = false,
     BINGOAutoFarm = false,
     CFAutoFarm = false,
-    ADAutoFarm = false
 }
 local UIPreferenceKeys = {
     ShowToxBinds = true,

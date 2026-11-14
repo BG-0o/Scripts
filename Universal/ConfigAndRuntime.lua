@@ -722,14 +722,9 @@ local gameName = (resolvedMod and resolvedMod.GameName and resolvedMod.ShortName
     or (game.PlaceId == 893973440 and "FTF")
     or (game.PlaceId == 155615604 and "PL")
     or (game.PlaceId == 70650894743738 and "BE")
-    or (game.PlaceId == 93660722909304 and "SBR")
     or (game.PlaceId == 119925538689885 and "SOD")
-    or (game.PlaceId == 115681808123944 and "Throw a Coin (TAC)")
-    or ((game.PlaceId == 3823781113 or game.GameId == 1307638097) and "Saber Simulator (SS)")
-    or ((game.PlaceId == 133007106457547 or game.GameId == 10892211425) and "+1 Muscle Evolution (ME)")
     or (game.PlaceId == 131479356121251 and "50 Player BINGO! (BINGO)")
     or (game.PlaceId == 137233438285284 and "Chicken Farm (CF)")
-    or (game.PlaceId == 113290951185459 and "Anime Dice (AD)")
     or ("Place " .. placeKeyStr)
 local function GetSaveStatusText()
     local hasSave = (getgenv().HasSavedConfigForCurrentPlace and getgenv().HasSavedConfigForCurrentPlace())
@@ -880,23 +875,11 @@ CreateConfirmButton("DESTROY", ConfigPage, function()
     if getgenv().ToxMM2Cleanup then
         pcall(getgenv().ToxMM2Cleanup)
     end
-    if getgenv().ToxTACCleanup then
-        pcall(getgenv().ToxTACCleanup)
-    end
-    if getgenv().ToxSSCleanup then
-        pcall(getgenv().ToxSSCleanup)
-    end
-    if getgenv().ToxMECleanup then
-        pcall(getgenv().ToxMECleanup)
-    end
     if getgenv().ToxBINGOCleanup then
         pcall(getgenv().ToxBINGOCleanup)
     end
     if getgenv().ToxCFCleanup then
         pcall(getgenv().ToxCFCleanup)
-    end
-    if getgenv().ToxADCleanup then
-        pcall(getgenv().ToxADCleanup)
     end
     if getgenv().SetNDSWaterFly then
         pcall(function()

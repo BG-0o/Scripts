@@ -190,24 +190,12 @@ if HasRunningToxHub() then
     getgenv().ToxMM2LoaderJobId = nil
     getgenv().ToxMM2LoaderVersion = nil
     getgenv().ToxMM2LoaderPage = nil
-    getgenv().ToxTACModuleLoadedJobId = nil
-    getgenv().ToxTACModuleVersion = nil
-    getgenv().ToxTACModulePage = nil
-    getgenv().ToxSSModuleLoadedJobId = nil
-    getgenv().ToxSSModuleVersion = nil
-    getgenv().ToxSSModulePage = nil
-    getgenv().ToxMEModuleLoadedJobId = nil
-    getgenv().ToxMEModuleVersion = nil
-    getgenv().ToxMEModulePage = nil
     getgenv().ToxBINGOModuleLoadedJobId = nil
     getgenv().ToxBINGOModuleVersion = nil
     getgenv().ToxBINGOModulePage = nil
     getgenv().ToxCFModuleLoadedJobId = nil
     getgenv().ToxCFModuleVersion = nil
     getgenv().ToxCFModulePage = nil
-    getgenv().ToxADModuleLoadedJobId = nil
-    getgenv().ToxADModuleVersion = nil
-    getgenv().ToxADModulePage = nil
     getgenv().ToxGameModuleLoadedUrl = nil
     getgenv().ToxGameModuleLoadedPage = nil
     getgenv().ToxGameModuleLoadingUrl = nil
@@ -263,23 +251,11 @@ if HasRunningToxHub() then
     if getgenv().ToxSODCleanup then
         pcall(getgenv().ToxSODCleanup)
     end
-    if getgenv().ToxTACCleanup then
-        pcall(getgenv().ToxTACCleanup)
-    end
-    if getgenv().ToxSSCleanup then
-        pcall(getgenv().ToxSSCleanup)
-    end
-    if getgenv().ToxMECleanup then
-        pcall(getgenv().ToxMECleanup)
-    end
     if getgenv().ToxBINGOCleanup then
         pcall(getgenv().ToxBINGOCleanup)
     end
     if getgenv().ToxCFCleanup then
         pcall(getgenv().ToxCFCleanup)
-    end
-    if getgenv().ToxADCleanup then
-        pcall(getgenv().ToxADCleanup)
     end
     if getgenv().ScriptConnections then
         for _, conn in ipairs(getgenv().ScriptConnections) do

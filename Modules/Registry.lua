@@ -91,57 +91,6 @@ local GameModuleRegistry = {
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Games/BE.lua",
         Ready = true
     },
-    [93660722909304] = {
-        ShortName = "SBR",
-        GameName = "Scary Baboon Reimagined",
-        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Games/SBR.lua",
-        Ready = true
-    },
-    [3823781113] = {
-        ShortName = "SS",
-        GameName = "Saber Simulator",
-        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Games/SS.lua",
-        Ready = true,
-        PlaceIds = { 3823781113, 1307638097 }
-    },
-    [1307638097] = {
-        ShortName = "SS",
-        GameName = "Saber Simulator",
-        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Games/SS.lua",
-        Ready = true,
-        IsAlias = true,
-        PlaceIds = { 3823781113, 1307638097 }
-    },
-    [115681808123944] = {
-        ShortName = "TAC",
-        GameName = "Throw a Coin",
-        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Games/TAC.lua",
-        Ready = true,
-        PlaceIds = { 115681808123944, 10131390815 }
-    },
-    [10131390815] = {
-        ShortName = "TAC",
-        GameName = "Throw a Coin",
-        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Games/TAC.lua",
-        Ready = true,
-        IsAlias = true,
-        PlaceIds = { 115681808123944, 10131390815 }
-    },
-    [133007106457547] = {
-        ShortName = "ME",
-        GameName = "+1 Muscle Evolution",
-        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Games/ME.lua",
-        Ready = true,
-        PlaceIds = { 133007106457547, 10892211425 }
-    },
-    [10892211425] = {
-        ShortName = "ME",
-        GameName = "+1 Muscle Evolution",
-        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Games/ME.lua",
-        Ready = true,
-        IsAlias = true,
-        PlaceIds = { 133007106457547, 10892211425 }
-    },
     [131479356121251] = {
         ShortName = "BINGO",
         GameName = "50 Player BINGO!",
@@ -152,12 +101,6 @@ local GameModuleRegistry = {
         ShortName = "CF",
         GameName = "Chicken Farm",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Games/CF.lua",
-        Ready = true
-    },
-    [113290951185459] = {
-        ShortName = "AD",
-        GameName = "Anime Dice",
-        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Games/AD.lua",
         Ready = true
     }
 }

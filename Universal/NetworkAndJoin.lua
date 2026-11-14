@@ -923,13 +923,8 @@ local SupportedToxGames = {
     { Name = "Steal Or Die", PlaceId = 119925538689885, Code = "SOD", Status = "online" },
     { Name = "Bug Evolution", PlaceId = 70650894743738, Code = "BE", Status = "online" },
     { Name = "When In Disgrace", PlaceId = 109440000000000 + 485612336, Code = "WID", Status = "online" },
-    { Name = "Scary Baboon Reimagined", PlaceId = 93660722909304, Code = "SBR", Status = "online" },
-    { Name = "Saber Simulator", PlaceId = 3823781113, Code = "SS", Status = "online" },
-    { Name = "Throw a Coin", PlaceId = 115681808123944, Code = "TAC", Status = "online" },
-    { Name = "+1 Muscle Evolution", PlaceId = 133007106457547, Code = "ME", Status = "online" },
     { Name = "50 Player BINGO!", PlaceId = 131479356121251, Code = "BINGO", Status = "online" },
-    { Name = "Chicken Farm", PlaceId = 137233438285284, Code = "CF", Status = "online" },
-    { Name = "Anime Dice", PlaceId = 113290951185459, Code = "AD", Status = "online" }
+    { Name = "Chicken Farm", PlaceId = 137233438285284, Code = "CF", Status = "online" }
 }
 local function RefreshQuickJoinGames()
     local scroll = (getgenv and getgenv().JoinGamesScroll) or JoinGamesScroll
