@@ -63,6 +63,7 @@ getgenv().Settings = {
     LockRadius = 110,
     AimTargets = "Players Only",
     IgnoreFriends = false,
+    TeamCheck = false,
     ShowFOV = false,
     FOVRadius = 120,
     SilentAim = false,

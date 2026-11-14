@@ -3368,6 +3368,8 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         MoveControlToSection("Return By Death", "PLAYER")
         MoveControlToSection("Instant Proximity Prompts", "MISC")
         MoveControlToSection("Tool Magnet", "MISC")
+        MoveControlToSection("Ultra Instinct", "MISC")
+        MoveControlToSection("Anti Social", "MISC")
 
         local combatSection = (not env.ToxCombatLoaded and not getgenv().ToxCombatLoaded) and FindSection("COMBAT") or nil
         local playerSection = FindSection("PLAYER")
@@ -3457,6 +3459,8 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         SetOrder(miscSection, {
             -- fling
             "Walk Fling", "Anti Fling", "Fling",
+            -- evasion
+            "Ultra Instinct", "Anti Social",
             -- players
             "Teleport", "Spectate", "Up Player", "Select Player (Hold + Click)", "Ctrl Click TP",
             -- utilities

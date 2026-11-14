@@ -88,6 +88,7 @@ Settings.AimLock = Settings.AimLock == true
 Settings.LockRadius = tonumber(Settings.LockRadius) or 110
 Settings.AimTargets = tostring(Settings.AimTargets or "Players Only")
 Settings.IgnoreFriends = Settings.IgnoreFriends == true
+Settings.TeamCheck = Settings.TeamCheck == true
 
 local function AutoSaveConfiguration()
     if env.AutoSaveConfiguration then
@@ -141,18 +142,56 @@ getgenv().RestoreHeadHitboxDefaults = RestoreHeadHitboxDefaults
 -- ==============================================================================
 -- FOV CIRCLE DRAWING
 -- ==============================================================================
+-- Drawn with a ScreenGui ring instead of Drawing.new: the Drawing library is
+-- missing or broken on several executors, so the circle never showed up there.
 local FOVCircle = nil
-if Drawing then
-    pcall(function()
-        FOVCircle = Drawing.new("Circle")
-        FOVCircle.Thickness = 1.5
-        FOVCircle.NumSides = 64
-        FOVCircle.Radius = Settings.FOVRadius or 120
-        FOVCircle.Filled = false
-        FOVCircle.Visible = false
-        FOVCircle.Color = Theme.Accent or Color3.fromRGB(30, 95, 255)
-    end)
-end
+pcall(function()
+    local parent = (gethui and gethui()) or game:GetService("CoreGui")
+    local old = parent:FindFirstChild("ToxFOVCircle")
+    if old then old:Destroy() end
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "ToxFOVCircle"
+    gui.IgnoreGuiInset = true -- same space as UserInputService:GetMouseLocation()
+    gui.ResetOnSpawn = false
+    gui.DisplayOrder = 999
+    gui.Parent = parent
+    local ring = Instance.new("Frame")
+    ring.AnchorPoint = Vector2.new(0.5, 0.5)
+    ring.BackgroundTransparency = 1
+    ring.Visible = false
+    ring.Parent = gui
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = ring
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1.5
+    stroke.Parent = ring
+    local state = { Radius = Settings.FOVRadius or 120 }
+    FOVCircle = setmetatable({}, {
+        __index = function(_, key)
+            if key == "Remove" then
+                return function() pcall(function() gui:Destroy() end) end
+            end
+            if key == "Visible" then return ring.Visible end
+            return state[key]
+        end,
+        __newindex = function(_, key, value)
+            if key == "Position" then
+                ring.Position = UDim2.fromOffset(value.X, value.Y)
+            elseif key == "Radius" then
+                state.Radius = value
+                local d = (tonumber(value) or 120) * 2
+                ring.Size = UDim2.fromOffset(d, d)
+            elseif key == "Color" then
+                stroke.Color = value
+            elseif key == "Visible" then
+                ring.Visible = value == true
+            end
+        end,
+    })
+    FOVCircle.Radius = Settings.FOVRadius or 120
+    FOVCircle.Color = Theme.Accent or Color3.fromRGB(30, 95, 255)
+end)
 
 -- ==============================================================================
 -- TARGETING HELPERS
@@ -179,6 +218,24 @@ local function IsFriend(otherPlayer)
         end
     end)
     return false
+end
+
+-- Team Check: skip players on your own team (Team, or TeamColor when the game has no Team objects)
+local function IsTeammate(otherPlayer)
+    if not Settings.TeamCheck or not otherPlayer or not Player or otherPlayer == Player then
+        return false
+    end
+    if Player.Neutral or otherPlayer.Neutral then
+        return false
+    end
+    if Player.Team ~= nil or otherPlayer.Team ~= nil then
+        return otherPlayer.Team == Player.Team
+    end
+    return otherPlayer.TeamColor == Player.TeamColor
+end
+
+local function ShouldSkipPlayer(otherPlayer)
+    return (Settings.IgnoreFriends and IsFriend(otherPlayer)) or IsTeammate(otherPlayer)
 end
 
 local function GetTargetPart(character, partName)
@@ -243,7 +300,7 @@ local function GetClosestTarget(maxRadius, partName)
     if checkPlayers then
         for _, p in ipairs(Players:GetPlayers()) do
             if not IsLocalPlayer(p) and p.Character then
-                if not (Settings.IgnoreFriends and IsFriend(p)) then
+                if not ShouldSkipPlayer(p) then
                     local char = p.Character
                     local hum = char:FindFirstChildOfClass("Humanoid")
                     if hum and hum.Health > 0 then
@@ -840,7 +897,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
     -- 1. FOV Circle Update
     if FOVCircle then
         if Settings.ShowFOV then
-            FOVCircle.Position = mousePos
+            FOVCircle.Position = UserInputService:GetMouseLocation()
             FOVCircle.Radius = Settings.FOVRadius or 120
             FOVCircle.Color = Theme.Accent or Color3.fromRGB(30, 95, 255)
             FOVCircle.Visible = true
@@ -931,7 +988,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
             local isValidEnemy = false
 
             if targetPlayer and not IsLocalPlayer(targetPlayer) then
-                if not (Settings.IgnoreFriends and IsFriend(targetPlayer)) then
+                if not ShouldSkipPlayer(targetPlayer) then
                     local hum = model:FindFirstChildOfClass("Humanoid")
                     if hum and hum.Health > 0 then
                         isValidEnemy = true
@@ -972,7 +1029,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         local hbSize = tonumber(Settings.HitboxSize) or 10
         local heightLimit = math.min(hbSize, 3.5)
         for _, p in ipairs(Players:GetPlayers()) do
-            if not IsLocalPlayer(p) and p.Character then
+            if not IsLocalPlayer(p) and p.Character and not IsTeammate(p) then
                 local hrp = p.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
                     if not HitboxDefaults[hrp] then
@@ -1000,7 +1057,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
     if Settings.HeadHitboxExpander then
         local headSize = tonumber(Settings.HeadHitboxSize) or 7
         for _, p in ipairs(Players:GetPlayers()) do
-            if not IsLocalPlayer(p) and p.Character then
+            if not IsLocalPlayer(p) and p.Character and not IsTeammate(p) then
                 local head = p.Character:FindFirstChild("Head")
                 if head then
                     if not HeadHitboxDefaults[head] then
@@ -1035,7 +1092,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
                 local hasTarget = false
                 for _, p in ipairs(Players:GetPlayers()) do
                     if not IsLocalPlayer(p) and p.Character
-                    and not (Settings.IgnoreFriends and IsFriend and IsFriend(p)) then
+                    and not ShouldSkipPlayer(p) then
                         local tHrp = p.Character:FindFirstChild("HumanoidRootPart")
                         local tHum = p.Character:FindFirstChildOfClass("Humanoid")
                         if tHrp and tHum and tHum.Health > 0
@@ -1235,6 +1292,12 @@ local function BuildCombatUI()
         AutoSaveConfiguration()
     end, "IgnoreFriends")
 
+    CreateToggle("Team Check", CombatPage, Settings.TeamCheck, function(v)
+        Settings.TeamCheck = v == true
+        lockedTarget = nil
+        AutoSaveConfiguration()
+    end, "TeamCheck")
+
     -- Card 2: Combat Assistance
     CreateSection(CombatPage, "Combat Assistance", "⚡")
 
@@ -1339,11 +1402,11 @@ local function BuildCombatUI()
         end, "HeadHitboxExpander")
     end
 
-    -- Card 4: Evasion & Defense
-    CreateSection(CombatPage, "Evasion & Defense", "⚡")
+    -- Evasion (Ultra Instinct / Anti Social) lives on the Misc page, not Combat
+    local EvasionPage = env.FlingPage or getgenv().FlingPage or CombatPage
 
     if type(CreateToggleWithSlider) == "function" then
-        CreateToggleWithSlider("Ultra Instinct", CombatPage, 5, 50, Settings.UltraInstinct, Settings.UltraInstinctRange or 14, " studs", function(v)
+        CreateToggleWithSlider("Ultra Instinct", EvasionPage, 5, 50, Settings.UltraInstinct, Settings.UltraInstinctRange or 14, " studs", function(v)
             Settings.UltraInstinct = v == true
             if not Settings.UltraInstinct then HideUltraInstinctCircle() end
             AutoSaveConfiguration()
@@ -1352,7 +1415,7 @@ local function BuildCombatUI()
             AutoSaveConfiguration()
         end, "UltraInstinct")
     else
-        CreateToggleWithValue("Ultra Instinct", CombatPage, Settings.UltraInstinct, Settings.UltraInstinctRange, function(v)
+        CreateToggleWithValue("Ultra Instinct", EvasionPage, Settings.UltraInstinct, Settings.UltraInstinctRange, function(v)
             Settings.UltraInstinct = v == true
             if not Settings.UltraInstinct then HideUltraInstinctCircle() end
             AutoSaveConfiguration()
@@ -1375,9 +1438,9 @@ local function BuildCombatUI()
         AutoSaveConfiguration()
     end
     if type(CreateToggleWithSlider) == "function" then
-        CreateToggleWithSlider("Anti Social", CombatPage, 5, 60, Settings.AntiSocial, Settings.AntiSocialRange or 20, " studs", OnAntiSocial, OnAntiSocialRange, "AntiSocial")
+        CreateToggleWithSlider("Anti Social", EvasionPage, 5, 60, Settings.AntiSocial, Settings.AntiSocialRange or 20, " studs", OnAntiSocial, OnAntiSocialRange, "AntiSocial")
     else
-        CreateToggleWithValue("Anti Social", CombatPage, Settings.AntiSocial, Settings.AntiSocialRange, OnAntiSocial, OnAntiSocialRange, "AntiSocial")
+        CreateToggleWithValue("Anti Social", EvasionPage, Settings.AntiSocial, Settings.AntiSocialRange, OnAntiSocial, OnAntiSocialRange, "AntiSocial")
     end
 
     if type(env.ClearActivePageCard) == "function" then
