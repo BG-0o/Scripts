@@ -37,8 +37,14 @@ end
 
 local function Notify(text, color, duration)
     local notify = getgenv().CustomNotify
-    if notify then
-        notify(text, color, duration)
+    if not (notify and pcall(notify, text, color, duration)) then
+        pcall(function()
+            game:GetService("StarterGui"):SetCore("SendNotification", {
+                Title = "ToxHub",
+                Text = string.sub(tostring(text), 1, 180),
+                Duration = duration or 8,
+            })
+        end)
     end
 end
 

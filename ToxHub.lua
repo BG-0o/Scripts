@@ -12,11 +12,14 @@ if getgenv then
     -- Second copy started a few seconds after the first one in the same server
     -- (auto-execute + the teleport queue both run after changing games): just stop,
     -- no "ToxHub is already running" prompt. A manual re-execute later still asks.
+    -- Also while the first copy is STILL LOADING (up to 60s): a second copy used to
+    -- "re-execute" over it mid-load, leaving the window open with every page empty.
     local lock = getgenv().__ToxHubBootLock
-    if typeof(lock) == "table"
-    and lock.Game == game
-    and os.clock() - (tonumber(lock.StartedAt) or 0) < 15 then
-        return
+    if typeof(lock) == "table" and lock.Game == game then
+        local age = os.clock() - (tonumber(lock.StartedAt) or 0)
+        if age < 15 or (age < 60 and getgenv().ScriptLoaded ~= true) then
+            return
+        end
     end
     getgenv().Destroyed = false
     getgenv().__ToxHubReexecCancelled = nil
@@ -60,21 +63,37 @@ local function FetchSource(relPath)
     return success, content
 end
 
+local function ToxLoadError(msg)
+    warn(msg)
+    -- warn() is invisible on some executors, so also show it on screen
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "ToxHub - erro ao carregar",
+            Text = string.sub(tostring(msg), 1, 180),
+            Duration = 20,
+        })
+    end)
+    if getgenv then
+        getgenv().__ToxHubLastError = msg
+        getgenv().__ToxHubBootLock = nil
+    end
+end
+
 local function RunFetchedSource(relPath, success, content)
     if not success or type(content) ~= "string" or content == "" or content == "404: Not Found" or content:sub(1, 15):find("404") then
-        warn("[ToxHub Error]: Nao foi possivel carregar " .. tostring(relPath))
+        ToxLoadError("[ToxHub Error]: Nao foi possivel carregar " .. tostring(relPath))
         return false
     end
 
     local func, err = loadstring(content, "@" .. relPath)
     if not func then
-        warn("[ToxHub Syntax Error] (" .. tostring(relPath) .. "): " .. tostring(err))
+        ToxLoadError("[ToxHub Syntax Error] (" .. tostring(relPath) .. "): " .. tostring(err))
         return false
     end
 
     local runOk, runErr = pcall(func)
     if not runOk then
-        warn("[ToxHub Runtime Error] (" .. tostring(relPath) .. "): " .. tostring(runErr))
+        ToxLoadError("[ToxHub Runtime Error] (" .. tostring(relPath) .. "): " .. tostring(runErr))
         return false
     end
 

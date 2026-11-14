@@ -2,10 +2,11 @@ do
     local env = getgenv()
     local current = env.__ToxHubBootLock
     local now = os.clock()
-    if typeof(current) == "table"
-    and current.Game == game
-    and now - (tonumber(current.StartedAt) or now) < 15 then
-        return
+    if typeof(current) == "table" and current.Game == game then
+        local age = now - (tonumber(current.StartedAt) or now)
+        if age < 15 or (age < 60 and env.ScriptLoaded ~= true) then
+            return
+        end
     end
     env.__ToxHubBootLock = {
         Game = game,
