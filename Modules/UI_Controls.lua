@@ -455,7 +455,10 @@ if env.ToxBindInputConn then
     pcall(function() env.ToxBindInputConn:Disconnect() end)
 end
 env.ToxBindInputConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if getgenv().Destroyed or gameProcessed or ToxBindCapturing then return end
+    -- gameProcessed is NOT used: games like MM2 bind many keys to their own actions,
+    -- which marked the key as "processed" and the option bind never fired.
+    -- Typing (chat / any text box) is still ignored through GetFocusedTextBox.
+    if getgenv().Destroyed or ToxBindCapturing then return end
     if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
     if UserInputService:GetFocusedTextBox() then return end
     if getgenv().ToxOptionsReady == false then return end
