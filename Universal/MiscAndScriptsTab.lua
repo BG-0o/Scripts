@@ -1426,11 +1426,7 @@ do
 end
 CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
 CreateButton("Tox Waypoints", FlingPage, function() WaypointsGui.Visible = not WaypointsGui.Visible end)
-CreateButton("Tox Magnet", FlingPage, function()
-    if MagnetGui then
-        MagnetGui.Visible = not MagnetGui.Visible
-    end
-end)
+-- (Tox Magnet window is opened only from the NDS page)
 CreateButton("Tox Avatar Items", FlingPage, function()
     if AvatarItemsGui then
         AvatarItemsGui.Visible = not AvatarItemsGui.Visible
