@@ -1053,21 +1053,32 @@ end
 local function updateResponsiveHeader()
     if not Main or not UserCapsule then return end
     local totalW = Main.AbsoluteSize.X
+    local rightEdge -- x where the next element to the right of the game tag starts
     if totalW < 600 then
         UserCapsule.Visible = false
-        if GameTagPill then GameTagPill.Visible = false end
+        rightEdge = totalW - 190
     elseif totalW < 720 then
         UserCapsule.Visible = true
         UserCapsule.Size = UDim2.new(0, 180, 0, 36)
         UserCapsule.Position = UDim2.new(1, -380, 0.5, -18)
         StatsContainer.Visible = false
-        if GameTagPill then GameTagPill.Visible = false end
+        rightEdge = totalW - 380
     else
         UserCapsule.Visible = true
         UserCapsule.Size = UDim2.new(0, 240, 0, 36)
         UserCapsule.Position = UDim2.new(1, -440, 0.5, -18)
         StatsContainer.Visible = true
-        if GameTagPill then GameTagPill.Visible = true end
+        rightEdge = totalW - 440
+    end
+    -- Game tag shrinks gradually with the window and only hides when there is no room left
+    if GameTagPill then
+        local available = rightEdge - 126 - 10
+        if available < 34 then
+            GameTagPill.Visible = false
+        else
+            GameTagPill.Visible = true
+            GameTagPill.Size = UDim2.new(0, math.min(105, math.floor(available)), 0, 22)
+        end
     end
 end
 Main:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateResponsiveHeader)
