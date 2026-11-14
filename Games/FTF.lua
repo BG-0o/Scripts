@@ -58,7 +58,7 @@ Settings.FTFNoFog = Settings.FTFNoFog == true
 Settings.FTFCrawlSpeed = Settings.FTFCrawlSpeed == true
 Settings.FTFCrawlSpeedValue = tonumber(Settings.FTFCrawlSpeedValue) or 8
 Settings.FTFNoRagdoll = Settings.FTFNoRagdoll == true
-Settings.FTFAutoEscape = Settings.FTFAutoEscape == true
+Settings.FTFAutoEscape = false   -- option removed
 Settings.FTFNoHackFail = Settings.FTFNoHackFail == true
 Settings.FTFNoFailMethod = tostring(Settings.FTFNoFailMethod or "Smart")
 Settings.FTFUnlockCamera = Settings.FTFUnlockCamera == true
@@ -84,6 +84,10 @@ local CharacterRagdollStarted = nil
 local BeastHitLast = 0
 local LastVisualRefresh = 0
 local LastComputerRefresh = 0
+local LastFogApply = 0
+local LastCrawlCheck = 0
+local LastStatScan = 0
+local CrawlingCached = false
 local AutoEscapeGeneration = 0
 local ComputerHighlights = setmetatable({}, {__mode = "k"})
 local OriginalLighting = {
@@ -406,14 +410,37 @@ local function RefreshComputerChams()
     end
 end
 
+-- FTF maps use an Atmosphere: while one exists, Lighting.FogStart/FogEnd do nothing,
+-- that's why No Fog seemed broken. Thin the Atmosphere too (restored when turned off).
+local AtmosphereDefaults = setmetatable({}, { __mode = "k" })
 local function ApplyNoFog(enabled)
     if enabled then
         Lighting.FogStart = 1000000
         Lighting.FogEnd = 10000000
+        for _, object in ipairs(Lighting:GetChildren()) do
+            if object:IsA("Atmosphere") then
+                if not AtmosphereDefaults[object] then
+                    AtmosphereDefaults[object] = { Density = object.Density, Haze = object.Haze, Offset = object.Offset }
+                end
+                object.Density = 0
+                object.Haze = 0
+                object.Offset = 0
+            end
+        end
     else
         Lighting.FogStart = OriginalLighting.FogStart
         Lighting.FogEnd = OriginalLighting.FogEnd
         Lighting.FogColor = OriginalLighting.FogColor
+        for object, saved in pairs(AtmosphereDefaults) do
+            if object.Parent then
+                pcall(function()
+                    object.Density = saved.Density
+                    object.Haze = saved.Haze
+                    object.Offset = saved.Offset
+                end)
+            end
+            AtmosphereDefaults[object] = nil
+        end
     end
 end
 
@@ -437,11 +464,9 @@ local function IsLikelyCrawling()
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 
     if humanoid then
+        -- (the old "WalkSpeed <= 9" guess also matched the speed WE set, so you stayed
+        -- slow after standing up; only the hip height is used now)
         if humanoid.HipHeight < 1.15 then
-            return true
-        end
-
-        if humanoid.WalkSpeed > 0 and humanoid.WalkSpeed <= 9 then
             return true
         end
     end
@@ -908,21 +933,27 @@ TrackConnection(RunService.Heartbeat:Connect(function()
         RefreshPlayerVisuals()
     end
 
-    if Settings.FTFComputerChams and now - LastComputerRefresh >= 0.35 then
+    if Settings.FTFComputerChams and now - LastComputerRefresh >= 1.5 then
         LastComputerRefresh = now
         RefreshComputerChams()
     end
 
-    if Settings.FTFNoFog then
-        Lighting.FogStart = 1000000
-        Lighting.FogEnd = 10000000
+    if Settings.FTFNoFog and now - LastFogApply >= 1 then
+        LastFogApply = now
+        ApplyNoFog(true)
     end
 
     local character = Player.Character
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 
-    if humanoid and Settings.FTFCrawlSpeed and IsLikelyCrawling() then
-        humanoid.WalkSpeed = math.clamp(Settings.FTFCrawlSpeedValue, 1, 18)
+    if humanoid and Settings.FTFCrawlSpeed then
+        if now - LastCrawlCheck >= 0.25 then
+            LastCrawlCheck = now
+            CrawlingCached = IsLikelyCrawling()
+        end
+        if CrawlingCached then
+            humanoid.WalkSpeed = math.clamp(tonumber(Settings.FTFCrawlSpeedValue) or 8, 1, 30)
+        end
     end
 
     if humanoid and Settings.FTFNoRagdoll then
@@ -939,13 +970,18 @@ TrackConnection(RunService.Heartbeat:Connect(function()
         CharacterRagdollStarted = nil
     end
 
-    SetEnableCrawling()
-    RemoveJumpFatigue()
+    -- these scan the player's stats/character: 4x per second is plenty (was every frame -> lag)
+    if now - LastStatScan >= 0.25 then
+        LastStatScan = now
+        SetEnableCrawling()
+        RemoveJumpFatigue()
+        ApplyNoHitStun()
+    end
     ApplyUnlockedCamera()
-    ApplyNoHitStun()
     RunHitAura()
 end))
 
+-- ===================== VISUALS =====================
 CreateFTFSection("VISUALS")
 
 FTFCreateToggle(
@@ -1000,80 +1036,6 @@ FTFCreateToggle(
     "FTFNoFog"
 )
 
-CreateFTFSection("PLAYER")
-
-FTFCreateToggleWithValue(
-    "Crawl Speed",
-    GamePage,
-    Settings.FTFCrawlSpeed,
-    Settings.FTFCrawlSpeedValue,
-    function(value)
-        Settings.FTFCrawlSpeed = value == true
-        AutoSaveConfiguration()
-    end,
-    function(value)
-        Settings.FTFCrawlSpeedValue = math.clamp(tonumber(value) or 8, 1, 18)
-        AutoSaveConfiguration()
-    end,
-    "FTFCrawlSpeed"
-)
-
-FTFCreateToggle(
-    "No Ragdoll",
-    GamePage,
-    Settings.FTFNoRagdoll,
-    function(value)
-        Settings.FTFNoRagdoll = value == true
-        CharacterRagdollStarted = nil
-        AutoSaveConfiguration()
-    end,
-    "FTFNoRagdoll"
-)
-
-CreateDisabledRow("Computer Autofarm")
-
-FTFCreateToggle(
-    "Auto Escape",
-    GamePage,
-    Settings.FTFAutoEscape,
-    function(value)
-        Settings.FTFAutoEscape = value == true
-        StartAutoEscape()
-        AutoSaveConfiguration()
-    end,
-    "FTFAutoEscape"
-)
-
-FTFCreateToggle(
-    "No Hack Fail",
-    GamePage,
-    Settings.FTFNoHackFail,
-    function(value)
-        Settings.FTFNoHackFail = value == true
-        if Settings.FTFNoHackFail then
-            local okHook, hookErr = pcall(InstallNoHackFailHook)
-            if not okHook then
-                warn("[ToxHub FTF] No Hack Fail hook unavailable: " .. tostring(hookErr))
-            end
-        end
-        AutoSaveConfiguration()
-    end,
-    "FTFNoHackFail"
-)
-
-FTFCreateDropdown(
-    "No Fail Method",
-    {"Smart", "Legit"},
-    GamePage,
-    Settings.FTFNoFailMethod,
-    function(value)
-        Settings.FTFNoFailMethod = tostring(value)
-        AutoSaveConfiguration()
-    end
-)
-
-CreateFTFSection("BEAST")
-
 FTFCreateToggle(
     "Unlock Camera",
     GamePage,
@@ -1087,6 +1049,65 @@ FTFCreateToggle(
     end,
     "FTFUnlockCamera"
 )
+
+-- ===================== SURVIVOR =====================
+CreateFTFSection("SURVIVOR")
+
+local function OnCrawlSpeedToggle(value)
+    Settings.FTFCrawlSpeed = value == true
+    AutoSaveConfiguration()
+end
+local function OnCrawlSpeedValue(value)
+    Settings.FTFCrawlSpeedValue = math.clamp(tonumber(value) or 8, 1, 30)
+    AutoSaveConfiguration()
+end
+local createToggleWithSlider = getgenv().CreateToggleWithSlider
+if type(createToggleWithSlider) == "function" then
+    TrackControl(createToggleWithSlider("Crawl Speed", GamePage, 1, 30, Settings.FTFCrawlSpeed,
+        Settings.FTFCrawlSpeedValue, "", OnCrawlSpeedToggle, OnCrawlSpeedValue, "FTFCrawlSpeed"))
+else
+    FTFCreateToggleWithValue("Crawl Speed", GamePage, Settings.FTFCrawlSpeed, Settings.FTFCrawlSpeedValue,
+        OnCrawlSpeedToggle, OnCrawlSpeedValue, "FTFCrawlSpeed")
+end
+
+FTFCreateToggle(
+    "No Ragdoll",
+    GamePage,
+    Settings.FTFNoRagdoll,
+    function(value)
+        Settings.FTFNoRagdoll = value == true
+        CharacterRagdollStarted = nil
+        AutoSaveConfiguration()
+    end,
+    "FTFNoRagdoll"
+)
+
+local function OnNoHackFail(value)
+    Settings.FTFNoHackFail = value == true
+    if Settings.FTFNoHackFail then
+        local okHook, hookErr = pcall(InstallNoHackFailHook)
+        if not okHook then
+            warn("[ToxHub FTF] No Hack Fail hook unavailable: " .. tostring(hookErr))
+        end
+    end
+    AutoSaveConfiguration()
+end
+local function OnNoFailMethod(value)
+    Settings.FTFNoFailMethod = tostring(value)
+    AutoSaveConfiguration()
+end
+local createToggleWithChoice = getgenv().CreateToggleWithChoice
+if type(createToggleWithChoice) == "function" then
+    -- toggle + method (Smart / Legit) in the same option
+    TrackControl(createToggleWithChoice("No Hack Fail", GamePage, {"Smart", "Legit"}, Settings.FTFNoHackFail,
+        Settings.FTFNoFailMethod, OnNoHackFail, OnNoFailMethod, "FTFNoHackFail"))
+else
+    FTFCreateToggle("No Hack Fail", GamePage, Settings.FTFNoHackFail, OnNoHackFail, "FTFNoHackFail")
+    FTFCreateDropdown("No Fail Method", {"Smart", "Legit"}, GamePage, Settings.FTFNoFailMethod, OnNoFailMethod)
+end
+
+-- ===================== BEAST =====================
+CreateFTFSection("BEAST")
 
 FTFCreateToggle(
     "Remove Jump Fatigue",
@@ -1133,38 +1154,30 @@ FTFCreateToggle(
     "FTFHitAura"
 )
 
-FTFCreateToggle(
-    "Notify Unragdolling",
-    GamePage,
-    Settings.FTFNotifyUnragdolling,
-    function(value)
-        Settings.FTFNotifyUnragdolling = value == true
-        AutoSaveConfiguration()
-    end,
-    "FTFNotifyUnragdolling"
-)
+-- ===================== ALERTS =====================
+CreateFTFSection("ALERTS")
 
-FTFCreateToggleWithValue(
-    "Notify when % done",
-    GamePage,
-    false,
-    Settings.FTFNotifyPercent,
-    function()
-    end,
-    function(value)
-        Settings.FTFNotifyPercent = math.clamp(tonumber(value) or 80, 1, 100)
-        AutoSaveConfiguration()
-    end,
-    nil
-)
+-- one option: toggle + the % (the old "Notify when % done" row had a switch that did nothing)
+local function OnNotifyUnragdolling(value)
+    Settings.FTFNotifyUnragdolling = value == true
+    AutoSaveConfiguration()
+end
+local function OnNotifyPercent(value)
+    Settings.FTFNotifyPercent = math.clamp(tonumber(value) or 80, 1, 100)
+    AutoSaveConfiguration()
+end
+if type(createToggleWithSlider) == "function" then
+    TrackControl(createToggleWithSlider("Notify Unragdolling", GamePage, 1, 100, Settings.FTFNotifyUnragdolling,
+        Settings.FTFNotifyPercent, "%", OnNotifyUnragdolling, OnNotifyPercent, "FTFNotifyUnragdolling"))
+else
+    FTFCreateToggleWithValue("Notify Unragdolling", GamePage, Settings.FTFNotifyUnragdolling, Settings.FTFNotifyPercent,
+        OnNotifyUnragdolling, OnNotifyPercent, "FTFNotifyUnragdolling")
+end
 
 ApplyNoFog(Settings.FTFNoFog)
 RefreshPlayerVisuals()
 RefreshComputerChams()
 
-if Settings.FTFAutoEscape then
-    StartAutoEscape()
-end
 
 getgenv().ToxFTFCleanup = function()
     AutoEscapeGeneration += 1
