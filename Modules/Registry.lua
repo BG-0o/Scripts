@@ -103,6 +103,12 @@ local GameModuleRegistry = {
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Games/BH.lua",
         Ready = true
     },
+    [4623386862] = {
+        ShortName = "PIGGY",
+        GameName = "Piggy",
+        Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Games/PIGGY.lua",
+        Ready = true
+    },
     [137233438285284] = {
         ShortName = "CF",
         GameName = "Chicken Farm",
