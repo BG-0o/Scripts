@@ -256,7 +256,7 @@ getgenv().Settings = {
 }
 local UIPreferenceKeys = {
     ShowToxBinds = true,
-    ToxBinds = true,          -- option keybinds follow you to every game
+    ToxBinds = true,          -- one shared store, split per game inside (see UI_Controls)
     KeybindsList = true,
     Theme = true,
     ToxUITheme = true,

@@ -280,6 +280,40 @@ if type(Settings.ToxBinds) ~= "table" then
 end
 Settings.ShowToxBinds = Settings.ShowToxBinds == true
 
+-- Binds are PER GAME: Settings.ToxBinds = { ["game:<GameId>"] = { [option id] = "KeyName" } }.
+-- A bind set in NDS (e.g. Fly) must not fire in FTF just because the key was pressed.
+-- Old flat binds (from before this change) can't be traced to a game, so they are
+-- parked under "_legacy" and stay inactive.
+local ToxBindGameKey = "game:" .. tostring((game.GameId and game.GameId ~= 0) and game.GameId or game.PlaceId)
+local function CurrentToxBinds()
+    local store = Settings.ToxBinds
+    if type(store) ~= "table" then
+        store = {}
+        Settings.ToxBinds = store
+    end
+    local legacy = nil
+    for k, v in pairs(store) do
+        if type(v) ~= "table" then
+            legacy = legacy or {}
+            legacy[k] = v
+        end
+    end
+    if legacy then
+        store._legacy = type(store._legacy) == "table" and store._legacy or {}
+        for k, v in pairs(legacy) do
+            store[k] = nil
+            store._legacy[k] = v
+        end
+    end
+    local bucket = store[ToxBindGameKey]
+    if type(bucket) ~= "table" then
+        bucket = {}
+        store[ToxBindGameKey] = bucket
+    end
+    return bucket
+end
+getgenv().GetCurrentToxBinds = CurrentToxBinds
+
 local ToxBindEntries = env.ToxBindEntries or {}
 env.ToxBindEntries = ToxBindEntries
 local ToxBindCapturing = false
@@ -292,7 +326,7 @@ local function GetToxBindId(Name, SyncKey)
 end
 
 local function GetToxBindKeyName(id)
-    local key = Settings.ToxBinds and Settings.ToxBinds[id]
+    local key = CurrentToxBinds()[id]
     if typeof(key) == "EnumItem" then
         return key.Name
     elseif type(key) == "string" and key ~= "" and key ~= "NONE" then
@@ -342,7 +376,7 @@ end
 -- Returns { {Id, Name, Key, Active}, ... } for the Keybinds List HUD
 getgenv().GetToxBindList = function()
     local list = {}
-    for id, keyName in pairs(Settings.ToxBinds or {}) do
+    for id, keyName in pairs(CurrentToxBinds()) do
         local name = nil
         if GetToxBindKeyName(id) then
             if ToxBindEntries[id] and ToxBindEntries[id].Name then
@@ -423,9 +457,9 @@ local function AttachToxBind(Name, SyncKey, Container, Label, LabelSizeDefault, 
             conn:Disconnect()
             if isKey then
                 if input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.Backspace then
-                    Settings.ToxBinds[id] = nil          -- Esc / Backspace removes the bind
+                    CurrentToxBinds()[id] = nil          -- Esc / Backspace removes the bind
                 else
-                    Settings.ToxBinds[id] = input.KeyCode.Name
+                    CurrentToxBinds()[id] = input.KeyCode.Name
                 end
                 AutoSaveConfiguration()
             end
@@ -440,7 +474,7 @@ local function AttachToxBind(Name, SyncKey, Container, Label, LabelSizeDefault, 
     -- Right click on the button clears the bind
     BindBtn.MouseButton2Click:Connect(function()
         if getgenv().Destroyed or capturing then return end
-        Settings.ToxBinds[id] = nil
+        CurrentToxBinds()[id] = nil
         AutoSaveConfiguration()
         RefreshToxBindButtons()
     end)
@@ -463,7 +497,7 @@ env.ToxBindInputConn = UserInputService.InputBegan:Connect(function(input, gameP
     if UserInputService:GetFocusedTextBox() then return end
     if getgenv().ToxOptionsReady == false then return end
     local pressed = input.KeyCode.Name
-    for id in pairs(Settings.ToxBinds or {}) do
+    for id in pairs(CurrentToxBinds()) do
         if GetToxBindKeyName(id) == pressed then
             local entry = ToxBindEntries[id]
             if entry and entry.Trigger then
