@@ -345,7 +345,7 @@ end
 -- ScreenGui Parent Container
 local ParentContainer = (gethui and gethui()) or game:GetService("CoreGui")
 local Gui = Instance.new("ScreenGui")
-Gui.Name = "ToxHudGui"
+Gui.Name = "ToxHubGui"
 Gui.ResetOnSpawn = false
 Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 Gui.DisplayOrder = 999999999
@@ -495,7 +495,7 @@ HubTitle.Name = "HubTitle"
 HubTitle.Size = UDim2.new(0, 70, 0, 20)
 HubTitle.Position = UDim2.new(0, 48, 0, 9)
 HubTitle.BackgroundTransparency = 1
-HubTitle.Text = "ToxHud"
+HubTitle.Text = "ToxHub"
 HubTitle.TextColor3 = Theme.Text
 HubTitle.Font = Enum.Font.GothamBold
 HubTitle.TextSize = 15

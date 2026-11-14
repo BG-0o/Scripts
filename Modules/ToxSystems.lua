@@ -1219,8 +1219,8 @@ local function SyncSupabasePresence()
     local payload = HttpService:JSONEncode({
         user_id = Player.UserId,
         username = Player.Name,
-        executor = "ToxHud | " .. tostring(CurrentDetectedExecutor),
-        active_effect = "ToxHud",
+        executor = "ToxHub | " .. tostring(CurrentDetectedExecutor),
+        active_effect = "ToxHub",
         current_game = tostring(CachedGameName),
         place_id = game.PlaceId,
         job_id = tostring(game.JobId),
@@ -1243,11 +1243,13 @@ local function SyncSupabasePresence()
     return ok
 end
 
-local function IsToxHudUser(u)
+local function IsToxHubUser(u)
     if not u then return false end
-    if tostring(u.active_effect) == "ToxHud" then return true end
+    -- "ToxHud" = users still on an older version (before the rename)
+    local effect = tostring(u.active_effect)
+    if effect == "ToxHub" or effect == "ToxHud" then return true end
     local execLow = string.lower(tostring(u.executor or ""))
-    if string.find(execLow, "toxhud", 1, true) then return true end
+    if string.find(execLow, "toxhub", 1, true) or string.find(execLow, "toxhud", 1, true) then return true end
     return false
 end
 
@@ -1393,7 +1395,7 @@ local function OpenToxNetworkModal()
     hSub.Size = UDim2.new(0, 320, 0, 16)
     hSub.Position = UDim2.new(0, 52, 0, 26)
     hSub.BackgroundTransparency = 1
-    hSub.Text = "Active instances across ToxHud & WASOR network"
+    hSub.Text = "Active instances across ToxHub & WASOR network"
     hSub.TextColor3 = (uiTheme and uiTheme.DimText) or Color3.fromRGB(156, 170, 195)
     hSub.Font = Enum.Font.GothamMedium
     hSub.TextSize = 10
@@ -1472,17 +1474,17 @@ local function OpenToxNetworkModal()
     tabAllBtn.Parent = filterBar
     local taCorner = Instance.new("UICorner") taCorner.CornerRadius = UDim.new(0, 6) taCorner.Parent = tabAllBtn
 
-    local tabToxHudBtn = Instance.new("TextButton")
-    tabToxHudBtn.Size = UDim2.new(0.17, -3, 1, 0)
-    tabToxHudBtn.Position = UDim2.new(0.49, 3, 0, 0)
-    tabToxHudBtn.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
-    tabToxHudBtn.BorderSizePixel = 0
-    tabToxHudBtn.Text = "🛡️ ToxHud (0)"
-    tabToxHudBtn.TextColor3 = Color3.fromRGB(56, 189, 248)
-    tabToxHudBtn.Font = Enum.Font.GothamBold
-    tabToxHudBtn.TextSize = 10
-    tabToxHudBtn.Parent = filterBar
-    local thCorner = Instance.new("UICorner") thCorner.CornerRadius = UDim.new(0, 6) thCorner.Parent = tabToxHudBtn
+    local tabToxHubBtn = Instance.new("TextButton")
+    tabToxHubBtn.Size = UDim2.new(0.17, -3, 1, 0)
+    tabToxHubBtn.Position = UDim2.new(0.49, 3, 0, 0)
+    tabToxHubBtn.BackgroundColor3 = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
+    tabToxHubBtn.BorderSizePixel = 0
+    tabToxHubBtn.Text = "🛡️ ToxHub (0)"
+    tabToxHubBtn.TextColor3 = Color3.fromRGB(56, 189, 248)
+    tabToxHubBtn.Font = Enum.Font.GothamBold
+    tabToxHubBtn.TextSize = 10
+    tabToxHubBtn.Parent = filterBar
+    local thCorner = Instance.new("UICorner") thCorner.CornerRadius = UDim.new(0, 6) thCorner.Parent = tabToxHubBtn
 
     local tabWasorBtn = Instance.new("TextButton")
     tabWasorBtn.Size = UDim2.new(0.17, -3, 1, 0)
@@ -1547,7 +1549,7 @@ local function OpenToxNetworkModal()
             local diff = nowUtc - ts
             local isOnline = (diff >= -30 and diff <= 95)
             if isOnline then onlineCount = onlineCount + 1 end
-            if IsToxHudUser(u) then
+            if IsToxHubUser(u) then
                 toxCount = toxCount + 1
             else
                 wasorCount = wasorCount + 1
@@ -1555,7 +1557,7 @@ local function OpenToxNetworkModal()
         end
 
         tabAllBtn.Text = "All (" .. tostring(totalCount) .. ")"
-        tabToxHudBtn.Text = "🛡️ ToxHud (" .. tostring(toxCount) .. ")"
+        tabToxHubBtn.Text = "🛡️ ToxHub (" .. tostring(toxCount) .. ")"
         tabWasorBtn.Text = "⚡ WASOR (" .. tostring(wasorCount) .. ")"
         tabOnlineBtn.Text = "🟢 Online (" .. tostring(onlineCount) .. ")"
 
@@ -1566,9 +1568,9 @@ local function OpenToxNetworkModal()
             local ts = ParseIsoTimestamp(u.updated_at)
             local diff = nowUtc - ts
             local isOnline = (diff >= -30 and diff <= 95)
-            local isTox = IsToxHudUser(u)
+            local isTox = IsToxHubUser(u)
 
-            if currentFilterMode == "TOXHUD" and not isTox then
+            if currentFilterMode == "TOXHUB" and not isTox then
                 continue
             elseif currentFilterMode == "WASOR" and isTox then
                 continue
@@ -1580,14 +1582,14 @@ local function OpenToxNetworkModal()
                 local matchName = string.find(string.lower(uname), q, 1, true)
                 local matchExec = string.find(string.lower(exec), q, 1, true)
                 local matchGame = string.find(string.lower(gameTitle), q, 1, true)
-                local matchOrigin = (isTox and string.find("toxhud", q, 1, true)) or (not isTox and string.find("wasor", q, 1, true))
+                local matchOrigin = (isTox and string.find("toxhub", q, 1, true)) or (not isTox and string.find("wasor", q, 1, true))
                 if not matchName and not matchExec and not matchGame and not matchOrigin then
                     continue
                 end
             end
 
-            local cleanExec = string.gsub(exec, "^ToxHud%s*|%s*", "")
-            if cleanExec == "" then cleanExec = "ToxHud" end
+            local cleanExec = string.gsub(exec, "^ToxHu[bd]%s*|%s*", "")
+            if cleanExec == "" then cleanExec = "ToxHub" end
 
             local card = Instance.new("Frame")
             card.Size = UDim2.new(1, -6, 0, 64)
@@ -1635,7 +1637,7 @@ local function OpenToxNetworkModal()
             local obText = Instance.new("TextLabel")
             obText.Size = UDim2.new(1, 0, 1, 0)
             obText.BackgroundTransparency = 1
-            obText.Text = isTox and "🛡️ ToxHud" or "⚡ WASOR"
+            obText.Text = isTox and "🛡️ ToxHub" or "⚡ WASOR"
             obText.TextColor3 = isTox and Color3.fromRGB(56, 189, 248) or Color3.fromRGB(216, 180, 254)
             obText.Font = Enum.Font.GothamBold
             obText.TextSize = 9
@@ -1741,7 +1743,7 @@ local function OpenToxNetworkModal()
         local activeBg = (uiTheme and uiTheme.Accent) or MAIN_COLOR
         local inactiveBg = (uiTheme and uiTheme.Element) or Color3.fromRGB(19, 25, 38)
         tabAllBtn.BackgroundColor3 = (currentFilterMode == "ALL") and activeBg or inactiveBg
-        tabToxHudBtn.BackgroundColor3 = (currentFilterMode == "TOXHUD") and activeBg or inactiveBg
+        tabToxHubBtn.BackgroundColor3 = (currentFilterMode == "TOXHUB") and activeBg or inactiveBg
         tabWasorBtn.BackgroundColor3 = (currentFilterMode == "WASOR") and activeBg or inactiveBg
         tabOnlineBtn.BackgroundColor3 = (currentFilterMode == "ONLINE") and activeBg or inactiveBg
     end
@@ -1755,8 +1757,8 @@ local function OpenToxNetworkModal()
         RenderUsers()
     end)
 
-    tabToxHudBtn.MouseButton1Click:Connect(function()
-        currentFilterMode = "TOXHUD"
+    tabToxHubBtn.MouseButton1Click:Connect(function()
+        currentFilterMode = "TOXHUB"
         UpdateFilterTabStyles()
         RenderUsers()
     end)

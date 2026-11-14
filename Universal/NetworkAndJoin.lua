@@ -1451,7 +1451,7 @@ local function QueueAntiKickResume()
         .. "local ok = pcall(function() loadstring(game:HttpGet("
         .. string.format(
             "%q",
-            "https://raw.githubusercontent.com/BG-0o/Scripts/main/ToxHud.lua"
+            "https://raw.githubusercontent.com/BG-0o/Scripts/main/ToxHub.lua"
         )
         .. "))() end)\n"
         .. "if not ok and env.__ToxQueuedDestinationAt == guardNow then env.__ToxQueuedDestinationGame = nil; env.__ToxQueuedDestinationAt = nil end"

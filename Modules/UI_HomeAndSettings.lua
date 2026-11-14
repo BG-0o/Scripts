@@ -66,7 +66,7 @@ local function InitializeHomePage()
     subLbl.Size = UDim2.new(1, -78, 0, 18)
     subLbl.Position = UDim2.new(0, 72, 0, 36)
     subLbl.BackgroundTransparency = 1
-    subLbl.Text = "ToxHud 1.0.0 • Lifetime"
+    subLbl.Text = "ToxHub 1.0.0 • Lifetime"
     subLbl.TextColor3 = Theme.Accent
     subLbl.TextSize = 11
     subLbl.Font = Enum.Font.GothamMedium
@@ -82,11 +82,11 @@ local function InitializeHomePage()
         end
         CustomNotify("Link copiado! Acesse o Discord no canal #robux para comprar via PIX/BRL.", Color3.fromRGB(0, 230, 120), 6)
     end)
-    CreateButton("Copiar Loader Oficial (ToxHud)", targetPage, function()
+    CreateButton("Copiar Loader Oficial (ToxHub)", targetPage, function()
         if setclipboard then
-            setclipboard('loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ToxHud.lua"))()')
+            setclipboard('loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ToxHub.lua"))()')
         end
-        CustomNotify("Loader do ToxHud copiado para a área de transferência!", Color3.fromRGB(0, 168, 255), 5)
+        CustomNotify("Loader do ToxHub copiado para a área de transferência!", Color3.fromRGB(0, 168, 255), 5)
     end)
     ActivePageCards[targetPage] = nil
 end
@@ -340,7 +340,7 @@ AddAnnounceLine("+ Flies: Space up / Ctrl down everywhere", false)
 AddAnnounceLine("+ MM2 Auto Farm & many bug fixes", false)
 
 -- Live changelog: replaces the static text above with the latest commits of the
--- ToxHud repo, so it updates by itself on every push. Falls back to the static text.
+-- ToxHub repo, so it updates by itself on every push. Falls back to the static text.
 task.spawn(function()
     local HttpService = game:GetService("HttpService")
     local url = "https://api.github.com/repos/BG-0o/Scripts/commits?per_page=25"
@@ -1153,7 +1153,7 @@ task.spawn(function()
         local maxP = Players.MaxPlayers
         UpdatePlayersPill(tostring(pCount) .. " / " .. tostring(maxP))
         if WatermarkFrame and WatermarkFrame.Visible and WatermarkLabel then
-            WatermarkLabel.Text = "<b>ToxHud</b> v2.0  |  FPS: " .. tostring(currentFps) .. "  |  Ping: " .. tostring(pingVal) .. "ms"
+            WatermarkLabel.Text = "<b>ToxHub</b> v2.0  |  FPS: " .. tostring(currentFps) .. "  |  Ping: " .. tostring(pingVal) .. "ms"
         end
         pcall(function()
             if UpdatePlayersStat then

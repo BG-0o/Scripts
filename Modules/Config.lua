@@ -1774,7 +1774,7 @@ end)
 local ok = pcall(function()
     loadstring(
         game:HttpGet(
-            "https://raw.githubusercontent.com/BG-0o/Scripts/main/ToxHud.lua"
+            "https://raw.githubusercontent.com/BG-0o/Scripts/main/ToxHub.lua"
         )
     )()
 end)

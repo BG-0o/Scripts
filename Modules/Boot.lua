@@ -323,13 +323,21 @@ Destroyed = false
 getgenv().__ToxHubReexecCancelled = nil
 
 ----------------------------------------------------------------------
--- TOXHUD KEY SYSTEM ("Tox-BetaUsers")
+-- TOXHUB KEY SYSTEM ("Tox-BetaUsers")
 ----------------------------------------------------------------------
 local VALID_KEY = "Tox-BetaUsers"
-local KEY_FILENAME = "ToxHud_Key.txt"
+local KEY_FILENAME = "ToxHub_Key.txt"
 local DISCORD_URL = "https://discord.com/invite/A7tZ9VbVvM"
 
+local LEGACY_KEY_FILENAME = "ToxHud_Key.txt"   -- old name, read so nobody has to type the key again
+
 local function ReadSavedKey()
+    if isfile and readfile and not isfile(KEY_FILENAME) and isfile(LEGACY_KEY_FILENAME) then
+        local ok, raw = pcall(readfile, LEGACY_KEY_FILENAME)
+        if ok and raw and writefile then
+            pcall(writefile, KEY_FILENAME, raw)
+        end
+    end
     if isfile and readfile and isfile(KEY_FILENAME) then
         local ok, raw = pcall(readfile, KEY_FILENAME)
         if ok and raw then
@@ -401,7 +409,7 @@ else
     headerTitle.Size = UDim2.new(0, 100, 0, 20)
     headerTitle.Position = UDim2.new(0, 64, 0, 16)
     headerTitle.BackgroundTransparency = 1
-    headerTitle.Text = "ToxHud"
+    headerTitle.Text = "ToxHub"
     headerTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
     headerTitle.Font = Enum.Font.GothamBold
     headerTitle.TextSize = 16
@@ -499,7 +507,7 @@ else
         local entered = string.match(textBox.Text or "", "^%s*(.-)%s*$") or ""
         if string.lower(entered) == string.lower(VALID_KEY) then
             statusLabel.TextColor3 = Color3.fromRGB(34, 197, 94)
-            statusLabel.Text = "✅ Valid Key! Loading ToxHud..."
+            statusLabel.Text = "✅ Valid Key! Loading ToxHub..."
             SaveKey(VALID_KEY)
             task.wait(0.35)
             getgenv().ToxKeyVerified = true

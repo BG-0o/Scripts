@@ -1738,7 +1738,7 @@ local function ShowCenterLoadSequence()
     TitleLabel.Size = UDim2.new(1, -85, 0, 24)
     TitleLabel.Position = UDim2.new(0, 78, 0, 16)
     TitleLabel.BackgroundTransparency = 1
-    TitleLabel.Text = "ToxHud"
+    TitleLabel.Text = "ToxHub"
     TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     TitleLabel.Font = Enum.Font.GothamBold
     TitleLabel.TextSize = 15
@@ -1799,7 +1799,7 @@ local function ShowCenterLoadSequence()
     end
     BarFill.Size = UDim2.new(1, 0, 1, 0)
     PercentLabel.Text = "100%"
-    TitleLabel.Text = "ToxHud Loaded Successfully"
+    TitleLabel.Text = "ToxHub Loaded Successfully"
     task.wait(0.1)
     if blur then blur:Destroy() end
     local fallTween = TweenService:Create(SplashFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
