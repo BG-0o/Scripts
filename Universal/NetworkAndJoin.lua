@@ -913,6 +913,7 @@ local function ResolvePlaceName(placeId)
 end
 local ResolveGameName = ResolvePlaceName
 local SupportedToxGames = {
+    { Name = "Brookhaven RP", PlaceId = 4924922222, Code = "BH", Status = "online" },
     { Name = "Murder Mystery 2", PlaceId = 142823291, Code = "MM2", Status = "online" },
     { Name = "Natural Disaster Survival", PlaceId = 189707, Code = "NDS", Status = "online" },
     { Name = "FREE ADMIN", PlaceId = 4522347649, Code = "ADMIN", Status = "online" },
