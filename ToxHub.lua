@@ -8,6 +8,7 @@ while (not game.PlaceId or game.PlaceId == 0) and waitPlaceTries < 10 do
     waitPlaceTries = waitPlaceTries + 1
 end
 
+local MyBootLock = nil
 if getgenv then
     -- Second copy started a few seconds after the first one in the same server
     -- (auto-execute + the teleport queue both run after changing games): just stop,
@@ -21,8 +22,17 @@ if getgenv then
             return
         end
     end
+    -- Take the lock right now (no yield since the check above). Two copies started
+    -- together (Join's teleport queue + the executor's auto-execute) both passed
+    -- this check before either one's Boot set the lock, so both loaded on top of
+    -- each other and the hub ended up broken/empty.
+    MyBootLock = { Game = game, StartedAt = os.clock() }
+    getgenv().__ToxHubBootLock = MyBootLock
     getgenv().Destroyed = false
     getgenv().__ToxHubReexecCancelled = nil
+end
+local function StillOwnsBoot()
+    return not getgenv or getgenv().__ToxHubBootLock == MyBootLock
 end
 
 local REPO_BASE = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/"
@@ -75,7 +85,9 @@ local function ToxLoadError(msg)
     end)
     if getgenv then
         getgenv().__ToxHubLastError = msg
-        getgenv().__ToxHubBootLock = nil
+        if getgenv().__ToxHubBootLock == MyBootLock then
+            getgenv().__ToxHubBootLock = nil
+        end
     end
 end
 
@@ -91,6 +103,9 @@ local function RunFetchedSource(relPath, success, content)
         return false
     end
 
+    if getgenv and relPath == CORE_MODULES[1].Path then
+        getgenv().__ToxHubBootCaller = MyBootLock
+    end
     local runOk, runErr = pcall(func)
     if not runOk then
         ToxLoadError("[ToxHub Runtime Error] (" .. tostring(relPath) .. "): " .. tostring(runErr))
@@ -104,6 +119,9 @@ end
 do
     local okFetch, bootSrc = FetchSource(CORE_MODULES[1].Path)
     if not RunFetchedSource(CORE_MODULES[1].Path, okFetch, bootSrc) then
+        return
+    end
+    if not StillOwnsBoot() then
         return
     end
     if getgenv and (getgenv().Destroyed or getgenv().__ToxHubReexecCancelled) then
@@ -137,9 +155,12 @@ for idx = 2, #CORE_MODULES do
     if getgenv and getgenv().Destroyed then
         return
     end
+    if not StillOwnsBoot() then
+        return
+    end
 end
 
-if getgenv then
+if getgenv and getgenv().__ToxHubBootLock == MyBootLock then
     getgenv().__ToxHubBootLock = nil
 end
 

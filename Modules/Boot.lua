@@ -2,16 +2,22 @@ do
     local env = getgenv()
     local current = env.__ToxHubBootLock
     local now = os.clock()
-    if typeof(current) == "table" and current.Game == game then
+    local caller = env.__ToxHubBootCaller
+    env.__ToxHubBootCaller = nil
+    if caller ~= nil and current == caller then
+        -- lock taken by the ToxHub.lua copy that is running this Boot: keep it
+    elseif typeof(current) == "table" and current.Game == game then
         local age = now - (tonumber(current.StartedAt) or now)
         if age < 15 or (age < 60 and env.ScriptLoaded ~= true) then
             return
         end
     end
-    env.__ToxHubBootLock = {
-        Game = game,
-        StartedAt = now
-    }
+    if not (caller ~= nil and current == caller) then
+        env.__ToxHubBootLock = {
+            Game = game,
+            StartedAt = now
+        }
+    end
 end
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
