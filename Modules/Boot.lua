@@ -5,7 +5,6 @@ do
     local caller = env.__ToxHubBootCaller
     env.__ToxHubBootCaller = nil
     if caller ~= nil and current == caller then
-        -- lock taken by the ToxHub.lua copy that is running this Boot: keep it
     elseif typeof(current) == "table" and current.Game == game then
         local age = now - (tonumber(current.StartedAt) or now)
         if age < 15 or (age < 60 and env.ScriptLoaded ~= true) then
@@ -43,9 +42,6 @@ local function HasRunningToxHub()
     and notifGui.Parent then
         return true
     end
-    -- Some executors keep getgenv() between teleports: the "active" flag from the
-    -- previous game made Join think ToxHub was still running here, so it waited on the
-    -- "already running" prompt and nothing loaded. Only count it for THIS game.
     if getgenv().ToxHubActive == true
     and getgenv().Destroyed ~= true
     and getgenv().ToxHubGame == game then
@@ -303,14 +299,11 @@ getgenv().Destroyed = false
 Destroyed = false
 getgenv().__ToxHubReexecCancelled = nil
 
-----------------------------------------------------------------------
--- TOXHUB KEY SYSTEM ("Tox-BetaUsers")
-----------------------------------------------------------------------
 local VALID_KEY = "Tox-BetaUsers"
 local KEY_FILENAME = "ToxHub_Key.txt"
 local DISCORD_URL = "https://discord.com/invite/A7tZ9VbVvM"
 
-local LEGACY_KEY_FILENAME = "ToxHud_Key.txt"   -- old name, read so nobody has to type the key again
+local LEGACY_KEY_FILENAME = "ToxHud_Key.txt"
 
 local function ReadSavedKey()
     if isfile and readfile and not isfile(KEY_FILENAME) and isfile(LEGACY_KEY_FILENAME) then

@@ -607,7 +607,6 @@ local function CleanToxChatDisplayName(displayName)
     return name
 end
 
-
 local function GetToxChatRole()
     local roleGetter =
         getgenv().GetToxRole
@@ -649,7 +648,6 @@ local function GetToxChatDisplayName()
         .. " • "
         .. GetToxChatRole()
 end
-
 
 local function ReadRelayResponse(
     response

@@ -339,8 +339,6 @@ AddAnnounceLine("+ Fly Bypass, Walk Fling & No Fall Damage reworked", false)
 AddAnnounceLine("+ Flies: Space up / Ctrl down everywhere", false)
 AddAnnounceLine("+ MM2 Auto Farm & many bug fixes", false)
 
--- Live changelog: replaces the static text above with the latest commits of the
--- ToxHub repo, so it updates by itself on every push. Falls back to the static text.
 task.spawn(function()
     local HttpService = game:GetService("HttpService")
     local url = "https://api.github.com/repos/BG-0o/Scripts/commits?per_page=25"
@@ -367,10 +365,8 @@ task.spawn(function()
         local message = commit and tostring(commit.message or "") or ""
         local firstLine = string.match(message, "^[^\n]+") or ""
         local kind = string.lower(string.match(firstLine, "^(%a+)") or "")
-        -- skip housekeeping / merge commits
         if firstLine ~= "" and kind ~= "chore" and kind ~= "merge" and kind ~= "docs" then
             newestDate = newestDate or (commit.author and commit.author.date)
-            -- "fix(walkfling): only apply ..." -> "Walkfling: only apply ..."
             local scope, rest = string.match(firstLine, "^%a+%(([^%)]+)%)!?:%s*(.+)$")
             if not rest then
                 rest = string.match(firstLine, "^%a+!?:%s*(.+)$") or firstLine

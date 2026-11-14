@@ -12,7 +12,7 @@ local TrackGuiPosition = function(...) if env.TrackGuiPosition then return env.T
 local Main = UI.Main or env.Main
 local ChatPage = UI.ChatPage or env.ChatPage
 local JoinPage = UI.JoinPage or env.JoinPage
-do 
+do
 local ToxChatGui = Instance.new("Frame")
 ToxChatGui.Name = "ToxChatFrame"
 ToxChatGui.Size = UDim2.new(1, 0, 1, 0)

@@ -61,7 +61,6 @@ if env.ToxMM2CoreReady ~= true then
     error("[ToxHub MM2 Loader Error]: core did not initialize")
 end
 
--- MM2 UI layer restored after ModuleMM2 core initializes.
 local function CreateMM2Section(
     text
 )
@@ -1006,7 +1005,6 @@ CreateButton(
     end
 )
 
-
 local AutoKnifeLastAttempt = 0
 local AutoShootLastAttempt = 0
 local AutoGrabAttemptedDrops = setmetatable({}, {__mode = "k"})
@@ -1098,7 +1096,6 @@ task.spawn(function()
     end
 end)
 
-
 local LastManualShootInput = 0
 
 AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -1157,7 +1154,6 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
         GrabGun()
     end
 end))
-
 
 getgenv().ToxMM2Cleanup = function()
     getgenv().ToxMM2ModuleLoadedJobId = nil
@@ -1250,7 +1246,6 @@ getgenv().ToxMM2ModuleVersion =
 
 getgenv().ToxMM2ModulePage =
     GamePage
-
 
 env.ToxMM2LoaderJobId = game.JobId
 env.ToxMM2LoaderVersion = loaderVersion

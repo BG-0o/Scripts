@@ -97,7 +97,6 @@ local function NDSCreateToggleWithSlider(Name, Page, MinVal, MaxVal, DefaultTogg
     if fn then
         return TrackNDSControl(fn(Name, Page, MinVal, MaxVal, DefaultToggle, DefaultVal, Suffix, CallbackToggle, CallbackValue, SyncKey))
     else
-        -- typed-value control takes a different argument order
         return TrackNDSControl(CreateToggleWithValue(Name, Page, DefaultToggle, DefaultVal, CallbackToggle, CallbackValue, SyncKey))
     end
 end
@@ -850,7 +849,6 @@ local function StartNDSNoFall()
             if character and humanoid and humanoid.Health > 0 and root then
                 local velocity = root.AssemblyLinearVelocity
 
-                -- Anti-fall damage protection: cap downward speed (strength = No Fall Damage %)
                 local maxFall = getgenv().ToxGetNoFallMaxSpeed and getgenv().ToxGetNoFallMaxSpeed()
                     or (15 + math.clamp(tonumber(Settings.NoFallSpeed) or 50, 0, 100) * 0.85)
                 if velocity.Y < -maxFall then
@@ -1545,8 +1543,6 @@ local function NDSIsIslandRock(object)
         return false
     end
 
-    -- The island (and its rocks) is NOT inside workspace.Structure (that is only the
-    -- map building), so the old check skipped every island rock once a map loaded.
     for _, p in ipairs(Players:GetPlayers()) do
         if p.Character and object:IsDescendantOf(p.Character) then
             return false
@@ -1555,10 +1551,6 @@ local function NDSIsIslandRock(object)
     return true
 end
 
--- Island Rocks: instead of forcing CanCollide on the rock meshes (their collision shape is
--- irregular, so standing on them made the character glitch/"teleport"), we raycast to the
--- rock surface under the feet and put a flat invisible support there. Same support is used
--- by "Walk on Water".
 local NDSRockSet = setmetatable({}, { __mode = "k" })
 local NDSRockList = {}
 local NDSRockListDirty = true
@@ -1576,7 +1568,7 @@ local function NDSApplyRock(object)
     end
 
     pcall(function()
-        object.CanQuery = true   -- raycasts must see the rock
+        object.CanQuery = true
     end)
 end
 
@@ -1607,7 +1599,7 @@ local function SetNDSIslandRocksCollidable(enabled)
                     if type(value) == "table" then
                         object.CanQuery = value.CanQuery
                     else
-                        object.CanCollide = value   -- left by older versions
+                        object.CanCollide = value
                     end
                 end)
             end
@@ -1632,8 +1624,6 @@ local function NDSIsWaterPart(part)
         or string.find(lower, "ocean", 1, true) ~= nil
 end
 
--- Finds the sea level once per map. Works even if the water part ignores raycasts
--- (CanQuery off), which is why the old raycast-only version let you fall into the void.
 local NDSWaterCache = { Map = false, Level = nil, Time = 0, Notified = false }
 
 local function NDSScanWaterLevel()
@@ -1660,7 +1650,6 @@ local function NDSScanWaterLevel()
     if best then
         return best, bestName
     end
-    -- Fallback: the ocean is usually the biggest flat, non-collidable sheet in the game
     local bestArea = 0
     for _, object in ipairs(workspace:GetDescendants()) do
         if object:IsA("BasePart") and not object.CanCollide
@@ -1682,13 +1671,12 @@ function NDSGetWaterLevel(position, character)
     local now = os.clock()
     if NDSWaterCache.Map ~= map or (not NDSWaterCache.Level and now - NDSWaterCache.Time > 3) then
         if NDSWaterCache.Map ~= map then
-            NDSWaterCache.Notified = false   -- tell the sea level again on a new map
+            NDSWaterCache.Notified = false
         end
         NDSWaterCache.Map = map
         NDSWaterCache.Time = now
         local level, name = NDSScanWaterLevel()
         if not level then
-            -- Terrain water: raycast straight down from high above, water not ignored
             local params = RaycastParams.new()
             params.FilterType = Enum.RaycastFilterType.Exclude
             params.FilterDescendantsInstances = { character, workspace.CurrentCamera, NDSSupportPart }
@@ -1719,7 +1707,6 @@ local function NDSHideSupport(destroy)
             pcall(function() NDSSupportPart:Destroy() end)
             NDSSupportPart = nil
         else
-            -- just park it far away (destroying/recreating every frame made it flicker)
             NDSSupportPart.CFrame = CFrame.new(0, -10000, 0)
         end
     end
@@ -1790,14 +1777,10 @@ local function NDSSupportStep(delta)
     if wantWater then
         local surfaceY = NDSGetWaterLevel(root.Position, character)
         if surfaceY then
-            -- Stand a bit ABOVE the water (legs out of it -> no swimming jitter).
-            -- The support follows you at water level everywhere, so it also catches you
-            -- when you walk off the island (under the island it is just below the ground).
             local surfaceTop = surfaceY + 1
             if feetY >= surfaceTop - 0.6 then
                 bestY = math.max(bestY or -math.huge, surfaceTop)
             elseif feetY >= surfaceY - 6 then
-                -- sunk a little: float up smoothly instead of popping out
                 root.AssemblyLinearVelocity = Vector3.new(velocity.X, math.max(velocity.Y, 24), velocity.Z)
             end
         end
@@ -1872,11 +1855,6 @@ local function SetNDSMuteCheer(enabled)
     end
 end
 
-
--- ==============================================================================
--- MUTE GAME SOUNDS: every game Sound goes to volume 0 (disasters, wind, music, alarms...).
--- Voice chat is not a Sound instance, so it keeps working. ToxHub's own sounds are kept.
--- ==============================================================================
 local NDSMutedSounds = setmetatable({}, { __mode = "k" })
 
 local function NDSIsToxSound(sound)
@@ -1905,7 +1883,6 @@ local function NDSMuteSound(sound)
     local entry = { Volume = sound.Volume }
     NDSMutedSounds[sound] = entry
     pcall(function() sound.Volume = 0 end)
-    -- the game often resets Volume when it plays a sound again
     entry.Conn = sound:GetPropertyChangedSignal("Volume"):Connect(function()
         if Settings.NDSMuteGameSounds and sound.Volume ~= 0 then
             entry.Volume = sound.Volume
@@ -1931,10 +1908,6 @@ local function SetNDSMuteGameSounds(enabled)
     end
 end
 
--- ==============================================================================
--- CLEAN SCREEN: removes weather/disaster screen effects (fog, atmosphere haze, blur,
--- color tint, clouds, wind/rain/snow/sand particles). Restores everything when off.
--- ==============================================================================
 local NDSCleanDefaults = setmetatable({}, { __mode = "k" })
 local NDSCleanLighting = nil
 local NDS_WEATHER_WORDS = { "wind", "rain", "snow", "blizzard", "sand", "dust", "fog", "storm", "cloud", "hail", "acid", "mist", "haze" }
@@ -1945,11 +1918,8 @@ local function NDSIsWeatherEffect(object)
     end
     local camera = workspace.CurrentCamera
     if camera and object:IsDescendantOf(camera) then
-        return true   -- effects glued to the camera = screen effects
+        return true
     end
-    -- Weather emitters are often attached to YOUR character (sandstorm follows you).
-    -- Inside a character only look at the names below the character model, so a player
-    -- called "Sandra"/"Rainbow" doesn't count.
     local names = {}
     local current = object
     local depth = 0
@@ -1996,14 +1966,12 @@ local function NDSApplyCleanScreen()
         if string.sub(object.Name, 1, 3) ~= "Tox" then
             pcall(function()
                 if object:IsA("Atmosphere") then
-                    -- thin the storm air but keep the normal sky look (not fullbright)
                     NDSCleanSet(object, "Density", math.min(object.Density, 0.3))
                     NDSCleanSet(object, "Haze", math.min(object.Haze, 1))
                     NDSCleanSet(object, "Glare", math.min(object.Glare, 1))
                 elseif object:IsA("BlurEffect") or object:IsA("DepthOfFieldEffect") then
                     NDSCleanSet(object, "Enabled", false)
                 elseif object:IsA("ColorCorrectionEffect") then
-                    -- remove only strong disaster tints/darkening, keep the normal look
                     local tinted = object.TintColor.R < 0.9 or object.TintColor.G < 0.9 or object.TintColor.B < 0.9
                     if tinted or object.Brightness < -0.05 or object.Contrast > 0.3 then
                         NDSCleanSet(object, "Enabled", false)
@@ -2016,7 +1984,6 @@ local function NDSApplyCleanScreen()
         local clouds = workspace.Terrain:FindFirstChildOfClass("Clouds")
         if clouds then NDSCleanSet(clouds, "Enabled", false) end
     end)
-    -- every particle/beam/trail anywhere (map, disaster models, characters, camera)
     for _, object in ipairs(workspace:GetDescendants()) do
         if (object:IsA("ParticleEmitter") or object:IsA("Beam") or object:IsA("Trail"))
         and NDSIsWeatherEffect(object) then
@@ -2024,8 +1991,6 @@ local function NDSApplyCleanScreen()
         end
     end
 
-    -- Wind / sandstorm / rain "streak" walls: big non-collidable parts with scrolling
-    -- textures around the map or glued to the camera. Hide the part and its textures.
     local characters = {}
     for _, p in ipairs(Players:GetPlayers()) do
         if p.Character then characters[#characters + 1] = p.Character end
@@ -2082,7 +2047,6 @@ local function NDSApplyCleanScreen()
         end
     end
 
-    -- Screen overlays the game puts in the PlayerGui for weather (tint / dust images)
     local playerGui = Player:FindFirstChildOfClass("PlayerGui")
     if playerGui then
         for _, gui in ipairs(playerGui:GetChildren()) do
@@ -2123,7 +2087,6 @@ local function SetNDSCleanScreen(enabled)
 end
 
 do
-    -- disasters change lighting/effects every round: re-apply twice a second
     local cleanClock = 0
     TrackNDSExtraConnection(RunService.Heartbeat:Connect(function(delta)
         if not Settings.NDSCleanScreen then
@@ -2144,7 +2107,6 @@ local function NDSDetectDisaster(text)
         return nil
     end
 
-    -- Canonical name map (from SurvivalTag.Value)
     local canonical = {
         ["acid rain"] = "Acid Rain",
         ["blizzard"] = "Blizzard",
@@ -2165,7 +2127,6 @@ local function NDSDetectDisaster(text)
         return canonical[lower]
     end
 
-    -- Warning text pattern detection (from PlayerGui text labels and Status banner)
     if string.find(lower, "tsunami") or string.find(lower, "higher ground") or string.find(lower, "tidal wave") then
         return "Tsunami"
     elseif string.find(lower, "flash flood") or (string.find(lower, "flood") and not string.find(lower, "light")) then
@@ -2229,7 +2190,6 @@ local function NDSScanDisasters()
         return
     end
 
-    -- 1. Check LocalPlayer's SurvivalTag first (immediate RNG server selection upon round spawn)
     local myChar = Player.Character
     if myChar then
         local myTag = myChar:FindFirstChild("SurvivalTag")
@@ -2243,7 +2203,6 @@ local function NDSScanDisasters()
         end
     end
 
-    -- 2. Check PlayerGui.MainGui (Status label & official Disaster Warning banner)
     local pg = Player:FindFirstChildOfClass("PlayerGui")
     local mainGui = pg and pg:FindFirstChild("MainGui")
     if mainGui then
@@ -2264,7 +2223,6 @@ local function NDSScanDisasters()
             end
         end
 
-        -- Check descendants of MainGui specifically (ignoring chat, ToxHub, foreign notifications)
         for _, obj in ipairs(mainGui:GetDescendants()) do
             if obj:IsA("TextLabel") and obj.Visible then
                 local text = tostring(obj.Text or "")
@@ -2279,7 +2237,6 @@ local function NDSScanDisasters()
         end
     end
 
-    -- 3. Spectator fallback: Only check players who are ALIVE and ON THE ISLAND (never AFK in lobby tower)
     local islandCenter = Vector3.new(-2, 45, 10)
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= Player and plr.Character then
@@ -2467,8 +2424,6 @@ end
 local function InteractAll()
     local count = 0
 
-    -- Only the current round map (workspace.Structure). Scanning all of workspace also
-    -- fired the lobby prompts/click detectors (shop menus, ad video, etc).
     local map = workspace:FindFirstChild("Structure")
     if not map then
         if CustomNotify then
@@ -2518,8 +2473,6 @@ TrackNDSExtraConnection(workspace.DescendantAdded:Connect(function(object)
     end
 end))
 
--- Virus effects are often created first and renamed/parented later, so DescendantAdded
--- misses them: rescan the likely places every 1.5s while the option is on.
 do
     local virusClock = 0
     TrackNDSExtraConnection(RunService.Heartbeat:Connect(function(delta)
@@ -2594,7 +2547,6 @@ TrackNDSExtraConnection(RunService.Heartbeat:Connect(function()
         return
     end
 
-    -- Combat module already runs Ultra Instinct (with the ground circle); avoid double teleports
     if getgenv().ToxCombatLoaded and type(getgenv().ToxUltraInstinctStep) == "function" then
         return
     end
@@ -2654,7 +2606,6 @@ TrackNDSExtraConnection(RunService.Heartbeat:Connect(function()
     end
 end))
 
-
 CreateNDSSection("SURVIVAL")
 
 NDSCreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
@@ -2667,7 +2618,6 @@ NDSCreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
     end
 end, "NDSAutoWin")
 
--- % = how fast you can fall (0% = very slow float, 100% = almost normal fall)
 NDSCreateToggleWithSlider("No Fall Damage", GamePage, 0, 100, Settings.NoFallDamage, Settings.NoFallSpeed or 50, "%", function(v)
     SetShared("NoFallDamage", v)
 end, function(val)
@@ -2720,7 +2670,6 @@ end, function(value)
 end, "NDSWaterFly")
 
 NDSCreateToggle("Walk on Water", GamePage, Settings.NDSWaterWalk == true, function(v)
-    -- Invisible flat support on the water surface under your feet (turn off to swim)
     Settings.NDSWaterWalk = v == true
 end, "NDSWaterWalk")
 
@@ -2753,7 +2702,6 @@ end, function(val)
     end
 end, "UltraInstinct")
 
--- Walks away from nearby players (logic lives in Universal/Combat.lua)
 NDSCreateToggleWithSlider("Anti Social", GamePage, 5, 60, Settings.AntiSocial == true, Settings.AntiSocialRange or 20, " studs", function(v)
     Settings.AntiSocial = v == true
     if SyncToggleVisuals then
@@ -2825,12 +2773,10 @@ end, "NDSRemoveBarbedWire")
 CreateNDSSection("VISUAL & AUDIO")
 
 NDSCreateToggle("Clean Screen", GamePage, Settings.NDSCleanScreen == true, function(v)
-    -- no fog / haze / blur / tint / clouds / wind-rain-snow-sand particles
     SetNDSCleanScreen(v)
 end, "NDSCleanScreen")
 
 NDSCreateToggle("Mute Game Sounds", GamePage, Settings.NDSMuteGameSounds == true, function(v)
-    -- every game sound (disasters, wind, alarms...). Voice chat keeps working.
     SetNDSMuteGameSounds(v)
 end, "NDSMuteGameSounds")
 

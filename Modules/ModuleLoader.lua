@@ -77,7 +77,6 @@ if not detected and getgenv().ResolveCurrentGameModule then
     getgenv().CurrentGameModule = detected
 end
 
--- Start concurrent pre-fetch of Universal modules, Chat, Systems, and Game module
 local prefetched = {}
 local function StartFetch(key, url)
     task.spawn(function()

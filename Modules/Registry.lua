@@ -105,7 +105,6 @@ local GameModuleRegistry = {
     }
 }
 
--- Mirror string keys into registry for robust executor type-matching
 local stringKeyMirrors = {}
 for k, v in pairs(GameModuleRegistry) do
     stringKeyMirrors[tostring(k)] = v

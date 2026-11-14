@@ -1,7 +1,3 @@
---[========================================================================[
-    ToxHub Game Module: BINGO (50 Player BINGO!)
-    Version: 2026-11-10-bingo-native-v2
-]========================================================================]
 do
     local isTarget = (game.PlaceId == 131479356121251 or game.GameId == 131479356121251 or tostring(game.PlaceId) == "131479356121251")
     local curMod = getgenv and getgenv().CurrentGameModule
@@ -16,7 +12,6 @@ end
 local RunBINGOCommunityScript = nil
 do
     local function CommunityEntry(...)
--- [TOXHUB_ORIGINAL_PAYLOAD_START]
 local gJ
 local gn
 local VirtualUser
@@ -950,7 +945,6 @@ g6_4:AddButton("Import Config from Clipboard Text", onImportConfigFromClipboardT
 gV:LoadAutoloadConfig()
 gm(gQ.AntiGameplayPause.Value)
 
--- [TOXHUB_ORIGINAL_PAYLOAD_END]
     end
     RunBINGOCommunityScript = CommunityEntry
 end

@@ -409,7 +409,7 @@ getgenv().EnsureGameTabCreated = function(moduleData)
     if not moduleData or not moduleData.Ready then return nil end
     getgenv().CurrentGameModule = moduleData
     getgenv().ToxPageNamesByPage = getgenv().ToxPageNamesByPage or {}
-    
+
     local page = getgenv().GamePage
     if not page then
         local shortName = moduleData.ShortName or "Game"
@@ -855,7 +855,6 @@ do
         ColorPickerModal.Visible = false
     end)
 
-    -- 2D Saturation / Value square
     local SVBox = Instance.new("TextButton")
     SVBox.Name = "SVBox"
     SVBox.Size = UDim2.new(0, 260, 0, 180)
@@ -913,7 +912,6 @@ do
     local svkdCorner = Instance.new("UICorner") svkdCorner.CornerRadius = UDim.new(1, 0) svkdCorner.Parent = svkDot
     local svkdStroke = Instance.new("UIStroke") svkdStroke.Color = Color3.fromRGB(15, 15, 20) svkdStroke.Thickness = 1.5 svkdStroke.Parent = svkDot
 
-    -- Vertical full-spectrum Hue bar
     local HueBar = Instance.new("TextButton")
     HueBar.Name = "HueBar"
     HueBar.Size = UDim2.new(0, 24, 0, 180)
@@ -950,7 +948,6 @@ do
     local hkCorner = Instance.new("UICorner") hkCorner.CornerRadius = UDim.new(1, 0) hkCorner.Parent = HueKnob
     local hkStroke = Instance.new("UIStroke") hkStroke.Color = Color3.fromRGB(20, 20, 26) hkStroke.Thickness = 1.5 hkStroke.Parent = HueKnob
 
-    -- Preview + Hex + RGB readout row
     local CPPreview = Instance.new("Frame")
     CPPreview.Size = UDim2.new(0, 52, 0, 30)
     CPPreview.Position = UDim2.new(0, 14, 0, 232)
@@ -993,7 +990,6 @@ do
     RegisterThemedObject(RGBLabel, "BackgroundColor3", "Element")
     RegisterThemedObject(RGBLabel, "TextColor3", "DimText")
 
-    -- Quick Swatches
     local PresetsContainer = Instance.new("Frame")
     PresetsContainer.Size = UDim2.new(1, -28, 0, 26)
     PresetsContainer.Position = UDim2.new(0, 14, 0, 274)

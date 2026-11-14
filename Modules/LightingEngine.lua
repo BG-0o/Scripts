@@ -28,8 +28,6 @@ local MAIN_COLOR = env.MAIN_COLOR or Color3.fromRGB(0, 170, 255)
 local SavedWaypoints = env.SavedWaypoints or {}
 local SavedIDs = env.SavedIDs or {}
 local function MakeDraggable(...) if env.MakeDraggable then return env.MakeDraggable(...) end end
--- Window title bars are square frames on top of a rounded window: their square corners
--- poked out of the rounded edge. Round the bar's top and fill its bottom corners.
 local function RoundTopBar(bar)
     if not bar or bar:FindFirstChild("ToxCornerFiller") then return end
     local corner = Instance.new("UICorner")

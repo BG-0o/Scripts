@@ -993,7 +993,7 @@ local function RefreshQuickJoinGames()
         idLabel.TextXAlignment = Enum.TextXAlignment.Left
         idLabel.Parent = row
         local statusColor = Color3.fromRGB(50, 230, 100)
-        local statusText = "ONLINE" 
+        local statusText = "ONLINE"
         local statusDot = Instance.new("Frame")
         statusDot.Size = UDim2.new(0, 7, 0, 7)
         statusDot.Position = UDim2.new(1, -78, 0, 10)

@@ -57,7 +57,6 @@ else
     end, "WalkFling")
 end
 if toggleWithSlider then
-    -- % = how fast you can fall (0% = very slow float, 100% = almost normal fall)
     local control = toggleWithSlider("No Fall Damage", FlingPage, 0, 100, Settings.NoFallDamage, Settings.NoFallSpeed or 50, "%", function(v)
         if getgenv().ToxSetSharedOption then getgenv().ToxSetSharedOption("NoFallDamage", v) end
     end, function(val)
@@ -284,25 +283,17 @@ CreateInputWithTwoButtons(
 )
 CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
 
-
--- ==============================================================================
--- TOX MAGNET: pulls the unanchored parts around you and moves them in formations.
--- Real for everyone (not visual): only moves parts YOUR client simulates (network
--- ownership). Roblox gives you the parts near you; it also tries to raise the
--- simulation radius when the executor allows it, and keeps the parts "awake".
--- All options live in the "Tox Magnet" window.
--- ==============================================================================
 Settings.MagnetMode = Settings.MagnetMode or "Orbit"
 Settings.PartMagnetRange = tonumber(Settings.PartMagnetRange) or 80
 Settings.MagnetRadius = tonumber(Settings.MagnetRadius) or 10
 Settings.MagnetSpeed = tonumber(Settings.MagnetSpeed) or 3
 Settings.MagnetMaxParts = tonumber(Settings.MagnetMaxParts) or 70
-Settings.PartMagnet = false   -- never auto-starts on load
+Settings.PartMagnet = false
 
 local MagnetGui = nil
 do
     local RunService = game:GetService("RunService")
-    local Controlled = {}      -- part -> { Att, Align, Index, CanCollide }
+    local Controlled = {}
     local controlledCount = 0
     local scanClock, radiusClock = 0, 0
     local nextIndex = 0
@@ -344,7 +335,7 @@ do
         if not part:IsA("BasePart") or part.Anchored or Controlled[part] then return false end
         if string.sub(part.Name, 1, 3) == "Tox" then return false end
         local ok, grounded = pcall(function() return part:IsGrounded() end)
-        if not ok or grounded then return false end      -- welded to something anchored
+        if not ok or grounded then return false end
         local size = part.Size
         if math.max(size.X, size.Y, size.Z) > 80 then return false end
         if IsCharacterPart(part) then return false end
@@ -367,7 +358,7 @@ do
         nextIndex += 1
         Controlled[part] = { Att = att, Align = align, Index = nextIndex, CanCollide = part.CanCollide }
         controlledCount += 1
-        pcall(function() part.CanCollide = false end)   -- so they don't hit you
+        pcall(function() part.CanCollide = false end)
     end
 
     local function TryRaiseSimulationRadius()
@@ -390,20 +381,17 @@ do
         return nil
     end
 
-    -- Formation position for part number i (of n) at time t
     local function FormationPosition(mode, i, n, t, root)
         local radius = math.max(tonumber(Settings.MagnetRadius) or 10, 1)
         local speed = tonumber(Settings.MagnetSpeed) or 3
         local center = root.Position
         if mode == "Ball" then
-            -- sphere above your head
             local y = 1 - (i - 0.5) / n * 2
             local r = math.sqrt(math.max(1 - y * y, 0))
             local theta = i * 2.399963 + t * speed * 0.4
             center = center + Vector3.new(0, radius + 4, 0)
             return center + Vector3.new(math.cos(theta) * r, y, math.sin(theta) * r) * (radius * 0.6)
         elseif mode == "Wall" then
-            -- shield in front of you
             local cols = math.max(math.ceil(math.sqrt(n)), 1)
             local col = (i - 1) % cols
             local row = math.floor((i - 1) / cols)
@@ -424,9 +412,7 @@ do
                 local rr = 2 + (i % 3)
                 return center + Vector3.new(math.cos(angle) * rr, ((i % 5) - 2) * 0.9, math.sin(angle) * rr)
             end
-            -- no target: fall back to orbit
         end
-        -- Orbit (default): spinning rings around you
         local ring = i % 4
         local rr = radius * 0.7 + ring * (radius * 0.3)
         local angle = i * 2.399963 + t * speed * (0.4 - ring * 0.05)
@@ -461,7 +447,6 @@ do
                     Release(part)
                 end
             end
-            -- too many (Max Parts lowered): let some go
             if controlledCount > maxParts then
                 for part in pairs(Controlled) do
                     if controlledCount <= maxParts then break end
@@ -489,7 +474,6 @@ do
 
         local t = os.clock()
         local mode = tostring(Settings.MagnetMode or "Orbit")
-        -- stable numbering 1..n for the formation
         local ordered = {}
         for part, data in pairs(Controlled) do
             ordered[#ordered + 1] = { part, data }
@@ -500,13 +484,11 @@ do
             local part, data = entry[1], entry[2]
             data.Align.Position = FormationPosition(mode, i, n, t, root)
             pcall(function()
-                -- keeps the part "awake" so the server doesn't take ownership back
                 part.AssemblyAngularVelocity = Vector3.new(0, 4, 0)
             end)
         end
     end))
 
-    -- ---------------------------------------------------------------- window
     local Theme = env.Theme or {}
     local RegisterThemedObject = env.RegisterThemedObject or function() end
     local function Themed(obj, prop, key, fallback)
@@ -542,7 +524,6 @@ do
         Corner(b, 4) Stroke(b) b.Parent = parent
         return b
     end
-    -- small slider: label + value + bar; also accepts typed values (click the number)
     local function Slider(text, y, minV, maxV, getValue, setValue, suffix, parent)
         Label(text, UDim2.new(0.5, 0, 0, 16), UDim2.new(0, 10, 0, y), parent)
         local valueBox = Instance.new("TextBox")
@@ -624,7 +605,6 @@ do
     local close = Button("X", UDim2.new(0, 22, 0, 20), UDim2.new(1, -26, 0.5, -10), top)
     close.MouseButton1Click:Connect(function() gui.Visible = false end)
 
-    -- On / Off + Release
     local power = Button("Magnet: OFF", UDim2.new(0.5, -14, 0, 28), UDim2.new(0, 10, 0, 40), gui)
     local release = Button("Release All", UDim2.new(0.5, -14, 0, 28), UDim2.new(0.5, 4, 0, 40), gui)
     local function PaintPower()
@@ -645,7 +625,6 @@ do
 
     statusLabel = Label("OFF", UDim2.new(1, -20, 0, 14), UDim2.new(0, 10, 0, 72), gui, true)
 
-    -- Modes
     Label("Mode", UDim2.new(1, -20, 0, 14), UDim2.new(0, 10, 0, 90), gui)
     local modes = { "Orbit", "Ball", "Wall", "Mouse", "Attack" }
     local modeButtons = {}
@@ -668,7 +647,6 @@ do
     end
     PaintModes()
 
-    -- Target (Attack mode)
     Label("Attack target", UDim2.new(0.4, 0, 0, 24), UDim2.new(0, 10, 0, 136), gui)
     magnetTargetBox = Instance.new("TextBox")
     magnetTargetBox.Size = UDim2.new(0.6, -20, 0, 24) magnetTargetBox.Position = UDim2.new(0.4, 10, 0, 136)
@@ -681,7 +659,6 @@ do
     env.ToxNamedInputs = env.ToxNamedInputs or {}
     env.ToxNamedInputs["Magnet"] = magnetTargetBox
 
-    -- Sliders
     Slider("Range (grab parts within)", 170, 5, 300, function() return Settings.PartMagnetRange end,
         function(v) Settings.PartMagnetRange = v end, " studs", gui)
     Slider("Formation size", 222, 2, 60, function() return Settings.MagnetRadius end,
@@ -699,7 +676,6 @@ do
         PaintPower()
     end
 
-    -- follow main UI visibility + minimize button (same as Tox Avatar Items)
     task.spawn(function()
         local minimizeDone, mainHooked = false, false
         for _ = 1, 100 do
@@ -731,10 +707,6 @@ do
     end)
 end
 
--- ==============================================================================
--- Shared player lookup (same matching as Fling / Teleport: name or display name)
--- ==============================================================================
--- forward declared: used by Select Player, built further below
 local AvatarItemsGui = nil
 local AvatarItemsLoad = nil
 
@@ -750,9 +722,6 @@ local function FindPlayerByInput(text)
     return nil
 end
 
--- ==============================================================================
--- SPECTATE: camera follows the chosen player
--- ==============================================================================
 local SpectateTarget = nil
 local function StopSpectate(silent)
     SpectateTarget = nil
@@ -787,7 +756,6 @@ AddConnection(game:GetService("RunService").Heartbeat:Connect(function()
         StopSpectate(true)
         return CustomNotify("Spectate stopped • player left", Color3.fromRGB(255, 180, 70))
     end
-    -- keep following after they respawn
     local hum = SpectateTarget.Character and SpectateTarget.Character:FindFirstChildOfClass("Humanoid")
     local camera = workspace.CurrentCamera
     if hum and camera and camera.CameraSubject ~= hum then
@@ -795,16 +763,12 @@ AddConnection(game:GetService("RunService").Heartbeat:Connect(function()
     end
 end))
 
--- ==============================================================================
--- UP PLAYER: goes under the player's feet and rises, lifting them with your head.
--- Speed (studs/s) and Height (studs) are sliders. Then returns you to where you were.
--- ==============================================================================
 Settings.UpPlayerSpeed = tonumber(Settings.UpPlayerSpeed) or 30
 Settings.UpPlayerHeight = tonumber(Settings.UpPlayerHeight) or 50
 local UpPlayerGeneration = 0
 
 local UpPlayerRunning = false
-local UpPlayerMode = "up"   -- "up" = rising/holding, "down" = bringing them back down
+local UpPlayerMode = "up"
 
 local function StopUpPlayer()
     UpPlayerGeneration = UpPlayerGeneration + 1
@@ -826,20 +790,17 @@ local function RunUpPlayer(target)
     local startCF = root.CFrame
     local RunService = game:GetService("RunService")
 
-    -- our root sits so the top of our head touches their feet
     local UNDER = 5.6
     local currentY = tRoot.Position.Y - UNDER
     local reachedTop = false
 
     CustomNotify("Up Player • " .. target.DisplayName .. " (Down to bring back)", Color3.fromRGB(100, 255, 160))
 
-    -- make sure we can actually push them
     local hadNoclip = Settings.Noclip
     Settings.Noclip = false
     local yaw = select(2, root.CFrame:ToOrientation())
     local baseY = currentY
 
-    -- Only goes UP (never back down), then stays in the air until you press Stop
     while generation == UpPlayerGeneration and not env.Destroyed do
         local dt = RunService.Heartbeat:Wait()
         if not root.Parent or humanoid.Health <= 0 or not target.Parent then
@@ -851,14 +812,12 @@ local function RunUpPlayer(target)
         end
         if env.AllowToxTeleport then env.AllowToxTeleport(0.3, "Up Player") end
 
-        -- sliders can be changed while it runs
         local speed = math.max(tonumber(Settings.UpPlayerSpeed) or 30, 1)
         local wantedTop = math.max(baseY + math.max(tonumber(Settings.UpPlayerHeight) or 50, 1), currentY)
         if reachedTop and currentY < wantedTop - 0.05 then
-            reachedTop = false   -- Height slider was raised while holding: keep going up
+            reachedTop = false
         end
         if UpPlayerMode == "down" then
-            -- bring them back down at the same speed, then finish
             currentY = math.max(currentY - speed * dt, baseY)
             root.CFrame = CFrame.new(tRoot.Position.X, currentY, tRoot.Position.Z) * CFrame.Angles(0, yaw, 0)
             root.AssemblyLinearVelocity = Vector3.new(0, -speed, 0)
@@ -890,7 +849,6 @@ local function RunUpPlayer(target)
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
         if Settings.UpPlayerReturn ~= false then
-            -- back to where you were when you pressed Up
             if env.AllowToxTeleport then env.AllowToxTeleport(1, "Up Player return") end
             if env.ToxSafeTeleportToCFrame then
                 pcall(env.ToxSafeTeleportToCFrame, startCF, false)
@@ -918,7 +876,6 @@ local UpPlayerBox = CreateInputWithTwoButtons("Up Player", FlingPage, "", "Up", 
     task.spawn(RunUpPlayer, target)
 end)
 
--- Third button: instant Stop (cancels right away, no lowering)
 if UpPlayerBox and UpPlayerBox:IsA("GuiObject") then
     local stopBtn = Instance.new("TextButton")
     stopBtn.Name = "ToxUpPlayerStop"
@@ -947,7 +904,6 @@ if UpPlayerBox and UpPlayerBox:IsA("GuiObject") then
     end)
 end
 
--- Speed / Height sliders live INSIDE the Up Player option (one block instead of 3 rows)
 if type(env.CreateSlider) == "function" and UpPlayerBox and UpPlayerBox:IsA("GuiObject") then
     local ROW = 42
     local speedSlider = env.CreateSlider("Speed", FlingPage, 5, 200, Settings.UpPlayerSpeed, " studs/s", function(v)
@@ -959,7 +915,6 @@ if type(env.CreateSlider) == "function" and UpPlayerBox and UpPlayerBox:IsA("Gui
         if env.AutoSaveConfiguration then env.AutoSaveConfiguration() end
     end, "UpPlayerHeight", true)
 
-    -- keep the original row (name, box, buttons) pinned to the top
     for _, child in ipairs(UpPlayerBox:GetChildren()) do
         if child:IsA("GuiObject") then
             if child.Position.Y.Scale == 0.5 then
@@ -981,7 +936,6 @@ if type(env.CreateSlider) == "function" and UpPlayerBox and UpPlayerBox:IsA("Gui
             y = y + slider.Size.Y.Offset + 6
         end
     end
-    -- "Return on Stop" inside the same block
     if Settings.UpPlayerReturn == nil then Settings.UpPlayerReturn = true end
     local createToggleRaw = (env.ToxUniversalRawCreators and env.ToxUniversalRawCreators.CreateToggle) or CreateToggle
     local returnToggle = createToggleRaw("Return to my spot after Down", FlingPage, Settings.UpPlayerReturn ~= false, function(v)
@@ -998,10 +952,6 @@ if type(env.CreateSlider) == "function" and UpPlayerBox and UpPlayerBox:IsA("Gui
     UpPlayerBox.Size = UDim2.new(UpPlayerBox.Size.X.Scale, UpPlayerBox.Size.X.Offset, 0, y + 2)
 end
 
--- ==============================================================================
--- SELECT PLAYER: hold the key and click someone -> their name goes into
--- Fling / Teleport / Spectate / Up Player boxes.
--- ==============================================================================
 local function GetSelectKeyName()
     local key = Settings.SelectPlayerKey
     if typeof(key) == "EnumItem" then return key.Name end
@@ -1028,7 +978,6 @@ local function GetPlayerUnderMouse()
         if p then return p end
         target = target.Parent
     end
-    -- fallback: closest character to the mouse ray
     local camera = workspace.CurrentCamera
     local loc = UserInputService:GetMouseLocation()
     local ray = camera:ViewportPointToRay(loc.X, loc.Y)
@@ -1071,16 +1020,12 @@ AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     CustomNotify("Selected • " .. target.DisplayName .. " (@" .. target.Name .. ")", Color3.fromRGB(100, 200, 255))
 end))
 
--- ==============================================================================
--- TOX AVATAR ITEMS: window with everything a player is wearing (thumbnail, name,
--- Copy ID, Copy All). Player = typed nick or picked with Select Player.
--- ==============================================================================
 do
     local Theme = env.Theme or {}
     local RegisterThemedObject = env.RegisterThemedObject or function() end
     local MarketplaceService = game:GetService("MarketplaceService")
     local AssetNameCache = {}
-    local AssetPriceCache = {}   -- id -> { Text = "R$ 75", Robux = 75 or nil }
+    local AssetPriceCache = {}
 
     local function DescribePrice(productInfo)
         if type(productInfo) ~= "table" then
@@ -1195,9 +1140,6 @@ do
     local currentIds = {}
     local loadToken = 0
 
-    -- Source: "Server" = what they are wearing right now in this server (also changes
-    -- made with in-game avatar editors / Catalog Avatar Creator), "Roblox" = their real
-    -- saved Roblox avatar.
     local itemSource = "Server"
     local serverTab = Button("Server (now)", UDim2.new(0.5, -12, 0, 24), UDim2.new(0, 8, 0, 72), gui)
     local robloxTab = Button("Roblox (profile)", UDim2.new(0.5, -12, 0, 24), UDim2.new(0.5, 4, 0, 72), gui)
@@ -1341,7 +1283,6 @@ do
                 and (where .. " • " .. #items .. " items • " .. target.DisplayName)
                 or (where .. " • no items found for " .. target.DisplayName)
             status.Text = baseText
-            -- running total of what is buyable right now
             local total, priced, offSale = 0, 0, 0
             local function OnPrice(price)
                 if token ~= loadToken then return end
@@ -1389,10 +1330,8 @@ do
     env.ToxAvatarItemsGui = gui
     env.ToxAvatarItemsLoad = AvatarItemsLoad
 
-    -- Follows the main window by itself: hides when the main UI hides and comes back
-    -- (only if it was open) when the main UI shows again. Plus the "-" minimize button.
     if env.ToxLinkedSubGuis then
-        env.ToxLinkedSubGuis.AvatarItems = nil   -- avoid two systems fighting over Visible
+        env.ToxLinkedSubGuis.AvatarItems = nil
     end
     task.spawn(function()
         local minimizeDone, mainHooked = false, false
@@ -1426,7 +1365,6 @@ do
 end
 CreateButton("Tox Music Player", FlingPage, function() MusicGui.Visible = not MusicGui.Visible end)
 CreateButton("Tox Waypoints", FlingPage, function() WaypointsGui.Visible = not WaypointsGui.Visible end)
--- (Tox Magnet window is opened only from the NDS page)
 CreateButton("Tox Avatar Items", FlingPage, function()
     if AvatarItemsGui then
         AvatarItemsGui.Visible = not AvatarItemsGui.Visible

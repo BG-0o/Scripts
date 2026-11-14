@@ -81,18 +81,18 @@ end
 local SODConnections = {}
 local SODCurrentSection = nil
 local SODSections = {}
-local ItemPrompts = {}        
-local ActiveMonsters = {}     
-local ExitObjects = {}        
-local VentObjects = {}        
-local ClosetObjects = {}      
-local DoorObjects = {}        
-local ItemESPObjects = {}     
-local ExitESPObjects = {}     
-local MonsterESPObjects = {}  
-local PlayerESPObjects = {}   
-local VentESPObjects = {}     
-local ClosetESPObjects = {}   
+local ItemPrompts = {}
+local ActiveMonsters = {}
+local ExitObjects = {}
+local VentObjects = {}
+local ClosetObjects = {}
+local DoorObjects = {}
+local ItemESPObjects = {}
+local ExitESPObjects = {}
+local MonsterESPObjects = {}
+local PlayerESPObjects = {}
+local VentESPObjects = {}
+local ClosetESPObjects = {}
 local SafePlatformModel = nil
 local WarnScreenGui = nil
 local WarnFrame = nil
@@ -307,29 +307,23 @@ local KnownItemRaritiesSorted = {
 local function DetectRarityFromColor(color)
     if not color then return nil end
     local r, g, b = color.R * 255, color.G * 255, color.B * 255
-    -- Purple / Violet / Lavender (Rare in Steal Or Die!)
     if (r > 115 and b > 145 and g < math.max(r, b) * 0.85)
     or (b > 155 and r > 105 and g < 170)
     or (r > 125 and b > 175 and g < 190) then
         return "Rare"
     end
-    -- Magenta / Deep Pink (Epic in Steal Or Die)
     if (r > 200 and b > 160 and g < 110) then
         return "Epic"
     end
-    -- Red (Mythic)
     if r > 180 and g < 100 and b < 100 then
         return "Mythic"
     end
-    -- Gold / Orange / Yellow (Legendary)
     if (r > 190 and g > 120 and b < 100) or (r > 220 and g > 170 and b < 70) then
         return "Legendary"
     end
-    -- Blue / Cyan (Rare fallback if blue)
     if (b > 160 and r < 140 and g < 220) or (b > 180 and g > 90 and r < 100) then
         return "Rare"
     end
-    -- Green (Uncommon)
     if g > 140 and r < 150 and b < 150 then
         return "Uncommon"
     end
@@ -413,7 +407,6 @@ local LootKeywords = {
 local ItemBaseValues = {
     ["vhs tapes"] = 250,
     ["vhs"] = 250,
-    -- Small scraps ($40 - $120)
     ["key"] = 50,
     ["safe key"] = 50,
     ["cup"] = 40,
@@ -477,7 +470,6 @@ local ItemBaseValues = {
     ["gaming headset"] = 160,
     ["power drill"] = 180,
 
-    -- Mid-tier valuables ($200 - $350)
     ["phone"] = 270,
     ["cellphone"] = 270,
     ["smartphone"] = 270,
@@ -506,7 +498,6 @@ local ItemBaseValues = {
     ["ps5"] = 380,
     ["xbox"] = 350,
 
-    -- High-tier scraps ($400 - $800)
     ["lab sample case"] = 460,
     ["sample case"] = 460,
     ["lab sample"] = 460,
@@ -535,7 +526,6 @@ local ItemBaseValues = {
     ["plasma cutter"] = 600,
     ["laser drill"] = 650,
 
-    -- High-end & Relics ($800 - $2500)
     ["urn"] = 700,
     ["vase"] = 750,
     ["ancient vase"] = 1100,
@@ -577,7 +567,6 @@ local ItemBaseValues = {
     ["briefcase of cash"] = 1500,
     ["stack of cash"] = 250,
 
-    -- Mythic & Secret ($2500+)
     ["prototype"] = 2200,
     ["meteorite"] = 2500,
     ["plasma rifle"] = 2600,
@@ -621,13 +610,6 @@ local function InferRarityFromValue(nameLower, value)
     end
     local ratio = value / base
 
-    -- Percentage multiplier over item base value:
-    -- Common:    ~1.0x (base price with variance, ratio < 1.25)
-    -- Uncommon:  ~1.4x (+25% to +65% increase)
-    -- Rare:      ~2.0x (+65% to +135% increase) [Textbook Stack $166 / 80 = 2.07x; Painting $503 / 250 = 2.01x]
-    -- Epic:      ~3.0x (+135% to +280% increase)
-    -- Legendary: ~5.0x to 35x+ (+280%+ increase) [Keyboard $2702 / 80 = 33.7x]
-    -- Mythic:    ~40x+ (extreme rare/secret)
     if ratio >= 40.0 then
         return "Mythic"
     elseif ratio >= 3.8 then
@@ -2063,9 +2045,9 @@ local function GetItemParts(mainPart)
                 local size = p.Size
                 local isHuge = size.X > 5.5 or size.Y > 5.5 or size.Z > 5.5 or size.Magnitude > 8.0
                 local pNameLower = string.lower(p.Name)
-                local isEnvironment = string.find(pNameLower, "floor") or string.find(pNameLower, "wall") 
-                                   or string.find(pNameLower, "ceiling") or string.find(pNameLower, "ground") 
-                                   or string.find(pNameLower, "baseplate") or string.find(pNameLower, "desk") 
+                local isEnvironment = string.find(pNameLower, "floor") or string.find(pNameLower, "wall")
+                                   or string.find(pNameLower, "ceiling") or string.find(pNameLower, "ground")
+                                   or string.find(pNameLower, "baseplate") or string.find(pNameLower, "desk")
                                    or string.find(pNameLower, "table") or string.find(pNameLower, "shelf")
                                    or string.find(pNameLower, "stand") or string.find(pNameLower, "counter")
                                    or string.find(pNameLower, "booth") or string.find(pNameLower, "vip")
@@ -2768,7 +2750,6 @@ local function ClickTargetCard(entry)
     local label = entry.Label
     local card = entry.Card or label
 
-    -- Direct signal invocation across card hierarchy (works unfocused / minimized in background)
     TriggerGuiEvents(label)
     TriggerGuiEvents(card)
     if card and card:IsA("GuiObject") then
@@ -2787,7 +2768,6 @@ local function ClickTargetCard(entry)
         TriggerGuiEvents(btn)
     end
 
-    -- Virtual mouse click fallback if window has active size
     pcall(function()
         local targetObj = btn or card or label
         if targetObj and targetObj:IsA("GuiObject") then
@@ -2892,7 +2872,6 @@ local function StartAutoVoteLoop()
                                 ClickTargetCard(entityEntry)
                             end
 
-                            -- Direct remote RPC backup (works completely headless / alt-tabbed)
                             pcall(function()
                                 local mapFormatted = MapTitleNames[chosenMapName] or chosenMapName
                                 local entFormatted = (targetEntity == "ai") and "AI" or "Player"

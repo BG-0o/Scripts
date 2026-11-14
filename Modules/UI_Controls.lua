@@ -270,20 +270,11 @@ do
     getgenv().ShowToxDropdownOverlay = ShowToxDropdownOverlay
     getgenv().CloseToxDropdownOverlay = CloseToxDropdownOverlay
 end
--- ==============================================================================
--- OPTION KEYBINDS: "[ - ]" button on every toggle (Config > "Keybinds" shows/hides them).
--- Hiding the buttons keeps every bind working. Binds live in Settings.ToxBinds
--- as { [option id] = "KeyCodeName" } and are saved with the config.
--- ==============================================================================
 if type(Settings.ToxBinds) ~= "table" then
     Settings.ToxBinds = {}
 end
 Settings.ShowToxBinds = Settings.ShowToxBinds == true
 
--- Binds are PER GAME: Settings.ToxBinds = { ["game:<GameId>"] = { [option id] = "KeyName" } }.
--- A bind set in NDS (e.g. Fly) must not fire in FTF just because the key was pressed.
--- Old flat binds (from before this change) can't be traced to a game, so they are
--- parked under "_legacy" and stay inactive.
 local ToxBindGameKey = "game:" .. tostring((game.GameId and game.GameId ~= 0) and game.GameId or game.PlaceId)
 local function CurrentToxBinds()
     local store = Settings.ToxBinds
@@ -373,7 +364,6 @@ getgenv().SetShowToxBinds = function(value)
     RefreshToxBindButtons()
 end
 
--- Returns { {Id, Name, Key, Active}, ... } for the Keybinds List HUD
 getgenv().GetToxBindList = function()
     local list = {}
     for id, keyName in pairs(CurrentToxBinds()) do
@@ -399,14 +389,6 @@ getgenv().GetToxBindList = function()
     return list
 end
 
---[[ AttachToxBind
-    Container      : the option row
-    Label          : its name label (shrunk while the bind button is shown)
-    LabelSizeDefault / LabelSizeWithBind : UDim2 for both states
-    BindPosition   : UDim2 position of the "[ key ]" button
-    Trigger        : function that flips the option exactly like clicking its switch
-    IsOn           : function returning the current state
-]]
 local function AttachToxBind(Name, SyncKey, Container, Label, LabelSizeDefault, LabelSizeWithBind, BindPosition, Trigger, IsOn)
     local id = GetToxBindId(Name, SyncKey)
     local entry = ToxBindEntries[id]
@@ -457,13 +439,12 @@ local function AttachToxBind(Name, SyncKey, Container, Label, LabelSizeDefault, 
             conn:Disconnect()
             if isKey then
                 if input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.Backspace then
-                    CurrentToxBinds()[id] = nil          -- Esc / Backspace removes the bind
+                    CurrentToxBinds()[id] = nil
                 else
                     CurrentToxBinds()[id] = input.KeyCode.Name
                 end
                 AutoSaveConfiguration()
             end
-            -- mouse click just cancels
             task.defer(function()
                 capturing = false
                 ToxBindCapturing = false
@@ -471,7 +452,6 @@ local function AttachToxBind(Name, SyncKey, Container, Label, LabelSizeDefault, 
             RefreshToxBindButtons()
         end)
     end)
-    -- Right click on the button clears the bind
     BindBtn.MouseButton2Click:Connect(function()
         if getgenv().Destroyed or capturing then return end
         CurrentToxBinds()[id] = nil
@@ -484,14 +464,10 @@ local function AttachToxBind(Name, SyncKey, Container, Label, LabelSizeDefault, 
 end
 UI.AttachToxBind = AttachToxBind
 
--- One global listener fires the bound options (works even with the bind buttons hidden)
 if env.ToxBindInputConn then
     pcall(function() env.ToxBindInputConn:Disconnect() end)
 end
 env.ToxBindInputConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    -- gameProcessed is NOT used: games like MM2 bind many keys to their own actions,
-    -- which marked the key as "processed" and the option bind never fired.
-    -- Typing (chat / any text box) is still ignored through GetFocusedTextBox.
     if getgenv().Destroyed or ToxBindCapturing then return end
     if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
     if UserInputService:GetFocusedTextBox() then return end
@@ -1020,7 +996,6 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
     Label.Parent = Container
     if not risky then RegisterThemedObject(Label, "TextColor3", "Text") else RegisterThemedObject(Label, "TextColor3", "Risky") end
 
-    -- Editable: click the value and type any number (slider still works next to it)
     local ValLabel = Instance.new("TextBox")
     ValLabel.ClearTextOnFocus = true
     ValLabel.PlaceholderText = tostring(curVal)
@@ -1117,7 +1092,6 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
         local num = tonumber(val) or minV
         local clamped
         if allowAboveMax then
-            -- typed values may go past the slider's max (knob just stays at the end)
             clamped = math.max(math.floor(num + 0.5), minV)
         else
             clamped = math.clamp(math.floor(num + 0.5), minV, maxV)
@@ -1178,7 +1152,7 @@ getgenv().CreateToggleWithSlider = function(Name, Page, MinVal, MaxVal, DefaultT
         if getgenv().Destroyed then return end
         local typed = tonumber((string.gsub(ValLabel.Text, "[^%d%.%-]", "")))
         if not typed then
-            applyValueVisual(curVal, true)   -- invalid / empty: restore
+            applyValueVisual(curVal, true)
             return
         end
         applyValueVisual(typed, true)
@@ -1544,7 +1518,6 @@ getgenv().CreateInputWithTwoButtons = function(Name, Page, DefaultText, Btn1Text
     Input.Font = Enum.Font.Gotham
     Input.ClearTextOnFocus = false
     Input.Parent = Box
-    -- Registered by name so "Select Player" can fill the player boxes (Fling, Teleport...)
     getgenv().ToxNamedInputs = getgenv().ToxNamedInputs or {}
     getgenv().ToxNamedInputs[Name] = Input
     local inCorner = Instance.new("UICorner") inCorner.CornerRadius = UDim.new(0, 4) inCorner.Parent = Input

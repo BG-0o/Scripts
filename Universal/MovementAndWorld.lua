@@ -87,7 +87,6 @@ local function SkidFling(TargetPlayer)
     local Handle = Accessory and Accessory:FindFirstChild("Handle")
     if not (Character and Humanoid and RootPart and TCharacter) then return false end
     if THumanoid and THumanoid.Sit then return false end
-    -- One fling at a time: overlapping flings overwrite the return position and the saved FPDH
     if getgenv().ToxFlingBusy and tick() < (tonumber(getgenv().ToxFlingBusyUntil) or 0) then
         return false, "busy"
     end
@@ -112,7 +111,6 @@ local function SkidFling(TargetPlayer)
     ToxActiveFlingTargets[TargetPlayer] = tick() + 4
     do
         local currentFPDH = workspace.FallenPartsDestroyHeight
-        -- Only remember a real value; a previous/overlapping fling may have left it as NaN
         if typeof(currentFPDH) == "number" and currentFPDH == currentFPDH then
             getgenv().FPDH = currentFPDH
         elseif typeof(getgenv().FPDH) ~= "number" or getgenv().FPDH ~= getgenv().FPDH then
@@ -203,9 +201,6 @@ local function SkidFling(TargetPlayer)
     BAV.Parent = RootPart
     Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
 
-    -- Protected: if anything errors mid-fling we must still remove the 9e8 BodyVelocity,
-    -- restore FallenPartsDestroyHeight and bring the player back. Otherwise the player
-    -- gets launched into the void and never dies (FPDH stays NaN) -> "stuck in the middle of nothing".
     local flingOk, flingErr = pcall(function()
         if TRootPart and THead then
             if (TRootPart.Position - THead.Position).Magnitude > 5 then
@@ -233,7 +228,6 @@ local function SkidFling(TargetPlayer)
     local OldPos = FlingStartCFrame
     local returnDeadline = tick() + 2.5
     repeat
-        -- Stop if we died / respawned: the new character spawns normally
         if Player.Character ~= Character or not RootPart.Parent or Humanoid.Health <= 0 then
             break
         end
@@ -418,9 +412,9 @@ local function ExecuteFling(TargetInput)
 end
 getgenv().ToxExecuteFling = ExecuteFling
 local function ExecuteTeleport(TargetInput, mode)
-    if not TargetInput or TargetInput == "" then 
+    if not TargetInput or TargetInput == "" then
         if mode == "LOOP" then Settings.LoopTPTarget = nil CustomNotify("Loop TP Disabled", Color3.fromRGB(255, 100, 100)) end
-        return CustomNotify("Enter username", Color3.fromRGB(255, 100, 100)) 
+        return CustomNotify("Enter username", Color3.fromRGB(255, 100, 100))
     end
     local LowerInput = string.lower(TargetInput)
     local targetObj = nil
@@ -1112,8 +1106,6 @@ end
     U.StopAntiVoid = StopAntiVoid
 end
 do
--- No Fall Damage strength: Settings.NoFallSpeed 0-100%  ->  max fall speed 15..100 studs/s
--- (0% = floats down very slowly, 100% = almost a normal fall)
 local function GetNoFallMaxSpeed()
     local pct = math.clamp(tonumber(Settings.NoFallSpeed) or 50, 0, 100)
     return 15 + pct * 0.85
@@ -1129,9 +1121,6 @@ local function SetWalkFlingImpulse(active)
     getgenv().ToxWalkFlingImpulseActive = active
 end
 
--- Our own "walking" velocity, clamped. Touching a flung player gives us a huge collision
--- impulse; if we reused that raw value every frame we would launch ourselves and die
--- from fall damage (this is what was killing in NDS).
 local function GetSafeWalkVelocity(root, humanoid)
     local vel = root.AssemblyLinearVelocity
     if vel.X ~= vel.X or vel.Y ~= vel.Y or vel.Z ~= vel.Z then
@@ -1145,9 +1134,8 @@ local function GetSafeWalkVelocity(root, humanoid)
     local y = vel.Y
     local maxFall = GetNoFallMaxSpeed()
     if y < -maxFall then
-        y = -maxFall       -- anti fall damage (strength from No Fall Damage %)
+        y = -maxFall
     else
-        -- Upward cap must allow the player's real jump (Jump option can raise JumpPower a lot)
         local jumpVelocity = 50
         pcall(function()
             if humanoid.UseJumpPower then
@@ -1158,7 +1146,7 @@ local function GetSafeWalkVelocity(root, humanoid)
         end)
         local maxUp = math.max(60, jumpVelocity * 1.2)
         if y > maxUp then
-            y = maxUp      -- real jumps still work, no self-launch from collisions
+            y = maxUp
         end
     end
     return Vector3.new(horizontal.X, y, horizontal.Z)
@@ -1184,13 +1172,8 @@ local function SettleCharacterAfterWalkFling()
     end
 end
 
--- ==========================================================================
--- External teleport guard: when the GAME teleports us (round start, spawn...),
--- the server moves a part we own while we are pushing fling velocity / falling,
--- which can kill instantly. Detect jumps we didn't cause and stabilize for a moment.
--- ==========================================================================
-local EXTERNAL_TP_DISTANCE = 30     -- studs in a single frame
-local EXTERNAL_TP_GUARD_TIME = 2.0  -- seconds of protection after a game teleport
+local EXTERNAL_TP_DISTANCE = 30
+local EXTERNAL_TP_GUARD_TIME = 2.0
 local GuardLastRoot = nil
 local GuardLastPos = nil
 getgenv().ToxExternalTeleportUntil = 0
@@ -1241,7 +1224,6 @@ AddConnection(RunService.Heartbeat:Connect(function()
     local justTeleported = CheckExternalTeleport(root)
 
     if justTeleported or IsExternalTeleportGuardActive() then
-        -- Land softly: no leftover fling / fall velocity, no spin, no ragdoll
         pcall(function()
             root.AssemblyLinearVelocity = GetSafeWalkVelocity(root, humanoid)
             root.AssemblyAngularVelocity = Vector3.zero
@@ -1253,19 +1235,16 @@ AddConnection(RunService.Heartbeat:Connect(function()
                 humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
             end)
             if getgenv().SetNDSNoTPAnchor then
-                -- Accept the game's teleport as the new anchor instead of fighting it
                 pcall(getgenv().SetNDSNoTPAnchor, root.CFrame, true)
             end
         end
     elseif not WalkFlingRunning then
-        -- Guard just ended and walkfling is off: give normal states back
         if humanoid:GetStateEnabled(Enum.HumanoidStateType.FallingDown) == false then
             SetWalkFlingStates(humanoid, true)
         end
     end
 end))
 
--- Immediate stop (script unload / restart). Normal disabling uses the ramp in SetWalkFling.
 local function StopWalkFling()
     WalkFlingGeneration = WalkFlingGeneration + 1
     WalkFlingRunning = false
@@ -1315,7 +1294,6 @@ local function StartWalkFling()
                     SetWalkFlingStates(humanoid, false)
                 end
 
-                -- Solid ground collision (never fall through floors / islands)
                 local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
                 if torso and not Settings.Noclip then
                     torso.CanCollide = true
@@ -1326,7 +1304,6 @@ local function StartWalkFling()
 
                 local power = math.clamp(tonumber(Settings.WalkFlingPower) or 30, 1, 100)
 
-                -- Game just teleported us: no fling impulse until we've landed safely
                 if CheckExternalTeleport(root) or IsExternalTeleportGuardActive() then
                     power = 0
                     normalVel = Vector3.zero
@@ -1344,11 +1321,6 @@ local function StartWalkFling()
                         moveDir = root.CFrame.LookVector
                     end
 
-                    -- Classic walkfling cycle (same order as Infinite Yield):
-                    --  Heartbeat (after physics): huge velocity -> replicates and flings whoever touches us
-                    --  RenderStepped: back to our normal (clamped) velocity
-                    --  Stepped (before physics): normal velocity + tiny jitter, so OUR physics never uses the huge value
-                    -- Never apply the huge velocity on Stepped, or the local character gets launched.
                     root.AssemblyLinearVelocity = Vector3.new(moveDir.X * mult, mult * 0.75, moveDir.Z * mult)
 
                     RunService.RenderStepped:Wait()

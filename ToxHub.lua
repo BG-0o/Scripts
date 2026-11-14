@@ -10,11 +10,6 @@ end
 
 local MyBootLock = nil
 if getgenv then
-    -- Second copy started a few seconds after the first one in the same server
-    -- (auto-execute + the teleport queue both run after changing games): just stop,
-    -- no "ToxHub is already running" prompt. A manual re-execute later still asks.
-    -- Also while the first copy is STILL LOADING (up to 60s): a second copy used to
-    -- "re-execute" over it mid-load, leaving the window open with every page empty.
     local lock = getgenv().__ToxHubBootLock
     if typeof(lock) == "table" and lock.Game == game then
         local age = os.clock() - (tonumber(lock.StartedAt) or 0)
@@ -22,10 +17,6 @@ if getgenv then
             return
         end
     end
-    -- Take the lock right now (no yield since the check above). Two copies started
-    -- together (Join's teleport queue + the executor's auto-execute) both passed
-    -- this check before either one's Boot set the lock, so both loaded on top of
-    -- each other and the hub ended up broken/empty.
     MyBootLock = { Game = game, StartedAt = os.clock() }
     getgenv().__ToxHubBootLock = MyBootLock
     getgenv().Destroyed = false
@@ -75,7 +66,6 @@ end
 
 local function ToxLoadError(msg)
     warn(msg)
-    -- warn() is invisible on some executors, so also show it on screen
     pcall(function()
         game:GetService("StarterGui"):SetCore("SendNotification", {
             Title = "ToxHub - erro ao carregar",
@@ -115,7 +105,6 @@ local function RunFetchedSource(relPath, success, content)
     return true
 end
 
--- Execute Boot first so re-execution confirm/cleanup runs cleanly before fetching remaining modules
 do
     local okFetch, bootSrc = FetchSource(CORE_MODULES[1].Path)
     if not RunFetchedSource(CORE_MODULES[1].Path, okFetch, bootSrc) then
@@ -132,7 +121,6 @@ do
     end
 end
 
--- Pre-fetch remaining core modules concurrently while executing them in strict order
 local prefetched = {}
 for idx = 2, #CORE_MODULES do
     local modPath = CORE_MODULES[idx].Path
@@ -164,7 +152,6 @@ if getgenv and getgenv().__ToxHubBootLock == MyBootLock then
     getgenv().__ToxHubBootLock = nil
 end
 
--- ConfigAndRuntime's loading sequence reveals Main and activates staged options once ScriptLoaded becomes true.
 local settings = getgenv and getgenv().Settings
 if getgenv and getgenv().ScriptLoaded == true and not (settings and settings.StartHidden) then
     if getgenv().Main and getgenv().Main.Parent then

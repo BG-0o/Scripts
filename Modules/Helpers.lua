@@ -849,7 +849,6 @@ local function UpdateAirWalk()
                 - 3.4
         end
         local vertical = 0
-        -- Up: Space / Down: Ctrl (same on every fly / air walk)
         if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
             vertical = vertical + 1
         end

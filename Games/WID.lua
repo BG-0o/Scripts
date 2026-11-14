@@ -561,7 +561,6 @@ local function GetGameSafetyStatus()
                 local text = label.Text
                 if typeof(text) == "string" and #text >= 3 and #text <= 75 then
                     local low = string.lower(text)
-                    -- Check for explicit SAFE indicator
                     if string.find(low, "against the wall")
                     or string.find(low, "stay against")
                     or string.find(low, "stay inside")
@@ -572,13 +571,11 @@ local function GetGameSafetyStatus()
                     or string.find(low, "comfort")
                     or string.find(low, "shelter") then
                         local col = label.TextColor3
-                        -- Mint green / vibrant green check (e.g. R=110, G=240, B=165)
                         if col.G >= 0.55 and col.G > col.R and (col.G - col.R) >= 0.12 then
                             return "SAFE", label.Text
                         end
                     end
 
-                    -- Check for explicit DANGER action instruction (must exclude general banners)
                     if (string.find(low, "find shelter")
                     or string.find(low, "seek shelter")
                     or string.find(low, "get inside")
@@ -600,7 +597,6 @@ local function GetGameSafetyStatus()
         end
     end
 
-    -- Also check BillboardGuis / SurfaceGuis anywhere in Workspace (floating hints in 3D world)
     for _, obj in ipairs(Workspace:GetChildren()) do
         if obj:IsA("BillboardGui") or obj:IsA("SurfaceGui") then
             for _, label in ipairs(obj:GetDescendants()) do
@@ -1222,7 +1218,6 @@ local function BindCharacterHealth(character)
                 return
             end
 
-            -- 1. If currently on Platform: IMMEDIATELY evacuate to map shelter!
             if IsPlayerOnPlatform() then
                 IsEvacuatedToMap = true
                 IsPlayerConfirmedSafe = false
@@ -1237,14 +1232,10 @@ local function BindCharacterHealth(character)
                 return
             end
 
-            -- 2. Player is already on the map:
-            -- If safety prompt is GREEN / SAFE: DO NOT relocate on lingering ticks!
             if IsPlayerConfirmedSafe then
                 return
             end
 
-            -- 3. In grace period (first 6 seconds after relocating):
-            -- Allow warming up / fire extinguishing without teleporting in loop!
             if tick() < RelocationGracePeriodUntil then
                 if (RelocationBaseHealth - newHealth) > 35 then
                     RelocationGracePeriodUntil = tick() + 6.0
@@ -1255,7 +1246,6 @@ local function BindCharacterHealth(character)
                 return
             end
 
-            -- 4. Grace period has expired and player is still losing health and not safe:
             if Settings.WIDRelocateOnDamage and (tick() - LastDamageEvacTime) > 3.0 then
                 LastDamageEvacTime = tick()
                 RelocationGracePeriodUntil = tick() + 6.0

@@ -1,8 +1,3 @@
--- ==============================================================================
--- TOXHUB COMBAT ENGINE (Universal/Combat.lua)
--- Standalone Universal Combat Module
--- URL: https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Universal/Combat.lua
--- ==============================================================================
 
 local env = getgenv()
 
@@ -49,7 +44,6 @@ local Theme = env.Theme or {
     Risky = Color3.fromRGB(255, 55, 65)
 }
 
--- Ensure Default Settings
 Settings.Aimbot = Settings.Aimbot == true
 Settings.AimbotMode = string.upper(tostring(Settings.AimbotMode or "CAMERA"))
 if Settings.AimbotMode ~= "CAMERA" and Settings.AimbotMode ~= "MOUSE" then
@@ -96,9 +90,6 @@ local function AutoSaveConfiguration()
     end
 end
 
--- ==============================================================================
--- HITBOX RESTORATION TABLES
--- ==============================================================================
 local HitboxDefaults = {}
 local HeadHitboxDefaults = {}
 
@@ -139,11 +130,6 @@ end
 getgenv().RestoreHitboxDefaults = RestoreHitboxDefaults
 getgenv().RestoreHeadHitboxDefaults = RestoreHeadHitboxDefaults
 
--- ==============================================================================
--- FOV CIRCLE DRAWING
--- ==============================================================================
--- Drawn with a ScreenGui ring instead of Drawing.new: the Drawing library is
--- missing or broken on several executors, so the circle never showed up there.
 local FOVCircle = nil
 pcall(function()
     local parent = (gethui and gethui()) or game:GetService("CoreGui")
@@ -151,7 +137,7 @@ pcall(function()
     if old then old:Destroy() end
     local gui = Instance.new("ScreenGui")
     gui.Name = "ToxFOVCircle"
-    gui.IgnoreGuiInset = true -- same space as UserInputService:GetMouseLocation()
+    gui.IgnoreGuiInset = true
     gui.ResetOnSpawn = false
     gui.DisplayOrder = 999
     gui.Parent = parent
@@ -193,9 +179,6 @@ pcall(function()
     FOVCircle.Color = Theme.Accent or Color3.fromRGB(30, 95, 255)
 end)
 
--- ==============================================================================
--- TARGETING HELPERS
--- ==============================================================================
 local lockedTarget = nil
 local aimbotBindHeld = false
 local friendCache = {}
@@ -220,7 +203,6 @@ local function IsFriend(otherPlayer)
     return false
 end
 
--- Team Check: skip players on your own team (Team, or TeamColor when the game has no Team objects)
 local function IsTeammate(otherPlayer)
     if not Settings.TeamCheck or not otherPlayer or not Player or otherPlayer == Player then
         return false
@@ -351,9 +333,6 @@ end
 
 getgenv().GetClosestCombatTarget = GetClosestTarget
 
--- ==============================================================================
--- MAGIC BULLET HOOK (CRASH-PROOF, NON-RECURSIVE, ZERO-LAG METAMETHOD HOOK)
--- ==============================================================================
 local hookInstalled = false
 local currentMagicTarget = nil
 
@@ -369,7 +348,6 @@ local function InstallMagicBulletHook()
         local hookHandler = function(self, ...)
             local method = getnamecallmethod and getnamecallmethod()
 
-            -- 1. Exploit caller check: NEVER hook internal script calls (prevents recursion)
             if typeof(checkcaller) == "function" and checkcaller() then
                 if typeof(setnamecallmethod) == "function" and method then
                     setnamecallmethod(method)
@@ -377,7 +355,6 @@ local function InstallMagicBulletHook()
                 return oldNamecall(self, ...)
             end
 
-            -- 2. Intercept Raycasts only when Magic Bullet or Silent Aim is enabled and target is valid
             if (Settings.MagicBullet or Settings.SilentAim) and not env.Destroyed and currentMagicTarget and currentMagicTarget.Parent then
                 local target = currentMagicTarget
                 local targetChar = target.Parent
@@ -387,9 +364,7 @@ local function InstallMagicBulletHook()
                     local char = Player and Player.Character
                     local tool = char and char:FindFirstChildOfClass("Tool")
 
-                    -- Must have a tool equipped
                     if tool and Camera then
-                        -- Caller filter: ignore camera, popper, control and movement scripts
                         local isSafeCaller = true
                         if typeof(getcallingscript) == "function" then
                             local caller = getcallingscript()
@@ -406,7 +381,6 @@ local function InstallMagicBulletHook()
                             if method == "Raycast" and self == Workspace then
                                 local origin, dir = ...
                                 if typeof(origin) == "Vector3" and typeof(dir) == "Vector3" and dir.Magnitude >= 1.5 then
-                                    -- Ignore downward ground checks and backward camera checks
                                     local isDownward = dir.Unit.Y < -0.8
                                     local isBehindCamera = dir:Dot(Camera.CFrame.LookVector) < -0.3
                                     if not isDownward and not isBehindCamera then
@@ -436,7 +410,6 @@ local function InstallMagicBulletHook()
                 end
             end
 
-            -- Default pass-through (never double call oldNamecall!)
             if typeof(setnamecallmethod) == "function" and method then
                 setnamecallmethod(method)
             end
@@ -451,14 +424,10 @@ local function InstallMagicBulletHook()
     end)
 end
 
--- Hook installed on demand when Magic Bullet or Silent Aim is enabled
 if Settings.MagicBullet or Settings.SilentAim then
     InstallMagicBulletHook()
 end
 
--- ==============================================================================
--- ULTRA INSTINCT (Safe Circular Proximity Evasion)
--- ==============================================================================
 local lastUltraInstinctTime = 0
 
 local function GetSafeUltraInstinctCFrame(myHrp, threatHrp, range)
@@ -473,9 +442,6 @@ local function GetSafeUltraInstinctCFrame(myHrp, threatHrp, range)
         flatThreatDir = flatThreatDir.Unit
     end
 
-    -- Angles relative to the direction AWAY from the threat (0 = exactly the opposite side
-    -- of where the player came from). Only if that spot is blocked (wall/void/water) it
-    -- tries slightly to the sides, widening step by step. Never towards the threat.
     local testAngles = {
         0,
         20, -20,
@@ -485,7 +451,6 @@ local function GetSafeUltraInstinctCFrame(myHrp, threatHrp, range)
         100, -100,
     }
 
-    -- Multiple candidate distance steps: ensure it finds safe ground even near ledges or inside rooms
     local baseDist = math.clamp(range + 4, 10, 35)
     local testDistances = {
         baseDist,
@@ -496,7 +461,6 @@ local function GetSafeUltraInstinctCFrame(myHrp, threatHrp, range)
 
     local fallenY = Workspace.FallenPartsDestroyHeight or -500
 
-    -- Ignore list: MUST include ALL player characters in the server so other players/hats/accessories never count as solid walls
     local ignoreList = { Camera }
     for _, p in ipairs(Players:GetPlayers()) do
         if p.Character then
@@ -509,7 +473,6 @@ local function GetSafeUltraInstinctCFrame(myHrp, threatHrp, range)
     rayParams.FilterDescendantsInstances = ignoreList
     rayParams.IgnoreWater = false
 
-    -- Direction first, distance second: prefer "straight away" even if it has to be a shorter hop
     for _, deg in ipairs(testAngles) do
         for _, dist in ipairs(testDistances) do
             local rad = math.rad(deg)
@@ -523,19 +486,16 @@ local function GetSafeUltraInstinctCFrame(myHrp, threatHrp, range)
 
             local candPos = myPos + (dir * dist)
 
-            -- 1. Horizontal obstacle check: only block if there's a real wall at chest/head level
             local chestOrigin = myPos + Vector3.new(0, 2.5, 0)
             local horizHit = Workspace:Raycast(chestOrigin, dir * dist, rayParams)
             local isWall = false
             if horizHit and horizHit.Instance and horizHit.Instance.CanCollide then
-                -- Must be a high obstruction, not a tiny floor bump
                 if horizHit.Position.Y > (myPos.Y + 1.2) then
                     isWall = true
                 end
             end
 
             if not isWall then
-                -- 2. Downward floor check: verify solid non-hazard floor
                 local floorOrigin = candPos + Vector3.new(0, 5, 0)
                 local floorHit = Workspace:Raycast(floorOrigin, Vector3.new(0, -45, 0), rayParams)
 
@@ -571,7 +531,6 @@ local function GetSafeUltraInstinctCFrame(myHrp, threatHrp, range)
                         end
 
                         if not isHazard and isSolidFloor and floorHit.Position.Y > (fallenY + 25) then
-                            -- Safe floor confirmed!
                             local safeY = floorHit.Position.Y + 3.2
                             local safeTargetPos = Vector3.new(candPos.X, safeY, candPos.Z)
                             local faceRot = CFrame.lookAt(safeTargetPos, Vector3.new(threatPos.X, safeTargetPos.Y, threatPos.Z))
@@ -583,12 +542,10 @@ local function GetSafeUltraInstinctCFrame(myHrp, threatHrp, range)
         end
     end
 
-    -- No safe spot found (surrounded by void or walls); abort teleport to prevent dying
     return nil
 end
 getgenv().GetSafeUltraInstinctCFrame = GetSafeUltraInstinctCFrame
 
--- Ground circle visual (shows the detection radius under the player)
 local UICircleRing = nil
 local UICircleFill = nil
 
@@ -646,7 +603,6 @@ end
 local function UpdateUltraInstinctCircle(character, myHrp, myHum, range, threatInside)
     if not EnsureUltraInstinctCircle() then return end
 
-    -- Find the ground under the player (fallback: estimated foot height)
     local footY = myHrp.Position.Y - (myHrp.Size.Y / 2) - (myHum.HipHeight or 2)
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
@@ -656,7 +612,6 @@ local function UpdateUltraInstinctCircle(character, myHrp, myHum, range, threatI
     if hit then footY = hit.Position.Y end
 
     local center = Vector3.new(myHrp.Position.X, footY + 0.08, myHrp.Position.Z)
-    -- Cylinder adornments extend along Z; rotate so they lie flat on the floor
     local cf = CFrame.new(center) * CFrame.Angles(math.rad(90), 0, 0)
     local color = threatInside and Color3.fromRGB(255, 60, 70) or (Theme.Accent or Color3.fromRGB(30, 95, 255))
 
@@ -673,8 +628,6 @@ local function UpdateUltraInstinctCircle(character, myHrp, myHum, range, threatI
     UICircleFill.Visible = true
 end
 
--- A player only counts as "near" if they are on (about) the same floor and nothing solid
--- is between us. Players on the floor below/above or behind a wall are ignored.
 local NEARBY_MAX_HEIGHT = 8
 local function IsReachableNearby(myRoot, otherRoot, myCharacter, otherCharacter)
     local dy = otherRoot.Position.Y - myRoot.Position.Y
@@ -716,7 +669,6 @@ local function UltraInstinctStep()
             local otherHrp = otherPlayer.Character:FindFirstChild("HumanoidRootPart")
             local otherHum = otherPlayer.Character:FindFirstChildOfClass("Humanoid")
             if otherHrp and otherHum and otherHum.Health > 0 then
-                -- Flat (XZ) distance so it matches the circle drawn on the ground
                 local diff = otherHrp.Position - myHrp.Position
                 local dist = Vector3.new(diff.X, 0, diff.Z).Magnitude
                 if dist <= closestDist
@@ -732,7 +684,6 @@ local function UltraInstinctStep()
 
     if not closestThreat then return end
 
-    -- Shared cooldown so Combat + game modules (e.g. NDS) never double-teleport
     local lastTime = tonumber(getgenv().ToxLastUltraInstinctTime) or 0
     if os.clock() - math.max(lastTime, lastUltraInstinctTime) < 0.18 then return end
 
@@ -764,11 +715,6 @@ local function UltraInstinctStep()
 end
 getgenv().ToxUltraInstinctStep = UltraInstinctStep
 
--- ==============================================================================
--- ANTI SOCIAL: WALKS (no teleport) away from every player inside the range.
--- Runs right after the default control script so it overrides WASD while someone
--- is close; with nobody in range you move normally.
--- ==============================================================================
 local ANTISOCIAL_BIND = "ToxAntiSocial"
 
 local function AntiSocialStep()
@@ -801,7 +747,6 @@ local function AntiSocialStep()
                         flat = root.CFrame.LookVector
                         dist = 0.05
                     end
-                    -- closer players push harder
                     away = away + flat.Unit * ((range - dist) / range + 0.1)
                 end
             end
@@ -812,8 +757,6 @@ local function AntiSocialStep()
         return
     end
 
-    -- Edge check: only walk where there is ground ahead (otherwise it walked into the void).
-    -- Tries the ideal direction first, then turns gradually (never back towards players).
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
     params.FilterDescendantsInstances = { character, Camera }
@@ -833,7 +776,6 @@ local function AntiSocialStep()
             if not hit then
                 return false
             end
-            -- deep water / drop of more than ~8 studs counts as unsafe
             if hit.Material == Enum.Material.Water or hit.Position.Y < feetY - 8 or hit.Position.Y < fallenY + 20 then
                 return false
             end
@@ -859,7 +801,7 @@ local function AntiSocialStep()
         if chosen then
             humanoid:Move(chosen, false)
         else
-            humanoid:Move(Vector3.zero, false)   -- cornered at an edge: stay put
+            humanoid:Move(Vector3.zero, false)
         end
     end)
 end
@@ -869,12 +811,9 @@ RunService:BindToRenderStep(ANTISOCIAL_BIND, Enum.RenderPriority.Input.Value + 1
     pcall(AntiSocialStep)
 end)
 
--- ==============================================================================
--- COMBAT MAIN LOOP (RenderStepped & Heartbeat)
--- ==============================================================================
 local lastTriggerTime = 0
 local lastKillAuraTime = 0
-local KILL_AURA_INTERVAL = 0.12   -- max ~8 swings/s (was every frame, per player)
+local KILL_AURA_INTERVAL = 0.12
 local spinAngle = 0
 
 local combatConnection = RunService.RenderStepped:Connect(function(dt)
@@ -882,7 +821,6 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
     if not Camera then Camera = Workspace.CurrentCamera end
     if not Camera then return end
 
-    -- Pre-cache Magic Bullet / Silent Aim target without running heavy Raycast inside __namecall!
     if Settings.MagicBullet or Settings.SilentAim then
         local mbFov = (Settings.MagicBullet and Settings.MagicBulletFOVEnabled and Settings.MagicBulletFOV)
             or (Settings.SilentAim and Settings.SilentAimFOVEnabled and Settings.SilentAimFOV)
@@ -894,7 +832,6 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
 
     local mousePos = GetMousePos()
 
-    -- 1. FOV Circle Update
     if FOVCircle then
         if Settings.ShowFOV then
             FOVCircle.Position = UserInputService:GetMouseLocation()
@@ -906,7 +843,6 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    -- 2. Aimbot Logic
     local aimbotActive = false
     local currentCombatTargetPart = nil
     if Settings.Aimbot then
@@ -957,7 +893,6 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         lockedTarget = nil
     end
 
-    -- Update Global Target for Target ESP
     local activeTargetPart = currentCombatTargetPart or currentMagicTarget
     if not activeTargetPart and Settings.TargetESP then
         activeTargetPart = GetClosestTarget(Settings.FOVRadius or 120)
@@ -968,7 +903,6 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         getgenv().ToxCurrentTarget = nil
     end
 
-    -- 3. Fixed Triggerbot
     if Settings.Triggerbot then
         local ray = Camera:ViewportPointToRay(mousePos.X, mousePos.Y)
         local params = RaycastParams.new()
@@ -1014,7 +948,6 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    -- 4. Spinbot
     if Settings.Spinbot and Player and Player.Character then
         local hrp = Player.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
@@ -1024,7 +957,6 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    -- 5. Normal Hitbox Expander (HumanoidRootPart / Torso)
     if Settings.HitboxExpander then
         local hbSize = tonumber(Settings.HitboxSize) or 10
         local heightLimit = math.min(hbSize, 3.5)
@@ -1053,7 +985,6 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    -- 6. Head Hitbox Expander (Head specifically!)
     if Settings.HeadHitboxExpander then
         local headSize = tonumber(Settings.HeadHitboxSize) or 7
         for _, p in ipairs(Players:GetPlayers()) do
@@ -1081,13 +1012,10 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    -- 7. Kill Aura
     if Settings.KillAura and Player and Player.Character then
         local myHrp = Player.Character:FindFirstChild("HumanoidRootPart")
         if myHrp then
             local range = tonumber(Settings.KillAuraRange) or 15
-            -- One swing per interval if ANY valid target is in range
-            -- (before: tool:Activate() every frame for every player in range)
             if os.clock() - lastKillAuraTime >= KILL_AURA_INTERVAL then
                 local hasTarget = false
                 for _, p in ipairs(Players:GetPlayers()) do
@@ -1113,7 +1041,6 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    -- 8. Ultra Instinct (Safe Proximity Teleport Evasion + ground circle)
     local okUI, errUI = pcall(UltraInstinctStep)
     if not okUI and not env.ToxUIErrorWarned then
         env.ToxUIErrorWarned = true
@@ -1123,7 +1050,6 @@ end)
 
 table.insert(connections, combatConnection)
 
--- Keybind Listener for Aimbot
 local inputBegan = UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe or env.Destroyed then return end
     if Settings.AimbotBindEnabled and input.KeyCode == Settings.AimbotKey then
@@ -1141,9 +1067,6 @@ end)
 table.insert(connections, inputBegan)
 table.insert(connections, inputEnded)
 
--- ==============================================================================
--- COMBAT PAGE UI BUILDER
--- ==============================================================================
 local function BuildCombatUI()
     if not CombatPage then
         CombatPage = env.CombatPage or env.UniversalPage or (env.Pages and env.Pages["UNIVERSAL_COMBAT"])
@@ -1168,7 +1091,6 @@ local function BuildCombatUI()
         return
     end
 
-    -- Card 1: Aimbot & Aiming
     CreateSection(CombatPage, "Aimbot & Aiming", "🎯")
 
     if type(CreateToggleWithChoice) == "function" then
@@ -1298,7 +1220,6 @@ local function BuildCombatUI()
         AutoSaveConfiguration()
     end, "TeamCheck")
 
-    -- Card 2: Combat Assistance
     CreateSection(CombatPage, "Combat Assistance", "⚡")
 
     CreateToggle("Silent Aim", CombatPage, Settings.SilentAim, function(v)
@@ -1361,7 +1282,6 @@ local function BuildCombatUI()
         end, "Spinbot")
     end
 
-    -- Card 3: Hitbox Expanders
     CreateSection(CombatPage, "Hitbox Expanders", "📦")
 
     if type(CreateToggleWithSlider) == "function" then
@@ -1402,7 +1322,6 @@ local function BuildCombatUI()
         end, "HeadHitboxExpander")
     end
 
-    -- Evasion (Ultra Instinct / Anti Social) lives on the Misc page, not Combat
     local EvasionPage = env.FlingPage or getgenv().FlingPage or CombatPage
 
     if type(CreateToggleWithSlider) == "function" then
@@ -1425,7 +1344,6 @@ local function BuildCombatUI()
         end, "UltraInstinct")
     end
 
-    -- Anti Social: walk away from nearby players (below Ultra Instinct)
     local function OnAntiSocial(v)
         Settings.AntiSocial = v == true
         AutoSaveConfiguration()
@@ -1452,7 +1370,6 @@ BuildCombatUI()
 env.ToxCombatLoaded = true
 getgenv().ToxCombatLoaded = true
 
--- Clean up on shutdown
 local function CleanupCombat()
     for _, c in ipairs(connections) do
         pcall(function() c:Disconnect() end)

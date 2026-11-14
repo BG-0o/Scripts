@@ -58,7 +58,7 @@ Settings.FTFNoFog = Settings.FTFNoFog == true
 Settings.FTFCrawlSpeed = Settings.FTFCrawlSpeed == true
 Settings.FTFCrawlSpeedValue = tonumber(Settings.FTFCrawlSpeedValue) or 8
 Settings.FTFNoRagdoll = Settings.FTFNoRagdoll == true
-Settings.FTFAutoEscape = false   -- option removed
+Settings.FTFAutoEscape = false
 Settings.FTFNoHackFail = Settings.FTFNoHackFail == true
 Settings.FTFNoFailMethod = tostring(Settings.FTFNoFailMethod or "Smart")
 Settings.FTFUnlockCamera = Settings.FTFUnlockCamera == true
@@ -412,8 +412,6 @@ local function RefreshComputerChams()
     end
 end
 
--- FTF maps use an Atmosphere: while one exists, Lighting.FogStart/FogEnd do nothing,
--- that's why No Fog seemed broken. Thin the Atmosphere too (restored when turned off).
 local AtmosphereDefaults = setmetatable({}, { __mode = "k" })
 local function ApplyNoFog(enabled)
     if enabled then
@@ -446,10 +444,6 @@ local function ApplyNoFog(enabled)
     end
 end
 
--- Crawling detection. The old one used "HipHeight < 1.15", but on R6 characters the
--- normal HipHeight is 0 -> it thought you were ALWAYS crawling and changed your normal speed.
--- Now: a crawl value in the stats, a playing crawl animation, or the hip height dropping
--- well below what it is when standing.
 local CrawlBaseline = { Humanoid = nil, HipHeight = 0 }
 
 local function IsLikelyCrawling()
@@ -920,11 +914,6 @@ local function SetupUnragdollNotifications(player)
     TrackConnection(player.CharacterAdded:Connect(bindCharacter))
 end
 
--- Some executors don't support (or block) hookmetamethod: if it errors here, the whole
--- FTF page used to stop loading and show no options. Now it just skips No Hack Fail.
--- The hook catches EVERY method call of the game. On some executors that breaks the
--- game's own scripts (WaitForChild returns nil -> "Attempted to call require with
--- invalid argument(s)") and the FTF page. So it is only installed when No Hack Fail is ON.
 if Settings.FTFNoHackFail then
     local okHook, hookErr = pcall(InstallNoHackFailHook)
     if not okHook then
@@ -976,12 +965,11 @@ TrackConnection(RunService.Heartbeat:Connect(function()
         local crawlValue = math.clamp(tonumber(Settings.FTFCrawlSpeedValue) or 8, 1, 30)
         if CrawlingCached then
             if not WasCrawling then
-                NormalWalkSpeed = humanoid.WalkSpeed   -- remember the standing speed
+                NormalWalkSpeed = humanoid.WalkSpeed
             end
             WasCrawling = true
             humanoid.WalkSpeed = crawlValue
         elseif WasCrawling then
-            -- stood up: give the normal speed back (only if the game didn't already)
             WasCrawling = false
             if NormalWalkSpeed and math.abs(humanoid.WalkSpeed - crawlValue) < 0.01 then
                 humanoid.WalkSpeed = NormalWalkSpeed
@@ -1008,7 +996,6 @@ TrackConnection(RunService.Heartbeat:Connect(function()
         CharacterRagdollStarted = nil
     end
 
-    -- these scan the player's stats/character: 4x per second is plenty (was every frame -> lag)
     if now - LastStatScan >= 0.25 then
         LastStatScan = now
         SetEnableCrawling()
@@ -1019,7 +1006,6 @@ TrackConnection(RunService.Heartbeat:Connect(function()
     RunHitAura()
 end))
 
--- ===================== VISUALS =====================
 CreateFTFSection("VISUALS")
 
 FTFCreateToggle(
@@ -1088,7 +1074,6 @@ FTFCreateToggle(
     "FTFUnlockCamera"
 )
 
--- ===================== SURVIVOR =====================
 CreateFTFSection("SURVIVOR")
 
 local function OnCrawlSpeedToggle(value)
@@ -1136,7 +1121,6 @@ local function OnNoFailMethod(value)
 end
 local createToggleWithChoice = getgenv().CreateToggleWithChoice
 if type(createToggleWithChoice) == "function" then
-    -- toggle + method (Smart / Legit) in the same option
     TrackControl(createToggleWithChoice("No Hack Fail", GamePage, {"Smart", "Legit"}, Settings.FTFNoHackFail,
         Settings.FTFNoFailMethod, OnNoHackFail, OnNoFailMethod, "FTFNoHackFail"))
 else
@@ -1144,7 +1128,6 @@ else
     FTFCreateDropdown("No Fail Method", {"Smart", "Legit"}, GamePage, Settings.FTFNoFailMethod, OnNoFailMethod)
 end
 
--- ===================== BEAST =====================
 CreateFTFSection("BEAST")
 
 FTFCreateToggle(
@@ -1192,10 +1175,8 @@ FTFCreateToggle(
     "FTFHitAura"
 )
 
--- ===================== ALERTS =====================
 CreateFTFSection("ALERTS")
 
--- one option: toggle + the % (the old "Notify when % done" row had a switch that did nothing)
 local function OnNotifyUnragdolling(value)
     Settings.FTFNotifyUnragdolling = value == true
     AutoSaveConfiguration()
@@ -1215,7 +1196,6 @@ end
 ApplyNoFog(Settings.FTFNoFog)
 RefreshPlayerVisuals()
 RefreshComputerChams()
-
 
 getgenv().ToxFTFCleanup = function()
     AutoEscapeGeneration += 1

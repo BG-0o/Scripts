@@ -270,7 +270,6 @@ end)
 
 local hudTargetParent = env.Gui or (gethui and gethui()) or CoreGui
 
--- 1. Spectator List Frame
 local ToxSpectatorsFrame = Instance.new("Frame")
 ToxSpectatorsFrame.Name = "ToxSpectatorsFrame"
 ToxSpectatorsFrame.Size = UDim2.new(0, 180, 0, 120)
@@ -335,7 +334,6 @@ if env.MakeDraggable then
     env.MakeDraggable(ToxSpectatorsFrame, ToxSpectatorsFrame)
 end
 
--- 2. Keybinds List Frame
 local ToxKeybindsFrame = Instance.new("Frame")
 ToxKeybindsFrame.Name = "ToxKeybindsFrame"
 ToxKeybindsFrame.Size = UDim2.new(0, 180, 0, 140)
@@ -400,7 +398,6 @@ if env.MakeDraggable then
     env.MakeDraggable(ToxKeybindsFrame, ToxKeybindsFrame)
 end
 
--- Update Spectators List
 local lastSpecUpdate = 0
 local function ToxUpdateSpectators()
     if not Settings.SpectatorList then
@@ -477,7 +474,6 @@ local function ToxUpdateSpectators()
 end
 env.ToxUpdateSpectators = ToxUpdateSpectators
 
--- Update Keybinds List
 local lastKeyUpdate = 0
 local function ToxUpdateKeybinds()
     if not Settings.KeybindsList then
@@ -490,7 +486,6 @@ local function ToxUpdateKeybinds()
     if now - lastKeyUpdate < 0.3 then return end
     lastKeyUpdate = now
 
-    -- Binds the user set with the "[ key ]" buttons (Config > Keybinds)
     local activeBinds = {}
     if getgenv().GetToxBindList then
         local ok, list = pcall(getgenv().GetToxBindList)
@@ -552,9 +547,6 @@ local function ToxUpdateKeybinds()
 end
 env.ToxUpdateKeybinds = ToxUpdateKeybinds
 
--- ==============================================================================
--- MM2 ROLE SYSTEM & FALLBACKS
--- ==============================================================================
 local MM2GameId = 66654135
 local MM2PlaceId = 142823291
 local MM2RoleCache = {}
@@ -892,7 +884,6 @@ env.ToxClearMM2Roles = function()
     MM2RoleCacheTime = 0
 end
 
--- ReplicatedStorage Remote Events for MM2
 local mm2Connections = {}
 if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
     pcall(function()
@@ -947,9 +938,6 @@ if game.GameId == MM2GameId or game.PlaceId == MM2PlaceId then
     end)
 end
 
--- ==============================================================================
--- MAIN ESP & HUD RENDER LOOP (RunService.RenderStepped)
--- ==============================================================================
 local lastMM2ToolTick = 0
 local espConnection = nil
 espConnection = RunService.RenderStepped:Connect(function(delta)
@@ -965,7 +953,6 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
     Camera = Workspace.CurrentCamera or Camera
     if not Camera then return end
 
-    -- Floating HUD Updates
     if Settings.SpectatorList then
         ToxUpdateSpectators()
     end
@@ -973,7 +960,6 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
         ToxUpdateKeybinds()
     end
 
-    -- Determine ESP State
     local mm2RoleESPActive = (game.GameId == MM2GameId or game.PlaceId == MM2PlaceId) and Settings.MM2RoleESP == true
     if (game.GameId == MM2GameId or game.PlaceId == MM2PlaceId) and (mm2RoleESPActive or Settings.ESPTeamColors) then
         local now = tick()
@@ -997,7 +983,6 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
         or effectiveChams
     )
 
-    -- If all ESP is disabled, cleanly hide everything
     if not anyESPActive then
         for p, _ in pairs(ESPDrawings) do
             HidePlayerDrawings(p)
@@ -1013,7 +998,6 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
         return
     end
 
-    -- Clean up disconnected players
     for p, _ in pairs(ESPDrawings) do
         if not p or not p.Parent or not Players:FindFirstChild(p.Name) then
             ClearESPForPlayer(p)
@@ -1023,7 +1007,6 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
     local localChar = Player.Character
     local localRoot = localChar and localChar:FindFirstChild("HumanoidRootPart")
 
-    -- Process each player
     for _, p in ipairs(Players:GetPlayers()) do
         if not IsLocalPlayer(p) then
             local char = p.Character
@@ -1047,7 +1030,6 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
                         espColor = Settings.TargetESPColor or Color3.fromRGB(255, 30, 30)
                     end
 
-                    -- 1. Chams / Highlights
                     if effectiveChams then
                         local hl = Highlights[p]
                         if not hl or hl.Parent ~= char then
@@ -1073,7 +1055,6 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
                         Highlights[p] = nil
                     end
 
-                    -- 2. Billboard Text (Names / Distance)
                     if (effectiveESPNames or Settings.ESPDistance) and withinDist then
                         local billboard = ESPLabels[p]
                         if not billboard or billboard.Parent ~= char then
@@ -1139,7 +1120,6 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
                         ESPLabels[p] = nil
                     end
 
-                    -- 3. Drawing ESP: Tracers, 2D Box, Head Dot, Skeletons
                     local hasDrawingESP = Drawing and (Settings.ESPTracers or Settings.ESPBox or Settings.ESPHeadDot or Settings.ESPSkeleton)
                     if hasDrawingESP then
                         local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
@@ -1156,9 +1136,7 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
                         local boxDraw = ESPDrawings[p].Box
                         local headDraw = ESPDrawings[p].HeadDot
 
-                        -- CRITICAL: Only draw if onScreen and strictly in front of the camera (pos.Z > 1)
                         if onScreen and pos.Z > 1 then
-                            -- Tracers
                             if Settings.ESPTracers and lineDraw then
                                 local startVector = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
                                 if Settings.TracerOrigin == "UP" then
@@ -1179,7 +1157,6 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
                                 lineDraw.To = Vector2.new(-10000, -10000)
                             end
 
-                            -- 2D Box
                             if Settings.ESPBox and boxDraw then
                                 local boxHeight = math.clamp(1000 / pos.Z, 12, 350)
                                 local boxWidth = boxHeight * 0.65
@@ -1195,7 +1172,6 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
                                 boxDraw.Position = Vector2.new(-10000, -10000)
                             end
 
-                            -- Head Dot
                             if Settings.ESPHeadDot and headDraw then
                                 local head = char:FindFirstChild("Head")
                                 if head then
@@ -1220,7 +1196,6 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
                                 headDraw.Position = Vector2.new(-10000, -10000)
                             end
 
-                            -- Skeletons
                             if Settings.ESPSkeleton then
                                 local bonesR15 = {
                                     {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
@@ -1286,14 +1261,12 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
                                 end
                             end
                         else
-                            -- NOT onScreen or behind camera: IMMEDIATELY hide all drawings!
                             HidePlayerDrawings(p)
                         end
                     elseif ESPDrawings[p] then
                         HidePlayerDrawings(p)
                     end
                 else
-                    -- Exceeds max distance: hide
                     HidePlayerDrawings(p)
                     if Highlights[p] then pcall(function() Highlights[p]:Destroy() end) Highlights[p] = nil end
                     if ESPLabels[p] then pcall(function() ESPLabels[p]:Destroy() end) ESPLabels[p] = nil end
@@ -1305,7 +1278,6 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
     end
 end)
 
--- Full Cleanup Routine
 env.ToxUniversal3Cleanup = function()
     if espConnection then
         pcall(function() espConnection:Disconnect() end)

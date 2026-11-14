@@ -17,8 +17,6 @@ local function UpdateAirWalk(...) if env.UpdateAirWalk then return env.UpdateAir
 local GetHumanoidDefaults = U.GetHumanoidDefaults or function() end
 local RestoreJump = U.RestoreJump or function() end
 
-
--- Toggle + slider (with typed value). Falls back to the old typed-only control.
 local function ValueSlider(Name, Page, MinV, MaxV, Toggle, Value, OnToggle, OnValue, SyncKey)
     local withSlider = env.CreateToggleWithSlider or getgenv().CreateToggleWithSlider
     if type(withSlider) == "function" then
@@ -32,7 +30,6 @@ local function ValueSlider(Name, Page, MinV, MaxV, Toggle, Value, OnToggle, OnVa
 end
 env.ToxValueSlider = ValueSlider
 
--- The 3 flies share Settings.FlySpeed: keep all their sliders in sync
 local function SetFlySpeed(val)
     Settings.FlySpeed = tonumber(val) or 10
     if getgenv().SyncValueVisuals then
@@ -133,8 +130,6 @@ end, function(val)
     Settings.CarFlySpeed = val
 end, "CarFly")
 
--- "Air Walk Platform" removed: it duplicated "Air Walk" (same floor under the feet).
--- Clean up a platform left by older versions.
 Settings.AirWalkPlatform = false
 pcall(function()
     local old = workspace:FindFirstChild("ToxAirPlatform")

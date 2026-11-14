@@ -2133,7 +2133,6 @@ AddConnection(RunService.Heartbeat:Connect(function()
     end
 end))
 
-
 RoundTimerFrame = nil
 RoundTimerLabel = nil
 LastRoundTimerUpdate = 0
@@ -2921,7 +2920,6 @@ function GetPredictedTargetPosition(
     local myPos = myRoot and myRoot.Position or aimPart.Position
     local dist = (aimPart.Position - myPos).Magnitude
 
-    -- At close range (< 12 studs), bullet travels near-instantaneously: direct torso aim hits 100%
     if dist < 12 then
         return aimPart.Position
     end
@@ -2935,9 +2933,7 @@ function GetPredictedTargetPosition(
         ping = math.clamp(Player:GetNetworkPing(), 0.01, 0.25)
     end)
 
-    -- Bullet velocity in MM2 is approx 300 studs/sec
     local travelTime = (dist / 300) + (ping * pingMultiplier)
-    -- Smoothly scale leading based on distance: 0 at <= 12 studs, increasing up to full lead at 60+ studs
     local distFactor = math.clamp((dist - 12) / 48, 0, 1)
 
     local lead = (velocity * Vector3.new(0.85, 0.4, 0.85) * travelTime)
@@ -3847,12 +3843,10 @@ end
 MM2CoinCache = {}
 MM2CoinScanTime = 0
 MM2CoinBlacklist = setmetatable({}, {__mode = "k"})
-AutoFarmExternalTPAt = 0                                   -- last time the GAME teleported us
-AutoFarmCoinAttempts = setmetatable({}, {__mode = "k"})   -- coin -> failed reach attempts
+AutoFarmExternalTPAt = 0
+AutoFarmCoinAttempts = setmetatable({}, {__mode = "k"})
 AutoFarmMapBoundsCache = nil
 
--- The game moved us (round start TP to the map / round end TP to the lobby) while farming.
--- Accept it instead of dragging the character back to where the farm was.
 function ToxMM2CheckExternalTeleport()
     if not AutoFarmRoot or not AutoFarmRoot.Parent or not AutoFarmHoldPosition then
         return false
@@ -3869,8 +3863,6 @@ function ToxMM2CheckExternalTeleport()
     return false
 end
 
--- True when the character is actually on/around the loaded map (not in the lobby
--- before the round TP, and not back in the lobby after the round ended).
 function ToxMM2IsPlayerOnMap(position)
     local map = GetLoadedMM2MapModel()
     if not map or typeof(position) ~= "Vector3" then
@@ -3880,7 +3872,7 @@ function ToxMM2IsPlayerOnMap(position)
     if not AutoFarmMapBoundsCache or AutoFarmMapBoundsCache.Map ~= map or now - AutoFarmMapBoundsCache.Time > 3 then
         local ok, cf, size = pcall(function() return map:GetBoundingBox() end)
         if not ok or not cf then
-            return true   -- can't measure: don't block farming
+            return true
         end
         AutoFarmMapBoundsCache = { Map = map, CF = cf, Size = size, Time = now }
     end
@@ -3954,7 +3946,6 @@ function IsAutoFarmPlayerEligible()
         return false
     end
 
-    -- MM2's Game panel is shown during an active round and hidden in the lobby.
     local playerGui = Player:FindFirstChildOfClass("PlayerGui")
     local mainGui = playerGui and playerGui:FindFirstChild("MainGUI")
     local gameGui = mainGui and mainGui:FindFirstChild("Game")
@@ -3991,7 +3982,6 @@ function IsAutoFarmPlayerEligible()
         end
     end
 
-    -- After a death, wait for fresh server role data before allowing farming again.
     if AutoFarmDeathObservedAt then
         if (MM2RoleDataCacheTime or 0) <= AutoFarmDeathObservedAt then
             return false
@@ -4313,9 +4303,7 @@ function IsCoinValid(coin)
     local mapRoot, activeContainer = GetAutoFarmMapRoot()
 
     if activeContainer and coin:IsDescendantOf(activeContainer) then
-        -- Within active container
     elseif mapRoot and coin:IsDescendantOf(mapRoot) and IsCoinTouchPart(coin) then
-        -- Within active map root
     else
         local container = coin:FindFirstAncestor("CoinContainer")
             or coin:FindFirstAncestor("CandyContainer")
@@ -5013,7 +5001,6 @@ function UpdateAutoFarmRoundLifecycle()
     return roundActive, currentMap, currentContainer
 end
 
-
 function ToxMM2FlingMurdererForAutoWin()
     local target = GetPlayerByRole("Murderer")
 
@@ -5463,8 +5450,6 @@ end
 
 getgenv().ToxMM2RunKillOnFull = ToxMM2RunKillOnFull
 
--- Watchdog: if a fling was interrupted (leftover 9e8 BodyVelocity / NaN FPDH) or we ended up
--- far outside the map with nothing running that explains it, clean up and return to the lobby.
 task.spawn(function()
     local lostSince = nil
     while not getgenv().Destroyed and game.PlaceId == 142823291 do
@@ -5497,7 +5482,6 @@ task.spawn(function()
                     lostSince = lostSince or tick()
                     if tick() - lostSince > 1.5 then
                         lostSince = nil
-                        -- Prefer the current map spawn (round running), otherwise the lobby
                         local spawnCF = nil
                         pcall(function()
                             local pos = FindSafeMapSpawnPosition()
@@ -5552,7 +5536,6 @@ local function ForceResetCharacter(char, hum)
         local head = char:FindFirstChild("Head")
         if head then head:Destroy() end
     end)
-    -- Universal engine void-drop fallback: guarantees server-side engine kill & respawn
     pcall(function()
         local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
         if root then
@@ -5560,7 +5543,6 @@ local function ForceResetCharacter(char, hum)
                 getgenv().AllowToxTeleport(2.5, "Character Reset")
             end
             local fallY = -2500
-            -- If a fling left FallenPartsDestroyHeight as NaN, the void never kills us: restore it first
             local currentFPDH = workspace.FallenPartsDestroyHeight
             if typeof(currentFPDH) ~= "number" or currentFPDH ~= currentFPDH then
                 local saved = getgenv().FPDH
@@ -5667,7 +5649,7 @@ function PrepareAutoFarm()
     end
 
     if AutoFarmPrepared and AutoFarmRoot == root then
-        root.Anchored = false -- must stay unanchored or the server stops receiving our position
+        root.Anchored = false
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
         humanoid.PlatformStand = true
@@ -5708,7 +5690,7 @@ function PrepareAutoFarm()
     humanoid.PlatformStand = true
     humanoid.Sit = false
     humanoid.AutoRotate = false
-    root.Anchored = false -- must stay unanchored or the server stops receiving our position
+    root.Anchored = false
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
     SetFarmCollision(false)
@@ -5755,10 +5737,6 @@ function GetCoinFarmPosition(coin)
     )
 end
 
-
--- ==============================================================================
--- SAFE LOBBY SYSTEM
--- ==============================================================================
 local SafeLobbyPlatform = nil
 
 local function EnsureSafeLobbyPlatform()
@@ -5823,9 +5801,6 @@ local function DestroySafeLobbyPlatform()
     end
 end
 
--- ==============================================================================
--- AUTO FARM STAND PLATFORM (ANTI-VOID FALLING)
--- ==============================================================================
 local AutoFarmStandPlatform = nil
 local function EnsureAutoFarmStandPlatform(position)
     if not AutoFarmStandPlatform or not AutoFarmStandPlatform.Parent then
@@ -5853,9 +5828,6 @@ local function DestroyAutoFarmStandPlatform()
     if p then pcall(function() p:Destroy() end) end
 end
 
--- ==============================================================================
--- MM2 MAP VOTING SYSTEM (INFINITE RESET & COIN PRIORITY)
--- ==============================================================================
 local MM2CoinBestMaps = {
     "factory",
     "biolab",
@@ -5938,9 +5910,9 @@ end
 local function GetTargetVotingPad()
     local pads = FindMM2VotingPads()
     if #pads == 0 then return nil end
-    
+
     local choice = tostring(Settings.MM2VoteMap or "Priority (Best Coins)")
-    
+
     if choice == "Priority (Best Coins)" then
         for _, wanted in ipairs(MM2CoinBestMaps) do
             for _, pad in ipairs(pads) do
@@ -5999,7 +5971,6 @@ task.spawn(function()
                             end)
                         end
                         task.wait(0.12)
-                        -- Infinite reset loop (instant clean reset & immediate respawn wait)
                         if Settings.MM2AutoVote and (Settings.MM2VoteInfinite ~= false) then
                             local oldChar = character
                             ForceResetCharacter(oldChar, humanoid)
@@ -6113,7 +6084,6 @@ task.spawn(function()
 
                 if isMatchLive then
                     if IsInSafeLobbyArea(root.Position) then
-                        -- If AutoFarm is already active with coins ready and not paused, warp straight to first coin entry!
                         if Settings.MM2AutoFarmV2 and isRoundCoins and not AutoFarmPausedFull and not ActionBusy then
                             local coin = GetBestCoin(root.Position, false)
                             if coin and IsCoinValid(coin) then
@@ -6189,13 +6159,12 @@ function SetAutoFarmCoinPosition(position, velocity, direction)
         return false
     end
 
-    -- Game teleported us mid-tween: stop this tween so the loop restarts from the new spot
     if ToxMM2CheckExternalTeleport() then
         return false
     end
 
     AutoFarmHoldPosition = position
-    AutoFarmRoot.Anchored = false -- must stay unanchored or the server stops receiving our position
+    AutoFarmRoot.Anchored = false
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
 
@@ -6486,7 +6455,6 @@ function CollectFarmCoin(coin, mode)
         RunService.Heartbeat:Wait()
     end
 
-    -- Underground fallback: rise close under the coin if the touch from depth didn't register
     if mode == "Underground"
     and Settings.MM2AutoFarmV2
     and generation == AutoFarmGeneration
@@ -6540,7 +6508,6 @@ function AutoFarmCoin(coin)
     local mode = GetActiveAutoFarmMode()
     AutoFarmWaitHoldPosition = nil
 
-    -- TELEPORT MODE
     if mode == "Teleport" then
         local tpPos = travelPosition - Vector3.new(0, 3.8, 0)
         local allow = getgenv().AllowToxTeleport
@@ -6579,7 +6546,6 @@ function AutoFarmCoin(coin)
         return true
     end
 
-    -- ENTRY FROM LOBBY (inside Lobby model / Y > 105) OR SAFE LOBBY (Y < -30 / SafeLobbyArea)
     local currentPosition = AutoFarmRoot.Position
     if IsInSafeLobbyArea(currentPosition)
     or (IsInNormalLobbyArea(currentPosition) and travelPosition.Y < currentPosition.Y - 12) then
@@ -6595,7 +6561,6 @@ function AutoFarmCoin(coin)
         end
     end
 
-    -- TWEEN / UNDERGROUND / SKY MOVEMENT
     local speedValue = math.clamp(
         tonumber(Settings.MM2AutoFarmSpeed) or 5,
         1,
@@ -6679,17 +6644,15 @@ AddConnection(RunService.Heartbeat:Connect(function()
         return
     end
 
-    AutoFarmRoot.Anchored = false -- must stay unanchored or the server stops receiving our position
+    AutoFarmRoot.Anchored = false
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
     AutoFarmHumanoid.PlatformStand = true
     AutoFarmHumanoid.Sit = false
     AutoFarmHumanoid.AutoRotate = false
 
-    -- Respect game teleports instead of pinning back to the old spot
     ToxMM2CheckExternalTeleport()
 
-    -- Unanchored hold: re-pin every frame so gravity never builds up (no falling, position still replicates)
     if AutoFarmHoldPosition and not AutoFarmActivelyTweening then
         AutoFarmRoot.CFrame = CFrame.new(AutoFarmHoldPosition)
     end
@@ -6702,7 +6665,6 @@ AddConnection(RunService.Stepped:Connect(function()
     or not AutoFarmRoot.Parent then
         return
     end
-    -- Cancel gravity right before the physics step as well
     AutoFarmRoot.AssemblyLinearVelocity = Vector3.zero
     AutoFarmRoot.AssemblyAngularVelocity = Vector3.zero
 end))
@@ -6785,7 +6747,6 @@ task.spawn(function()
 
                 task.wait(0.2)
             elseif os.clock() - AutoFarmExternalTPAt < 2.5 then
-                -- the game just teleported us (round start/end): let it settle first
                 if AutoFarmPrepared then
                     StopAutoFarm(false)
                 end
@@ -6793,8 +6754,6 @@ task.spawn(function()
                 task.wait(0.15)
             elseif root and not ToxMM2IsPlayerOnMap(root.Position)
             and not (AutoFarmRoot and AutoFarmRoot.Parent and ToxMM2IsPlayerOnMap(AutoFarmRoot.Position)) then
-                -- still in the lobby (before the round TP) or back in the lobby (round over):
-                -- coins of that map are not collectable from here
                 if AutoFarmPrepared then
                     StopAutoFarm(false)
                 end
@@ -6820,8 +6779,6 @@ task.spawn(function()
                     AutoFarmWaitHoldPosition = nil
                     local ok = AutoFarmCoin(coin)
                     if IsCoinValid(coin) then
-                        -- reached it but it didn't get collected (ghost coin / round over):
-                        -- after 2 tries ignore it for a while instead of looping forever
                         AutoFarmCoinAttempts[coin] = (AutoFarmCoinAttempts[coin] or 0) + 1
                         if AutoFarmCoinAttempts[coin] >= 2 then
                             AutoFarmCoinAttempts[coin] = nil

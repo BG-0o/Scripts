@@ -34,7 +34,6 @@ local WatermarkLabel = nil
 local SetWeatherType = nil
 local OpenColorPicker = nil
 
--- Rayfield Cyber Blue Palette: Luminous high-contrast neon blue on dark obsidian slate
 local DefaultTheme = {
     Background = Color3.fromRGB(10, 13, 20),
     Panel = Color3.fromRGB(13, 17, 26),
@@ -342,7 +341,6 @@ getgenv().SetToxUITransparency = function(transparency, skipSave)
     end
 end
 
--- ScreenGui Parent Container
 local ParentContainer = (gethui and gethui()) or game:GetService("CoreGui")
 local Gui = Instance.new("ScreenGui")
 Gui.Name = "ToxHubGui"
@@ -352,7 +350,6 @@ Gui.DisplayOrder = 999999999
 Gui.Parent = ParentContainer
 getgenv().Gui = Gui
 
--- Dimmer Background Overlay
 local DimmerFrame = Instance.new("TextButton")
 DimmerFrame.Name = "DimmerFrame"
 DimmerFrame.Size = UDim2.new(1, 0, 1, 0)
@@ -366,7 +363,6 @@ DimmerFrame.Visible = false
 DimmerFrame.ZIndex = 1
 DimmerFrame.Parent = Gui
 
--- Main Window (Rayfield proportions: 740 x 490)
 local defaultInitSize = UDim2.new(0, 740, 0, 490)
 local defaultInitPos = UDim2.new(0.5, -370, 0.5, -245)
 
@@ -438,9 +434,6 @@ ScreenWeatherGui.ResetOnSpawn = false
 ScreenWeatherGui.DisplayOrder = 999999990
 ScreenWeatherGui.Parent = ParentContainer
 
-----------------------------------------------------------------------
--- TOPBAR: Rayfield Header with User Profile at the Top
-----------------------------------------------------------------------
 local TopBarHeight = 52
 local TopBar = Instance.new("Frame")
 TopBar.Name = "TopBar"
@@ -476,7 +469,6 @@ TopBarBottomBorder.ZIndex = 31
 TopBarBottomBorder.Parent = TopBar
 RegisterThemedObject(TopBarBottomBorder, "BackgroundColor3", "Outline")
 
--- Left Section: Brand Logo & Title
 local HubLogo = Instance.new("ImageLabel")
 HubLogo.Name = "HubLogo"
 HubLogo.Size = UDim2.new(0, 30, 0, 30)
@@ -518,7 +510,6 @@ HubVersion.ZIndex = 32
 HubVersion.Parent = TopBar
 RegisterThemedObject(HubVersion, "TextColor3", "Accent")
 
--- Current Game Tag Badge
 local GameTagPill = Instance.new("Frame")
 GameTagPill.Name = "GameTagPill"
 GameTagPill.Size = UDim2.new(0, 105, 0, 22)
@@ -547,7 +538,6 @@ GameTagText.Parent = GameTagPill
 RegisterThemedObject(GameTagText, "TextColor3", "Accent")
 env.ToxGameTagText = GameTagText
 
--- Center/Right: USER PROFILE CAPSULE AT THE TOP
 local UserCapsule = Instance.new("Frame")
 UserCapsule.Name = "UserCapsule"
 UserCapsule.Size = UDim2.new(0, 230, 0, 36)
@@ -614,7 +604,6 @@ UserExpiryLabel.Parent = StatusBadge
 RegisterThemedObject(UserExpiryLabel, "TextColor3", "Accent")
 env.ToxUserExpiryLabel = UserExpiryLabel
 
--- Live FPS & Ping Display inside Capsule
 local StatsContainer = Instance.new("Frame")
 StatsContainer.Name = "StatsContainer"
 StatsContainer.Size = UDim2.new(0, 78, 1, -8)
@@ -650,7 +639,6 @@ PingLabel.ZIndex = 34
 PingLabel.Parent = StatsContainer
 RegisterThemedObject(PingLabel, "TextColor3", "Accent2")
 
--- Smooth Stats Updater
 local liveFpsCount = 0
 task.spawn(function()
     local lastTime = os.clock()
@@ -686,7 +674,6 @@ RunService.RenderStepped:Connect(function()
     liveFpsCount = liveFpsCount + 1
 end)
 
--- Search Pill on TopBar
 local SearchPill = Instance.new("Frame")
 SearchPill.Name = "SearchPill"
 SearchPill.Size = UDim2.new(0, 110, 0, 28)
@@ -729,7 +716,6 @@ SearchTextBox.Parent = SearchPill
 RegisterThemedObject(SearchTextBox, "TextColor3", "Text")
 RegisterThemedObject(SearchTextBox, "PlaceholderColor3", "DimText")
 
--- Top Window Controls: Minimize (-) and Close (X)
 local MinimizeBtn = Instance.new("TextButton")
 MinimizeBtn.Name = "Minimize"
 MinimizeBtn.Size = UDim2.new(0, 28, 0, 28)
@@ -780,12 +766,8 @@ CloseBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Make entire TopBar draggable
 MakeDraggable(Main, TopBar)
 
-----------------------------------------------------------------------
--- BODY: Sidebar (Navigation) + Content Area
-----------------------------------------------------------------------
 local isSidebarCollapsed = Settings.CollapseSidebar == true
 local sidebarExpandedWidth = 185
 local sidebarCollapsedWidth = 54
@@ -878,9 +860,6 @@ SidebarLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     SidebarScroll.CanvasSize = UDim2.new(0, 0, 0, SidebarLayout.AbsoluteContentSize.Y + 16)
 end)
 
-----------------------------------------------------------------------
--- CONTENT AREA & PAGES CONTAINER
-----------------------------------------------------------------------
 local ContentArea = Instance.new("Frame")
 ContentArea.Name = "ContentArea"
 ContentArea.Size = UDim2.new(1, -(isSidebarCollapsed and sidebarCollapsedWidth or sidebarExpandedWidth), 1, -TopBarHeight)
@@ -920,7 +899,6 @@ PagesContainer.ClipsDescendants = true
 PagesContainer.ZIndex = 6
 PagesContainer.Parent = ContentArea
 
--- Search Results Floating Scroll
 local SearchResultsScroll = Instance.new("ScrollingFrame")
 SearchResultsScroll.Name = "SearchResultsScroll"
 SearchResultsScroll.Size = UDim2.new(0, 260, 0, 220)
@@ -952,9 +930,6 @@ SearchResultsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(func
     SearchResultsScroll.CanvasSize = UDim2.new(0, 0, 0, SearchResultsLayout.AbsoluteContentSize.Y + 12)
 end)
 
-----------------------------------------------------------------------
--- MINIMIZE & WINDOW LOGIC
-----------------------------------------------------------------------
 do
     local MainExpandedSize = Main.Size
     local savedPageTitle = "Home"
@@ -1044,16 +1019,14 @@ local function SetSidebarCollapsed(collapsed)
     end
 end
 
--- Make Window Resizable if supported
 if getgenv().MakeResizable then
     getgenv().MakeResizable(Main, "Main", Vector2.new(380, 260), Vector2.new(8192, 8192))
 end
 
--- Responsive TopBar capsule adjustment
 local function updateResponsiveHeader()
     if not Main or not UserCapsule then return end
     local totalW = Main.AbsoluteSize.X
-    local rightEdge -- x where the next element to the right of the game tag starts
+    local rightEdge
     if totalW < 600 then
         UserCapsule.Visible = false
         rightEdge = totalW - 190
@@ -1070,7 +1043,6 @@ local function updateResponsiveHeader()
         StatsContainer.Visible = true
         rightEdge = totalW - 440
     end
-    -- Game tag shrinks gradually with the window and only hides when there is no room left
     if GameTagPill then
         local available = rightEdge - 126 - 10
         if available < 34 then
@@ -1084,7 +1056,6 @@ end
 Main:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateResponsiveHeader)
 task.defer(updateResponsiveHeader)
 
--- Rainbow loop listener
 local lastRainbowTick = 0
 RunService.RenderStepped:Connect(function()
     if env.Destroyed then return end
@@ -1102,7 +1073,6 @@ end)
 getgenv().ApplyToxTheme()
 getgenv().SetToxUITransparency(Settings.ToxUITransparency or 0, true)
 
--- Register globals in UI table for subsequent modules
 env.ToxUI = env.ToxUI or {}
 local UI = env.ToxUI
 UI.DefaultTheme = DefaultTheme

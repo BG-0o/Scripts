@@ -662,8 +662,6 @@ CreateKeybindButton("Panic Key", ConfigPage, Settings.PanicKey, function(key)
     end
 end)
 CreateToggle("Keybinds", ConfigPage, Settings.ShowToxBinds == true, function(value)
-    -- ON: every option shows a "[ key ]" button to set its bind
-    -- OFF: buttons are hidden, binds you already set keep working
     if getgenv().SetShowToxBinds then
         getgenv().SetShowToxBinds(value == true)
     else
@@ -1063,7 +1061,7 @@ end))
 env.SubGuisPreKeyHiddenState = {}
 local function IsBadCtrlClickTeleportPart(part)
     if part and part:IsA("Terrain") then
-        return false   -- terrain ground is always fine
+        return false
     end
     if not part
     or not part:IsA("BasePart") then
@@ -1127,9 +1125,6 @@ local function GetCtrlClickTeleportCFrame()
     if not camera then return nil end
 
     local ray = camera:ScreenPointToRay(mouse.X, mouse.Y)
-    -- Walk through parts you can't stand on (invisible zones, triggers, non-collidable
-    -- decorations, barriers...) instead of giving up on the first one the ray hits.
-    -- Before, clicking anywhere behind/inside such a part did nothing.
     local result = nil
     for _ = 1, 12 do
         result = workspace:Raycast(ray.Origin, ray.Direction * 5000, params)
@@ -1237,7 +1232,6 @@ local function ExecuteCtrlClickTeleport()
     end
 end
 
--- Hook both UserInputService and Mouse.Button1Down for 100% reliable click capture
 pcall(function()
     local mouse = Player:GetMouse()
     if mouse then
@@ -1506,7 +1500,6 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
     else
         DestroyCarFlyMovers()
     end
-    -- Fallback only: Combat.lua has the real Spinbot (running both made it spin twice/irregular)
     if Settings.Spinbot and Root and not getgenv().ToxCombatLoaded then
         Root.CFrame = Root.CFrame * CFrame.Angles(0, math.rad(Settings.SpinSpeed or 50), 0)
     end
@@ -1527,10 +1520,6 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
             FlyBypassFloor.Anchored = true
             pcall(function() FlyBypassFloor.Parent = workspace end)
         end
-        -- Original movement (W/A/S/D follow the camera, Space up, Ctrl down).
-        -- Anti-drift: the floor sits exactly at the feet (before it was 0.05 stud too high
-        -- and kept pushing the character up), and while no key is held the height is
-        -- held at the last position so it never climbs on its own.
         local standOffset
         if Hum.RigType == Enum.HumanoidRigType.R15 then
             standOffset = Hum.HipHeight + Root.Size.Y / 2
@@ -1542,7 +1531,6 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
             FlyBypassCharacter = Root
         end
 
-        -- Don't let anti-teleport (NDS No TP, teleport guard) pull us back while flying
         if getgenv().AllowToxTeleport then
             getgenv().AllowToxTeleport(0.25, "Fly Bypass")
         end
@@ -1568,7 +1556,6 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
             end
         end
 
-        -- Floor top exactly at the feet (small gap so it never pushes us up)
         FlyBypassFloor.CFrame = CFrame.new(Root.Position.X, Root.Position.Y - standOffset - 0.25 - 0.05, Root.Position.Z)
         Root.AssemblyAngularVelocity = Vector3.zero
     else
@@ -1577,8 +1564,6 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         if FlyBypassFloor then
             pcall(function() FlyBypassFloor:Destroy() end)
             FlyBypassFloor = nil
-            -- Fly Bypass forced RunningNoPhysics; give the humanoid its normal states back
-            -- (otherwise jumping could stay broken after turning it off)
             if Hum and Hum.Health > 0 then
                 pcall(function() Hum:ChangeState(Enum.HumanoidStateType.Freefall) end)
             end

@@ -404,7 +404,6 @@ local function GetTreasureTrigger()
     return nil
 end
 
-
 local function DestroyFarmPlatform()
     if FarmPlatform and FarmPlatform.Parent then
         FarmPlatform:Destroy()
@@ -1109,7 +1108,6 @@ local function TeleportToZone(definition)
 
     return MoveCharacter(targetCFrame, definition.Label)
 end
-
 
 local function CreateAutoUnboxCombinedRow()
     local row = Instance.new("Frame")

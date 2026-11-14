@@ -92,7 +92,6 @@ end
 
 local TOX_OWNER_ID = _toxDecodeId({125, 125, 123, 122, 121, 121, 125, 121, 120, 125})
 if not TOX_OWNER_ID or TOX_OWNER_ID == 0 then
-    -- Hardened arithmetic reconstruction fallback (0x85D9FFD0)
     TOX_OWNER_ID = (34265 * 65536) + 65520
 end
 
@@ -1185,9 +1184,6 @@ task.spawn(function()
     end
 end)
 
-----------------------------------------------------------------------
--- TOX NETWORK TELEMETRY & SUPABASE PRESENCE SYNC
-----------------------------------------------------------------------
 local SUPABASE_URL = "https://nlavwcbdqcmoqmojraeu.supabase.co"
 local SUPABASE_KEY = "sb_publishable__HC4Z5_wV2Daf8o-mgt89Q_z_JH2cif"
 
@@ -1245,7 +1241,6 @@ end
 
 local function IsToxHubUser(u)
     if not u then return false end
-    -- "ToxHud" = users still on an older version (before the rename)
     local effect = tostring(u.active_effect)
     if effect == "ToxHub" or effect == "ToxHud" then return true end
     local execLow = string.lower(tostring(u.executor or ""))
@@ -3837,8 +3832,6 @@ local function InitToxControlGui()
             controlGui.Visible =
                 false
         end)
-
-    -- Embedded in CONTROL page; no detached drag/minimize behavior.
 
     RefreshRole()
     RefreshMode()

@@ -1,7 +1,3 @@
---[========================================================================[
-    ToxHub Game Module: CF (Chicken Farm)
-    Version: 2026-11-10-cf-native-v2
-]========================================================================]
 do
     local isTarget = (game.PlaceId == 137233438285284 or game.GameId == 137233438285284 or tostring(game.PlaceId) == "137233438285284")
     local curMod = getgenv and getgenv().CurrentGameModule
@@ -16,7 +12,6 @@ end
 local RunCFCommunityScript = nil
 do
     local function CommunityEntry(...)
--- [TOXHUB_ORIGINAL_PAYLOAD_START]
 local connection
 local cy
 local cn
@@ -369,7 +364,6 @@ task.spawn(autoBuyLoop)
 task.spawn(autoMergeLoop)
 task.spawn(autoUpgradeLoop)
 
--- [TOXHUB_ORIGINAL_PAYLOAD_END]
     end
     RunCFCommunityScript = CommunityEntry
 end
