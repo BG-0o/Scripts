@@ -873,7 +873,14 @@ local function SetupUnragdollNotifications(player)
     TrackConnection(player.CharacterAdded:Connect(bindCharacter))
 end
 
-InstallNoHackFailHook()
+-- Some executors don't support (or block) hookmetamethod: if it errors here, the whole
+-- FTF page used to stop loading and show no options. Now it just skips No Hack Fail.
+do
+    local okHook, hookErr = pcall(InstallNoHackFailHook)
+    if not okHook then
+        warn("[ToxHub FTF] No Hack Fail hook unavailable: " .. tostring(hookErr))
+    end
+end
 
 for _, other in ipairs(Players:GetPlayers()) do
     SetupUnragdollNotifications(other)
