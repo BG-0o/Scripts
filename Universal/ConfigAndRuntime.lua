@@ -730,7 +730,6 @@ local gameName = (resolvedMod and resolvedMod.GameName and resolvedMod.ShortName
     or (game.PlaceId == 131479356121251 and "50 Player BINGO! (BINGO)")
     or (game.PlaceId == 137233438285284 and "Chicken Farm (CF)")
     or (game.PlaceId == 113290951185459 and "Anime Dice (AD)")
-    or (game.PlaceId == 72858262610964 and "Tap Simulator REBORN (TSR)")
     or ("Place " .. placeKeyStr)
 local function GetSaveStatusText()
     local hasSave = (getgenv().HasSavedConfigForCurrentPlace and getgenv().HasSavedConfigForCurrentPlace())

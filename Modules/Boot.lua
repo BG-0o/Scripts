@@ -208,9 +208,6 @@ if HasRunningToxHub() then
     getgenv().ToxADModuleLoadedJobId = nil
     getgenv().ToxADModuleVersion = nil
     getgenv().ToxADModulePage = nil
-    getgenv().ToxTSRModuleLoadedJobId = nil
-    getgenv().ToxTSRModuleVersion = nil
-    getgenv().ToxTSRModulePage = nil
     getgenv().ToxGameModuleLoadedUrl = nil
     getgenv().ToxGameModuleLoadedPage = nil
     getgenv().ToxGameModuleLoadingUrl = nil
@@ -283,9 +280,6 @@ if HasRunningToxHub() then
     end
     if getgenv().ToxADCleanup then
         pcall(getgenv().ToxADCleanup)
-    end
-    if getgenv().ToxTSRCleanup then
-        pcall(getgenv().ToxTSRCleanup)
     end
     if getgenv().ScriptConnections then
         for _, conn in ipairs(getgenv().ScriptConnections) do
