@@ -9,8 +9,16 @@ while (not game.PlaceId or game.PlaceId == 0) and waitPlaceTries < 10 do
 end
 
 if getgenv then
+    -- Second copy started a few seconds after the first one in the same server
+    -- (auto-execute + the teleport queue both run after changing games): just stop,
+    -- no "ToxHub is already running" prompt. A manual re-execute later still asks.
+    local lock = getgenv().__ToxHubBootLock
+    if typeof(lock) == "table"
+    and lock.Game == game
+    and os.clock() - (tonumber(lock.StartedAt) or 0) < 15 then
+        return
+    end
     getgenv().Destroyed = false
-    getgenv().__ToxHubBootLock = nil
     getgenv().__ToxHubReexecCancelled = nil
 end
 

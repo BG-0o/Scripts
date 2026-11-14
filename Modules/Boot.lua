@@ -4,7 +4,7 @@ do
     local now = os.clock()
     if typeof(current) == "table"
     and current.Game == game
-    and now - (tonumber(current.StartedAt) or now) < 8 then
+    and now - (tonumber(current.StartedAt) or now) < 15 then
         return
     end
     env.__ToxHubBootLock = {
