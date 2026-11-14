@@ -1062,6 +1062,9 @@ AddConnection(UserInputService.JumpRequest:Connect(function()
 end))
 env.SubGuisPreKeyHiddenState = {}
 local function IsBadCtrlClickTeleportPart(part)
+    if part and part:IsA("Terrain") then
+        return false   -- terrain ground is always fine
+    end
     if not part
     or not part:IsA("BasePart") then
         return true
@@ -1124,7 +1127,24 @@ local function GetCtrlClickTeleportCFrame()
     if not camera then return nil end
 
     local ray = camera:ScreenPointToRay(mouse.X, mouse.Y)
-    local result = workspace:Raycast(ray.Origin, ray.Direction * 5000, params)
+    -- Walk through parts you can't stand on (invisible zones, triggers, non-collidable
+    -- decorations, barriers...) instead of giving up on the first one the ray hits.
+    -- Before, clicking anywhere behind/inside such a part did nothing.
+    local result = nil
+    for _ = 1, 12 do
+        result = workspace:Raycast(ray.Origin, ray.Direction * 5000, params)
+        if not result or not result.Instance then
+            break
+        end
+        local hit = result.Instance
+        local passThrough = hit:IsA("BasePart") and (not hit.CanCollide or IsBadCtrlClickTeleportPart(hit))
+        if hit:IsA("Terrain") or not passThrough then
+            break
+        end
+        table.insert(excluded, hit)
+        params.FilterDescendantsInstances = excluded
+        result = nil
+    end
 
     if not result or not result.Instance or IsBadCtrlClickTeleportPart(result.Instance) then
         if mouse.Target and not IsBadCtrlClickTeleportPart(mouse.Target) and mouse.Hit then
