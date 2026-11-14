@@ -2655,7 +2655,7 @@ TrackNDSExtraConnection(RunService.Heartbeat:Connect(function()
 end))
 
 
-CreateNDSSection("PLAYER")
+CreateNDSSection("SURVIVAL")
 
 NDSCreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
     Settings.NDSAutoWin = v
@@ -2666,14 +2666,6 @@ NDSCreateToggle("Auto Win", GamePage, Settings.NDSAutoWin, function(v)
         StopAutoWin(true)
     end
 end, "NDSAutoWin")
-
-NDSCreateToggle("No TP", GamePage, Settings.NDSNoTP, function(v)
-    getgenv().SetNDSNoTP(v, true)
-end, "NDSNoTP")
-
-NDSCreateToggle("Noclip", GamePage, Settings.Noclip, function(v)
-    SetShared("Noclip", v)
-end, "Noclip")
 
 -- % = how fast you can fall (0% = very slow float, 100% = almost normal fall)
 NDSCreateToggleWithSlider("No Fall Damage", GamePage, 0, 100, Settings.NoFallDamage, Settings.NoFallSpeed or 50, "%", function(v)
@@ -2689,7 +2681,29 @@ NDSCreateToggle("Anti Void", GamePage, Settings.AntiVoid, function(v)
     SetShared("AntiVoid", v)
 end, "AntiVoid")
 
+NDSCreateToggle("No TP", GamePage, Settings.NDSNoTP, function(v)
+    getgenv().SetNDSNoTP(v, true)
+end, "NDSNoTP")
+
+NDSCreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
+    SetShared("AntiFling", v)
+end, "AntiFling")
+
 CreateNDSSection("MOVEMENT")
+
+NDSCreateToggle("Noclip", GamePage, Settings.Noclip, function(v)
+    SetShared("Noclip", v)
+end, "Noclip")
+
+NDSCreateToggleWithSlider("Fly Bypass", GamePage, 0, 100, Settings.FlyBypass, Settings.FlySpeed or 10, "", function(v)
+    SetShared("FlyBypass", v)
+end, function(value)
+    Settings.FlySpeed = math.max(tonumber(value) or 10, 0)
+
+    if SyncValueVisuals then
+        SyncValueVisuals("FlyBypass", Settings.FlySpeed)
+    end
+end, "FlyBypass")
 
 NDSCreateToggleWithSlider("Water Fly", GamePage, 5, 250, Settings.NDSWaterFly, Settings.NDSWaterFlySpeed, "", function(v)
     getgenv().SetNDSWaterFly(v, true)
@@ -2710,15 +2724,9 @@ NDSCreateToggle("Walk on Water", GamePage, Settings.NDSWaterWalk == true, functi
     Settings.NDSWaterWalk = v == true
 end, "NDSWaterWalk")
 
-NDSCreateToggleWithSlider("Fly Bypass", GamePage, 0, 100, Settings.FlyBypass, Settings.FlySpeed or 10, "", function(v)
-    SetShared("FlyBypass", v)
-end, function(value)
-    Settings.FlySpeed = math.max(tonumber(value) or 10, 0)
-
-    if SyncValueVisuals then
-        SyncValueVisuals("FlyBypass", Settings.FlySpeed)
-    end
-end, "FlyBypass")
+NDSCreateToggle("Island Rocks Collidable", GamePage, Settings.NDSIslandRocksCollidable, function(v)
+    SetNDSIslandRocksCollidable(v)
+end, "NDSIslandRocksCollidable")
 
 NDSCreateToggleWithSlider("Car Fly", GamePage, 5, 300, Settings.CarFly, Settings.CarFlySpeed, "", function(v)
     SetShared("CarFly", v)
@@ -2734,26 +2742,7 @@ NDSCreateToggle("Ctrl Click TP", GamePage, Settings.CtrlClickTP, function(v)
     SetShared("CtrlClickTP", v)
 end, "CtrlClickTP")
 
-CreateNDSSection("FLING")
-
-NDSCreateToggleWithSlider("Walk Fling", GamePage, 1, 100, Settings.WalkFling, Settings.WalkFlingPower or 30, "%", function(v)
-    SetShared("WalkFling", v)
-
-    if v then
-        StartNDSNoFall()
-    elseif not Settings.NoFallDamage then
-        StopNDSNoFall()
-    end
-end, function(val)
-    Settings.WalkFlingPower = tonumber(val) or 30
-    if getgenv().ToxOnSharedValueChanged then
-        getgenv().ToxOnSharedValueChanged("WalkFling", val)
-    end
-end, "WalkFling")
-
-NDSCreateToggle("Anti Fling", GamePage, Settings.AntiFling, function(v)
-    SetShared("AntiFling", v)
-end, "AntiFling")
+CreateNDSSection("PLAYERS")
 
 NDSCreateToggleWithSlider("Ultra Instinct", GamePage, 5, 50, Settings.UltraInstinct, Settings.UltraInstinctRange or 14, " studs", function(v)
     SetShared("UltraInstinct", v)
@@ -2779,6 +2768,33 @@ end, function(val)
         SyncValueVisuals("AntiSocial", Settings.AntiSocialRange)
     end
 end, "AntiSocial")
+
+NDSCreateToggleWithSlider("Walk Fling", GamePage, 1, 100, Settings.WalkFling, Settings.WalkFlingPower or 30, "%", function(v)
+    SetShared("WalkFling", v)
+
+    if v then
+        StartNDSNoFall()
+    elseif not Settings.NoFallDamage then
+        StopNDSNoFall()
+    end
+end, function(val)
+    Settings.WalkFlingPower = tonumber(val) or 30
+    if getgenv().ToxOnSharedValueChanged then
+        getgenv().ToxOnSharedValueChanged("WalkFling", val)
+    end
+end, "WalkFling")
+
+do
+    local createButton = CreateButton or (getgenv and getgenv().CreateButton)
+    if createButton then
+        TrackNDSControl(createButton("Tox Magnet", GamePage, function()
+            local magnet = getgenv().ToxMagnetGui
+            if magnet then
+                magnet.Visible = not magnet.Visible
+            end
+        end))
+    end
+end
 
 CreateNDSSection("DISASTERS")
 
@@ -2806,11 +2822,21 @@ NDSCreateToggle("Remove Barbed Wire", GamePage, Settings.NDSRemoveBarbedWire, fu
     SetNDSHazard("BarbedWire", v)
 end, "NDSRemoveBarbedWire")
 
-CreateNDSSection("ISLAND")
+CreateNDSSection("VISUAL & AUDIO")
 
-NDSCreateToggle("Island Rocks Collidable", GamePage, Settings.NDSIslandRocksCollidable, function(v)
-    SetNDSIslandRocksCollidable(v)
-end, "NDSIslandRocksCollidable")
+NDSCreateToggle("Clean Screen", GamePage, Settings.NDSCleanScreen == true, function(v)
+    -- no fog / haze / blur / tint / clouds / wind-rain-snow-sand particles
+    SetNDSCleanScreen(v)
+end, "NDSCleanScreen")
+
+NDSCreateToggle("Mute Game Sounds", GamePage, Settings.NDSMuteGameSounds == true, function(v)
+    -- every game sound (disasters, wind, alarms...). Voice chat keeps working.
+    SetNDSMuteGameSounds(v)
+end, "NDSMuteGameSounds")
+
+NDSCreateToggle("Mute Cheer Sound", GamePage, Settings.NDSMuteCheerSound, function(v)
+    SetNDSMuteCheer(v)
+end, "NDSMuteCheerSound")
 
 CreateNDSSection("EXTRAS")
 
@@ -2821,32 +2847,6 @@ end)
 NDSCreateButton("Interact All", GamePage, function()
     InteractAll()
 end)
-
-NDSCreateToggle("Mute Cheer Sound", GamePage, Settings.NDSMuteCheerSound, function(v)
-    SetNDSMuteCheer(v)
-end, "NDSMuteCheerSound")
-
-do
-    local createButton = CreateButton or (getgenv and getgenv().CreateButton)
-    if createButton then
-        TrackNDSControl(createButton("Tox Magnet", GamePage, function()
-            local magnet = getgenv().ToxMagnetGui
-            if magnet then
-                magnet.Visible = not magnet.Visible
-            end
-        end))
-    end
-end
-
-NDSCreateToggle("Mute Game Sounds", GamePage, Settings.NDSMuteGameSounds == true, function(v)
-    -- every game sound (disasters, wind, alarms...). Voice chat keeps working.
-    SetNDSMuteGameSounds(v)
-end, "NDSMuteGameSounds")
-
-NDSCreateToggle("Clean Screen", GamePage, Settings.NDSCleanScreen == true, function(v)
-    -- no fog / haze / blur / tint / clouds / wind-rain-snow-sand particles
-    SetNDSCleanScreen(v)
-end, "NDSCleanScreen")
 
 CreateNDSSection("TELEPORTS")
 
