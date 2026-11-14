@@ -3463,6 +3463,15 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             "Instant Proximity Prompts", "Tool Magnet",
             "Force Shift Lock", "Fake Lag (%)", "Normalize Animations", "Fix Unanchored Parts",
         })
+        SetOrder(visualSection, {
+            -- master switches
+            "ESP", "Team Colors", "ESP Max Dist",
+            -- what is drawn
+            "Charms", "2D Box ESP", "Skeleton ESP", "Head Dot ESP", "Tracers",
+            "Names", "Show Health", "Distance", "Target ESP",
+            -- colors
+            "Rainbow", "ESP Color", "🎨 Pick Custom ESP Color (HSV)",
+        })
         -- the two window buttons always at the very end
         if miscSection and type(miscSection.Controls) == "table" then
             for _, name in ipairs({ "Tox Music Player", "Tox Waypoints", "Tox Avatar Items" }) do
