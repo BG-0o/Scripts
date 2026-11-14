@@ -88,6 +88,8 @@ local LastFogApply = 0
 local LastCrawlCheck = 0
 local LastStatScan = 0
 local CrawlingCached = false
+local WasCrawling = false
+local NormalWalkSpeed = nil
 local AutoEscapeGeneration = 0
 local ComputerHighlights = setmetatable({}, {__mode = "k"})
 local OriginalLighting = {
@@ -444,6 +446,12 @@ local function ApplyNoFog(enabled)
     end
 end
 
+-- Crawling detection. The old one used "HipHeight < 1.15", but on R6 characters the
+-- normal HipHeight is 0 -> it thought you were ALWAYS crawling and changed your normal speed.
+-- Now: a crawl value in the stats, a playing crawl animation, or the hip height dropping
+-- well below what it is when standing.
+local CrawlBaseline = { Humanoid = nil, HipHeight = 0 }
+
 local function IsLikelyCrawling()
     local stats = GetTempStats(Player)
 
@@ -462,13 +470,27 @@ local function IsLikelyCrawling()
 
     local character = Player.Character
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then
+        return false
+    end
 
-    if humanoid then
-        -- (the old "WalkSpeed <= 9" guess also matched the speed WE set, so you stayed
-        -- slow after standing up; only the hip height is used now)
-        if humanoid.HipHeight < 1.15 then
-            return true
+    local okTracks, tracks = pcall(function() return humanoid:GetPlayingAnimationTracks() end)
+    if okTracks and tracks then
+        for _, track in ipairs(tracks) do
+            local animName = string.lower(tostring(track.Name) .. " " .. tostring(track.Animation and track.Animation.Name or ""))
+            if string.find(animName, "crawl", 1, true) then
+                return true
+            end
         end
+    end
+
+    if CrawlBaseline.Humanoid ~= humanoid then
+        CrawlBaseline.Humanoid = humanoid
+        CrawlBaseline.HipHeight = humanoid.HipHeight
+    end
+    CrawlBaseline.HipHeight = math.max(CrawlBaseline.HipHeight, humanoid.HipHeight)
+    if CrawlBaseline.HipHeight > 0.5 and humanoid.HipHeight < CrawlBaseline.HipHeight * 0.7 then
+        return true
     end
 
     return false
@@ -951,8 +973,24 @@ TrackConnection(RunService.Heartbeat:Connect(function()
             LastCrawlCheck = now
             CrawlingCached = IsLikelyCrawling()
         end
+        local crawlValue = math.clamp(tonumber(Settings.FTFCrawlSpeedValue) or 8, 1, 30)
         if CrawlingCached then
-            humanoid.WalkSpeed = math.clamp(tonumber(Settings.FTFCrawlSpeedValue) or 8, 1, 30)
+            if not WasCrawling then
+                NormalWalkSpeed = humanoid.WalkSpeed   -- remember the standing speed
+            end
+            WasCrawling = true
+            humanoid.WalkSpeed = crawlValue
+        elseif WasCrawling then
+            -- stood up: give the normal speed back (only if the game didn't already)
+            WasCrawling = false
+            if NormalWalkSpeed and math.abs(humanoid.WalkSpeed - crawlValue) < 0.01 then
+                humanoid.WalkSpeed = NormalWalkSpeed
+            end
+        end
+    elseif WasCrawling then
+        WasCrawling = false
+        if humanoid and NormalWalkSpeed then
+            humanoid.WalkSpeed = NormalWalkSpeed
         end
     end
 
