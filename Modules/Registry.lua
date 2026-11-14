@@ -45,7 +45,7 @@ local GameModuleRegistry = {
     },
     [4522347649] = {
         ShortName = "ADMIN",
-        GameName = "Kohls Admin House",
+        GameName = "FREE ADMIN",
         Url = "https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/Games/ADMIN.lua",
         Ready = true
     },

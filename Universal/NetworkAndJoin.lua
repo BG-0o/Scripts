@@ -915,7 +915,7 @@ local ResolveGameName = ResolvePlaceName
 local SupportedToxGames = {
     { Name = "Murder Mystery 2", PlaceId = 142823291, Code = "MM2", Status = "online" },
     { Name = "Natural Disaster Survival", PlaceId = 189707, Code = "NDS", Status = "online" },
-    { Name = "Kohls Admin House", PlaceId = 4522347649, Code = "ADMIN", Status = "online" },
+    { Name = "FREE ADMIN", PlaceId = 4522347649, Code = "ADMIN", Status = "online" },
     { Name = "Build A Boat For Treasure", PlaceId = 537413528, Code = "BABFT", Status = "online" },
     { Name = "Lucky Block Battleground", PlaceId = 662417684, Code = "LBB", Status = "online" },
     { Name = "Flee the Facility", PlaceId = 893973440, Code = "FTF", Status = "online" },
