@@ -875,7 +875,10 @@ end
 
 -- Some executors don't support (or block) hookmetamethod: if it errors here, the whole
 -- FTF page used to stop loading and show no options. Now it just skips No Hack Fail.
-do
+-- The hook catches EVERY method call of the game. On some executors that breaks the
+-- game's own scripts (WaitForChild returns nil -> "Attempted to call require with
+-- invalid argument(s)") and the FTF page. So it is only installed when No Hack Fail is ON.
+if Settings.FTFNoHackFail then
     local okHook, hookErr = pcall(InstallNoHackFailHook)
     if not okHook then
         warn("[ToxHub FTF] No Hack Fail hook unavailable: " .. tostring(hookErr))
@@ -1047,7 +1050,12 @@ FTFCreateToggle(
     Settings.FTFNoHackFail,
     function(value)
         Settings.FTFNoHackFail = value == true
-        InstallNoHackFailHook()
+        if Settings.FTFNoHackFail then
+            local okHook, hookErr = pcall(InstallNoHackFailHook)
+            if not okHook then
+                warn("[ToxHub FTF] No Hack Fail hook unavailable: " .. tostring(hookErr))
+            end
+        end
         AutoSaveConfiguration()
     end,
     "FTFNoHackFail"
