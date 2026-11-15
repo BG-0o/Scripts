@@ -1666,7 +1666,75 @@ local function NDSScanWaterLevel()
     return best, bestName
 end
 
-function NDSGetWaterLevel(position, character)
+local NDSWaterParts = { List = {}, Time = 0 }
+
+local function NDSIsWaterLike(object)
+    if object.Material == Enum.Material.Water then
+        return true
+    end
+    local lower = string.lower(object.Name)
+    if string.find(lower, "water", 1, true) or string.find(lower, "ocean", 1, true)
+    or string.find(lower, "flood", 1, true) or string.find(lower, "lake", 1, true)
+    or lower == "sea" or string.find(lower, "sea ", 1, true) then
+        return true
+    end
+    local size = object.Size
+    if not object.CanCollide and object.Transparency >= 0.1 and object.Transparency <= 0.9
+    and math.min(size.X, size.Z) >= 60 then
+        local c = object.Color
+        if c.B > c.R + 0.1 and c.B >= c.G - 0.05 then
+            return true
+        end
+    end
+    return false
+end
+
+local function NDSRefreshWaterParts()
+    local now = os.clock()
+    if now - NDSWaterParts.Time < 1.5 then
+        return NDSWaterParts.List
+    end
+    NDSWaterParts.Time = now
+    local list = {}
+    local myCharacter = Player.Character
+    for _, object in ipairs(workspace:GetDescendants()) do
+        if object:IsA("BasePart") and object.Name ~= "ToxNDSSupport"
+        and math.max(object.Size.X, object.Size.Z) >= 20
+        and not (myCharacter and object:IsDescendantOf(myCharacter))
+        and NDSIsWaterLike(object) then
+            table.insert(list, object)
+        end
+    end
+    NDSWaterParts.List = list
+    return list
+end
+
+local function NDSWaterTopAt(position, feetY)
+    local best = nil
+    for _, part in ipairs(NDSRefreshWaterParts()) do
+        if part.Parent then
+            local localPos = part.CFrame:PointToObjectSpace(position)
+            local half = part.Size / 2
+            if math.abs(localPos.X) <= half.X and math.abs(localPos.Z) <= half.Z then
+                local top = part.Position.Y + half.Y
+                local bottom = part.Position.Y - half.Y
+                if feetY >= bottom - 2 and feetY <= top + 3 then
+                    if not best or top > best then
+                        best = top
+                    end
+                end
+            end
+        end
+    end
+    return best
+end
+
+function NDSGetWaterLevel(position, character, feetY)
+    feetY = feetY or position.Y - 3
+    local dynamic = NDSWaterTopAt(position, feetY)
+    if dynamic then
+        return dynamic
+    end
     local map = workspace:FindFirstChild("Structure")
     local now = os.clock()
     if NDSWaterCache.Map ~= map or (not NDSWaterCache.Level and now - NDSWaterCache.Time > 3) then
@@ -1679,7 +1747,7 @@ function NDSGetWaterLevel(position, character)
         if not level then
             local params = RaycastParams.new()
             params.FilterType = Enum.RaycastFilterType.Exclude
-            params.FilterDescendantsInstances = { character, workspace.CurrentCamera, NDSSupportPart }
+            params.FilterDescendantsInstances = { character, workspace.CurrentCamera }
             params.IgnoreWater = false
             local hit = workspace:Raycast(position + Vector3.new(0, 400, 0), Vector3.new(0, -1200, 0), params)
             if hit and hit.Instance:IsA("Terrain") and hit.Material == Enum.Material.Water then
@@ -1687,16 +1755,13 @@ function NDSGetWaterLevel(position, character)
             end
         end
         NDSWaterCache.Level = level
-        if not NDSWaterCache.Notified and CustomNotify then
-            NDSWaterCache.Notified = true
-            if level then
-                CustomNotify(string.format("Walk on Water • sea level %.1f (%s)", level, tostring(name)), Color3.fromRGB(100, 200, 255), 4)
-            else
-                CustomNotify("Walk on Water • no water found on this map", Color3.fromRGB(255, 180, 70), 4)
-            end
-        end
+        NDSWaterCache.Name = name
     end
-    return NDSWaterCache.Level
+    local level = NDSWaterCache.Level
+    if level and feetY <= level + 3 and feetY >= level - 40 then
+        return level
+    end
+    return nil
 end
 
 local NDSSupportPart = nil
@@ -1775,13 +1840,14 @@ local function NDSSupportStep(delta)
     end
 
     if wantWater then
-        local surfaceY = NDSGetWaterLevel(root.Position, character)
+        local surfaceY = NDSGetWaterLevel(root.Position, character, feetY)
         if surfaceY then
-            local surfaceTop = surfaceY + 1
+            local surfaceTop = surfaceY + 0.5
             if feetY >= surfaceTop - 0.6 then
                 bestY = math.max(bestY or -math.huge, surfaceTop)
-            elseif feetY >= surfaceY - 6 then
-                root.AssemblyLinearVelocity = Vector3.new(velocity.X, math.max(velocity.Y, 24), velocity.Z)
+            else
+                local rise = math.clamp((surfaceTop - feetY) * 8, 30, 90)
+                root.AssemblyLinearVelocity = Vector3.new(velocity.X, math.max(velocity.Y, rise), velocity.Z)
             end
         end
     end
