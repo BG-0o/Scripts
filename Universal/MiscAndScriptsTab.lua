@@ -286,12 +286,16 @@ CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(t
 Settings.MagnetMode = Settings.MagnetMode or "Orbit"
 Settings.MagnetShape = Settings.MagnetShape or "Orbit"
 Settings.MagnetAttackStyle = Settings.MagnetAttackStyle or "Swarm"
-Settings.PartMagnetRange = tonumber(Settings.PartMagnetRange) or 80
-Settings.MagnetRadius = tonumber(Settings.MagnetRadius) or 10
-Settings.MagnetSpeed = math.clamp(tonumber(Settings.MagnetSpeed) or 3, 0, 20)
+Settings.PartMagnetRange = math.clamp(tonumber(Settings.PartMagnetRange) or 80, 5, 500)
+Settings.MagnetRadius = math.clamp(tonumber(Settings.MagnetRadius) or 10, 2, 100)
+-- Spin 0-100 (velocidade real = Spin / 5). Migra o valor antigo MagnetSpeed (0-20).
+if tonumber(Settings.MagnetSpin) == nil then
+    Settings.MagnetSpin = (tonumber(Settings.MagnetSpeed) or 3) * 5
+end
+Settings.MagnetSpin = math.clamp(math.floor(tonumber(Settings.MagnetSpin) + 0.5), 0, 100)
 Settings.MagnetHeight = tonumber(Settings.MagnetHeight) or 0
 Settings.MagnetAttackDistance = tonumber(Settings.MagnetAttackDistance) or 3
-Settings.MagnetPull = tonumber(Settings.MagnetPull) or 120
+Settings.MagnetPull = math.clamp(tonumber(Settings.MagnetPull) or 100, 5, 100)
 Settings.MagnetMaxParts = tonumber(Settings.MagnetMaxParts) or 70
 Settings.PartMagnet = false
 
@@ -324,11 +328,11 @@ do
     -- Formas: (i, n, t, centro, cframe orientado, tamanho, velocidade) -> posicao
     local SHAPE_ORDER = {
         "Orbit", "Ring", "Rings", "Wave",
-        "Ripple", "Spiral", "DNA", "Tornado",
-        "Ball", "Cage", "Halo", "Atom",
-        "Wings", "Wall", "Shield", "Snake",
-        "Star", "Heart", "Fountain", "Blades",
-        "Floor",
+        "Spiral", "Halo", "Tornado", "Blades",
+        "Fountain", "Floor", "Galaxy", "Flower",
+        "Infinity", "Torus", "Crown", "Pillars",
+        "Comet", "Pulse", "Pyramid", "Cube",
+        "Rain",
     }
     local SHAPES = {}
 
@@ -356,108 +360,22 @@ do
         local y = sin(a * 4 + t * S * 1) * R * 0.25
         return c + V3(cos(a) * R, y, sin(a) * R)
     end
-    SHAPES.Ripple = function(i, n, t, c, cf, R, S)
-        local k = (i - 1) % 4
-        local j = floor((i - 1) / 4)
-        local m = max(ceil(n / 4), 1)
-        local rr = R * (0.3 + 0.25 * k)
-        local a = TAU * j / m + k * 0.4 + t * S * 0.1
-        local y = sin(t * S * 1 - k * 1.2) * R * 0.15 - 1
-        return c + V3(cos(a) * rr, y, sin(a) * rr)
-    end
     SHAPES.Spiral = function(i, n, t, c, cf, R, S)
         local f = (i - 1) / max(n - 1, 1)
         local a = f * TAU * 3 + t * S * 0.4
         local rr = R * 0.6
         return c + V3(cos(a) * rr, f * R * 2 - 2, sin(a) * rr)
     end
-    SHAPES.DNA = function(i, n, t, c, cf, R, S)
-        local strand = (i - 1) % 2
-        local j = floor((i - 1) / 2)
-        local f = j / max(ceil(n / 2) - 1, 1)
-        local a = f * TAU * 2 + t * S * 0.4 + strand * math.pi
-        local rr = R * 0.45
-        return c + V3(cos(a) * rr, f * R * 2 - 2, sin(a) * rr)
+    SHAPES.Halo = function(i, n, t, c, cf, R, S)
+        local rr = max(R * 0.35, 2)
+        local a = TAU * (i - 1) / n + t * S * 0.5
+        return c + V3(cos(a) * rr, 5, sin(a) * rr)
     end
     SHAPES.Tornado = function(i, n, t, c, cf, R, S)
         local f = ((i - 1) / n + t * S * 0.03) % 1
         local rr = R * (0.15 + f * 0.85)
         local a = i * GOLD + t * S * (0.6 - f * 0.2)
         return c + V3(cos(a) * rr, f * R * 2.5 - 3, sin(a) * rr)
-    end
-    SHAPES.Ball = function(i, n, t, c, cf, R, S)
-        return c + V3(0, R + 4, 0) + SphereDir(i, n, t * S * 0.4) * (R * 0.6)
-    end
-    SHAPES.Cage = function(i, n, t, c, cf, R, S)
-        return c + SphereDir(i, n, t * S * 0.4) * (R * 0.8)
-    end
-    SHAPES.Halo = function(i, n, t, c, cf, R, S)
-        local rr = max(R * 0.35, 2)
-        local a = TAU * (i - 1) / n + t * S * 0.5
-        return c + V3(cos(a) * rr, 5, sin(a) * rr)
-    end
-    SHAPES.Atom = function(i, n, t, c, cf, R, S)
-        local k = (i - 1) % 3
-        local j = floor((i - 1) / 3)
-        local m = max(ceil(n / 3), 1)
-        local a = TAU * j / m + t * S * 0.5
-        local rot = CFrame.Angles(0, k * TAU / 3, 0) * CFrame.Angles(math.rad(65), 0, 0)
-        return c + V3(0, 2, 0) + rot:VectorToWorldSpace(V3(cos(a) * R, 0, sin(a) * R))
-    end
-    SHAPES.Wings = function(i, n, t, c, cf, R, S)
-        local side = (i % 2 == 0) and 1 or -1
-        local j = floor((i - 1) / 2)
-        local f = j / max(ceil(n / 2) - 1, 1)
-        local flap = sin(t * S * 0.8) * 0.6
-        local x = side * (2 + f * R)
-        local y = 2 + sin(f * math.pi) * R * 0.4 + flap * f * R * 0.5
-        return LocalPos(cf, x, y, 2 + f * R * 0.3)
-    end
-    SHAPES.Wall = function(i, n, t, c, cf, R, S)
-        local cols = max(ceil(sqrt(n)), 1)
-        local col = (i - 1) % cols
-        local row = floor((i - 1) / cols)
-        return LocalPos(cf, (col - (cols - 1) / 2) * 3, row * 3 - 1, -R)
-    end
-    SHAPES.Shield = function(i, n, t, c, cf, R, S)
-        local row = (i - 1) % 3
-        local ci = floor((i - 1) / 3)
-        local cols = max(ceil(n / 3), 1)
-        local f = cols > 1 and ci / (cols - 1) or 0.5
-        local ang = (f - 0.5) * math.rad(150)
-        return LocalPos(cf, sin(ang) * R, row * 2.5 - 1, -cos(ang) * R)
-    end
-    SHAPES.Snake = function(i, n, t, c, cf, R, S)
-        local f = (i - 1) / max(n - 1, 1)
-        local x = sin(f * TAU * 1.5 - t * S * 1) * R * 0.25
-        local y = 1 + sin(f * TAU - t * S * 0.6) * 1.2
-        return LocalPos(cf, x, y, 3 + f * R * 2)
-    end
-    SHAPES.Star = function(i, n, t, c, cf, R, S)
-        local s = ((i - 1) / n + t * S * 0.02) % 1
-        local seg = s * 10
-        local k = floor(seg)
-        local f = seg - k
-        local rot = t * S * 0.3
-        local function Vert(v)
-            local a = v * TAU / 10 + rot
-            local r = (v % 2 == 0) and R or R * 0.45
-            return V3(cos(a) * r, 1, sin(a) * r)
-        end
-        return c + Vert(k):Lerp(Vert(k + 1), f)
-    end
-    SHAPES.Heart = function(i, n, t, c, cf, R, S)
-        local s = TAU * (i - 1) / n + t * S * 0.2
-        local x = 16 * sin(s) ^ 3
-        local y = 13 * cos(s) - 5 * cos(2 * s) - 2 * cos(3 * s) - cos(4 * s)
-        local k = R / 16
-        return LocalPos(cf, x * k, y * k + R * 0.5 + 3, -(R * 0.3 + 4))
-    end
-    SHAPES.Fountain = function(i, n, t, c, cf, R, S)
-        local ph = ((i * 0.618034) % 1 + t * S * 0.05) % 1
-        local a = i * GOLD
-        local rr = ph * R
-        return c + V3(cos(a) * rr, ph * (1 - ph) * 4 * R * 0.9, sin(a) * rr)
     end
     SHAPES.Blades = function(i, n, t, c, cf, R, S)
         local b = (i - 1) % 4
@@ -467,11 +385,111 @@ do
         local a = b * TAU / 4 + t * S * 0.6
         return c + V3(cos(a) * rr, 1, sin(a) * rr)
     end
+    SHAPES.Fountain = function(i, n, t, c, cf, R, S)
+        local ph = ((i * 0.618034) % 1 + t * S * 0.05) % 1
+        local a = i * GOLD
+        local rr = ph * R
+        return c + V3(cos(a) * rr, ph * (1 - ph) * 4 * R * 0.9, sin(a) * rr)
+    end
     SHAPES.Floor = function(i, n, t, c, cf, R, S)
         local cols = max(ceil(sqrt(n)), 1)
         local col = (i - 1) % cols
         local row = floor((i - 1) / cols)
         return LocalPos(cf, (col - (cols - 1) / 2) * 3, -3.6, (row - (cols - 1) / 2) * 3)
+    end
+    -- Disco com 3 bracos em espiral
+    SHAPES.Galaxy = function(i, n, t, c, cf, R, S)
+        local arm = (i - 1) % 3
+        local j = floor((i - 1) / 3)
+        local f = (j + 1) / max(ceil(n / 3), 1)
+        local a = arm * TAU / 3 + f * 2.5 + t * S * 0.3
+        return c + V3(cos(a) * f * R, 0.5, sin(a) * f * R)
+    end
+    -- Flor de 5 petalas (rosa polar)
+    SHAPES.Flower = function(i, n, t, c, cf, R, S)
+        local th = math.pi * (i - 1) / n + t * S * 0.2
+        local r = R * cos(5 * th)
+        return c + V3(cos(th) * r, 1, sin(th) * r)
+    end
+    -- Oito deitado na sua frente/volta
+    SHAPES.Infinity = function(i, n, t, c, cf, R, S)
+        local s = TAU * (i - 1) / n + t * S * 0.4
+        local d = 1 + sin(s) ^ 2
+        return LocalPos(cf, R * cos(s) / d, 1, R * sin(s) * cos(s) / d)
+    end
+    -- Rosquinha girando
+    SHAPES.Torus = function(i, n, t, c, cf, R, S)
+        local major = R * 0.75
+        local minor = max(R * 0.25, 1.5)
+        local u = TAU * (i - 1) / n + t * S * 0.3
+        local v = i * GOLD * 3 + t * S * 0.6
+        local w = major + minor * cos(v)
+        return c + V3(cos(u) * w, minor * sin(v) + 1, sin(u) * w)
+    end
+    -- Coroa com pontas em zigue-zague
+    SHAPES.Crown = function(i, n, t, c, cf, R, S)
+        local a = TAU * (i - 1) / n + t * S * 0.4
+        local tri = math.abs(((a * 8 / TAU) % 2) - 1)
+        local rr = R * 0.6
+        return c + V3(cos(a) * rr, 3 + tri * R * 0.4, sin(a) * rr)
+    end
+    -- 4 colunas girando em volta
+    SHAPES.Pillars = function(i, n, t, c, cf, R, S)
+        local p = (i - 1) % 4
+        local j = floor((i - 1) / 4)
+        local m = max(ceil(n / 4) - 1, 1)
+        local a = p * TAU / 4 + t * S * 0.3
+        return c + V3(cos(a) * R, -2 + j / m * R * 1.5, sin(a) * R)
+    end
+    -- Cometa: uma cabeca orbitando com rastro atras
+    SHAPES.Comet = function(i, n, t, c, cf, R, S)
+        local f = (i - 1) / max(n - 1, 1)
+        local a = t * S * 0.6 - f * 2.2
+        local spread = f * 1.5 * sin(i * 7)
+        local rr = R + spread
+        return c + V3(cos(a) * rr, 1 + sin(a * 2) * R * 0.2 + spread * 0.5, sin(a) * rr)
+    end
+    -- Esfera que enche e esvazia
+    SHAPES.Pulse = function(i, n, t, c, cf, R, S)
+        local radius = R * (0.55 + 0.35 * sin(t * S * 0.8))
+        return c + V3(0, 2, 0) + SphereDir(i, n, t * S * 0.2) * radius
+    end
+    -- Piramide (arestas) girando
+    local PYR = {
+        { V3(-1, 0, -1), V3(1, 0, -1) }, { V3(1, 0, -1), V3(1, 0, 1) },
+        { V3(1, 0, 1), V3(-1, 0, 1) }, { V3(-1, 0, 1), V3(-1, 0, -1) },
+        { V3(-1, 0, -1), V3(0, 1, 0) }, { V3(1, 0, -1), V3(0, 1, 0) },
+        { V3(1, 0, 1), V3(0, 1, 0) }, { V3(-1, 0, 1), V3(0, 1, 0) },
+    }
+    SHAPES.Pyramid = function(i, n, t, c, cf, R, S)
+        local e = PYR[(i - 1) % 8 + 1]
+        local f = (floor((i - 1) / 8) + 0.5) / max(ceil(n / 8), 1)
+        local p = e[1]:Lerp(e[2], f)
+        local local3 = V3(p.X * R * 0.7, p.Y * R * 1.2 - 2, p.Z * R * 0.7)
+        return c + CFrame.Angles(0, t * S * 0.3, 0):VectorToWorldSpace(local3)
+    end
+    -- Cubo (arestas) girando em dois eixos
+    local CUBE = {}
+    for _, a in ipairs({ -1, 1 }) do
+        for _, b in ipairs({ -1, 1 }) do
+            CUBE[#CUBE + 1] = { V3(-1, a, b), V3(1, a, b) }
+            CUBE[#CUBE + 1] = { V3(a, -1, b), V3(a, 1, b) }
+            CUBE[#CUBE + 1] = { V3(a, b, -1), V3(a, b, 1) }
+        end
+    end
+    SHAPES.Cube = function(i, n, t, c, cf, R, S)
+        local e = CUBE[(i - 1) % 12 + 1]
+        local f = (floor((i - 1) / 12) + 0.5) / max(ceil(n / 12), 1)
+        local p = e[1]:Lerp(e[2], f) * (R * 0.6)
+        local rot = CFrame.Angles(0, t * S * 0.3, 0) * CFrame.Angles(t * S * 0.15, 0, 0)
+        return c + V3(0, R * 0.6 + 1, 0) + rot:VectorToWorldSpace(p)
+    end
+    -- Chuva caindo em volta
+    SHAPES.Rain = function(i, n, t, c, cf, R, S)
+        local ph = ((i * 0.618034) % 1 + t * S * 0.06) % 1
+        local a = i * GOLD
+        local rr = sqrt((i * 0.37) % 1) * R
+        return c + V3(cos(a) * rr, R * 1.2 * (1 - ph) - 2, sin(a) * rr)
     end
 
     -- Jeitos de ficar no alvo: (i, n, t, centro do alvo, cframe, distancia, velocidade, tamanho)
@@ -573,7 +591,7 @@ do
     end
 
     local function GetPull()
-        return math.clamp(tonumber(Settings.MagnetPull) or 120, 5, 200)
+        return math.clamp(tonumber(Settings.MagnetPull) or 100, 5, 100)
     end
 
     local function Grab(part)
@@ -700,15 +718,15 @@ do
             TryRaiseSimulationRadius()
         end
 
-        local range = math.clamp(tonumber(Settings.PartMagnetRange) or 80, 5, 1000)
+        local range = math.clamp(tonumber(Settings.PartMagnetRange) or 80, 5, 500)
         local maxParts = math.clamp(math.floor(tonumber(Settings.MagnetMaxParts) or 70), 1, 300)
 
         local mode = tostring(Settings.MagnetMode or "Orbit")
         local shapeName = SHAPES[Settings.MagnetShape] and Settings.MagnetShape or "Orbit"
-        local R = math.max(tonumber(Settings.MagnetRadius) or 10, 1)
-        local S = tonumber(Settings.MagnetSpeed) or 3
-        local H = tonumber(Settings.MagnetHeight) or 0
-        local D = math.max(tonumber(Settings.MagnetAttackDistance) or 3, 0)
+        local R = math.clamp(tonumber(Settings.MagnetRadius) or 10, 1, 100)
+        local S = (tonumber(Settings.MagnetSpin) or 15) / 5
+        local H = math.clamp(tonumber(Settings.MagnetHeight) or 0, -100, 100)
+        local D = math.clamp(tonumber(Settings.MagnetAttackDistance) or 3, 0, 100)
         local t = os.clock()
 
         -- Decide centro + funcao de posicao
@@ -862,9 +880,9 @@ do
             valueBox.Text = string.format("%g", v) .. suffix
             fill.Size = UDim2.new(math.clamp((v - minV) / (maxV - minV), 0, 1), 0, 1, 0)
         end
-        local function Apply(v, allowAbove)
+        local function Apply(v)
             v = math.floor((tonumber(v) or minV) / step + 0.5) * step
-            v = allowAbove and math.max(v, minV) or math.clamp(v, minV, maxV)
+            v = math.clamp(v, minV, maxV)
             setValue(v)
             Show(v)
             if env.AutoSaveConfiguration then env.AutoSaveConfiguration() end
@@ -893,7 +911,7 @@ do
         end))
         valueBox.FocusLost:Connect(function()
             local typed = tonumber((string.gsub(valueBox.Text, "[^%d%.%-]", "")))
-            if typed then Apply(typed, true) else Show(getValue()) end
+            if typed then Apply(typed) else Show(getValue()) end
         end)
     end
     local function Grid(parent, y, count, cols)
@@ -1065,12 +1083,12 @@ do
     y += 34
 
     local sliders = {
-        { "Range (grab parts within)", 5, 1000, "PartMagnetRange", " studs" },
-        { "Formation size", 2, 200, "MagnetRadius", " studs" },
-        { "Spin speed", 0, 20, "MagnetSpeed", "", 0.5 },
-        { "Pull strength (how fast parts move)", 5, 200, "MagnetPull", "" },
-        { "Height offset", -20, 60, "MagnetHeight", " studs" },
-        { "Attack distance", 0, 30, "MagnetAttackDistance", " studs" },
+        { "Range (grab parts within)", 5, 500, "PartMagnetRange", " studs" },
+        { "Formation size", 2, 100, "MagnetRadius", " studs" },
+        { "Spin speed", 0, 100, "MagnetSpin", "" },
+        { "Pull strength (how fast parts move)", 5, 100, "MagnetPull", "" },
+        { "Height offset", -100, 100, "MagnetHeight", " studs" },
+        { "Attack distance", 0, 100, "MagnetAttackDistance", " studs" },
         { "Max parts", 1, 300, "MagnetMaxParts", "" },
     }
     for _, s in ipairs(sliders) do
