@@ -284,9 +284,14 @@ CreateInputWithTwoButtons(
 CreateInputWithTwoButtons("Teleport", FlingPage, "", "TP", "Loop TP", function(text, mode) ExecuteTeleport(text, mode) end)
 
 Settings.MagnetMode = Settings.MagnetMode or "Orbit"
+Settings.MagnetShape = Settings.MagnetShape or "Orbit"
+Settings.MagnetAttackStyle = Settings.MagnetAttackStyle or "Swarm"
 Settings.PartMagnetRange = tonumber(Settings.PartMagnetRange) or 80
 Settings.MagnetRadius = tonumber(Settings.MagnetRadius) or 10
 Settings.MagnetSpeed = tonumber(Settings.MagnetSpeed) or 3
+Settings.MagnetHeight = tonumber(Settings.MagnetHeight) or 0
+Settings.MagnetAttackDistance = tonumber(Settings.MagnetAttackDistance) or 3
+Settings.MagnetPull = tonumber(Settings.MagnetPull) or 120
 Settings.MagnetMaxParts = tonumber(Settings.MagnetMaxParts) or 70
 Settings.PartMagnet = false
 
@@ -299,6 +304,230 @@ do
     local nextIndex = 0
     local statusLabel = nil
     local magnetTargetBox = nil
+
+    local TAU = math.pi * 2
+    local GOLD = 2.399963
+    local V3 = Vector3.new
+    local sin, cos, floor, ceil, max, sqrt = math.sin, math.cos, math.floor, math.ceil, math.max, math.sqrt
+
+    local function LocalPos(cf, x, y, z)
+        return (cf * CFrame.new(x, y, z)).Position
+    end
+
+    local function SphereDir(i, n, rot)
+        local y = 1 - (i - 0.5) / max(n, 1) * 2
+        local r = sqrt(max(1 - y * y, 0))
+        local theta = i * GOLD + rot
+        return V3(cos(theta) * r, y, sin(theta) * r)
+    end
+
+    -- Formas: (i, n, t, centro, cframe orientado, tamanho, velocidade) -> posicao
+    local SHAPE_ORDER = {
+        "Orbit", "Ring", "Rings", "Wave",
+        "Ripple", "Spiral", "DNA", "Tornado",
+        "Ball", "Cage", "Halo", "Atom",
+        "Wings", "Wall", "Shield", "Snake",
+        "Star", "Heart", "Fountain", "Blades",
+        "Floor",
+    }
+    local SHAPES = {}
+
+    SHAPES.Orbit = function(i, n, t, c, cf, R, S)
+        local ring = i % 4
+        local rr = R * 0.7 + ring * (R * 0.3)
+        local a = i * GOLD + t * S * (0.4 - ring * 0.05)
+        return c + V3(cos(a) * rr, ((i % 5) - 2) * 1.6, sin(a) * rr)
+    end
+    SHAPES.Ring = function(i, n, t, c, cf, R, S)
+        local a = TAU * (i - 1) / n + t * S * 0.5
+        return c + V3(cos(a) * R, 0, sin(a) * R)
+    end
+    SHAPES.Rings = function(i, n, t, c, cf, R, S)
+        local k = (i - 1) % 3
+        local j = floor((i - 1) / 3)
+        local m = max(ceil(n / 3), 1)
+        local dir = (k % 2 == 0) and 1 or -1
+        local a = TAU * j / m + t * S * 0.5 * dir
+        local rr = R * (0.45 + 0.3 * k)
+        return c + V3(cos(a) * rr, (k - 1) * 1.5, sin(a) * rr)
+    end
+    SHAPES.Wave = function(i, n, t, c, cf, R, S)
+        local a = TAU * (i - 1) / n + t * S * 0.3
+        local y = sin(a * 4 + t * S * 2) * R * 0.25
+        return c + V3(cos(a) * R, y, sin(a) * R)
+    end
+    SHAPES.Ripple = function(i, n, t, c, cf, R, S)
+        local k = (i - 1) % 4
+        local j = floor((i - 1) / 4)
+        local m = max(ceil(n / 4), 1)
+        local rr = R * (0.3 + 0.25 * k)
+        local a = TAU * j / m + k * 0.4 + t * S * 0.1
+        local y = sin(t * S * 2 - k * 1.2) * R * 0.15 - 1
+        return c + V3(cos(a) * rr, y, sin(a) * rr)
+    end
+    SHAPES.Spiral = function(i, n, t, c, cf, R, S)
+        local f = (i - 1) / max(n - 1, 1)
+        local a = f * TAU * 3 + t * S * 0.5
+        local rr = R * 0.6
+        return c + V3(cos(a) * rr, f * R * 2 - 2, sin(a) * rr)
+    end
+    SHAPES.DNA = function(i, n, t, c, cf, R, S)
+        local strand = (i - 1) % 2
+        local j = floor((i - 1) / 2)
+        local f = j / max(ceil(n / 2) - 1, 1)
+        local a = f * TAU * 2 + t * S * 0.6 + strand * math.pi
+        local rr = R * 0.45
+        return c + V3(cos(a) * rr, f * R * 2 - 2, sin(a) * rr)
+    end
+    SHAPES.Tornado = function(i, n, t, c, cf, R, S)
+        local f = ((i - 1) / n + t * S * 0.05) % 1
+        local rr = R * (0.15 + f * 0.85)
+        local a = i * GOLD + t * S * (1.6 - f * 0.6)
+        return c + V3(cos(a) * rr, f * R * 2.5 - 3, sin(a) * rr)
+    end
+    SHAPES.Ball = function(i, n, t, c, cf, R, S)
+        return c + V3(0, R + 4, 0) + SphereDir(i, n, t * S * 0.4) * (R * 0.6)
+    end
+    SHAPES.Cage = function(i, n, t, c, cf, R, S)
+        return c + SphereDir(i, n, t * S * 0.4) * (R * 0.8)
+    end
+    SHAPES.Halo = function(i, n, t, c, cf, R, S)
+        local rr = max(R * 0.35, 2)
+        local a = TAU * (i - 1) / n + t * S
+        return c + V3(cos(a) * rr, 5, sin(a) * rr)
+    end
+    SHAPES.Atom = function(i, n, t, c, cf, R, S)
+        local k = (i - 1) % 3
+        local j = floor((i - 1) / 3)
+        local m = max(ceil(n / 3), 1)
+        local a = TAU * j / m + t * S * 0.8
+        local rot = CFrame.Angles(0, k * TAU / 3, 0) * CFrame.Angles(math.rad(65), 0, 0)
+        return c + V3(0, 2, 0) + rot:VectorToWorldSpace(V3(cos(a) * R, 0, sin(a) * R))
+    end
+    SHAPES.Wings = function(i, n, t, c, cf, R, S)
+        local side = (i % 2 == 0) and 1 or -1
+        local j = floor((i - 1) / 2)
+        local f = j / max(ceil(n / 2) - 1, 1)
+        local flap = sin(t * S * 1.5) * 0.6
+        local x = side * (2 + f * R)
+        local y = 2 + sin(f * math.pi) * R * 0.4 + flap * f * R * 0.5
+        return LocalPos(cf, x, y, 2 + f * R * 0.3)
+    end
+    SHAPES.Wall = function(i, n, t, c, cf, R, S)
+        local cols = max(ceil(sqrt(n)), 1)
+        local col = (i - 1) % cols
+        local row = floor((i - 1) / cols)
+        return LocalPos(cf, (col - (cols - 1) / 2) * 3, row * 3 - 1, -R)
+    end
+    SHAPES.Shield = function(i, n, t, c, cf, R, S)
+        local row = (i - 1) % 3
+        local ci = floor((i - 1) / 3)
+        local cols = max(ceil(n / 3), 1)
+        local f = cols > 1 and ci / (cols - 1) or 0.5
+        local ang = (f - 0.5) * math.rad(150)
+        return LocalPos(cf, sin(ang) * R, row * 2.5 - 1, -cos(ang) * R)
+    end
+    SHAPES.Snake = function(i, n, t, c, cf, R, S)
+        local f = (i - 1) / max(n - 1, 1)
+        local x = sin(f * TAU * 1.5 - t * S * 2) * R * 0.25
+        local y = 1 + sin(f * TAU - t * S) * 1.2
+        return LocalPos(cf, x, y, 3 + f * R * 2)
+    end
+    SHAPES.Star = function(i, n, t, c, cf, R, S)
+        local s = ((i - 1) / n + t * S * 0.02) % 1
+        local seg = s * 10
+        local k = floor(seg)
+        local f = seg - k
+        local rot = t * S * 0.3
+        local function Vert(v)
+            local a = v * TAU / 10 + rot
+            local r = (v % 2 == 0) and R or R * 0.45
+            return V3(cos(a) * r, 1, sin(a) * r)
+        end
+        return c + Vert(k):Lerp(Vert(k + 1), f)
+    end
+    SHAPES.Heart = function(i, n, t, c, cf, R, S)
+        local s = TAU * (i - 1) / n + t * S * 0.2
+        local x = 16 * sin(s) ^ 3
+        local y = 13 * cos(s) - 5 * cos(2 * s) - 2 * cos(3 * s) - cos(4 * s)
+        local k = R / 16
+        return LocalPos(cf, x * k, y * k + R * 0.5 + 3, -(R * 0.3 + 4))
+    end
+    SHAPES.Fountain = function(i, n, t, c, cf, R, S)
+        local ph = ((i * 0.618034) % 1 + t * S * 0.08) % 1
+        local a = i * GOLD
+        local rr = ph * R
+        return c + V3(cos(a) * rr, ph * (1 - ph) * 4 * R * 0.9, sin(a) * rr)
+    end
+    SHAPES.Blades = function(i, n, t, c, cf, R, S)
+        local b = (i - 1) % 4
+        local j = floor((i - 1) / 4)
+        local m = max(ceil(n / 4), 1)
+        local rr = (j + 1) / m * R
+        local a = b * TAU / 4 + t * S * 1.5
+        return c + V3(cos(a) * rr, 1, sin(a) * rr)
+    end
+    SHAPES.Floor = function(i, n, t, c, cf, R, S)
+        local cols = max(ceil(sqrt(n)), 1)
+        local col = (i - 1) % cols
+        local row = floor((i - 1) / cols)
+        return LocalPos(cf, (col - (cols - 1) / 2) * 3, -3.6, (row - (cols - 1) / 2) * 3)
+    end
+
+    -- Jeitos de ficar no alvo: (i, n, t, centro do alvo, cframe, distancia, velocidade, tamanho)
+    local ATTACK_ORDER = { "Swarm", "Cage", "Ring", "Head", "Feet", "Ram", "Tornado", "Inside", "Shape" }
+    local ATTACK = {}
+
+    ATTACK.Swarm = function(i, n, t, c, cf, D, S, R)
+        local a = i * GOLD + t * S * 3
+        local rr = D * 0.7 + (i % 3)
+        return c + V3(cos(a) * rr, ((i % 5) - 2) * 0.9, sin(a) * rr)
+    end
+    ATTACK.Cage = function(i, n, t, c, cf, D, S, R)
+        return c + SphereDir(i, n, t * S * 0.8) * (D + 1.5)
+    end
+    ATTACK.Ring = function(i, n, t, c, cf, D, S, R)
+        local a = TAU * (i - 1) / n + t * S * 2
+        local rr = D + 1
+        return c + V3(cos(a) * rr, ((i % 3) - 1) * 0.8, sin(a) * rr)
+    end
+    ATTACK.Head = function(i, n, t, c, cf, D, S, R)
+        local j = i - 1
+        local a = j * GOLD + t * S * 2
+        local rr = 1 + D * 0.2
+        return c + V3(cos(a) * rr, 2.8 + (j % 10) * 0.7, sin(a) * rr)
+    end
+    ATTACK.Feet = function(i, n, t, c, cf, D, S, R)
+        local a = TAU * (i - 1) / n + t * S * 1.5
+        local rr = D * 0.6 + (i % 2)
+        return c + V3(cos(a) * rr, -2.8, sin(a) * rr)
+    end
+    ATTACK.Ram = function(i, n, t, c, cf, D, S, R)
+        local dir = SphereDir(i, n, 0)
+        local ph = ((i * 0.618034) % 1 + t * max(S, 0.5) * 0.15) % 1
+        return c + dir * ((D + 8) * (1 - 2 * ph))
+    end
+    ATTACK.Tornado = function(i, n, t, c, cf, D, S, R)
+        local f = ((i - 1) / n + t * S * 0.08) % 1
+        local rr = D * 0.3 + f * (D + 2)
+        local a = i * GOLD + t * S * 3
+        return c + V3(cos(a) * rr, f * 7 - 3, sin(a) * rr)
+    end
+    ATTACK.Inside = function(i, n, t, c, cf, D, S, R)
+        return c + V3(sin(t * S * 4 + i) * 0.6, ((i % 5) - 2) * 0.6, cos(t * S * 4 + i * 1.3) * 0.6)
+    end
+    ATTACK.Shape = function(i, n, t, c, cf, D, S, R)
+        local shape = SHAPES[Settings.MagnetShape] or SHAPES.Orbit
+        return shape(i, n, t, c, cf, R, S)
+    end
+
+    if not SHAPES[Settings.MagnetShape] then Settings.MagnetShape = "Orbit" end
+    if not ATTACK[Settings.MagnetAttackStyle] then Settings.MagnetAttackStyle = "Swarm" end
+    if not SHAPES[Settings.MagnetMode]
+    and Settings.MagnetMode ~= "Mouse"
+    and Settings.MagnetMode ~= "Attack" then
+        Settings.MagnetMode = Settings.MagnetShape
+    end
 
     local function Release(part)
         local data = Controlled[part]
@@ -343,6 +572,10 @@ do
         return true
     end
 
+    local function GetPull()
+        return math.clamp(tonumber(Settings.MagnetPull) or 120, 5, 200)
+    end
+
     local function Grab(part)
         local att = Instance.new("Attachment")
         att.Name = "ToxMagnetAttachment"
@@ -353,10 +586,11 @@ do
         align.Attachment0 = att
         align.MaxForce = math.huge
         align.MaxVelocity = math.huge
-        align.Responsiveness = 120
+        local pull = GetPull()
+        align.Responsiveness = pull
         align.Parent = part
         nextIndex += 1
-        Controlled[part] = { Att = att, Align = align, Index = nextIndex, CanCollide = part.CanCollide }
+        Controlled[part] = { Att = att, Align = align, Index = nextIndex, CanCollide = part.CanCollide, Pull = pull }
         controlledCount += 1
         pcall(function() part.CanCollide = false end)
     end
@@ -369,61 +603,91 @@ do
         end
     end
 
-    local function GetMagnetTargetRoot()
+    local function GetMagnetTarget()
         local text = string.lower(magnetTargetBox and magnetTargetBox.Text or "")
         if text == "" then return nil end
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= Player and (string.find(string.lower(p.Name), text, 1, true)
             or string.find(string.lower(p.DisplayName), text, 1, true)) then
-                return p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+                local char = p.Character
+                local tRoot = char and char:FindFirstChild("HumanoidRootPart")
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if tRoot and hum and hum.Health > 0 then
+                    return p, tRoot
+                end
+                return p, nil
             end
         end
         return nil
     end
 
-    local function FormationPosition(mode, i, n, t, root)
-        local radius = math.max(tonumber(Settings.MagnetRadius) or 10, 1)
-        local speed = tonumber(Settings.MagnetSpeed) or 3
-        local center = root.Position
-        if mode == "Ball" then
-            local y = 1 - (i - 0.5) / n * 2
-            local r = math.sqrt(math.max(1 - y * y, 0))
-            local theta = i * 2.399963 + t * speed * 0.4
-            center = center + Vector3.new(0, radius + 4, 0)
-            return center + Vector3.new(math.cos(theta) * r, y, math.sin(theta) * r) * (radius * 0.6)
-        elseif mode == "Wall" then
-            local cols = math.max(math.ceil(math.sqrt(n)), 1)
-            local col = (i - 1) % cols
-            local row = math.floor((i - 1) / cols)
-            local spacing = 3
-            local cf = CFrame.new(center, center + Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z))
-            return (cf * CFrame.new((col - (cols - 1) / 2) * spacing, row * spacing - 1, -radius)).Position
-        elseif mode == "Mouse" then
-            local mouse = Player:GetMouse()
-            center = (mouse and mouse.Hit and mouse.Hit.Position or center) + Vector3.new(0, 3, 0)
-            local angle = i * 2.399963 + t * speed
-            local rr = 3 + (i % 3) * 1.5
-            return center + Vector3.new(math.cos(angle) * rr, ((i % 4) - 1.5) * 1.2, math.sin(angle) * rr)
-        elseif mode == "Attack" then
-            local tRoot = GetMagnetTargetRoot()
-            if tRoot then
-                center = tRoot.Position
-                local angle = i * 2.399963 + t * speed * 3
-                local rr = 2 + (i % 3)
-                return center + Vector3.new(math.cos(angle) * rr, ((i % 5) - 2) * 0.9, math.sin(angle) * rr)
-            end
+    -- Ponto do modo Mouse: so muda quando voce clica / segura (mouse ou toque)
+    local MousePoint = nil
+    local holdKind = nil
+    local holdTouch = nil
+
+    local function RaycastScreen(x, y, isViewport)
+        local cam = workspace.CurrentCamera
+        if not cam then return nil end
+        local ray = isViewport and cam:ViewportPointToRay(x, y) or cam:ScreenPointToRay(x, y)
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        local exclude = {}
+        if Player.Character then exclude[1] = Player.Character end
+        for part in pairs(Controlled) do exclude[#exclude + 1] = part end
+        params.FilterDescendantsInstances = exclude
+        local hit = workspace:Raycast(ray.Origin, ray.Direction * 2000, params)
+        return hit and hit.Position or (ray.Origin + ray.Direction * 120)
+    end
+
+    local function UpdateMousePointFromCursor()
+        local loc = UserInputService:GetMouseLocation()
+        local p = RaycastScreen(loc.X, loc.Y, true)
+        if p then MousePoint = p end
+    end
+
+    local function MouseModeActive()
+        return Settings.PartMagnet and Settings.MagnetMode == "Mouse"
+    end
+
+    AddConnection(UserInputService.InputBegan:Connect(function(input, processed)
+        if processed or not MouseModeActive() then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            holdKind = "Mouse"
+            UpdateMousePointFromCursor()
+        elseif input.UserInputType == Enum.UserInputType.Touch then
+            holdKind = "Touch"
+            holdTouch = input
+            local p = RaycastScreen(input.Position.X, input.Position.Y, false)
+            if p then MousePoint = p end
         end
-        local ring = i % 4
-        local rr = radius * 0.7 + ring * (radius * 0.3)
-        local angle = i * 2.399963 + t * speed * (0.4 - ring * 0.05)
-        local height = ((i % 5) - 2) * 1.6
-        return center + Vector3.new(math.cos(angle) * rr, height, math.sin(angle) * rr)
+    end))
+    AddConnection(UserInputService.InputChanged:Connect(function(input)
+        if holdKind == "Touch" and input == holdTouch then
+            local p = RaycastScreen(input.Position.X, input.Position.Y, false)
+            if p then MousePoint = p end
+        end
+    end))
+    AddConnection(UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 and holdKind == "Mouse" then
+            holdKind = nil
+        elseif input == holdTouch then
+            holdKind = nil
+            holdTouch = nil
+        end
+    end))
+
+    local function FlatCFrame(position, look)
+        local flat = V3(look.X, 0, look.Z)
+        if flat.Magnitude < 1e-3 then flat = V3(0, 0, -1) end
+        return CFrame.new(position, position + flat.Unit)
     end
 
     AddConnection(RunService.Heartbeat:Connect(function(delta)
         if env.Destroyed then return end
         if not Settings.PartMagnet then
             if controlledCount > 0 then ReleaseAll() end
+            holdKind, holdTouch = nil, nil
             return
         end
         local character = Player.Character
@@ -438,6 +702,47 @@ do
 
         local range = math.clamp(tonumber(Settings.PartMagnetRange) or 80, 5, 1000)
         local maxParts = math.clamp(math.floor(tonumber(Settings.MagnetMaxParts) or 70), 1, 300)
+
+        local mode = tostring(Settings.MagnetMode or "Orbit")
+        local shapeName = SHAPES[Settings.MagnetShape] and Settings.MagnetShape or "Orbit"
+        local R = math.max(tonumber(Settings.MagnetRadius) or 10, 1)
+        local S = tonumber(Settings.MagnetSpeed) or 3
+        local H = tonumber(Settings.MagnetHeight) or 0
+        local D = math.max(tonumber(Settings.MagnetAttackDistance) or 3, 0)
+        local t = os.clock()
+
+        -- Decide centro + funcao de posicao
+        local center = root.Position + V3(0, H, 0)
+        local cf = FlatCFrame(center, root.CFrame.LookVector)
+        local shapeFn = SHAPES[shapeName]
+        local attackFn = nil
+        local status
+
+        if mode == "Attack" then
+            local target, tRoot = GetMagnetTarget()
+            if tRoot then
+                local vel = tRoot.AssemblyLinearVelocity
+                if vel.Magnitude > 120 then vel = vel.Unit * 120 end
+                center = tRoot.Position + vel * 0.08
+                cf = FlatCFrame(center, tRoot.CFrame.LookVector)
+                attackFn = ATTACK[Settings.MagnetAttackStyle] or ATTACK.Swarm
+                status = "Attack • " .. target.DisplayName .. " • " .. tostring(Settings.MagnetAttackStyle)
+            else
+                -- Sem alvo (saiu / morreu / nick vazio): volta pra forma que voce estava usando
+                status = "Attack • no target → " .. shapeName
+            end
+        elseif mode == "Mouse" then
+            if holdKind == "Mouse" then
+                UpdateMousePointFromCursor()
+            end
+            if MousePoint then
+                center = MousePoint + V3(0, 3 + H, 0)
+                cf = FlatCFrame(center, root.CFrame.LookVector)
+            end
+            status = "Mouse • " .. shapeName .. (MousePoint and "" or " • click to place")
+        else
+            status = shapeName
+        end
 
         scanClock += delta
         if scanClock >= 0.4 then
@@ -468,12 +773,11 @@ do
                 end
             end
             if statusLabel then
-                statusLabel.Text = "ON • controlling " .. controlledCount .. " parts • " .. tostring(Settings.MagnetMode)
+                statusLabel.Text = "ON • " .. controlledCount .. " parts • " .. status
             end
         end
 
-        local t = os.clock()
-        local mode = tostring(Settings.MagnetMode or "Orbit")
+        local pull = GetPull()
         local ordered = {}
         for part, data in pairs(Controlled) do
             ordered[#ordered + 1] = { part, data }
@@ -482,7 +786,19 @@ do
         local n = #ordered
         for i, entry in ipairs(ordered) do
             local part, data = entry[1], entry[2]
-            data.Align.Position = FormationPosition(mode, i, n, t, root)
+            if data.Pull ~= pull then
+                data.Pull = pull
+                pcall(function() data.Align.Responsiveness = pull end)
+            end
+            local ok, pos
+            if attackFn then
+                ok, pos = pcall(attackFn, i, n, t, center, cf, D, S, R)
+            else
+                ok, pos = pcall(shapeFn, i, n, t, center, cf, R, S)
+            end
+            if ok and typeof(pos) == "Vector3" then
+                data.Align.Position = pos
+            end
             pcall(function()
                 part.AssemblyAngularVelocity = Vector3.new(0, 4, 0)
             end)
@@ -525,7 +841,7 @@ do
         return b
     end
     local function Slider(text, y, minV, maxV, getValue, setValue, suffix, parent)
-        Label(text, UDim2.new(0.5, 0, 0, 16), UDim2.new(0, 10, 0, y), parent)
+        Label(text, UDim2.new(0.6, 0, 0, 16), UDim2.new(0, 10, 0, y), parent)
         local valueBox = Instance.new("TextBox")
         valueBox.Size = UDim2.new(0, 70, 0, 16) valueBox.Position = UDim2.new(1, -80, 0, y)
         valueBox.BackgroundTransparency = 1 valueBox.Font = Enum.Font.GothamBold valueBox.TextSize = 11
@@ -579,11 +895,25 @@ do
             if typed then Apply(typed, true) else Show(getValue()) end
         end)
     end
+    local function Grid(parent, y, count, cols)
+        local rows = math.max(math.ceil(count / cols), 1)
+        local holder = Instance.new("Frame")
+        holder.BackgroundTransparency = 1
+        holder.Size = UDim2.new(1, -20, 0, rows * 26)
+        holder.Position = UDim2.new(0, 10, 0, y)
+        holder.Parent = parent
+        local layout = Instance.new("UIGridLayout")
+        layout.CellSize = UDim2.new(1 / cols, -4, 0, 22)
+        layout.CellPadding = UDim2.new(0, 4, 0, 4)
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Parent = holder
+        return holder, y + rows * 26
+    end
 
     local gui = Instance.new("Frame")
     gui.Name = "ToxMagnetFrame"
-    gui.Size = UDim2.new(0, 330, 0, 384)
-    gui.Position = UDim2.new(0.5, -165, 0.5, -192)
+    gui.Size = UDim2.new(0, 330, 0, 430)
+    gui.Position = UDim2.new(0.5, -165, 0.5, -215)
     gui.BorderSizePixel = 0
     gui.ClipsDescendants = true
     gui.Visible = false
@@ -605,8 +935,21 @@ do
     local close = Button("X", UDim2.new(0, 22, 0, 20), UDim2.new(1, -26, 0.5, -10), top)
     close.MouseButton1Click:Connect(function() gui.Visible = false end)
 
-    local power = Button("Magnet: OFF", UDim2.new(0.5, -14, 0, 28), UDim2.new(0, 10, 0, 40), gui)
-    local release = Button("Release All", UDim2.new(0.5, -14, 0, 28), UDim2.new(0.5, 4, 0, 40), gui)
+    local body = Instance.new("ScrollingFrame")
+    body.Name = "Body"
+    body.Size = UDim2.new(1, 0, 1, -32)
+    body.Position = UDim2.new(0, 0, 0, 32)
+    body.BackgroundTransparency = 1
+    body.BorderSizePixel = 0
+    body.ScrollBarThickness = 4
+    body.ScrollingDirection = Enum.ScrollingDirection.Y
+    body.CanvasSize = UDim2.new(0, 0, 0, 0)
+    Themed(body, "ScrollBarImageColor3", "Accent", Color3.fromRGB(30, 95, 255))
+    body.Parent = gui
+
+    local y = 8
+    local power = Button("Magnet: OFF", UDim2.new(0.5, -14, 0, 28), UDim2.new(0, 10, 0, y), body)
+    local release = Button("Release All", UDim2.new(0.5, -14, 0, 28), UDim2.new(0.5, 4, 0, y), body)
     local function PaintPower()
         power.Text = Settings.PartMagnet and "Magnet: ON" or "Magnet: OFF"
         power.BackgroundColor3 = Settings.PartMagnet and Color3.fromRGB(40, 150, 80) or (Theme.Element or Color3.fromRGB(25, 30, 40))
@@ -622,51 +965,120 @@ do
         ReleaseAll()
         CustomNotify("Tox Magnet • released all parts", Color3.fromRGB(255, 200, 120))
     end)
+    y += 34
 
-    statusLabel = Label("OFF", UDim2.new(1, -20, 0, 14), UDim2.new(0, 10, 0, 72), gui, true)
+    statusLabel = Label("OFF", UDim2.new(1, -20, 0, 14), UDim2.new(0, 10, 0, y), body, true)
+    statusLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    y += 18
 
-    Label("Mode", UDim2.new(1, -20, 0, 14), UDim2.new(0, 10, 0, 90), gui)
-    local modes = { "Orbit", "Ball", "Wall", "Mouse", "Attack" }
+    Label("Mode / Shape", UDim2.new(1, -20, 0, 14), UDim2.new(0, 10, 0, y), body)
+    y += 16
+    local modeNames = {}
+    for _, name in ipairs(SHAPE_ORDER) do modeNames[#modeNames + 1] = name end
+    modeNames[#modeNames + 1] = "Mouse"
+    modeNames[#modeNames + 1] = "Attack"
+    local modeHolder
+    modeHolder, y = Grid(body, y, #modeNames, 4)
     local modeButtons = {}
+    local styleButtons = {}
+
     local function PaintModes()
+        local accent = Theme.Accent or Color3.fromRGB(30, 95, 255)
+        local element = Theme.Element or Color3.fromRGB(25, 30, 40)
+        local special = Settings.MagnetMode == "Mouse" or Settings.MagnetMode == "Attack"
         for name, btn in pairs(modeButtons) do
-            local active = Settings.MagnetMode == name
-            btn.BackgroundColor3 = active and (Theme.Accent or Color3.fromRGB(30, 95, 255)) or (Theme.Element or Color3.fromRGB(25, 30, 40))
+            if Settings.MagnetMode == name then
+                btn.BackgroundColor3 = accent
+            elseif special and Settings.MagnetShape == name then
+                btn.BackgroundColor3 = element:Lerp(accent, 0.45)
+            else
+                btn.BackgroundColor3 = element
+            end
+        end
+        for name, btn in pairs(styleButtons) do
+            btn.BackgroundColor3 = Settings.MagnetAttackStyle == name and accent or element
         end
     end
-    for index, name in ipairs(modes) do
-        local w = 1 / #modes
-        local b = Button(name, UDim2.new(w, -6, 0, 24), UDim2.new(w * (index - 1), index == 1 and 10 or 4, 0, 106), gui)
-        if index == #modes then b.Size = UDim2.new(w, -14, 0, 24) end
+
+    local function SaveMagnet()
+        if env.AutoSaveConfiguration then env.AutoSaveConfiguration() end
+    end
+
+    for index, name in ipairs(modeNames) do
+        local b = Button(name, UDim2.new(), UDim2.new(), modeHolder)
+        b.LayoutOrder = index
         modeButtons[name] = b
         b.MouseButton1Click:Connect(function()
-            Settings.MagnetMode = name
+            if name == "Mouse" or name == "Attack" then
+                if Settings.MagnetMode == name then
+                    -- clicar de novo volta pra forma que voce estava usando
+                    Settings.MagnetMode = Settings.MagnetShape
+                else
+                    Settings.MagnetMode = name
+                end
+            else
+                Settings.MagnetShape = name
+                if Settings.MagnetMode ~= "Mouse" and Settings.MagnetMode ~= "Attack" then
+                    Settings.MagnetMode = name
+                end
+            end
             PaintModes()
-            if env.AutoSaveConfiguration then env.AutoSaveConfiguration() end
+            SaveMagnet()
+        end)
+    end
+
+    local hint = Label("Shape still applies in Mouse/Attack • click Mouse/Attack again to go back",
+        UDim2.new(1, -20, 0, 24), UDim2.new(0, 10, 0, y), body, true)
+    hint.TextWrapped = true
+    y += 28
+
+    Label("Attack style (how parts stay on the target)", UDim2.new(1, -20, 0, 14), UDim2.new(0, 10, 0, y), body)
+    y += 16
+    local styleHolder
+    styleHolder, y = Grid(body, y, #ATTACK_ORDER, 3)
+    for index, name in ipairs(ATTACK_ORDER) do
+        local b = Button(name, UDim2.new(), UDim2.new(), styleHolder)
+        b.LayoutOrder = index
+        styleButtons[name] = b
+        b.MouseButton1Click:Connect(function()
+            Settings.MagnetAttackStyle = name
+            Settings.MagnetMode = "Attack"
+            PaintModes()
+            SaveMagnet()
         end)
     end
     PaintModes()
+    y += 6
 
-    Label("Attack target", UDim2.new(0.4, 0, 0, 24), UDim2.new(0, 10, 0, 136), gui)
+    Label("Attack target", UDim2.new(0.4, 0, 0, 24), UDim2.new(0, 10, 0, y), body)
     magnetTargetBox = Instance.new("TextBox")
-    magnetTargetBox.Size = UDim2.new(0.6, -20, 0, 24) magnetTargetBox.Position = UDim2.new(0.4, 10, 0, 136)
+    magnetTargetBox.Size = UDim2.new(0.6, -20, 0, 24) magnetTargetBox.Position = UDim2.new(0.4, 10, 0, y)
     magnetTargetBox.BorderSizePixel = 0 magnetTargetBox.ClearTextOnFocus = false
     magnetTargetBox.PlaceholderText = "nick (or Select Player)"
     magnetTargetBox.Text = "" magnetTargetBox.Font = Enum.Font.Gotham magnetTargetBox.TextSize = 11
     Themed(magnetTargetBox, "BackgroundColor3", "Element", Color3.fromRGB(25, 30, 40))
     Themed(magnetTargetBox, "TextColor3", "Text", Color3.new(1, 1, 1))
-    Corner(magnetTargetBox, 4) Stroke(magnetTargetBox) magnetTargetBox.Parent = gui
+    Corner(magnetTargetBox, 4) Stroke(magnetTargetBox) magnetTargetBox.Parent = body
     env.ToxNamedInputs = env.ToxNamedInputs or {}
     env.ToxNamedInputs["Magnet"] = magnetTargetBox
+    y += 34
 
-    Slider("Range (grab parts within)", 170, 5, 300, function() return Settings.PartMagnetRange end,
-        function(v) Settings.PartMagnetRange = v end, " studs", gui)
-    Slider("Formation size", 222, 2, 60, function() return Settings.MagnetRadius end,
-        function(v) Settings.MagnetRadius = v end, " studs", gui)
-    Slider("Spin speed", 274, 0, 20, function() return Settings.MagnetSpeed end,
-        function(v) Settings.MagnetSpeed = v end, "", gui)
-    Slider("Max parts", 326, 1, 200, function() return Settings.MagnetMaxParts end,
-        function(v) Settings.MagnetMaxParts = v end, "", gui)
+    local sliders = {
+        { "Range (grab parts within)", 5, 1000, "PartMagnetRange", " studs" },
+        { "Formation size", 2, 200, "MagnetRadius", " studs" },
+        { "Spin speed", 0, 100, "MagnetSpeed", "" },
+        { "Pull strength (how fast parts move)", 5, 200, "MagnetPull", "" },
+        { "Height offset", -20, 60, "MagnetHeight", " studs" },
+        { "Attack distance", 0, 30, "MagnetAttackDistance", " studs" },
+        { "Max parts", 1, 300, "MagnetMaxParts", "" },
+    }
+    for _, s in ipairs(sliders) do
+        local key = s[4]
+        Slider(s[1], y, s[2], s[3], function() return Settings[key] end,
+            function(v) Settings[key] = v end, s[5], body)
+        y += 52
+    end
+    body.CanvasSize = UDim2.new(0, 0, 0, y + 6)
 
     MagnetGui = gui
     env.ToxMagnetGui = gui
