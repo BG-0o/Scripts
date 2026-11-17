@@ -299,7 +299,9 @@ getgenv().Destroyed = false
 Destroyed = false
 getgenv().__ToxHubReexecCancelled = nil
 
-local VALID_KEY = "Tox-BetaUsers"
+local VALID_KEY = "BetaUsers"
+-- Key antiga: quem ja tinha salvo continua entrando (e e migrado pra nova)
+local LEGACY_VALID_KEY = "Tox-BetaUsers"
 local KEY_FILENAME = "ToxHub_Key.txt"
 local DISCORD_URL = "https://discord.com/invite/A7tZ9VbVvM"
 
@@ -328,6 +330,10 @@ local function SaveKey(key)
 end
 
 local savedKey = ReadSavedKey()
+if string.lower(savedKey) == string.lower(LEGACY_VALID_KEY) then
+    SaveKey(VALID_KEY)
+    savedKey = VALID_KEY
+end
 if string.lower(savedKey) == string.lower(VALID_KEY) then
     getgenv().ToxHasPreviousExecution = true
     getgenv().ToxKeyVerified = true
@@ -433,7 +439,7 @@ else
     textBox.Position = UDim2.new(0, 12, 0, 0)
     textBox.BackgroundTransparency = 1
     textBox.Text = ""
-    textBox.PlaceholderText = "Paste your key here... (Tox-BetaUsers)"
+    textBox.PlaceholderText = "Paste your key here..."
     textBox.PlaceholderColor3 = Color3.fromRGB(110, 125, 150)
     textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
     textBox.Font = Enum.Font.GothamMedium
