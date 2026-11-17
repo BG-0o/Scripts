@@ -1307,6 +1307,20 @@ getgenv().SetNDSNoTPAnchor = function(
         return false
     end
 
+    -- Com o No TP ligado, so aceita nova ancora vinda de um TP do proprio hub
+    -- (AllowToxTeleport / fling). Qualquer outra chamada durante um TP
+    -- forcado do jogo era o que fazia o No TP "aceitar" o puxao.
+    if Settings.NDSNoTP then
+        local ownTeleport =
+            (getgenv().ToxIsToxTeleportAllowed
+                and getgenv().ToxIsToxTeleportAllowed())
+            or tick() < (tonumber(getgenv().ToxFlingBypassUntil) or 0)
+
+        if not ownTeleport then
+            return false
+        end
+    end
+
     NoTPAnchorCFrame = cframe
     NoTPLastObservedCFrame = cframe
     NoTPCorrectionCFrame = nil

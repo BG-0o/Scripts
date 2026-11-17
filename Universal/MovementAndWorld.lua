@@ -1234,7 +1234,12 @@ AddConnection(RunService.Heartbeat:Connect(function()
                 root.AssemblyLinearVelocity = Vector3.zero
                 humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
             end)
-            if getgenv().SetNDSNoTPAnchor then
+            -- Nao aceitar o TP forcado como nova ancora quando o No TP do NDS
+            -- esta ligado: e justamente esse TP que o No TP precisa cancelar.
+            local ndsNoTPActive =
+                game.PlaceId == 189707
+                and Settings.NDSNoTP == true
+            if not ndsNoTPActive and getgenv().SetNDSNoTPAnchor then
                 pcall(getgenv().SetNDSNoTPAnchor, root.CFrame, true)
             end
         end
