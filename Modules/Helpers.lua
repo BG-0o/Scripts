@@ -805,9 +805,103 @@ getgenv().ApplySavedGuiPosition = function(key, gui)
     end
     return saved or gui.Position
 end
+-- Lembra quais janelas (Waypoints, Music, Magnet, etc.) ficaram abertas e
+-- reabre elas na proxima execucao. Fica salvo junto com as posicoes,
+-- em UIPositions.__Open, entao nao precisa mexer no formato do config.
+local OPEN_STATE_KEY = "__Open"
+local OpenStateIgnored = {
+    Main = true, MobileToggle = true, Watermark = true, Keybinds = true,
+    Spectators = true, ServerInfo = true, MM2RoundTimer = true,
+}
+local OpenStateTracked = {}
+local OpenStateRestored = false
+local OpenStateSaveToken = 0
+
+local function GetOpenStateTable()
+    local positions = getgenv().UIPositions
+    if typeof(positions) ~= "table" then
+        positions = {}
+        getgenv().UIPositions = positions
+    end
+    if typeof(positions[OPEN_STATE_KEY]) ~= "table" then
+        positions[OPEN_STATE_KEY] = {}
+    end
+    return positions[OPEN_STATE_KEY]
+end
+
+local function IsMainShown()
+    local main = getgenv().Main
+    return main ~= nil and main.Parent ~= nil and main.Visible == true
+end
+
+local function RecordOpenState(key, gui)
+    if not OpenStateRestored
+    or not getgenv().ScriptLoaded
+    or env.Destroyed
+    or getgenv().Destroyed
+    or not gui.Parent
+    or not IsMainShown() then
+        -- Esconder tudo pela tecla da GUI / fechar o hub nao conta como "fechei a janela"
+        return
+    end
+    local open = GetOpenStateTable()
+    local value = gui.Visible == true
+    if open[key] == value then
+        return
+    end
+    open[key] = value
+    OpenStateSaveToken += 1
+    local token = OpenStateSaveToken
+    task.delay(0.25, function()
+        if OpenStateSaveToken == token and not env.Destroyed then
+            AutoSaveConfiguration()
+        end
+    end)
+end
+
+local function RestoreOpenGuis()
+    local open = GetOpenStateTable()
+    for key, gui in pairs(OpenStateTracked) do
+        if open[key] == true and gui and gui.Parent then
+            gui.Visible = true
+        end
+    end
+end
+
+task.spawn(function()
+    repeat
+        task.wait(0.2)
+    until getgenv().ScriptLoaded or env.Destroyed or getgenv().Destroyed
+    -- da tempo dos modulos terminarem de montar as janelas (todas nascem fechadas)
+    task.wait(0.8)
+    local waited = 0
+    while not IsMainShown() and not env.Destroyed and not getgenv().Destroyed do
+        -- Start Hidden: so reabre quando o hub for aberto
+        task.wait(0.2)
+        waited += 0.2
+        if waited > 600 then break end
+    end
+    if env.Destroyed or getgenv().Destroyed then return end
+    task.wait(0.1)
+    RestoreOpenGuis()
+    OpenStateRestored = true
+end)
+
 getgenv().TrackGuiPosition = function(key, gui)
     if not gui then
         return
+    end
+    if not OpenStateIgnored[key] and OpenStateTracked[key] ~= gui then
+        OpenStateTracked[key] = gui
+        AddConnection(gui:GetPropertyChangedSignal("Visible"):Connect(function()
+            RecordOpenState(key, gui)
+        end))
+        if OpenStateRestored and IsMainShown() and GetOpenStateTable()[key] == true then
+            -- janela criada depois do load (ex: modulo do jogo)
+            task.defer(function()
+                if gui.Parent then gui.Visible = true end
+            end)
+        end
     end
     AddConnection(gui:GetPropertyChangedSignal("Position"):Connect(function()
         if not getgenv().ScriptLoaded or gui:GetAttribute("ToxIgnorePosTrack") == true then
