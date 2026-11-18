@@ -1756,7 +1756,7 @@ local function ToxIsFloorPart(object)
     return true
 end
 local ToxFloorShiny = {
-    [Enum.Material.SmoothPlastic] = 1.25, [Enum.Material.Plastic] = 1.1, [Enum.Material.Marble] = 1.25,
+    [Enum.Material.SmoothPlastic] = 1, [Enum.Material.Plastic] = 0.55, [Enum.Material.Marble] = 1,
     [Enum.Material.Metal] = 1.2, [Enum.Material.DiamondPlate] = 1.1, [Enum.Material.Foil] = 1.25,
     [Enum.Material.Ice] = 1.25, [Enum.Material.Granite] = 1, [Enum.Material.Slate] = 0.9,
     [Enum.Material.Concrete] = 0.8, [Enum.Material.Pebble] = 0.7, [Enum.Material.Cobblestone] = 0.7,
@@ -1768,8 +1768,11 @@ local function ToxFloorAmount()
     return math.clamp(tonumber(LightingSettings.LightingFloorReflectAmount) or 35, 0, 100) / 100
 end
 local function ToxFloorTarget(object, original, amount)
-    local factor = ToxFloorShiny[object.Material] or 0.9
-    return math.max(original, math.clamp(amount * factor, 0, 0.6))
+    local factor = ToxFloorShiny[object.Material] or 0.7
+    if object.TopSurface == Enum.SurfaceType.Studs or object.TopSurface == Enum.SurfaceType.Inlet then
+        factor = factor * 0.5
+    end
+    return math.max(original, math.clamp(amount * factor, 0, 0.25))
 end
 local function ToxApplyFloor(object)
     if not ToxIsFloorPart(object) then
@@ -1844,7 +1847,7 @@ local ToxLightingPresets = {
         SunRays = { Intensity = 0.06, Spread = 0.7 },
         DepthOfField = { FarIntensity = 0.1, FocusDistance = 140, InFocusRadius = 140, NearIntensity = 0 },
         Water = { WaterColor = RGB(58, 80, 108), WaterReflectance = 1, WaterTransparency = 0.82, WaterWaveSize = 0.12, WaterWaveSpeed = 8 },
-        Reflect = 0.3,
+        Reflect = 0.18,
     },
     Morning = {
         Lighting = {
@@ -1862,7 +1865,7 @@ local ToxLightingPresets = {
         SunRays = { Intensity = 0.05, Spread = 0.6 },
         DepthOfField = { FarIntensity = 0.08, FocusDistance = 160, InFocusRadius = 160, NearIntensity = 0 },
         Water = { WaterColor = RGB(40, 96, 114), WaterReflectance = 1, WaterTransparency = 0.86, WaterWaveSize = 0.14, WaterWaveSpeed = 10 },
-        Reflect = 0.28,
+        Reflect = 0.16,
     },
     Midday = {
         Lighting = {
@@ -1880,7 +1883,7 @@ local ToxLightingPresets = {
         SunRays = { Intensity = 0.03, Spread = 0.4 },
         DepthOfField = { FarIntensity = 0.06, FocusDistance = 200, InFocusRadius = 200, NearIntensity = 0 },
         Water = { WaterColor = RGB(28, 108, 136), WaterReflectance = 1, WaterTransparency = 0.9, WaterWaveSize = 0.12, WaterWaveSpeed = 12 },
-        Reflect = 0.22,
+        Reflect = 0.12,
     },
     Sunset = {
         Lighting = {
@@ -1898,7 +1901,7 @@ local ToxLightingPresets = {
         SunRays = { Intensity = 0.08, Spread = 0.85 },
         DepthOfField = { FarIntensity = 0.1, FocusDistance = 140, InFocusRadius = 140, NearIntensity = 0 },
         Water = { WaterColor = RGB(76, 68, 90), WaterReflectance = 1, WaterTransparency = 0.8, WaterWaveSize = 0.15, WaterWaveSpeed = 9 },
-        Reflect = 0.38,
+        Reflect = 0.2,
     },
     Evening = {
         Lighting = {
@@ -1916,7 +1919,7 @@ local ToxLightingPresets = {
         SunRays = { Intensity = 0.06, Spread = 0.8 },
         DepthOfField = { FarIntensity = 0.1, FocusDistance = 120, InFocusRadius = 120, NearIntensity = 0 },
         Water = { WaterColor = RGB(50, 48, 80), WaterReflectance = 1, WaterTransparency = 0.8, WaterWaveSize = 0.15, WaterWaveSpeed = 8 },
-        Reflect = 0.32,
+        Reflect = 0.18,
     },
     Night = {
         Lighting = {
@@ -1933,7 +1936,7 @@ local ToxLightingPresets = {
         ColorCorrection = { Brightness = 0, Contrast = 0.14, Saturation = -0.04, TintColor = RGB(214, 224, 255) },
         DepthOfField = { FarIntensity = 0.12, FocusDistance = 100, InFocusRadius = 100, NearIntensity = 0 },
         Water = { WaterColor = RGB(22, 32, 64), WaterReflectance = 1, WaterTransparency = 0.75, WaterWaveSize = 0.12, WaterWaveSpeed = 6 },
-        Reflect = 0.12,
+        Reflect = 0.08,
     },
     Overcast = {
         Lighting = {
@@ -1950,7 +1953,7 @@ local ToxLightingPresets = {
         ColorCorrection = { Brightness = -0.01, Contrast = 0.1, Saturation = -0.1, TintColor = RGB(236, 242, 250) },
         DepthOfField = { FarIntensity = 0.14, FocusDistance = 100, InFocusRadius = 100, NearIntensity = 0 },
         Water = { WaterColor = RGB(54, 72, 82), WaterReflectance = 1, WaterTransparency = 0.78, WaterWaveSize = 0.2, WaterWaveSpeed = 14 },
-        Reflect = 0.22,
+        Reflect = 0.12,
     },
 }
 local ToxPresetOrder = { "Off", "Dawn", "Morning", "Midday", "Sunset", "Evening", "Night", "Overcast" }
