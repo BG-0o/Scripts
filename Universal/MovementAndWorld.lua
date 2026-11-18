@@ -1312,6 +1312,17 @@ local function StartWalkFling()
                     normalVel = Vector3.zero
                 end
 
+                local isNDS = game.PlaceId == 189707
+                if isNDS and power >= 1 then
+                    local state = humanoid:GetState()
+                    local airborne = humanoid.FloorMaterial == Enum.Material.Air
+                        or state == Enum.HumanoidStateType.Freefall
+                        or state == Enum.HumanoidStateType.Jumping
+                    if airborne or root.AssemblyLinearVelocity.Y < -20 then
+                        power = 0
+                    end
+                end
+
                 if power < 1 then
                     SetWalkFlingImpulse(false)
                     root.AssemblyLinearVelocity = normalVel
@@ -1324,7 +1335,8 @@ local function StartWalkFling()
                         moveDir = root.CFrame.LookVector
                     end
 
-                    root.AssemblyLinearVelocity = Vector3.new(moveDir.X * mult, mult * 0.75, moveDir.Z * mult)
+                    local liftY = isNDS and 0 or mult * 0.75
+                    root.AssemblyLinearVelocity = Vector3.new(moveDir.X * mult, liftY, moveDir.Z * mult)
 
                     RunService.RenderStepped:Wait()
                     if root.Parent then
