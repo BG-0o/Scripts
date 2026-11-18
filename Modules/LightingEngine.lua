@@ -1413,91 +1413,149 @@ local ToxPresetSkies = {
         Lf = "rbxassetid://271042310", Rt = "rbxassetid://271042467", Up = "rbxassetid://271077958",
     },
 }
+local function RGB(r, g, b)
+    return Color3.fromRGB(r, g, b)
+end
 local ToxLightingPresets = {
+    Dawn = {
+        Lighting = {
+            ClockTime = 5.9, GeographicLatitude = 38, Brightness = 1.8, ExposureCompensation = 0.25,
+            Ambient = RGB(56, 52, 70), OutdoorAmbient = RGB(118, 108, 132),
+            ColorShift_Top = RGB(255, 186, 150), ColorShift_Bottom = RGB(96, 90, 130),
+            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.45, GlobalShadows = true,
+        },
+        Sky = { Faces = "Morning", StarCount = 800, SunAngularSize = 22, MoonAngularSize = 9 },
+        Atmosphere = { Density = 0.4, Offset = 0.3, Color = RGB(214, 170, 168), Decay = RGB(98, 100, 140), Glare = 0.8, Haze = 2.2 },
+        Clouds = { Cover = 0.55, Density = 0.55, Color = RGB(255, 214, 196) },
+        Wind = Vector3.new(4, 0, 2),
+        Bloom = { Intensity = 0.55, Size = 30, Threshold = 1.6 },
+        ColorCorrection = { Brightness = 0.01, Contrast = 0.1, Saturation = 0.08, TintColor = RGB(255, 236, 230) },
+        SunRays = { Intensity = 0.14, Spread = 0.9 },
+        DepthOfField = { FarIntensity = 0.12, FocusDistance = 120, InFocusRadius = 120, NearIntensity = 0 },
+        Water = { WaterColor = RGB(60, 82, 112), WaterReflectance = 1, WaterTransparency = 0.82, WaterWaveSize = 0.12, WaterWaveSpeed = 8 },
+    },
     Morning = {
         Lighting = {
-            ClockTime = 7.2, GeographicLatitude = 41, Brightness = 2.6, ExposureCompensation = 0.1,
-            Ambient = Color3.fromRGB(62, 56, 60), OutdoorAmbient = Color3.fromRGB(140, 128, 122),
-            ColorShift_Top = Color3.fromRGB(255, 214, 170), ColorShift_Bottom = Color3.fromRGB(120, 100, 90),
-            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.25, GlobalShadows = true,
+            ClockTime = 7.4, GeographicLatitude = 41, Brightness = 2.6, ExposureCompensation = 0.12,
+            Ambient = RGB(66, 60, 64), OutdoorAmbient = RGB(142, 132, 126),
+            ColorShift_Top = RGB(255, 222, 182), ColorShift_Bottom = RGB(118, 104, 96),
+            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.22, GlobalShadows = true,
         },
-        Sky = { Faces = "Morning", StarCount = 0, SunAngularSize = 14 },
-        Atmosphere = { Density = 0.32, Offset = 0.25, Color = Color3.fromRGB(205, 176, 148), Decay = Color3.fromRGB(106, 112, 125), Glare = 0.4, Haze = 1.6 },
-        Bloom = { Intensity = 0.6, Size = 28, Threshold = 1.2 },
-        ColorCorrection = { Brightness = 0.02, Contrast = 0.12, Saturation = 0.12, TintColor = Color3.fromRGB(255, 242, 228) },
-        SunRays = { Intensity = 0.1, Spread = 0.8 },
-        DepthOfField = { FarIntensity = 0.08, FocusDistance = 60, InFocusRadius = 60, NearIntensity = 0 },
-        Water = { WaterColor = Color3.fromRGB(42, 92, 110), WaterReflectance = 1, WaterTransparency = 0.85, WaterWaveSize = 0.15, WaterWaveSpeed = 10 },
+        Sky = { Faces = "Morning", StarCount = 0, SunAngularSize = 15 },
+        Atmosphere = { Density = 0.3, Offset = 0.25, Color = RGB(210, 186, 160), Decay = RGB(104, 116, 134), Glare = 0.45, Haze = 1.5 },
+        Clouds = { Cover = 0.5, Density = 0.45, Color = RGB(255, 244, 232) },
+        Wind = Vector3.new(6, 0, 3),
+        Bloom = { Intensity = 0.5, Size = 26, Threshold = 1.7 },
+        ColorCorrection = { Brightness = 0.02, Contrast = 0.1, Saturation = 0.12, TintColor = RGB(255, 246, 234) },
+        SunRays = { Intensity = 0.1, Spread = 0.75 },
+        DepthOfField = { FarIntensity = 0.1, FocusDistance = 140, InFocusRadius = 140, NearIntensity = 0 },
+        Water = { WaterColor = RGB(40, 98, 116), WaterReflectance = 1, WaterTransparency = 0.86, WaterWaveSize = 0.14, WaterWaveSpeed = 10 },
     },
     Midday = {
         Lighting = {
-            ClockTime = 13.8, GeographicLatitude = 30, Brightness = 3, ExposureCompensation = 0,
-            Ambient = Color3.fromRGB(70, 72, 82), OutdoorAmbient = Color3.fromRGB(150, 150, 160),
-            ColorShift_Top = Color3.fromRGB(255, 248, 235), ColorShift_Bottom = Color3.fromRGB(110, 115, 125),
-            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.15, GlobalShadows = true,
+            ClockTime = 13.6, GeographicLatitude = 28, Brightness = 3.1, ExposureCompensation = 0,
+            Ambient = RGB(72, 74, 84), OutdoorAmbient = RGB(150, 152, 162),
+            ColorShift_Top = RGB(255, 250, 240), ColorShift_Bottom = RGB(108, 116, 128),
+            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.1, GlobalShadows = true,
         },
         Sky = { Faces = "Midday", StarCount = 0, SunAngularSize = 11 },
-        Atmosphere = { Density = 0.27, Offset = 0.2, Color = Color3.fromRGB(199, 205, 216), Decay = Color3.fromRGB(92, 110, 140), Glare = 0, Haze = 1 },
-        Bloom = { Intensity = 0.45, Size = 24, Threshold = 1.4 },
-        ColorCorrection = { Brightness = 0, Contrast = 0.1, Saturation = 0.15, TintColor = Color3.fromRGB(255, 255, 255) },
-        SunRays = { Intensity = 0.06, Spread = 0.5 },
-        DepthOfField = { FarIntensity = 0.06, FocusDistance = 80, InFocusRadius = 80, NearIntensity = 0 },
-        Water = { WaterColor = Color3.fromRGB(30, 110, 140), WaterReflectance = 1, WaterTransparency = 0.9, WaterWaveSize = 0.12, WaterWaveSpeed = 12 },
+        Atmosphere = { Density = 0.26, Offset = 0.2, Color = RGB(198, 208, 222), Decay = RGB(90, 112, 146), Glare = 0.1, Haze = 0.9 },
+        Clouds = { Cover = 0.62, Density = 0.5, Color = RGB(255, 255, 255) },
+        Wind = Vector3.new(8, 0, 4),
+        Bloom = { Intensity = 0.35, Size = 22, Threshold = 2 },
+        ColorCorrection = { Brightness = 0, Contrast = 0.08, Saturation = 0.16, TintColor = RGB(255, 255, 252) },
+        SunRays = { Intensity = 0.05, Spread = 0.45 },
+        DepthOfField = { FarIntensity = 0.08, FocusDistance = 180, InFocusRadius = 180, NearIntensity = 0 },
+        Water = { WaterColor = RGB(26, 112, 142), WaterReflectance = 1, WaterTransparency = 0.9, WaterWaveSize = 0.12, WaterWaveSpeed = 12 },
     },
     Sunset = {
         Lighting = {
-            ClockTime = 17.4, GeographicLatitude = 41, Brightness = 2.4, ExposureCompensation = 0.15,
-            Ambient = Color3.fromRGB(70, 52, 52), OutdoorAmbient = Color3.fromRGB(150, 118, 108),
-            ColorShift_Top = Color3.fromRGB(255, 165, 105), ColorShift_Bottom = Color3.fromRGB(120, 80, 90),
-            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.3, GlobalShadows = true,
+            ClockTime = 17.55, GeographicLatitude = 41, Brightness = 2.3, ExposureCompensation = 0.18,
+            Ambient = RGB(74, 54, 54), OutdoorAmbient = RGB(156, 118, 104),
+            ColorShift_Top = RGB(255, 158, 96), ColorShift_Bottom = RGB(124, 78, 88),
+            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.28, GlobalShadows = true,
         },
-        Sky = { Faces = "Sunset", StarCount = 0, SunAngularSize = 18 },
-        Atmosphere = { Density = 0.36, Offset = 0.3, Color = Color3.fromRGB(255, 186, 140), Decay = Color3.fromRGB(120, 88, 110), Glare = 0.6, Haze = 2 },
-        Bloom = { Intensity = 0.8, Size = 32, Threshold = 1.1 },
-        ColorCorrection = { Brightness = 0.01, Contrast = 0.15, Saturation = 0.2, TintColor = Color3.fromRGB(255, 228, 205) },
-        SunRays = { Intensity = 0.15, Spread = 1 },
-        DepthOfField = { FarIntensity = 0.1, FocusDistance = 55, InFocusRadius = 55, NearIntensity = 0 },
-        Water = { WaterColor = Color3.fromRGB(70, 70, 95), WaterReflectance = 1, WaterTransparency = 0.8, WaterWaveSize = 0.15, WaterWaveSpeed = 9 },
+        Sky = { Faces = "Sunset", StarCount = 0, SunAngularSize = 21 },
+        Atmosphere = { Density = 0.35, Offset = 0.32, Color = RGB(255, 182, 132), Decay = RGB(124, 86, 108), Glare = 0.9, Haze = 2 },
+        Clouds = { Cover = 0.58, Density = 0.55, Color = RGB(255, 186, 150) },
+        Wind = Vector3.new(5, 0, 2),
+        Bloom = { Intensity = 0.75, Size = 32, Threshold = 1.35 },
+        ColorCorrection = { Brightness = 0.01, Contrast = 0.14, Saturation = 0.2, TintColor = RGB(255, 230, 208) },
+        SunRays = { Intensity = 0.16, Spread = 1 },
+        DepthOfField = { FarIntensity = 0.12, FocusDistance = 120, InFocusRadius = 120, NearIntensity = 0 },
+        Water = { WaterColor = RGB(78, 70, 92), WaterReflectance = 1, WaterTransparency = 0.8, WaterWaveSize = 0.15, WaterWaveSpeed = 9 },
     },
     Evening = {
         Lighting = {
-            ClockTime = 18.5, GeographicLatitude = 41, Brightness = 1.6, ExposureCompensation = 0.2,
-            Ambient = Color3.fromRGB(52, 46, 62), OutdoorAmbient = Color3.fromRGB(105, 92, 120),
-            ColorShift_Top = Color3.fromRGB(255, 140, 120), ColorShift_Bottom = Color3.fromRGB(80, 70, 110),
-            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.35, GlobalShadows = true,
+            ClockTime = 18.45, GeographicLatitude = 41, Brightness = 1.5, ExposureCompensation = 0.25,
+            Ambient = RGB(54, 46, 66), OutdoorAmbient = RGB(108, 92, 124),
+            ColorShift_Top = RGB(255, 134, 118), ColorShift_Bottom = RGB(76, 68, 118),
+            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.38, GlobalShadows = true,
         },
-        Sky = { Faces = "Evening", StarCount = 1500, SunAngularSize = 20 },
-        Atmosphere = { Density = 0.38, Offset = 0.25, Color = Color3.fromRGB(190, 140, 160), Decay = Color3.fromRGB(70, 60, 100), Glare = 0.5, Haze = 1.8 },
-        Bloom = { Intensity = 0.9, Size = 34, Threshold = 1 },
-        ColorCorrection = { Brightness = 0, Contrast = 0.16, Saturation = 0.1, TintColor = Color3.fromRGB(245, 225, 240) },
+        Sky = { Faces = "Evening", StarCount = 1800, SunAngularSize = 22, MoonAngularSize = 10 },
+        Atmosphere = { Density = 0.38, Offset = 0.26, Color = RGB(196, 138, 158), Decay = RGB(68, 58, 104), Glare = 0.6, Haze = 1.8 },
+        Clouds = { Cover = 0.52, Density = 0.5, Color = RGB(214, 150, 170) },
+        Wind = Vector3.new(4, 0, 2),
+        Bloom = { Intensity = 0.85, Size = 34, Threshold = 1.2 },
+        ColorCorrection = { Brightness = 0, Contrast = 0.15, Saturation = 0.1, TintColor = RGB(246, 228, 244) },
         SunRays = { Intensity = 0.12, Spread = 0.9 },
-        DepthOfField = { FarIntensity = 0.1, FocusDistance = 50, InFocusRadius = 50, NearIntensity = 0 },
-        Water = { WaterColor = Color3.fromRGB(50, 50, 80), WaterReflectance = 1, WaterTransparency = 0.8, WaterWaveSize = 0.15, WaterWaveSpeed = 8 },
+        DepthOfField = { FarIntensity = 0.12, FocusDistance = 110, InFocusRadius = 110, NearIntensity = 0 },
+        Water = { WaterColor = RGB(52, 50, 82), WaterReflectance = 1, WaterTransparency = 0.8, WaterWaveSize = 0.15, WaterWaveSpeed = 8 },
     },
     Night = {
         Lighting = {
-            ClockTime = 0.2, GeographicLatitude = 41, Brightness = 1.2, ExposureCompensation = 0.25,
-            Ambient = Color3.fromRGB(30, 33, 50), OutdoorAmbient = Color3.fromRGB(58, 64, 96),
-            ColorShift_Top = Color3.fromRGB(150, 170, 255), ColorShift_Bottom = Color3.fromRGB(40, 45, 80),
-            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.4, GlobalShadows = true,
+            ClockTime = 0.3, GeographicLatitude = 41, Brightness = 1.3, ExposureCompensation = 0.35,
+            Ambient = RGB(34, 38, 58), OutdoorAmbient = RGB(64, 72, 108),
+            ColorShift_Top = RGB(160, 182, 255), ColorShift_Bottom = RGB(40, 46, 86),
+            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.35, GlobalShadows = true,
         },
-        Sky = { Faces = nil, StarCount = 5000, MoonAngularSize = 14 },
-        Atmosphere = { Density = 0.36, Offset = 0.1, Color = Color3.fromRGB(62, 72, 112), Decay = Color3.fromRGB(20, 25, 46), Glare = 0, Haze = 0.6 },
-        Bloom = { Intensity = 1, Size = 40, Threshold = 0.9 },
-        ColorCorrection = { Brightness = -0.02, Contrast = 0.18, Saturation = -0.05, TintColor = Color3.fromRGB(205, 215, 255) },
-        DepthOfField = { FarIntensity = 0.12, FocusDistance = 45, InFocusRadius = 45, NearIntensity = 0 },
-        Water = { WaterColor = Color3.fromRGB(20, 30, 60), WaterReflectance = 1, WaterTransparency = 0.75, WaterWaveSize = 0.12, WaterWaveSpeed = 6 },
+        Sky = { Faces = nil, StarCount = 6000, MoonAngularSize = 16 },
+        Atmosphere = { Density = 0.33, Offset = 0.12, Color = RGB(66, 78, 120), Decay = RGB(22, 28, 52), Glare = 0.2, Haze = 0.7 },
+        Clouds = { Cover = 0.4, Density = 0.35, Color = RGB(120, 132, 170) },
+        Wind = Vector3.new(3, 0, 1),
+        Bloom = { Intensity = 0.95, Size = 40, Threshold = 1 },
+        ColorCorrection = { Brightness = 0, Contrast = 0.16, Saturation = -0.04, TintColor = RGB(212, 222, 255) },
+        DepthOfField = { FarIntensity = 0.14, FocusDistance = 90, InFocusRadius = 90, NearIntensity = 0 },
+        Water = { WaterColor = RGB(22, 32, 64), WaterReflectance = 1, WaterTransparency = 0.75, WaterWaveSize = 0.12, WaterWaveSpeed = 6 },
+    },
+    Overcast = {
+        Lighting = {
+            ClockTime = 14.5, GeographicLatitude = 41, Brightness = 1.6, ExposureCompensation = 0.1,
+            Ambient = RGB(84, 88, 96), OutdoorAmbient = RGB(132, 138, 148),
+            ColorShift_Top = RGB(214, 222, 232), ColorShift_Bottom = RGB(100, 106, 116),
+            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 0.8, ShadowSoftness = 0.8, GlobalShadows = true,
+        },
+        Sky = { Faces = "Midday", StarCount = 0, SunAngularSize = 8 },
+        Atmosphere = { Density = 0.42, Offset = 0.18, Color = RGB(170, 178, 190), Decay = RGB(110, 118, 132), Glare = 0, Haze = 2.6 },
+        Clouds = { Cover = 0.88, Density = 0.75, Color = RGB(196, 202, 212) },
+        Wind = Vector3.new(12, 0, 6),
+        Bloom = { Intensity = 0.3, Size = 24, Threshold = 2.2 },
+        ColorCorrection = { Brightness = -0.01, Contrast = 0.12, Saturation = -0.12, TintColor = RGB(236, 242, 250) },
+        DepthOfField = { FarIntensity = 0.16, FocusDistance = 90, InFocusRadius = 90, NearIntensity = 0 },
+        Water = { WaterColor = RGB(56, 74, 84), WaterReflectance = 1, WaterTransparency = 0.78, WaterWaveSize = 0.2, WaterWaveSpeed = 14 },
     },
 }
-local ToxPresetOrder = { "Off", "Morning", "Midday", "Sunset", "Evening", "Night" }
+local ToxPresetOrder = { "Off", "Dawn", "Morning", "Midday", "Sunset", "Evening", "Night", "Overcast" }
 local ToxPresetClasses = { "Sky", "Atmosphere", "BloomEffect", "ColorCorrectionEffect", "SunRaysEffect", "DepthOfFieldEffect" }
+local ToxPresetFade = TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+local ToxPresetStart = {
+    Atmosphere = { Density = 0, Offset = 0, Glare = 0, Haze = 0 },
+    BloomEffect = { Intensity = 0, Size = 0 },
+    ColorCorrectionEffect = { Brightness = 0, Contrast = 0, Saturation = 0, TintColor = RGB(255, 255, 255) },
+    SunRaysEffect = { Intensity = 0 },
+    DepthOfFieldEffect = { FarIntensity = 0, NearIntensity = 0 },
+}
 local ToxPresetState = {
     Active = nil,
     Lighting = nil,
     Water = nil,
+    Wind = nil,
+    Clouds = nil,
+    CloudsCreated = false,
     Detached = {},
     Created = {},
     Connections = {},
+    Tweens = {},
     Applying = false,
 }
 local function ToxPresetSet(object, props)
@@ -1506,6 +1564,39 @@ local function ToxPresetSet(object, props)
             object[property] = value
         end)
     end
+end
+local function ToxPresetTween(object, props, instant)
+    if instant then
+        ToxPresetSet(object, props)
+        return
+    end
+    local tweenable, rest = {}, {}
+    for property, value in pairs(props) do
+        local kind = typeof(value)
+        if kind == "number" or kind == "Color3" or kind == "Vector3" then
+            tweenable[property] = value
+        else
+            rest[property] = value
+        end
+    end
+    ToxPresetSet(object, rest)
+    local ok, tween = pcall(function()
+        return TweenService:Create(object, ToxPresetFade, tweenable)
+    end)
+    if ok and tween then
+        table.insert(ToxPresetState.Tweens, tween)
+        tween:Play()
+    else
+        ToxPresetSet(object, tweenable)
+    end
+end
+local function ToxPresetStopTweens()
+    for _, tween in ipairs(ToxPresetState.Tweens) do
+        pcall(function()
+            tween:Cancel()
+        end)
+    end
+    table.clear(ToxPresetState.Tweens)
 end
 local function ToxPresetIsOwn(object)
     for _, created in ipairs(ToxPresetState.Created) do
@@ -1539,6 +1630,7 @@ local function ToxPresetDisconnect()
 end
 local function ToxPresetRestore()
     ToxPresetDisconnect()
+    ToxPresetStopTweens()
     for _, object in ipairs(ToxPresetState.Created) do
         pcall(function()
             object:Destroy()
@@ -1563,21 +1655,101 @@ local function ToxPresetRestore()
         ToxPresetSet(terrain, ToxPresetState.Water)
     end
     ToxPresetState.Water = nil
+    if ToxPresetState.Clouds and ToxPresetState.Clouds.Instance and not ToxPresetState.CloudsCreated then
+        ToxPresetSet(ToxPresetState.Clouds.Instance, ToxPresetState.Clouds.Snapshot)
+    end
+    ToxPresetState.Clouds = nil
+    ToxPresetState.CloudsCreated = false
+    if ToxPresetState.Wind then
+        pcall(function()
+            workspace.GlobalWind = ToxPresetState.Wind
+        end)
+        ToxPresetState.Wind = nil
+    end
     ToxPresetState.Active = nil
 end
-local function ToxPresetCreate(className, name, props)
+local function ToxPresetClearForSwitch()
+    ToxPresetDisconnect()
+    ToxPresetStopTweens()
+    for _, object in ipairs(ToxPresetState.Created) do
+        pcall(function()
+            object:Destroy()
+        end)
+    end
+    table.clear(ToxPresetState.Created)
+    if ToxPresetState.CloudsCreated then
+        ToxPresetState.Clouds = nil
+        ToxPresetState.CloudsCreated = false
+    end
+    ToxPresetState.Active = nil
+end
+local function ToxPresetCreate(className, name, props, instant)
     local object = Instance.new(className)
     object.Name = name
-    ToxPresetSet(object, props)
+    local start = ToxPresetStart[className]
+    if start and not instant then
+        ToxPresetSet(object, props)
+        ToxPresetSet(object, start)
+    else
+        ToxPresetSet(object, props)
+    end
     table.insert(ToxPresetState.Created, object)
     object.Parent = LightingService
+    if start and not instant then
+        ToxPresetTween(object, props)
+    end
     return object
 end
-local function ToxPresetApplyLighting(preset)
+local function ToxPresetApplyLighting(preset, instant)
     ToxPresetState.Applying = true
-    ToxPresetSet(LightingService, preset.Lighting)
+    ToxPresetTween(LightingService, preset.Lighting, instant)
     ToxSetTechnology("Future")
-    ToxPresetState.Applying = false
+    task.delay(instant and 0 or ToxPresetFade.Time + 0.05, function()
+        ToxPresetState.Applying = false
+    end)
+end
+local function ToxPresetApplyClouds(preset, terrain, instant)
+    if not terrain or not preset.Clouds then
+        return
+    end
+    local existing = ToxPresetState.Clouds
+    if existing and existing.Instance and existing.Instance.Parent and not ToxPresetState.CloudsCreated then
+        ToxPresetTween(existing.Instance, preset.Clouds, instant)
+        return
+    end
+    local clouds = terrain:FindFirstChildOfClass("Clouds")
+    if clouds then
+        local snapshot = {}
+        for property in pairs(preset.Clouds) do
+            pcall(function()
+                snapshot[property] = clouds[property]
+            end)
+        end
+        pcall(function()
+            snapshot.Enabled = clouds.Enabled
+        end)
+        ToxPresetState.Clouds = { Instance = clouds, Snapshot = snapshot }
+        ToxPresetState.CloudsCreated = false
+        pcall(function()
+            clouds.Enabled = true
+        end)
+    else
+        local ok, created = pcall(function()
+            local object = Instance.new("Clouds")
+            object.Name = "ToxPresetClouds"
+            object.Cover = 0
+            object.Parent = terrain
+            return object
+        end)
+        if not ok or not created then
+            return
+        end
+        clouds = created
+        table.insert(ToxPresetState.Created, clouds)
+        ToxPresetState.Clouds = { Instance = clouds, Snapshot = {} }
+        ToxPresetState.CloudsCreated = true
+    end
+    ToxPresetTween(clouds, preset.Clouds, instant)
 end
 function ToxLighting.GetPresetNames()
     return ToxPresetOrder
@@ -1585,10 +1757,13 @@ end
 function ToxLighting.GetPreset()
     return ToxPresetState.Active or "Off"
 end
-function ToxLighting.ApplyPreset(name)
+function ToxLighting.ApplyPreset(name, instant)
     name = tostring(name or "Off")
     local preset = ToxLightingPresets[name]
-    if ToxPresetState.Active then
+    local switching = ToxPresetState.Active ~= nil and preset ~= nil
+    if switching then
+        ToxPresetClearForSwitch()
+    elseif ToxPresetState.Active then
         ToxPresetRestore()
     end
     LightingSettings.LightingPreset = preset and name or "Off"
@@ -1610,29 +1785,44 @@ function ToxLighting.ApplyPreset(name)
             pcall(env.SyncToggleVisuals, "Fullbright", false)
         end
     end
-    local snapshot = {}
+    local snapshot = ToxPresetState.Lighting or {}
     for property in pairs(preset.Lighting) do
+        if snapshot[property] == nil then
+            pcall(function()
+                snapshot[property] = LightingService[property]
+            end)
+        end
+    end
+    if snapshot.Technology == nil then
         pcall(function()
-            snapshot[property] = LightingService[property]
+            snapshot.Technology = LightingService.Technology
         end)
     end
-    pcall(function()
-        snapshot.Technology = LightingService.Technology
-    end)
     ToxPresetState.Lighting = snapshot
     for _, object in ipairs(LightingService:GetChildren()) do
         ToxPresetDetach(object)
     end
     local terrain = workspace:FindFirstChildOfClass("Terrain")
     if terrain and preset.Water then
-        local water = {}
+        local water = ToxPresetState.Water or {}
         for property in pairs(preset.Water) do
-            pcall(function()
-                water[property] = terrain[property]
-            end)
+            if water[property] == nil then
+                pcall(function()
+                    water[property] = terrain[property]
+                end)
+            end
         end
         ToxPresetState.Water = water
-        ToxPresetSet(terrain, preset.Water)
+        ToxPresetTween(terrain, preset.Water, instant)
+    end
+    ToxPresetApplyClouds(preset, terrain, instant)
+    if preset.Wind then
+        pcall(function()
+            if ToxPresetState.Wind == nil then
+                ToxPresetState.Wind = workspace.GlobalWind
+            end
+            workspace.GlobalWind = preset.Wind
+        end)
     end
     local skyProps = { CelestialBodiesShown = true, StarCount = preset.Sky.StarCount or 3000 }
     if preset.Sky.SunAngularSize then skyProps.SunAngularSize = preset.Sky.SunAngularSize end
@@ -1646,17 +1836,17 @@ function ToxLighting.ApplyPreset(name)
         skyProps.SkyboxRt = faces.Rt
         skyProps.SkyboxUp = faces.Up
     end
-    ToxPresetCreate("Sky", "ToxPresetSky", skyProps)
-    ToxPresetCreate("Atmosphere", "ToxPresetAtmosphere", preset.Atmosphere)
-    ToxPresetCreate("BloomEffect", "ToxPresetBloom", preset.Bloom)
-    ToxPresetCreate("ColorCorrectionEffect", "ToxPresetColor", preset.ColorCorrection)
+    ToxPresetCreate("Sky", "ToxPresetSky", skyProps, true)
+    ToxPresetCreate("Atmosphere", "ToxPresetAtmosphere", preset.Atmosphere, instant)
+    ToxPresetCreate("BloomEffect", "ToxPresetBloom", preset.Bloom, instant)
+    ToxPresetCreate("ColorCorrectionEffect", "ToxPresetColor", preset.ColorCorrection, instant)
     if preset.SunRays then
-        ToxPresetCreate("SunRaysEffect", "ToxPresetSunRays", preset.SunRays)
+        ToxPresetCreate("SunRaysEffect", "ToxPresetSunRays", preset.SunRays, instant)
     end
     if preset.DepthOfField then
-        ToxPresetCreate("DepthOfFieldEffect", "ToxPresetDepth", preset.DepthOfField)
+        ToxPresetCreate("DepthOfFieldEffect", "ToxPresetDepth", preset.DepthOfField, instant)
     end
-    ToxPresetApplyLighting(preset)
+    ToxPresetApplyLighting(preset, instant)
     ToxPresetState.Active = name
     table.insert(ToxPresetState.Connections, LightingService.ChildAdded:Connect(function(object)
         task.defer(function()
@@ -1676,8 +1866,8 @@ function ToxLighting.ApplyPreset(name)
         pending = true
         task.delay(0.1, function()
             pending = false
-            if ToxPresetState.Active == name then
-                ToxPresetApplyLighting(preset)
+            if ToxPresetState.Active == name and not ToxPresetState.Applying then
+                ToxPresetApplyLighting(preset, true)
             end
         end)
     end))

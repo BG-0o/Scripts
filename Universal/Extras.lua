@@ -2621,7 +2621,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
                 end
             )
             if Settings.LightingPreset and Settings.LightingPreset ~= "Off" then
-                task.defer(controller.ApplyPreset, Settings.LightingPreset)
+                task.defer(controller.ApplyPreset, Settings.LightingPreset, true)
             end
         end
 
