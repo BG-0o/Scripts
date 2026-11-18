@@ -1248,6 +1248,12 @@ AddConnection(RunService.Heartbeat:Connect(function()
     end
 end))
 
+local WalkFlingLastPos = nil
+local WalkFlingPauseUntil = 0
+getgenv().ToxPauseWalkFling = function(seconds)
+    WalkFlingPauseUntil = math.max(WalkFlingPauseUntil, tick() + (tonumber(seconds) or 1))
+end
+
 local function StopWalkFling()
     WalkFlingGeneration = WalkFlingGeneration + 1
     WalkFlingRunning = false
@@ -1310,6 +1316,21 @@ local function StartWalkFling()
                 if CheckExternalTeleport(root) or IsExternalTeleportGuardActive() then
                     power = 0
                     normalVel = Vector3.zero
+                end
+
+                local pos = root.Position
+                if WalkFlingLastPos and (pos - WalkFlingLastPos).Magnitude > 12 then
+                    WalkFlingPauseUntil = tick() + 1.2
+                end
+                WalkFlingLastPos = pos
+                if IsOwnTeleportActive() or (getgenv().ToxTeleportInProgress == true) then
+                    WalkFlingPauseUntil = math.max(WalkFlingPauseUntil, tick() + 0.6)
+                end
+                if tick() < WalkFlingPauseUntil then
+                    if power >= 1 then
+                        normalVel = Vector3.zero
+                    end
+                    power = 0
                 end
 
                 local isNDS = game.PlaceId == 189707
