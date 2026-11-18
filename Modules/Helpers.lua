@@ -56,10 +56,189 @@ local NotifLayout = Instance.new("UIListLayout")
 NotifLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 NotifLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 NotifLayout.SortOrder = Enum.SortOrder.LayoutOrder
-NotifLayout.Padding = UDim.new(0, 6)
+NotifLayout.Padding = UDim.new(0, 0)
 NotifLayout.Parent = NotifContainer
 getgenv().ToxLastNotificationText = getgenv().ToxLastNotificationText or nil
 getgenv().ToxLastNotificationTime = getgenv().ToxLastNotificationTime or 0
+-- Notificacoes: card com barra colorida, entra deslizando da direita,
+-- barra de tempo embaixo, clique pra fechar, e notificacoes fixas (pin).
+local TextService = game:GetService("TextService")
+local NOTIF_WIDTH = 270
+local NOTIF_MAX_STACK = 6
+NotifContainer.Size = UDim2.new(0, NOTIF_WIDTH, 1, -40)
+NotifContainer.Position = UDim2.new(1, -NOTIF_WIDTH - 14, 0, 20)
+local NotifOrder = 0
+local ActiveNotifs = {}
+local PinnedNotifs = {}
+
+local function NotifTheme(key, fallback)
+    local theme = env.Theme
+    return (theme and theme[key]) or fallback
+end
+
+local function MeasureNotifHeight(text)
+    local ok, size = pcall(function()
+        return TextService:GetTextSize(text, 13, Enum.Font.GothamMedium, Vector2.new(NOTIF_WIDTH - 40, 1000))
+    end)
+    local textHeight = ok and size.Y or 16
+    return math.max(44, math.min(textHeight, 48) + 26)
+end
+
+local function CreateNotif(text, color, pinned)
+    local accent = NotifTheme("Accent", MAIN_COLOR or Color3.fromRGB(30, 95, 255))
+    local barColor = color or accent
+    local uiTransp = math.clamp(tonumber(Settings and Settings.ToxUITransparency) or 0, 0, 0.85)
+    local height = MeasureNotifHeight(text)
+
+    NotifOrder += 1
+    local holder = Instance.new("Frame")
+    holder.Name = pinned and "ToxNotifPinned" or "ToxNotif"
+    holder.BackgroundTransparency = 1
+    holder.ClipsDescendants = true
+    holder.Size = UDim2.new(1, 0, 0, 0)
+    holder.LayoutOrder = pinned and (-100000 + NotifOrder) or NotifOrder
+    holder.Parent = NotifContainer
+
+    local card = Instance.new("TextButton")
+    card.Name = "Card"
+    card.AutoButtonColor = false
+    card.Text = ""
+    card.Size = UDim2.new(1, -2, 0, height - 2)
+    card.Position = UDim2.new(0, NOTIF_WIDTH + 24, 0, 1)
+    card.BackgroundColor3 = NotifTheme("Panel", Color3.fromRGB(16, 16, 26))
+    card.BackgroundTransparency = 1
+    card.BorderSizePixel = 0
+    card.Parent = holder
+    local corner = Instance.new("UICorner") corner.CornerRadius = UDim.new(0, 8) corner.Parent = card
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = accent
+    stroke.Thickness = 1
+    stroke.Transparency = 1
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Parent = card
+
+    -- brilho suave da cor da notificacao vindo da esquerda
+    local glow = Instance.new("Frame")
+    glow.Name = "Glow"
+    glow.Size = UDim2.new(1, 0, 1, 0)
+    glow.BackgroundColor3 = barColor
+    glow.BackgroundTransparency = 1
+    glow.BorderSizePixel = 0
+    glow.Parent = card
+    local glowCorner = Instance.new("UICorner") glowCorner.CornerRadius = UDim.new(0, 8) glowCorner.Parent = glow
+    local glowGradient = Instance.new("UIGradient")
+    glowGradient.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.82),
+        NumberSequenceKeypoint.new(0.45, 1),
+        NumberSequenceKeypoint.new(1, 1),
+    })
+    glowGradient.Parent = glow
+
+    local bar = Instance.new("Frame")
+    bar.Name = "Bar"
+    bar.Size = UDim2.new(0, 3, 1, -16)
+    bar.Position = UDim2.new(0, 8, 0, 8)
+    bar.BackgroundColor3 = barColor
+    bar.BackgroundTransparency = 1
+    bar.BorderSizePixel = 0
+    bar.Parent = card
+    local barCorner = Instance.new("UICorner") barCorner.CornerRadius = UDim.new(1, 0) barCorner.Parent = bar
+
+    local label = Instance.new("TextLabel")
+    label.Name = "Text"
+    label.Size = UDim2.new(1, -32, 1, -6)
+    label.Position = UDim2.new(0, 20, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = NotifTheme("Text", Color3.fromRGB(240, 240, 240))
+    label.TextTransparency = 1
+    label.Font = Enum.Font.GothamMedium
+    label.TextSize = 13
+    label.TextWrapped = true
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.TextTruncate = Enum.TextTruncate.AtEnd
+    label.Parent = card
+
+    local progress = Instance.new("Frame")
+    progress.Name = "Progress"
+    progress.Size = UDim2.new(1, -28, 0, 2)
+    progress.Position = UDim2.new(0, 20, 1, -6)
+    progress.BackgroundColor3 = barColor
+    progress.BackgroundTransparency = 1
+    progress.BorderSizePixel = 0
+    progress.Visible = not pinned
+    progress.Parent = card
+    local progressCorner = Instance.new("UICorner") progressCorner.CornerRadius = UDim.new(1, 0) progressCorner.Parent = progress
+
+    local handle = { Holder = holder, Card = card, Label = label, Bar = bar, Glow = glow, Progress = progress, Pinned = pinned, Dismissed = false }
+
+    local inInfo = TweenInfo.new(0.45, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    TweenService:Create(holder, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.new(1, 0, 0, height + 6) }):Play()
+    TweenService:Create(card, inInfo, { Position = UDim2.new(0, 1, 0, 1), BackgroundTransparency = uiTransp }):Play()
+    TweenService:Create(stroke, inInfo, { Transparency = 0.35 }):Play()
+    TweenService:Create(glow, inInfo, { BackgroundTransparency = 0 }):Play()
+    TweenService:Create(bar, inInfo, { BackgroundTransparency = 0 }):Play()
+    TweenService:Create(label, inInfo, { TextTransparency = 0 }):Play()
+    TweenService:Create(progress, inInfo, { BackgroundTransparency = 0.35 }):Play()
+
+    if pinned then
+        -- barra "respirando" enquanto esta fixa
+        handle.PulseTween = TweenService:Create(bar, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { BackgroundTransparency = 0.6 })
+        task.delay(0.45, function()
+            if not handle.Dismissed and handle.PulseTween then handle.PulseTween:Play() end
+        end)
+    end
+
+    function handle.Dismiss()
+        if handle.Dismissed then return end
+        handle.Dismissed = true
+        if handle.PulseTween then pcall(function() handle.PulseTween:Cancel() end) end
+        for index, other in ipairs(ActiveNotifs) do
+            if other == handle then table.remove(ActiveNotifs, index) break end
+        end
+        if not holder.Parent then return end
+        local outInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+        TweenService:Create(card, outInfo, { Position = UDim2.new(0, NOTIF_WIDTH + 24, 0, 1), BackgroundTransparency = 1 }):Play()
+        TweenService:Create(stroke, outInfo, { Transparency = 1 }):Play()
+        TweenService:Create(glow, outInfo, { BackgroundTransparency = 1 }):Play()
+        TweenService:Create(bar, outInfo, { BackgroundTransparency = 1 }):Play()
+        TweenService:Create(progress, outInfo, { BackgroundTransparency = 1 }):Play()
+        TweenService:Create(label, outInfo, { TextTransparency = 1 }):Play()
+        task.delay(0.28, function()
+            if not holder.Parent then return end
+            local collapse = TweenService:Create(holder, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), { Size = UDim2.new(1, 0, 0, 0) })
+            collapse.Completed:Connect(function() holder:Destroy() end)
+            collapse:Play()
+        end)
+    end
+
+    function handle.SetText(newText, newColor)
+        if handle.Dismissed then return end
+        label.Text = tostring(newText or "")
+        if newColor then
+            bar.BackgroundColor3 = newColor
+            glow.BackgroundColor3 = newColor
+            progress.BackgroundColor3 = newColor
+        end
+        local newHeight = MeasureNotifHeight(label.Text)
+        local info = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        TweenService:Create(holder, info, { Size = UDim2.new(1, 0, 0, newHeight + 6) }):Play()
+        TweenService:Create(card, info, { Size = UDim2.new(1, -2, 0, newHeight - 2) }):Play()
+    end
+
+    card.MouseButton1Click:Connect(function()
+        if handle.Pinned then
+            for id, other in pairs(PinnedNotifs) do
+                if other == handle then PinnedNotifs[id] = nil end
+            end
+        end
+        handle.Dismiss()
+    end)
+
+    return handle
+end
+
 getgenv().CustomNotify = function(text, color, customTime)
     local now = os.clock()
     local message = tostring(text or "")
@@ -69,42 +248,39 @@ getgenv().CustomNotify = function(text, color, customTime)
     end
     getgenv().ToxLastNotificationText = message
     getgenv().ToxLastNotificationTime = now
-    local uiTheme = env.Theme
-    local uiTransp = math.clamp(tonumber(Settings and Settings.ToxUITransparency) or 0, 0, 0.85)
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(1, 0, 0, 38)
-    Frame.BackgroundColor3 = (uiTheme and uiTheme.Panel) or Color3.fromRGB(16, 16, 26)
-    Frame.BorderSizePixel = 0
-    Frame.ClipsDescendants = true
-    Frame.Parent = NotifContainer
-    local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0, 6) Corner.Parent = Frame
-    local Stroke = Instance.new("UIStroke") Stroke.Color = (uiTheme and uiTheme.Accent) or MAIN_COLOR Stroke.Thickness = 1 Stroke.Transparency = 0.25 Stroke.Parent = Frame
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(1, -16, 1, 0)
-    Label.Position = UDim2.new(0, 10, 0, 0)
-    Label.BackgroundTransparency = 1
-    Label.Text = text
-    Label.TextColor3 = color or (uiTheme and uiTheme.Text) or Color3.fromRGB(240, 240, 240)
-    Label.Font = Enum.Font.GothamMedium
-    Label.TextSize = 13
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.TextTruncate = Enum.TextTruncate.AtEnd
-    Label.Parent = Frame
-    Frame.BackgroundTransparency = 1 Label.TextTransparency = 1 Stroke.Transparency = 1
-    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-    TweenService:Create(Frame, tweenInfo, {BackgroundTransparency = uiTransp}):Play()
-    TweenService:Create(Label, tweenInfo, {TextTransparency = 0}):Play()
-    TweenService:Create(Stroke, tweenInfo, {Transparency = 0.25}):Play()
-    task.delay(customTime or 3, function()
-        if Frame and Frame.Parent then
-            local tweenOut = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
-            local t1 = TweenService:Create(Frame, tweenOut, {BackgroundTransparency = 1})
-            local t2 = TweenService:Create(Label, tweenOut, {TextTransparency = 1})
-            local t3 = TweenService:Create(Stroke, tweenOut, {Transparency = 1})
-            t1:Play() t2:Play() t3:Play()
-            t1.Completed:Connect(function() Frame:Destroy() end)
+    local duration = (tonumber(customTime) or 3) + 1
+    local handle = CreateNotif(message, color, false)
+    table.insert(ActiveNotifs, handle)
+    while #ActiveNotifs > NOTIF_MAX_STACK do
+        ActiveNotifs[1].Dismiss()
+    end
+    TweenService:Create(handle.Progress, TweenInfo.new(duration + 0.2, Enum.EasingStyle.Linear), { Size = UDim2.new(0, 0, 0, 2) }):Play()
+    task.delay(duration, handle.Dismiss)
+    return handle
+end
+
+-- Notificacao fixa: fica na tela ate ToxUnpinNotify(id). Chamar de novo com o
+-- mesmo id so atualiza o texto.
+getgenv().ToxPinNotify = function(id, text, color)
+    id = tostring(id or "default")
+    local message = tostring(text or "")
+    local existing = PinnedNotifs[id]
+    if existing and not existing.Dismissed and existing.Holder.Parent then
+        if existing.Label.Text ~= message or color then
+            existing.SetText(message, color)
         end
-    end)
+        return existing
+    end
+    local handle = CreateNotif(message, color, true)
+    PinnedNotifs[id] = handle
+    return handle
+end
+
+getgenv().ToxUnpinNotify = function(id)
+    id = tostring(id or "default")
+    local handle = PinnedNotifs[id]
+    PinnedNotifs[id] = nil
+    if handle then handle.Dismiss() end
 end
 local ToxChatPopupContainer =
     Instance.new("Frame")

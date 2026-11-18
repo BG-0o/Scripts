@@ -697,7 +697,8 @@ WatermarkFrame.Visible = Settings.Watermark == true
 WatermarkFrame.ZIndex = 999990
 WatermarkFrame.Parent = Gui
 local WCorner = Instance.new("UICorner") WCorner.CornerRadius = UDim.new(0, 6) WCorner.Parent = WatermarkFrame
-local WStroke = Instance.new("UIStroke") WStroke.Color = Theme.Outline WStroke.Thickness = 1 WStroke.Parent = WatermarkFrame
+local WStroke = Instance.new("UIStroke") WStroke.Color = Theme.Accent WStroke.Thickness = 1 WStroke.Transparency = 0.35 WStroke.Parent = WatermarkFrame
+RegisterThemedObject(WStroke, "Color", "Accent")
 RegisterThemedObject(WatermarkFrame, "BackgroundColor3", "Panel")
 RegisterThemedObject(WStroke, "Color", "Outline")
 WatermarkLabel = Instance.new("TextLabel")
@@ -706,12 +707,12 @@ WatermarkLabel.Position = UDim2.new(0, 8, 0, 0)
 WatermarkLabel.BackgroundTransparency = 1
 WatermarkLabel.RichText = true
 WatermarkLabel.Text = "<b>ToxHub</b> 1.0.0  |  FPS: 60  |  Ping: 50ms"
-WatermarkLabel.TextColor3 = Theme.Text
+WatermarkLabel.TextColor3 = Theme.Accent
 WatermarkLabel.Font = Enum.Font.GothamMedium
 WatermarkLabel.TextSize = 10
 WatermarkLabel.TextXAlignment = Enum.TextXAlignment.Left
 WatermarkLabel.Parent = WatermarkFrame
-RegisterThemedObject(WatermarkLabel, "TextColor3", "Text")
+RegisterThemedObject(WatermarkLabel, "TextColor3", "Accent")
 MakeDraggable(WatermarkFrame, WatermarkFrame)
 if getgenv().ApplySavedGuiPosition then getgenv().ApplySavedGuiPosition("Watermark", WatermarkFrame) end
 if getgenv().TrackGuiPosition then getgenv().TrackGuiPosition("Watermark", WatermarkFrame) end

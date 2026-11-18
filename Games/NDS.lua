@@ -1546,14 +1546,25 @@ local function SetNDSHazard(feature, enabled)
 end
 
 local function NDSIsIslandRock(object)
-    if not object:IsA("BasePart") then
+    if not object:IsA("BasePart") or not object.Anchored then
+        -- pedras que caem (meteoro etc.) nao sao anchored: ignora
+        return false
+    end
+    if object.Name == "ToxNDSRockCollider" or object.Name == "ToxNDSSupport" then
         return false
     end
 
     local path = NDSLowerPath(object)
 
     if not string.find(path, "rock", 1, true)
-    and not string.find(path, "boulder", 1, true) then
+    and not string.find(path, "boulder", 1, true)
+    and not string.find(path, "stone", 1, true)
+    and not string.find(path, "cliff", 1, true) then
+        return false
+    end
+
+    local size = object.Size
+    if math.max(size.X, size.Y, size.Z) > 400 then
         return false
     end
 
@@ -1565,25 +1576,69 @@ local function NDSIsIslandRock(object)
     return true
 end
 
+-- Pra cada pedra cria uma copia invisivel, anchored e com colisao, so no seu
+-- cliente. Assim colide por cima E pelos lados, mesmo que a pedra original
+-- esteja sem colisao ou num collision group que nao bate no player.
 local NDSRockSet = setmetatable({}, { __mode = "k" })
-local NDSRockList = {}
-local NDSRockListDirty = true
+local NDSRockFolder = nil
+local NDSRockCount = 0
+
+local function NDSGetRockFolder()
+    if not NDSRockFolder or not NDSRockFolder.Parent then
+        local folder = Instance.new("Folder")
+        folder.Name = "ToxNDSRockColliders"
+        folder.Parent = workspace
+        NDSRockFolder = folder
+    end
+    return NDSRockFolder
+end
 
 local function NDSApplyRock(object)
-    if not NDSIsIslandRock(object) or NDSRockSet[object] then
+    if not Settings.NDSIslandRocksCollidable then
+        return
+    end
+    if NDSRockSet[object] or not NDSIsIslandRock(object) then
         return
     end
 
-    NDSRockSet[object] = true
-    NDSRockListDirty = true
-
-    if NDSRockDefaults[object] == nil then
-        NDSRockDefaults[object] = { CanQuery = object.CanQuery }
+    local ok, collider = pcall(function()
+        local archivable = object.Archivable
+        object.Archivable = true
+        local copy = object:Clone()
+        object.Archivable = archivable
+        return copy
+    end)
+    if not ok or not collider then
+        return
     end
 
-    pcall(function()
-        object.CanQuery = true
+    collider:ClearAllChildren()
+    collider.Name = "ToxNDSRockCollider"
+    collider.Anchored = true
+    collider.CanCollide = true
+    collider.CanQuery = false
+    collider.CanTouch = false
+    collider.Transparency = 1
+    collider.CastShadow = false
+    collider.CFrame = object.CFrame
+    pcall(function() collider.CollisionGroup = "Default" end)
+    collider.Parent = NDSGetRockFolder()
+
+    NDSRockSet[object] = collider
+    NDSRockCount += 1
+
+    local link
+    link = object.AncestryChanged:Connect(function(_, parent)
+        if parent == nil then
+            link:Disconnect()
+            if NDSRockSet[object] then
+                pcall(function() NDSRockSet[object]:Destroy() end)
+                NDSRockSet[object] = nil
+                NDSRockCount = math.max(NDSRockCount - 1, 0)
+            end
+        end
     end)
+    TrackNDSExtraConnection(link)
 end
 
 local function SetNDSIslandRocksCollidable(enabled)
@@ -1594,35 +1649,19 @@ local function SetNDSIslandRocksCollidable(enabled)
         for _, object in ipairs(workspace:GetDescendants()) do
             NDSApplyRock(object)
         end
-        local count = 0
-        for _ in pairs(NDSRockSet) do count += 1 end
         if CustomNotify and getgenv().ScriptLoaded then
-            CustomNotify("Island Rocks • " .. count .. " rocks found", count > 0 and Color3.fromRGB(100, 200, 255) or Color3.fromRGB(255, 180, 70), 4)
+            CustomNotify("Island Rocks • " .. NDSRockCount .. " rocks collidable", NDSRockCount > 0 and Color3.fromRGB(100, 200, 255) or Color3.fromRGB(255, 180, 70), 4)
         end
     else
-        local copy = {}
-
-        for object, value in pairs(NDSRockDefaults) do
-            copy[object] = value
-            NDSRockDefaults[object] = nil
-        end
-
-        for object, value in pairs(copy) do
-            if object and object.Parent then
-                pcall(function()
-                    if type(value) == "table" then
-                        object.CanQuery = value.CanQuery
-                    else
-                        object.CanCollide = value
-                    end
-                end)
-            end
-        end
-
-        for object in pairs(NDSRockSet) do
+        for object, collider in pairs(NDSRockSet) do
+            pcall(function() collider:Destroy() end)
             NDSRockSet[object] = nil
         end
-        NDSRockListDirty = true
+        NDSRockCount = 0
+        if NDSRockFolder then
+            pcall(function() NDSRockFolder:Destroy() end)
+            NDSRockFolder = nil
+        end
     end
 end
 
@@ -1636,48 +1675,6 @@ local function NDSIsWaterPart(part)
     local lower = string.lower(part.Name)
     return string.find(lower, "water", 1, true) ~= nil
         or string.find(lower, "ocean", 1, true) ~= nil
-end
-
-local NDSWaterCache = { Map = false, Level = nil, Time = 0, Notified = false }
-
-local function NDSScanWaterLevel()
-    local best = nil
-    local bestName = nil
-    local myCharacter = Player.Character
-    for _, object in ipairs(workspace:GetDescendants()) do
-        if object:IsA("BasePart") and not (myCharacter and object:IsDescendantOf(myCharacter)) then
-            local size = object.Size
-            if math.max(size.X, size.Z) >= 150 then
-                local lower = string.lower(object.Name)
-                local named = string.find(lower, "water", 1, true) or string.find(lower, "ocean", 1, true)
-                    or lower == "sea" or string.find(lower, "sea ", 1, true)
-                if object.Material == Enum.Material.Water or named then
-                    local top = object.Position.Y + size.Y / 2
-                    if not best or top > best then
-                        best = top
-                        bestName = object:GetFullName()
-                    end
-                end
-            end
-        end
-    end
-    if best then
-        return best, bestName
-    end
-    local bestArea = 0
-    for _, object in ipairs(workspace:GetDescendants()) do
-        if object:IsA("BasePart") and not object.CanCollide
-        and not (myCharacter and object:IsDescendantOf(myCharacter)) then
-            local size = object.Size
-            local area = size.X * size.Z
-            if math.min(size.X, size.Z) >= 400 and size.Y <= 60 and area > bestArea then
-                bestArea = area
-                best = object.Position.Y + size.Y / 2
-                bestName = object:GetFullName() .. " [biggest sheet]"
-            end
-        end
-    end
-    return best, bestName
 end
 
 local NDSWaterParts = { List = {}, Time = 0 }
@@ -1713,7 +1710,9 @@ local function NDSRefreshWaterParts()
     local myCharacter = Player.Character
     for _, object in ipairs(workspace:GetDescendants()) do
         if object:IsA("BasePart") and object.Name ~= "ToxNDSSupport"
+        and object.Name ~= "ToxNDSRockCollider"
         and math.max(object.Size.X, object.Size.Z) >= 20
+        and object.Transparency < 1
         and not (myCharacter and object:IsDescendantOf(myCharacter))
         and NDSIsWaterLike(object) then
             table.insert(list, object)
@@ -1723,8 +1722,10 @@ local function NDSRefreshWaterParts()
     return list
 end
 
+-- Agua feita de Part (oceano, flash flood subindo...): topo da part que esta
+-- embaixo/em volta dos seus pes.
 local function NDSWaterTopAt(position, feetY)
-    local best = nil
+    local best, bestName = nil, nil
     for _, part in ipairs(NDSRefreshWaterParts()) do
         if part.Parent then
             local localPos = part.CFrame:PointToObjectSpace(position)
@@ -1735,47 +1736,55 @@ local function NDSWaterTopAt(position, feetY)
                 if feetY >= bottom - 2 and feetY <= top + 3 then
                     if not best or top > best then
                         best = top
+                        bestName = part.Name
                     end
                 end
             end
         end
     end
-    return best
+    return best, bestName
 end
+
+-- Agua de Terrain: raio de cima pra baixo so no Terrain, pegando a primeira
+-- superficie de agua.
+local NDSTerrainParams = RaycastParams.new()
+NDSTerrainParams.FilterType = Enum.RaycastFilterType.Include
+NDSTerrainParams.IgnoreWater = false
+
+local function NDSTerrainWaterTop(position, feetY)
+    local terrain = workspace:FindFirstChildOfClass("Terrain")
+    if not terrain then
+        return nil
+    end
+    NDSTerrainParams.FilterDescendantsInstances = { terrain }
+    local origin = Vector3.new(position.X, feetY + 60, position.Z)
+    local hit = workspace:Raycast(origin, Vector3.new(0, -100, 0), NDSTerrainParams)
+    if hit and hit.Material == Enum.Material.Water then
+        local top = hit.Position.Y
+        if feetY <= top + 3 and feetY >= top - 40 then
+            return top
+        end
+    end
+    return nil
+end
+
+local NDSWaterLastSource = nil
 
 function NDSGetWaterLevel(position, character, feetY)
     feetY = feetY or position.Y - 3
-    local dynamic = NDSWaterTopAt(position, feetY)
-    if dynamic then
-        return dynamic
+    local partTop, partName = NDSWaterTopAt(position, feetY)
+    local terrainTop = NDSTerrainWaterTop(position, feetY)
+    local top, source = partTop, partName
+    if terrainTop and (not top or terrainTop > top) then
+        top, source = terrainTop, "Terrain water"
     end
-    local map = workspace:FindFirstChild("Structure")
-    local now = os.clock()
-    if NDSWaterCache.Map ~= map or (not NDSWaterCache.Level and now - NDSWaterCache.Time > 3) then
-        if NDSWaterCache.Map ~= map then
-            NDSWaterCache.Notified = false
+    if top and source ~= NDSWaterLastSource then
+        NDSWaterLastSource = source
+        if Settings.NDSWaterWalk and CustomNotify then
+            CustomNotify("Walk on Water • " .. tostring(source), Color3.fromRGB(100, 200, 255), 2)
         end
-        NDSWaterCache.Map = map
-        NDSWaterCache.Time = now
-        local level, name = NDSScanWaterLevel()
-        if not level then
-            local params = RaycastParams.new()
-            params.FilterType = Enum.RaycastFilterType.Exclude
-            params.FilterDescendantsInstances = { character, workspace.CurrentCamera }
-            params.IgnoreWater = false
-            local hit = workspace:Raycast(position + Vector3.new(0, 400, 0), Vector3.new(0, -1200, 0), params)
-            if hit and hit.Instance:IsA("Terrain") and hit.Material == Enum.Material.Water then
-                level, name = hit.Position.Y, "Terrain water"
-            end
-        end
-        NDSWaterCache.Level = level
-        NDSWaterCache.Name = name
     end
-    local level = NDSWaterCache.Level
-    if level and feetY <= level + 3 and feetY >= level - 40 then
-        return level
-    end
-    return nil
+    return top
 end
 
 local NDSSupportPart = nil
@@ -1809,9 +1818,8 @@ end
 
 local NDSSupportWarned = false
 local function NDSSupportStep(delta)
-    local wantRocks = Settings.NDSIslandRocksCollidable == true
     local wantWater = Settings.NDSWaterWalk == true and not Settings.NDSWaterFly
-    if not wantRocks and not wantWater then
+    if not wantWater then
         NDSHideSupport(true)
         return
     end
@@ -1828,30 +1836,8 @@ local function NDSSupportStep(delta)
     end
 
     local velocity = root.AssemblyLinearVelocity
-    local reach = standOffset + 2.5 + math.max(0, -velocity.Y) * math.max(tonumber(delta) or 0.016, 0.016) * 2
     local feetY = root.Position.Y - standOffset
     local bestY = nil
-
-    if wantRocks then
-        if NDSRockListDirty then
-            table.clear(NDSRockList)
-            for object in pairs(NDSRockSet) do
-                if object.Parent then
-                    table.insert(NDSRockList, object)
-                end
-            end
-            NDSRockListDirty = false
-        end
-        if #NDSRockList > 0 then
-            local params = RaycastParams.new()
-            params.FilterType = Enum.RaycastFilterType.Include
-            params.FilterDescendantsInstances = NDSRockList
-            local hit = workspace:Raycast(root.Position, Vector3.new(0, -reach, 0), params)
-            if hit and feetY >= hit.Position.Y - 1 then
-                bestY = hit.Position.Y
-            end
-        end
-    end
 
     if wantWater then
         local surfaceY = NDSGetWaterLevel(root.Position, character, feetY)
@@ -2236,38 +2222,91 @@ local function NDSDetectDisaster(text)
     return nil
 end
 
-local function NDSNotifyDisaster(disaster, mapName)
+local NDSPinnedDisaster = nil
+local NDSPinnedUntil = 0
+local NDSDisasterColor = Color3.fromRGB(255, 190, 80)
+
+local function NDSClearDisasterPin()
+    if NDSPinnedDisaster and getgenv().ToxUnpinNotify then
+        pcall(getgenv().ToxUnpinNotify, "NDSDisaster")
+    end
+    NDSPinnedDisaster = nil
+    NDSPinnedUntil = 0
+end
+
+local function NDSResetDisasterState()
+    NDSCurrentDisaster = nil
+    NDSCurrentMap = nil
+    NDSLastDisasterNotify = ""
+    NDSClearDisasterPin()
+end
+
+-- Status "intermission/loading" com a sua SurvivalTag ainda ativa = rodada
+-- ainda rolando; nao derruba a previsao fixa (evita piscar).
+local function NDSResetDisasterStateFromStatus()
+    local char = Player.Character
+    local tag = char and char:FindFirstChild("SurvivalTag")
+    if NDSPinnedDisaster and tag and tag:IsA("StringValue") and tag.Value ~= "" then
+        return
+    end
+    NDSResetDisasterState()
+end
+
+-- announced = true quando veio do texto do proprio jogo (desastre comecou).
+-- Previsao (SurvivalTag) fica FIXA na tela ate o desastre aparecer de verdade.
+local function NDSNotifyDisaster(disaster, mapName, announced)
     if not disaster then
         return
     end
 
-    local key = tostring(disaster) .. "::" .. tostring(mapName or "")
+    if mapName and tostring(mapName) ~= "" and tostring(mapName) ~= "none" then
+        NDSCurrentMap = tostring(mapName)
+    end
+
+    local text = tostring(disaster)
+    if NDSCurrentMap and NDSCurrentMap ~= "" and NDSCurrentMap ~= "none" then
+        text = text .. " • " .. tostring(NDSCurrentMap)
+    end
+
+    local key = tostring(disaster) .. "::" .. tostring(NDSCurrentMap or "")
+
+    if announced and NDSPinnedDisaster then
+        NDSClearDisasterPin()
+        NDSCurrentDisaster = disaster
+        NDSLastDisasterNotify = key
+        if CustomNotify then
+            CustomNotify("Disaster started: " .. text, NDSDisasterColor, 4)
+        end
+        return
+    end
+
     if NDSLastDisasterNotify == key then
         return
     end
 
     NDSCurrentDisaster = disaster
-    if mapName and tostring(mapName) ~= "" and tostring(mapName) ~= "none" then
-        NDSCurrentMap = tostring(mapName)
-    end
     NDSLastDisasterNotify = key
 
+    if not announced and getgenv().ToxPinNotify then
+        NDSPinnedDisaster = disaster
+        NDSPinnedUntil = tick() + 120
+        getgenv().ToxPinNotify("NDSDisaster", "Next disaster: " .. text, NDSDisasterColor)
+        return
+    end
+
     if CustomNotify then
-        local msg = "Disaster: " .. tostring(disaster)
-        if NDSCurrentMap and NDSCurrentMap ~= "" and NDSCurrentMap ~= "none" then
-            msg = msg .. " • " .. tostring(NDSCurrentMap)
-        end
-        CustomNotify(
-            msg,
-            Color3.fromRGB(255, 190, 80),
-            7
-        )
+        CustomNotify("Disaster: " .. text, NDSDisasterColor, 7)
     end
 end
 
 local function NDSScanDisasters()
     if not Settings.NDSNotifyDisasters then
+        NDSClearDisasterPin()
         return
+    end
+
+    if NDSPinnedDisaster and tick() > NDSPinnedUntil then
+        NDSClearDisasterPin()
     end
 
     local myChar = Player.Character
@@ -2278,7 +2317,10 @@ local function NDSScanDisasters()
             local detected = NDSDetectDisaster(myTag.Value)
             if detected then
                 NDSNotifyDisaster(detected, mapVal)
-                return
+                if not NDSPinnedDisaster then
+                    return
+                end
+                -- previsao fixa: continua olhando a GUI do jogo pra saber quando o desastre comecou
             end
         end
     end
@@ -2291,13 +2333,11 @@ local function NDSScanDisasters()
             local text = tostring(statusLabel.Text or "")
             local lower = string.lower(text)
             if string.find(lower, "intermission") or string.find(lower, "waiting") or string.find(lower, "loading") then
-                NDSCurrentDisaster = nil
-                NDSCurrentMap = nil
-                NDSLastDisasterNotify = ""
+                NDSResetDisasterStateFromStatus()
             else
                 local detected = NDSDetectDisaster(text)
                 if detected then
-                    NDSNotifyDisaster(detected, NDSCurrentMap)
+                    NDSNotifyDisaster(detected, NDSCurrentMap, true)
                     return
                 end
             end
@@ -2309,7 +2349,7 @@ local function NDSScanDisasters()
                 if #text > 4 then
                     local detected = NDSDetectDisaster(text)
                     if detected then
-                        NDSNotifyDisaster(detected, NDSCurrentMap)
+                        NDSNotifyDisaster(detected, NDSCurrentMap, true)
                         return
                     end
                 end
@@ -2360,9 +2400,7 @@ local function HookCharacterForSurvivalTag(char)
     end))
     TrackNDSExtraConnection(char.ChildRemoved:Connect(function(child)
         if child.Name == "SurvivalTag" then
-            NDSCurrentDisaster = nil
-            NDSCurrentMap = nil
-            NDSLastDisasterNotify = ""
+            NDSResetDisasterState()
         end
     end))
 
@@ -2393,13 +2431,11 @@ local function HookNDSMainGui()
             local text = tostring(status.Text or "")
             local lower = string.lower(text)
             if string.find(lower, "intermission") or string.find(lower, "waiting") or string.find(lower, "loading") then
-                NDSCurrentDisaster = nil
-                NDSCurrentMap = nil
-                NDSLastDisasterNotify = ""
+                NDSResetDisasterStateFromStatus()
             else
                 local detected = NDSDetectDisaster(text)
                 if detected then
-                    NDSNotifyDisaster(detected, NDSCurrentMap)
+                    NDSNotifyDisaster(detected, NDSCurrentMap, true)
                 end
             end
         end))
@@ -2418,9 +2454,7 @@ end
 
 local function SetNDSNotifyDisasters(enabled)
     Settings.NDSNotifyDisasters = enabled == true
-    NDSCurrentDisaster = nil
-    NDSCurrentMap = nil
-    NDSLastDisasterNotify = ""
+    NDSResetDisasterState()
     NDSDisasterClock = 0
 
     if Settings.NDSNotifyDisasters then
@@ -2812,18 +2846,6 @@ end, function(val)
     end
 end, "WalkFling")
 
-do
-    local createButton = CreateButton or (getgenv and getgenv().CreateButton)
-    if createButton then
-        TrackNDSControl(createButton("Tox Magnet", GamePage, function()
-            local magnet = getgenv().ToxMagnetGui
-            if magnet then
-                magnet.Visible = not magnet.Visible
-            end
-        end))
-    end
-end
-
 CreateNDSSection("DISASTERS")
 
 NDSCreateToggle("Notify Disasters", GamePage, Settings.NDSNotifyDisasters, function(v)
@@ -2873,6 +2895,18 @@ end)
 NDSCreateButton("Interact All", GamePage, function()
     InteractAll()
 end)
+
+do
+    local createButton = CreateButton or (getgenv and getgenv().CreateButton)
+    if createButton then
+        TrackNDSControl(createButton("Tox Magnet", GamePage, function()
+            local magnet = getgenv().ToxMagnetGui
+            if magnet then
+                magnet.Visible = not magnet.Visible
+            end
+        end))
+    end
+end
 
 CreateNDSSection("TELEPORTS")
 
