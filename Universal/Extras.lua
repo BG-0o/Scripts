@@ -2625,6 +2625,32 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end
         end
 
+        if type(controller.SetFloorReflections) == "function" then
+            CreateToggle(
+                "Floor Reflections",
+                page,
+                Settings.LightingFloorReflect == true,
+                function(value)
+                    controller.SetFloorReflections(value)
+                end,
+                "LightingFloorReflect"
+            )
+            CreateVisualNumberOption(
+                "Floor Reflection Amount",
+                page,
+                Settings.LightingFloorReflectAmount or 35,
+                0,
+                100,
+                function(value)
+                    Settings.LightingFloorReflectAmount = value
+                    controller.RefreshFloorReflections()
+                end
+            )
+            if Settings.LightingFloorReflect then
+                task.defer(controller.SetFloorReflections, true)
+            end
+        end
+
         CreateToggle(
             "Adjust Lighting",
             page,
@@ -3413,6 +3439,8 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             MoveControlToSection("Fullbright", "LIGHTING")
             MoveBefore(lightingSection, "Adjust Lighting", "Fullbright")
             MoveBefore(lightingSection, "Shader Preset", "Adjust Lighting")
+            MoveAfter(lightingSection, "Floor Reflections", "Shader Preset")
+            MoveAfter(lightingSection, "Floor Reflection Amount", "Floor Reflections")
             MoveAfter(lightingSection, "Get Technology", "Fullbright")
             MoveAfter(lightingSection, "Technology", "Get Technology")
             MoveAfter(lightingSection, "Ambient", "Technology")

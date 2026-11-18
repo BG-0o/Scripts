@@ -296,6 +296,7 @@ Settings.MagnetHeight = tonumber(Settings.MagnetHeight) or 0
 Settings.MagnetAttackDistance = tonumber(Settings.MagnetAttackDistance) or 3
 Settings.MagnetPull = math.clamp(tonumber(Settings.MagnetPull) or 100, 5, 100)
 Settings.MagnetMaxParts = tonumber(Settings.MagnetMaxParts) or 70
+Settings.MagnetAutoReset = Settings.MagnetAutoReset ~= false
 Settings.PartMagnet = false
 
 local MagnetGui = nil
@@ -330,7 +331,9 @@ do
         "Fountain", "Floor", "Galaxy", "Flower",
         "Infinity", "Torus", "Crown", "Pillars",
         "Comet", "Pulse", "Pyramid", "Cube",
-        "Rain",
+        "Rain", "Spikes", "Saturn", "Hourglass",
+        "Wheel", "Wave Grid", "Arrow", "Spring",
+        "Orbitals",
     }
     local SHAPES = {}
 
@@ -479,7 +482,69 @@ do
         return c + V3(cos(a) * rr, R * 1.2 * (1 - ph) - 2, sin(a) * rr)
     end
 
-    local ATTACK_ORDER = { "Swarm", "Cage", "Ring", "Head", "Feet", "Ram", "Tornado", "Inside", "Shape" }
+    SHAPES.Spikes = function(i, n, t, c, cf, R, S)
+        local spikes = 10
+        local k = (i - 1) % spikes + 1
+        local j = floor((i - 1) / spikes)
+        local f = (j + 1) / max(ceil(n / spikes), 1)
+        return c + V3(0, 2, 0) + SphereDir(k, spikes, t * S * 0.3) * (2 + f * R)
+    end
+    SHAPES.Saturn = function(i, n, t, c, cf, R, S)
+        local center = c + V3(0, R * 0.5 + 3, 0)
+        local ringCount = max(floor(n * 0.45), 1)
+        if i <= ringCount then
+            local a = TAU * (i - 1) / ringCount + t * S * 0.6
+            local tilt = CFrame.Angles(math.rad(25), 0, math.rad(10))
+            return center + tilt:VectorToWorldSpace(V3(cos(a) * R, 0, sin(a) * R))
+        end
+        return center + SphereDir(i - ringCount, max(n - ringCount, 1), t * S * 0.3) * (R * 0.4)
+    end
+    SHAPES.Hourglass = function(i, n, t, c, cf, R, S)
+        local f = (i - 1) / max(n - 1, 1)
+        local y = (f - 0.5) * 2
+        local rr = R * 0.15 + math.abs(y) * R * 0.7
+        local a = i * GOLD + t * S * 0.4
+        return c + V3(cos(a) * rr, y * R * 0.9 + R * 0.9, sin(a) * rr)
+    end
+    SHAPES.Wheel = function(i, n, t, c, cf, R, S)
+        local a = TAU * (i - 1) / n + t * S * 0.6
+        local rr = R * 0.7
+        return LocalPos(cf, cos(a) * rr, sin(a) * rr + rr + 1, -(R * 0.5 + 4))
+    end
+    SHAPES["Wave Grid"] = function(i, n, t, c, cf, R, S)
+        local cols = max(ceil(sqrt(n)), 1)
+        local col = (i - 1) % cols
+        local row = floor((i - 1) / cols)
+        local spacing = max(R / cols * 2, 2.5)
+        local x = (col - (cols - 1) / 2) * spacing
+        local z = (row - (cols - 1) / 2) * spacing
+        local d = sqrt(x * x + z * z)
+        return c + V3(x, sin(d * 0.4 - t * S * 1.2) * 1.5 - 1, z)
+    end
+    SHAPES.Arrow = function(i, n, t, c, cf, R, S)
+        local side = (i % 2 == 0) and 1 or -1
+        local j = floor((i - 1) / 2)
+        local f = j / max(ceil(n / 2) - 1, 1)
+        local bob = sin(t * S * 0.8) * 0.6
+        return LocalPos(cf, side * f * R * 0.6, 2 + bob, -(R + 4) + f * R * 0.8)
+    end
+    SHAPES.Spring = function(i, n, t, c, cf, R, S)
+        local f = (i - 1) / max(n - 1, 1)
+        local a = f * TAU * 8 + t * S * 0.8
+        local rr = max(R * 0.3, 3)
+        local stretch = 0.75 + 0.25 * sin(t * S * 0.6)
+        return c + V3(cos(a) * rr, f * R * 1.5 * stretch - 3, sin(a) * rr)
+    end
+    SHAPES.Orbitals = function(i, n, t, c, cf, R, S)
+        local k = (i - 1) % 4
+        local j = floor((i - 1) / 4)
+        local m = max(ceil(n / 4), 1)
+        local a = k * TAU / 4 + t * S * 0.5
+        local hub = c + V3(cos(a) * R, 2, sin(a) * R)
+        return hub + SphereDir(j + 1, m, t * S) * max(R * 0.15, 1.5)
+    end
+
+    local ATTACK_ORDER = { "Swarm", "Cage", "Ring", "Head", "Feet", "Ram", "Tornado", "Inside", "Wall", "Rain", "Helix", "Sandwich", "Shape" }
     local ATTACK = {}
 
     ATTACK.Swarm = function(i, n, t, c, cf, D, S, R)
@@ -520,6 +585,33 @@ do
     ATTACK.Inside = function(i, n, t, c, cf, D, S, R)
         return c + V3(sin(t * S * 2 + i) * 0.6, ((i % 5) - 2) * 0.6, cos(t * S * 2 + i * 1.3) * 0.6)
     end
+    ATTACK.Wall = function(i, n, t, c, cf, D, S, R)
+        local cols = max(ceil(sqrt(n)), 1)
+        local col = (i - 1) % cols
+        local row = floor((i - 1) / cols)
+        return LocalPos(cf, (col - (cols - 1) / 2) * 2.5, row * 2.5 - 2, -(D + 2))
+    end
+    ATTACK.Rain = function(i, n, t, c, cf, D, S, R)
+        local ph = ((i * 0.618034) % 1 + t * max(S, 0.5) * 0.12) % 1
+        local a = i * GOLD
+        local rr = sqrt((i * 0.37) % 1) * (D + 1)
+        return c + V3(cos(a) * rr, 12 * (1 - ph) - 1, sin(a) * rr)
+    end
+    ATTACK.Helix = function(i, n, t, c, cf, D, S, R)
+        local strand = (i - 1) % 2
+        local f = floor((i - 1) / 2) / max(ceil(n / 2) - 1, 1)
+        local a = f * TAU * 2 + t * S * 1.2 + strand * math.pi
+        local rr = D + 1
+        return c + V3(cos(a) * rr, f * 7 - 3, sin(a) * rr)
+    end
+    ATTACK.Sandwich = function(i, n, t, c, cf, D, S, R)
+        local top = (i - 1) % 2 == 0
+        local j = floor((i - 1) / 2)
+        local m = max(ceil(n / 2), 1)
+        local a = j * GOLD + t * S * 0.5
+        local rr = sqrt((j + 0.5) / m) * (D + 1.5)
+        return c + V3(cos(a) * rr, top and 3.4 or -3.4, sin(a) * rr)
+    end
     ATTACK.Shape = function(i, n, t, c, cf, D, S, R)
         local shape = SHAPES[Settings.MagnetShape] or SHAPES.Orbit
         return shape(i, n, t, c, cf, R, S)
@@ -533,15 +625,28 @@ do
         Settings.MagnetMode = Settings.MagnetShape
     end
 
-    local function Release(part)
+    local SkipUntil = setmetatable({}, { __mode = "k" })
+    local FailCount = setmetatable({}, { __mode = "k" })
+    local lastAutoResetNotify = 0
+
+    local function Release(part, cooldown)
         local data = Controlled[part]
         if not data then return end
         Controlled[part] = nil
         controlledCount = math.max(controlledCount - 1, 0)
         pcall(function() data.Align:Destroy() end)
         pcall(function() data.Att:Destroy() end)
-        if part.Parent and data.CanCollide ~= nil then
-            pcall(function() part.CanCollide = data.CanCollide end)
+        if part.Parent then
+            pcall(function()
+                part.AssemblyLinearVelocity = Vector3.zero
+                part.AssemblyAngularVelocity = Vector3.zero
+            end)
+            if data.CanCollide ~= nil then
+                pcall(function() part.CanCollide = data.CanCollide end)
+            end
+        end
+        if cooldown and cooldown > 0 then
+            SkipUntil[part] = os.clock() + cooldown
         end
     end
 
@@ -566,6 +671,8 @@ do
 
     local function IsMagnetCandidate(part)
         if not part:IsA("BasePart") or part.Anchored or Controlled[part] then return false end
+        local skip = SkipUntil[part]
+        if skip and os.clock() < skip then return false end
         if string.sub(part.Name, 1, 3) == "Tox" then return false end
         local ok, grounded = pcall(function() return part:IsGrounded() end)
         if not ok or grounded then return false end
@@ -581,6 +688,11 @@ do
     end
 
     local function Grab(part)
+        for _, child in ipairs(part:GetChildren()) do
+            if child.Name == "ToxMagnetAlign" or child.Name == "ToxMagnetAttachment" then
+                pcall(function() child:Destroy() end)
+            end
+        end
         local att = Instance.new("Attachment")
         att.Name = "ToxMagnetAttachment"
         att.Parent = part
@@ -594,7 +706,7 @@ do
         align.Responsiveness = pull
         align.Parent = part
         nextIndex += 1
-        Controlled[part] = { Att = att, Align = align, Index = nextIndex, CanCollide = part.CanCollide, Pull = pull }
+        Controlled[part] = { Att = att, Align = align, Index = nextIndex, CanCollide = part.CanCollide, Pull = pull, GrabbedAt = os.clock() }
         controlledCount += 1
         pcall(function() part.CanCollide = false end)
     end
@@ -748,9 +860,36 @@ do
         scanClock += delta
         if scanClock >= 0.4 then
             scanClock = 0
-            for part in pairs(Controlled) do
-                if not part.Parent or part.Anchored then
+            local now = os.clock()
+            local checked, stuck = 0, 0
+            local stuckLimit = 20 + R * 0.5
+            for part, data in pairs(Controlled) do
+                if not part.Parent or part.Anchored
+                or not data.Align.Parent or data.Att.Parent ~= part then
                     Release(part)
+                elseif data.Target and now - data.GrabbedAt > 1.5 then
+                    checked += 1
+                    if (part.Position - data.Target).Magnitude > stuckLimit then
+                        data.StuckSince = data.StuckSince or now
+                        if now - data.StuckSince > 2.5 then
+                            stuck += 1
+                            if Settings.MagnetAutoReset then
+                                local fails = (FailCount[part] or 0) + 1
+                                FailCount[part] = fails
+                                Release(part, fails <= 1 and 0 or math.min(5 * (fails - 1), 30))
+                            end
+                        end
+                    else
+                        data.StuckSince = nil
+                        FailCount[part] = nil
+                    end
+                end
+            end
+            if Settings.MagnetAutoReset and checked >= 3 and stuck / checked >= 0.6 then
+                TryRaiseSimulationRadius()
+                if now - lastAutoResetNotify > 10 then
+                    lastAutoResetNotify = now
+                    CustomNotify("Tox Magnet • parts stuck, auto reset", Color3.fromRGB(255, 200, 120), 2)
                 end
             end
             if controlledCount > maxParts then
@@ -799,6 +938,7 @@ do
             end
             if ok and typeof(pos) == "Vector3" then
                 data.Align.Position = pos
+                data.Target = pos
             end
             pcall(function()
                 part.AssemblyAngularVelocity = Vector3.new(0, 4, 0)
@@ -950,8 +1090,9 @@ do
     body.Parent = gui
 
     local y = 8
-    local power = Button("Magnet: OFF", UDim2.new(0.5, -14, 0, 28), UDim2.new(0, 10, 0, y), body)
-    local release = Button("Release All", UDim2.new(0.5, -14, 0, 28), UDim2.new(0.5, 4, 0, y), body)
+    local power = Button("Magnet: OFF", UDim2.new(1 / 3, -10, 0, 28), UDim2.new(0, 10, 0, y), body)
+    local reset = Button("Reset", UDim2.new(1 / 3, -10, 0, 28), UDim2.new(1 / 3, 5, 0, y), body)
+    local release = Button("Release All", UDim2.new(1 / 3, -10, 0, 28), UDim2.new(2 / 3, 0, 0, y), body)
     local function PaintPower()
         power.Text = Settings.PartMagnet and "Magnet: ON" or "Magnet: OFF"
         power.BackgroundColor3 = Settings.PartMagnet and Color3.fromRGB(40, 150, 80) or (Theme.Element or Color3.fromRGB(25, 30, 40))
@@ -967,7 +1108,28 @@ do
         ReleaseAll()
         CustomNotify("Tox Magnet • released all parts", Color3.fromRGB(255, 200, 120))
     end)
+    reset.MouseButton1Click:Connect(function()
+        ReleaseAll()
+        table.clear(SkipUntil)
+        table.clear(FailCount)
+        TryRaiseSimulationRadius()
+        scanClock = 1
+        CustomNotify("Tox Magnet • reset, grabbing parts again", Color3.fromRGB(120, 200, 255))
+    end)
     y += 34
+
+    local autoReset = Button("", UDim2.new(1, -20, 0, 22), UDim2.new(0, 10, 0, y), body)
+    local function PaintAutoReset()
+        autoReset.Text = Settings.MagnetAutoReset and "Auto Reset stuck parts: ON" or "Auto Reset stuck parts: OFF"
+        autoReset.BackgroundColor3 = Settings.MagnetAutoReset and Color3.fromRGB(40, 150, 80) or (Theme.Element or Color3.fromRGB(25, 30, 40))
+    end
+    PaintAutoReset()
+    autoReset.MouseButton1Click:Connect(function()
+        Settings.MagnetAutoReset = not Settings.MagnetAutoReset
+        PaintAutoReset()
+        if env.AutoSaveConfiguration then env.AutoSaveConfiguration() end
+    end)
+    y += 28
 
     statusLabel = Label("OFF", UDim2.new(1, -20, 0, 14), UDim2.new(0, 10, 0, y), body, true)
     statusLabel.TextTruncate = Enum.TextTruncate.AtEnd

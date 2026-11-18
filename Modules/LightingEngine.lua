@@ -1682,8 +1682,93 @@ function ToxLighting.ApplyPreset(name)
         end)
     end))
 end
+local ToxFloorState = {
+    Parts = setmetatable({}, { __mode = "k" }),
+    Connection = nil,
+}
+local function ToxIsFloorPart(object)
+    if not object:IsA("BasePart") or not object.Anchored or object.Transparency >= 0.9 then
+        return false
+    end
+    if object:IsA("Terrain") or string.sub(object.Name, 1, 3) == "Tox" then
+        return false
+    end
+    if object.Material == Enum.Material.Water or object.Material == Enum.Material.Glass then
+        return false
+    end
+    local size = object.Size
+    if math.min(size.X, size.Z) < 6 or size.Y > math.min(size.X, size.Z) * 0.5 then
+        return false
+    end
+    local up = object.CFrame.UpVector
+    if math.abs(up.Y) < 0.9 then
+        return false
+    end
+    local model = object:FindFirstAncestorOfClass("Model")
+    if model and model:FindFirstChildOfClass("Humanoid") then
+        return false
+    end
+    return true
+end
+local function ToxFloorAmount()
+    return math.clamp(tonumber(LightingSettings.LightingFloorReflectAmount) or 35, 0, 100) / 100
+end
+local function ToxApplyFloor(object)
+    if not ToxIsFloorPart(object) then
+        return
+    end
+    if ToxFloorState.Parts[object] == nil then
+        ToxFloorState.Parts[object] = object.Reflectance
+    end
+    pcall(function()
+        object.Reflectance = math.max(ToxFloorState.Parts[object], ToxFloorAmount())
+    end)
+end
+function ToxLighting.SetFloorReflections(enabled)
+    enabled = enabled == true
+    LightingSettings.LightingFloorReflect = enabled
+    if ToxFloorState.Connection then
+        pcall(function()
+            ToxFloorState.Connection:Disconnect()
+        end)
+        ToxFloorState.Connection = nil
+    end
+    if enabled then
+        for _, object in ipairs(workspace:GetDescendants()) do
+            ToxApplyFloor(object)
+        end
+        ToxFloorState.Connection = workspace.DescendantAdded:Connect(function(object)
+            if object:IsA("BasePart") then
+                task.defer(ToxApplyFloor, object)
+            end
+        end)
+    else
+        for object, original in pairs(ToxFloorState.Parts) do
+            if object and object.Parent then
+                pcall(function()
+                    object.Reflectance = original
+                end)
+            end
+            ToxFloorState.Parts[object] = nil
+        end
+    end
+end
+function ToxLighting.RefreshFloorReflections()
+    if not LightingSettings.LightingFloorReflect then
+        return
+    end
+    local amount = ToxFloorAmount()
+    for object, original in pairs(ToxFloorState.Parts) do
+        if object and object.Parent then
+            pcall(function()
+                object.Reflectance = math.max(original, amount)
+            end)
+        end
+    end
+end
 function ToxLighting.Reset(syncVisuals)
     ToxLighting.ApplyPreset("Off")
+    ToxLighting.SetFloorReflections(false)
     ToxLighting.SetFixShadows(false)
     ToxLighting.SetAdjust(false)
     ToxLighting.SetEffect("SunRays", false)
@@ -1721,6 +1806,7 @@ function ToxLighting.Reset(syncVisuals)
             "LightingRemoveSkyboxes",
             "LightingRemoveGrading",
             "LightingGlobalShadows",
+            "LightingFloorReflect",
             "Fullbright"
         }) do
             pcall(env.SyncToggleVisuals, key, false)
