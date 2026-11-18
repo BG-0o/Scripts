@@ -2651,32 +2651,6 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end
         end
 
-        if type(controller.SetMirrorReflections) == "function" then
-            CreateToggle(
-                "Mirror Reflections",
-                page,
-                Settings.LightingMirror == true,
-                function(value)
-                    controller.SetMirrorReflections(value)
-                end,
-                "LightingMirror"
-            )
-            CreateVisualNumberOption(
-                "Mirror Strength",
-                page,
-                Settings.LightingMirrorStrength or 45,
-                0,
-                100,
-                function(value)
-                    Settings.LightingMirrorStrength = value
-                    controller.RefreshMirrorReflections()
-                end
-            )
-            if Settings.LightingMirror then
-                task.defer(controller.SetMirrorReflections, true)
-            end
-        end
-
         CreateToggle(
             "Adjust Lighting",
             page,
@@ -3467,8 +3441,6 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             MoveBefore(lightingSection, "Shader Preset", "Adjust Lighting")
             MoveAfter(lightingSection, "Floor Reflections", "Shader Preset")
             MoveAfter(lightingSection, "Floor Reflection Amount", "Floor Reflections")
-            MoveAfter(lightingSection, "Mirror Reflections", "Floor Reflection Amount")
-            MoveAfter(lightingSection, "Mirror Strength", "Mirror Reflections")
             MoveAfter(lightingSection, "Get Technology", "Fullbright")
             MoveAfter(lightingSection, "Technology", "Get Technology")
             MoveAfter(lightingSection, "Ambient", "Technology")
