@@ -10,20 +10,30 @@ local function AttachChoiceArrow(button)
     padding.PaddingLeft = UDim.new(0, 6)
     padding.PaddingRight = UDim.new(0, 14)
     padding.Parent = button
-    local arrow = Instance.new("TextLabel")
+    local arrow = Instance.new("Frame")
     arrow.Name = "ChoiceArrow"
     arrow.AnchorPoint = Vector2.new(1, 0.5)
-    arrow.Position = UDim2.new(1, 11, 0.5, 0)
+    arrow.Position = UDim2.new(1, 10, 0.5, 0)
     arrow.Size = UDim2.fromOffset(8, 8)
     arrow.BackgroundTransparency = 1
-    arrow.Text = "▼"
-    arrow.TextSize = 7
-    arrow.Font = Enum.Font.GothamBold
-    arrow.TextColor3 = button.TextColor3
-    arrow.TextTransparency = 0.25
     arrow.Parent = button
+    local bars = {}
+    for index, angle in ipairs({ 45, -45 }) do
+        local bar = Instance.new("Frame")
+        bar.AnchorPoint = Vector2.new(0.5, 0.5)
+        bar.Size = UDim2.fromOffset(5, 1.5)
+        bar.Position = UDim2.new(0.5, index == 1 and -1.5 or 1.5, 0.5, 0)
+        bar.Rotation = angle
+        bar.BorderSizePixel = 0
+        bar.BackgroundColor3 = button.TextColor3
+        bar.BackgroundTransparency = 0.2
+        bar.Parent = arrow
+        bars[#bars + 1] = bar
+    end
     button:GetPropertyChangedSignal("TextColor3"):Connect(function()
-        arrow.TextColor3 = button.TextColor3
+        for _, bar in ipairs(bars) do
+            bar.BackgroundColor3 = button.TextColor3
+        end
     end)
     return function(open)
         TweenService:Create(arrow, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = open and 180 or 0 }):Play()

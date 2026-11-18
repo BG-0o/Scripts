@@ -2607,6 +2607,94 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             technologies = {"ShadowMap"}
         end
 
+        local customColors = { "Custom" }
+        local defaultColors = { "Default", "Custom" }
+        for _, name in ipairs(colors) do
+            customColors[#customColors + 1] = name
+            defaultColors[#defaultColors + 1] = name
+        end
+
+        local numberKeys = {
+            ["Floor Reflection Amount"] = "LightingFloorReflectAmount",
+            ["Clock Time"] = "LightingClockTime",
+            ["Brightness"] = "LightingBrightness",
+            ["Exposure"] = "LightingExposure",
+            ["Latitude"] = "LightingLatitude",
+            ["Shadow Softness"] = "LightingShadowSoftness",
+            ["Diffuse Scale"] = "LightingDiffuseScale",
+            ["Specular Scale"] = "LightingSpecularScale",
+            ["Fog Start"] = "LightingFogStart",
+            ["Fog End"] = "LightingFogEnd",
+            ["Sunrays Intensity"] = "LightingSunRaysIntensity",
+            ["Sunrays Spread"] = "LightingSunRaysSpread",
+            ["Bloom Intensity"] = "LightingBloomIntensity",
+            ["Bloom Size"] = "LightingBloomSize",
+            ["Bloom Threshold"] = "LightingBloomThreshold",
+            ["Color Brightness"] = "LightingColorBrightness",
+            ["Color Contrast"] = "LightingColorContrast",
+            ["Color Saturation"] = "LightingColorSaturation",
+            ["Blur Size"] = "LightingBlurSize",
+            ["Sun Size"] = "LightingSunSize",
+            ["Moon Size"] = "LightingMoonSize",
+            ["Star Count"] = "LightingStarCount",
+            ["Atmosphere Density"] = "LightingAtmosphereDensity",
+            ["Atmosphere Offset"] = "LightingAtmosphereOffset",
+            ["Atmosphere Haze"] = "LightingAtmosphereHaze",
+            ["Atmosphere Glare"] = "LightingAtmosphereGlare",
+            ["Cloud Cover"] = "LightingCloudCover",
+            ["Cloud Density"] = "LightingCloudDensity",
+            ["Cloud Wind"] = "LightingCloudWind",
+            ["DOF Far Intensity"] = "LightingDOFFar",
+            ["DOF Focus Distance"] = "LightingDOFFocus",
+            ["DOF Focus Radius"] = "LightingDOFRadius",
+        }
+        local dropdownKeys = {
+            ["Shader Preset"] = "LightingPreset",
+            ["Technology"] = "LightingTechnology",
+            ["Ambient"] = "LightingAmbientColorName",
+            ["Outdoor Ambient"] = "LightingOutdoorAmbientColorName",
+            ["Fog Color"] = "LightingFogColorName",
+            ["Sun Color"] = "LightingSunColorName",
+            ["Sky Style"] = "LightingSkyStyle",
+            ["Atmosphere Color"] = "LightingAtmosphereColorName",
+            ["Atmosphere Decay"] = "LightingAtmosphereDecayName",
+            ["Cloud Color"] = "LightingCloudColorName",
+            ["Color Tint"] = "LightingColorTintName",
+            ["Water Color"] = "LightingWaterColorName",
+        }
+        local numberBoxes = {}
+        local dropdownButtons = {}
+        local baseNumberOption = CreateVisualNumberOption
+        local function CreateVisualNumberOption(name, targetPage, defaultValue, minValue, maxValue, callback)
+            local box = baseNumberOption(name, targetPage, defaultValue, minValue, maxValue, callback)
+            local key = numberKeys[name]
+            if key and box then
+                numberBoxes[key] = box:FindFirstChildWhichIsA("TextBox", true)
+            end
+            return box
+        end
+        local baseDropdown = CreateDropdown
+        CreateDropdown = function(name, options, targetPage, defaultOption, callback)
+            local box = baseDropdown(name, options, targetPage, defaultOption, callback)
+            local key = dropdownKeys[name]
+            if key and box then
+                dropdownButtons[key] = box:FindFirstChildWhichIsA("TextButton", true)
+            end
+            return box
+        end
+        env.ToxSyncLightingUI = function()
+            for key, input in pairs(numberBoxes) do
+                if input and input.Parent and Settings[key] ~= nil then
+                    input.Text = tostring(Settings[key])
+                end
+            end
+            for key, button in pairs(dropdownButtons) do
+                if button and button.Parent and Settings[key] ~= nil then
+                    button.Text = tostring(Settings[key])
+                end
+            end
+        end
+
         if type(controller.ApplyPreset) == "function" then
             CreateDropdown(
                 "Shader Preset",
@@ -2615,14 +2703,12 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
                 Settings.LightingPreset or "Off",
                 function(value)
                     controller.ApplyPreset(value)
+                    env.ToxSyncLightingUI()
                     if type(env.AutoSaveConfiguration) == "function" then
                         env.AutoSaveConfiguration()
                     end
                 end
             )
-            if Settings.LightingPreset and Settings.LightingPreset ~= "Off" then
-                task.defer(controller.ApplyPreset, Settings.LightingPreset, true)
-            end
         end
 
         if type(controller.SetFloorReflections) == "function" then
@@ -2763,7 +2849,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
 
         CreateDropdown(
             "Ambient",
-            colors,
+            customColors,
             page,
             Settings.LightingAmbientColorName,
             function(value)
@@ -2774,7 +2860,7 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
 
         CreateDropdown(
             "Outdoor Ambient",
-            colors,
+            customColors,
             page,
             Settings.LightingOutdoorAmbientColorName,
             function(value)
@@ -3077,8 +3163,139 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             "LightingRemoveGrading"
         )
 
+        CreateVisualNumberOption("Exposure", page, Settings.LightingExposure or 0, -3, 3, function(value)
+            Settings.LightingExposure = value
+            controller.RefreshMain()
+        end)
+        CreateVisualNumberOption("Latitude", page, Settings.LightingLatitude or 41.7, -90, 90, function(value)
+            Settings.LightingLatitude = value
+            controller.RefreshMain()
+        end)
+        CreateDropdown("Sun Color", defaultColors, page, Settings.LightingSunColorName or "Default", function(value)
+            Settings.LightingSunColorName = tostring(value)
+            controller.RefreshMain()
+            Save()
+        end)
+
+        CreateToggle("Custom Sky", page, Settings.LightingSky == true, function(value)
+            controller.SetSky(value)
+            Save()
+        end, "LightingSky")
+        CreateDropdown("Sky Style", controller.GetSkyStyles(), page, Settings.LightingSkyStyle or "Game", function(value)
+            Settings.LightingSkyStyle = tostring(value)
+            controller.RefreshSky()
+            Save()
+        end)
+        CreateVisualNumberOption("Sun Size", page, Settings.LightingSunSize or 21, 0, 60, function(value)
+            Settings.LightingSunSize = value
+            controller.RefreshSky()
+        end)
+        CreateVisualNumberOption("Moon Size", page, Settings.LightingMoonSize or 11, 0, 60, function(value)
+            Settings.LightingMoonSize = value
+            controller.RefreshSky()
+        end)
+        CreateVisualNumberOption("Star Count", page, Settings.LightingStarCount or 3000, 0, 10000, function(value)
+            Settings.LightingStarCount = value
+            controller.RefreshSky()
+        end)
+
+        CreateToggle("Custom Atmosphere", page, Settings.LightingAtmosphere == true, function(value)
+            controller.SetEffect("Atmosphere", value)
+            Save()
+        end, "LightingAtmosphere")
+        CreateVisualNumberOption("Atmosphere Density", page, Settings.LightingAtmosphereDensity or 0.3, 0, 1, function(value)
+            Settings.LightingAtmosphereDensity = value
+            controller.RefreshEffect("Atmosphere")
+        end)
+        CreateVisualNumberOption("Atmosphere Offset", page, Settings.LightingAtmosphereOffset or 0.25, 0, 1, function(value)
+            Settings.LightingAtmosphereOffset = value
+            controller.RefreshEffect("Atmosphere")
+        end)
+        CreateVisualNumberOption("Atmosphere Haze", page, Settings.LightingAtmosphereHaze or 1, 0, 10, function(value)
+            Settings.LightingAtmosphereHaze = value
+            controller.RefreshEffect("Atmosphere")
+        end)
+        CreateVisualNumberOption("Atmosphere Glare", page, Settings.LightingAtmosphereGlare or 0, 0, 10, function(value)
+            Settings.LightingAtmosphereGlare = value
+            controller.RefreshEffect("Atmosphere")
+        end)
+        CreateDropdown("Atmosphere Color", defaultColors, page, Settings.LightingAtmosphereColorName or "Default", function(value)
+            Settings.LightingAtmosphereColorName = tostring(value)
+            controller.RefreshEffect("Atmosphere")
+            Save()
+        end)
+        CreateDropdown("Atmosphere Decay", defaultColors, page, Settings.LightingAtmosphereDecayName or "Default", function(value)
+            Settings.LightingAtmosphereDecayName = tostring(value)
+            controller.RefreshEffect("Atmosphere")
+            Save()
+        end)
+
+        CreateToggle("Clouds", page, Settings.LightingClouds == true, function(value)
+            controller.SetClouds(value)
+            Save()
+        end, "LightingClouds")
+        CreateVisualNumberOption("Cloud Cover", page, Settings.LightingCloudCover or 0.5, 0, 1, function(value)
+            Settings.LightingCloudCover = value
+            controller.RefreshClouds()
+        end)
+        CreateVisualNumberOption("Cloud Density", page, Settings.LightingCloudDensity or 0.5, 0, 1, function(value)
+            Settings.LightingCloudDensity = value
+            controller.RefreshClouds()
+        end)
+        CreateVisualNumberOption("Cloud Wind", page, Settings.LightingCloudWind or 6, 0, 100, function(value)
+            Settings.LightingCloudWind = value
+            controller.RefreshClouds()
+        end)
+        CreateDropdown("Cloud Color", defaultColors, page, Settings.LightingCloudColorName or "Default", function(value)
+            Settings.LightingCloudColorName = tostring(value)
+            controller.RefreshClouds()
+            Save()
+        end)
+
+        CreateToggle("Depth of Field", page, Settings.LightingDepthOfField == true, function(value)
+            controller.SetEffect("DepthOfField", value)
+            Save()
+        end, "LightingDepthOfField")
+        CreateVisualNumberOption("DOF Far Intensity", page, Settings.LightingDOFFar or 0.1, 0, 1, function(value)
+            Settings.LightingDOFFar = value
+            controller.RefreshEffect("DepthOfField")
+        end)
+        CreateVisualNumberOption("DOF Focus Distance", page, Settings.LightingDOFFocus or 120, 0, 500, function(value)
+            Settings.LightingDOFFocus = value
+            controller.RefreshEffect("DepthOfField")
+        end)
+        CreateVisualNumberOption("DOF Focus Radius", page, Settings.LightingDOFRadius or 120, 0, 500, function(value)
+            Settings.LightingDOFRadius = value
+            controller.RefreshEffect("DepthOfField")
+        end)
+
+        CreateDropdown("Color Tint", defaultColors, page, Settings.LightingColorTintName or "Default", function(value)
+            Settings.LightingColorTintName = tostring(value)
+            controller.RefreshEffect("ColorCorrection")
+            Save()
+        end)
+
+        CreateToggle("Reflective Water", page, Settings.LightingWater == true, function(value)
+            controller.SetWater(value)
+            Save()
+        end, "LightingWater")
+        CreateDropdown("Water Color", defaultColors, page, Settings.LightingWaterColorName or "Default", function(value)
+            Settings.LightingWaterColorName = tostring(value)
+            controller.RefreshWater()
+            Save()
+        end)
+
+        task.defer(function()
+            if Settings.LightingSky then controller.SetSky(true) end
+            if Settings.LightingAtmosphere then controller.SetEffect("Atmosphere", true) end
+            if Settings.LightingClouds then controller.SetClouds(true) end
+            if Settings.LightingDepthOfField then controller.SetEffect("DepthOfField", true) end
+            if Settings.LightingWater then controller.SetWater(true) end
+        end)
+
         CreateButton("Reset Lighting", page, function()
             controller.Reset(true)
+            env.ToxSyncLightingUI()
             Save()
         end)
     end
@@ -3453,6 +3670,33 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             MoveAfter(lightingSection, "Fog Color", "Global Shadows")
             MoveAfter(lightingSection, "Fog Start", "Fog Color")
             MoveAfter(lightingSection, "Fog End", "Fog Start")
+            MoveAfter(lightingSection, "Reflective Water", "Floor Reflection Amount")
+            MoveAfter(lightingSection, "Water Color", "Reflective Water")
+            MoveAfter(lightingSection, "Exposure", "Specular Scale")
+            MoveAfter(lightingSection, "Latitude", "Exposure")
+            MoveAfter(lightingSection, "Sun Color", "Latitude")
+            MoveAfter(lightingSection, "Custom Sky", "Fog End")
+            MoveAfter(lightingSection, "Sky Style", "Custom Sky")
+            MoveAfter(lightingSection, "Sun Size", "Sky Style")
+            MoveAfter(lightingSection, "Moon Size", "Sun Size")
+            MoveAfter(lightingSection, "Star Count", "Moon Size")
+            MoveAfter(lightingSection, "Custom Atmosphere", "Star Count")
+            MoveAfter(lightingSection, "Atmosphere Density", "Custom Atmosphere")
+            MoveAfter(lightingSection, "Atmosphere Offset", "Atmosphere Density")
+            MoveAfter(lightingSection, "Atmosphere Haze", "Atmosphere Offset")
+            MoveAfter(lightingSection, "Atmosphere Glare", "Atmosphere Haze")
+            MoveAfter(lightingSection, "Atmosphere Color", "Atmosphere Glare")
+            MoveAfter(lightingSection, "Atmosphere Decay", "Atmosphere Color")
+            MoveAfter(lightingSection, "Clouds", "Atmosphere Decay")
+            MoveAfter(lightingSection, "Cloud Cover", "Clouds")
+            MoveAfter(lightingSection, "Cloud Density", "Cloud Cover")
+            MoveAfter(lightingSection, "Cloud Wind", "Cloud Density")
+            MoveAfter(lightingSection, "Cloud Color", "Cloud Wind")
+            MoveAfter(lightingSection, "Color Tint", "Color Saturation")
+            MoveAfter(lightingSection, "Depth of Field", "Blur Size")
+            MoveAfter(lightingSection, "DOF Far Intensity", "Depth of Field")
+            MoveAfter(lightingSection, "DOF Focus Distance", "DOF Far Intensity")
+            MoveAfter(lightingSection, "DOF Focus Radius", "DOF Focus Distance")
         end
 
         MoveBefore(miscSection, "Walk Fling", "Ctrl Click TP")

@@ -985,6 +985,35 @@ local ToxLightingEffects = {
             Brightness = "LightingColorBrightness",
             Contrast = "LightingColorContrast",
             Saturation = "LightingColorSaturation"
+        },
+        ColorProperties = {
+            TintColor = { "LightingColorTintName", "LightingColorTint" }
+        }
+    },
+    DepthOfField = {
+        Class = "DepthOfFieldEffect",
+        Name = "ToxDepthOfFieldEffect",
+        EnabledKey = "LightingDepthOfField",
+        Properties = {
+            FarIntensity = "LightingDOFFar",
+            FocusDistance = "LightingDOFFocus",
+            InFocusRadius = "LightingDOFRadius",
+            NearIntensity = "LightingDOFNear"
+        }
+    },
+    Atmosphere = {
+        Class = "Atmosphere",
+        Name = "ToxAtmosphere",
+        EnabledKey = "LightingAtmosphere",
+        Properties = {
+            Density = "LightingAtmosphereDensity",
+            Offset = "LightingAtmosphereOffset",
+            Haze = "LightingAtmosphereHaze",
+            Glare = "LightingAtmosphereGlare"
+        },
+        ColorProperties = {
+            Color = { "LightingAtmosphereColorName", "LightingAtmosphereColor" },
+            Decay = { "LightingAtmosphereDecayName", "LightingAtmosphereDecay" }
         }
     },
     Blur = {
@@ -1000,6 +1029,17 @@ local function ToxLightingColor(name, fallback)
     local map = env.ColorMap
     local value = typeof(map) == "table" and map[tostring(name)] or nil
     return typeof(value) == "Color3" and value or fallback
+end
+local function ToxResolveColor(nameKey, customKey, fallback)
+    local name = tostring(LightingSettings[nameKey] or "Default")
+    if name == "Custom" then
+        local custom = LightingSettings[customKey]
+        return typeof(custom) == "Color3" and custom or fallback
+    end
+    if name == "Default" then
+        return fallback
+    end
+    return ToxLightingColor(name, fallback)
 end
 local function ToxLightingTechnology(name)
     local wanted = tostring(name or "")
@@ -1039,7 +1079,10 @@ local function ToxCaptureLightingMain()
         GlobalShadows = LightingService.GlobalShadows,
         FogColor = LightingService.FogColor,
         FogStart = LightingService.FogStart,
-        FogEnd = LightingService.FogEnd
+        FogEnd = LightingService.FogEnd,
+        ExposureCompensation = LightingService.ExposureCompensation,
+        GeographicLatitude = LightingService.GeographicLatitude,
+        ColorShift_Top = LightingService.ColorShift_Top
     }
     pcall(function()
         snapshot.Technology = LightingService.Technology
@@ -1089,10 +1132,16 @@ local function ToxCaptureEffect(key)
         effect.Parent = LightingService
         created = true
     end
-    local snapshot = {
-        Enabled = effect.Enabled
-    }
+    local snapshot = {}
+    pcall(function()
+        snapshot.Enabled = effect.Enabled
+    end)
     for property in pairs(config.Properties) do
+        pcall(function()
+            snapshot[property] = effect[property]
+        end)
+    end
+    for property in pairs(config.ColorProperties or {}) do
         pcall(function()
             snapshot[property] = effect[property]
         end)
@@ -1180,14 +1229,16 @@ function ToxLighting.RefreshMain()
         return
     end
     pcall(function()
-        LightingService.Ambient = ToxLightingColor(
-            LightingSettings.LightingAmbientColorName,
+        LightingService.Ambient = ToxResolveColor(
+            "LightingAmbientColorName",
+            "LightingAmbientColor",
             LightingService.Ambient
         )
     end)
     pcall(function()
-        LightingService.OutdoorAmbient = ToxLightingColor(
-            LightingSettings.LightingOutdoorAmbientColorName,
+        LightingService.OutdoorAmbient = ToxResolveColor(
+            "LightingOutdoorAmbientColorName",
+            "LightingOutdoorAmbientColor",
             LightingService.OutdoorAmbient
         )
     end)
@@ -1229,6 +1280,28 @@ function ToxLighting.RefreshMain()
     pcall(function()
         LightingService.GlobalShadows = LightingSettings.LightingGlobalShadows == true
     end)
+    local main = ToxLightingState.Main or {}
+    pcall(function()
+        LightingService.ExposureCompensation = math.clamp(
+            tonumber(LightingSettings.LightingExposure) or main.ExposureCompensation or 0,
+            -3,
+            3
+        )
+    end)
+    pcall(function()
+        LightingService.GeographicLatitude = math.clamp(
+            tonumber(LightingSettings.LightingLatitude) or main.GeographicLatitude or 41.7,
+            -90,
+            90
+        )
+    end)
+    pcall(function()
+        LightingService.ColorShift_Top = ToxResolveColor(
+            "LightingSunColorName",
+            "LightingSunColor",
+            main.ColorShift_Top or LightingService.ColorShift_Top
+        )
+    end)
     pcall(function()
         LightingService.FogColor = ToxLightingColor(
             LightingSettings.LightingFogColorName,
@@ -1267,9 +1340,6 @@ function ToxLighting.SetAdjust(enabled)
         if type(env.SyncToggleVisuals) == "function" then
             pcall(env.SyncToggleVisuals, "Fullbright", false)
         end
-    end
-    if enabled and type(ToxLighting.GetPreset) == "function" and ToxLighting.GetPreset() ~= "Off" then
-        ToxLighting.ApplyPreset("Off")
     end
     local keepFixShadows = LightingSettings.LightingFixShadows == true
     LightingSettings.AdjustLighting = enabled
@@ -1320,6 +1390,15 @@ function ToxLighting.RefreshEffect(key)
         if value ~= nil then
             pcall(function()
                 effect[property] = value
+            end)
+        end
+    end
+    for property, keys in pairs(config.ColorProperties or {}) do
+        local fallback = state.Snapshot and state.Snapshot[property]
+        local color = ToxResolveColor(keys[1], keys[2], typeof(fallback) == "Color3" and fallback or nil)
+        if typeof(color) == "Color3" then
+            pcall(function()
+                effect[property] = color
             end)
         end
     end
@@ -1426,6 +1505,327 @@ local ToxPresetSkies = {
 }
 local function RGB(r, g, b)
     return Color3.fromRGB(r, g, b)
+end
+local function ToxPresetSet(object, props)
+    for property, value in pairs(props) do
+        pcall(function()
+            object[property] = value
+        end)
+    end
+end
+local ToxSkyState = { Created = nil, Style = nil, Detached = {}, Game = nil, GameSnapshot = nil }
+local function ToxSkyRestoreGame()
+    local gameSky = ToxSkyState.Game
+    if gameSky and gameSky.Parent and ToxSkyState.GameSnapshot then
+        ToxPresetSet(gameSky, ToxSkyState.GameSnapshot)
+    end
+    ToxSkyState.Game = nil
+    ToxSkyState.GameSnapshot = nil
+end
+local function ToxSkyClearCreated()
+    if ToxSkyState.Created then
+        pcall(function()
+            ToxSkyState.Created:Destroy()
+        end)
+    end
+    ToxSkyState.Created = nil
+    ToxSkyState.Style = nil
+end
+function ToxLighting.GetSkyStyles()
+    return { "Game", "Morning", "Midday", "Sunset", "Evening", "Stars" }
+end
+function ToxLighting.RefreshSky()
+    if not LightingSettings.LightingSky then
+        return
+    end
+    local style = tostring(LightingSettings.LightingSkyStyle or "Game")
+    local target
+    if style == "Game" then
+        ToxSkyClearCreated()
+        ToxRestoreDetached(ToxSkyState.Detached)
+        target = LightingService:FindFirstChildOfClass("Sky")
+        if target and target ~= ToxSkyState.Game then
+            ToxSkyRestoreGame()
+            ToxSkyState.Game = target
+            ToxSkyState.GameSnapshot = {
+                SunAngularSize = target.SunAngularSize,
+                MoonAngularSize = target.MoonAngularSize,
+                StarCount = target.StarCount,
+                CelestialBodiesShown = target.CelestialBodiesShown,
+            }
+        end
+    else
+        ToxSkyRestoreGame()
+        if ToxSkyState.Style ~= style then
+            ToxSkyClearCreated()
+        end
+        for _, object in ipairs(LightingService:GetChildren()) do
+            if object:IsA("Sky") and object ~= ToxSkyState.Created and ToxSkyState.Detached[object] == nil then
+                ToxSkyState.Detached[object] = object.Parent
+                pcall(function()
+                    object.Parent = nil
+                end)
+            end
+        end
+        if not ToxSkyState.Created then
+            local sky = Instance.new("Sky")
+            sky.Name = "ToxSky"
+            local faces = ToxPresetSkies[style]
+            if faces then
+                ToxPresetSet(sky, {
+                    SkyboxBk = faces.Bk, SkyboxDn = faces.Dn, SkyboxFt = faces.Ft,
+                    SkyboxLf = faces.Lf, SkyboxRt = faces.Rt, SkyboxUp = faces.Up,
+                })
+            end
+            sky.Parent = LightingService
+            ToxSkyState.Created = sky
+            ToxSkyState.Style = style
+        end
+        target = ToxSkyState.Created
+    end
+    if target then
+        ToxPresetSet(target, {
+            CelestialBodiesShown = true,
+            SunAngularSize = math.clamp(tonumber(LightingSettings.LightingSunSize) or 21, 0, 60),
+            MoonAngularSize = math.clamp(tonumber(LightingSettings.LightingMoonSize) or 11, 0, 60),
+            StarCount = math.clamp(math.floor(tonumber(LightingSettings.LightingStarCount) or 3000), 0, 10000),
+        })
+    end
+end
+function ToxLighting.SetSky(enabled)
+    LightingSettings.LightingSky = enabled == true
+    if LightingSettings.LightingSky then
+        ToxLighting.RefreshSky()
+        return
+    end
+    ToxSkyClearCreated()
+    ToxRestoreDetached(ToxSkyState.Detached)
+    ToxSkyRestoreGame()
+end
+function ToxLighting.HandleNewSky(object)
+    if LightingSettings.LightingSky
+    and object:IsA("Sky")
+    and object ~= ToxSkyState.Created
+    and tostring(LightingSettings.LightingSkyStyle or "Game") ~= "Game"
+    and ToxSkyState.Detached[object] == nil then
+        ToxSkyState.Detached[object] = LightingService
+        pcall(function()
+            object.Parent = nil
+        end)
+    end
+end
+local ToxCloudState = { Instance = nil, Created = false, Snapshot = nil, Wind = nil }
+function ToxLighting.RefreshClouds()
+    if not LightingSettings.LightingClouds then
+        return
+    end
+    local terrain = workspace:FindFirstChildOfClass("Terrain")
+    if not terrain then
+        return
+    end
+    local clouds = ToxCloudState.Instance
+    if not clouds or not clouds.Parent then
+        clouds = terrain:FindFirstChildOfClass("Clouds")
+        if clouds then
+            ToxCloudState.Snapshot = {
+                Cover = clouds.Cover, Density = clouds.Density, Color = clouds.Color, Enabled = clouds.Enabled,
+            }
+            ToxCloudState.Created = false
+        else
+            local ok, created = pcall(function()
+                local object = Instance.new("Clouds")
+                object.Name = "ToxClouds"
+                object.Parent = terrain
+                return object
+            end)
+            if not ok or not created then
+                return
+            end
+            clouds = created
+            ToxCloudState.Snapshot = nil
+            ToxCloudState.Created = true
+        end
+        ToxCloudState.Instance = clouds
+        if ToxCloudState.Wind == nil then
+            pcall(function()
+                ToxCloudState.Wind = workspace.GlobalWind
+            end)
+        end
+    end
+    local fallback = ToxCloudState.Snapshot and ToxCloudState.Snapshot.Color or Color3.new(1, 1, 1)
+    ToxPresetSet(clouds, {
+        Enabled = true,
+        Cover = math.clamp(tonumber(LightingSettings.LightingCloudCover) or 0.5, 0, 1),
+        Density = math.clamp(tonumber(LightingSettings.LightingCloudDensity) or 0.5, 0, 1),
+        Color = ToxResolveColor("LightingCloudColorName", "LightingCloudColor", fallback),
+    })
+    local wind = math.clamp(tonumber(LightingSettings.LightingCloudWind) or 6, 0, 100)
+    pcall(function()
+        workspace.GlobalWind = Vector3.new(wind, 0, wind * 0.5)
+    end)
+end
+function ToxLighting.SetClouds(enabled)
+    LightingSettings.LightingClouds = enabled == true
+    if LightingSettings.LightingClouds then
+        ToxLighting.RefreshClouds()
+        return
+    end
+    local clouds = ToxCloudState.Instance
+    if clouds then
+        if ToxCloudState.Created then
+            pcall(function()
+                clouds:Destroy()
+            end)
+        elseif clouds.Parent and ToxCloudState.Snapshot then
+            ToxPresetSet(clouds, ToxCloudState.Snapshot)
+        end
+    end
+    if ToxCloudState.Wind then
+        pcall(function()
+            workspace.GlobalWind = ToxCloudState.Wind
+        end)
+    end
+    ToxCloudState.Instance = nil
+    ToxCloudState.Created = false
+    ToxCloudState.Snapshot = nil
+    ToxCloudState.Wind = nil
+end
+local ToxWaterState = { Snapshot = nil }
+function ToxLighting.RefreshWater()
+    if not LightingSettings.LightingWater then
+        return
+    end
+    local terrain = workspace:FindFirstChildOfClass("Terrain")
+    if not terrain then
+        return
+    end
+    if not ToxWaterState.Snapshot then
+        ToxWaterState.Snapshot = {
+            WaterColor = terrain.WaterColor,
+            WaterReflectance = terrain.WaterReflectance,
+            WaterTransparency = terrain.WaterTransparency,
+            WaterWaveSize = terrain.WaterWaveSize,
+            WaterWaveSpeed = terrain.WaterWaveSpeed,
+        }
+    end
+    ToxPresetSet(terrain, {
+        WaterReflectance = 1,
+        WaterTransparency = 0.85,
+        WaterWaveSize = 0.14,
+        WaterWaveSpeed = 10,
+        WaterColor = ToxResolveColor("LightingWaterColorName", "LightingWaterColor", ToxWaterState.Snapshot.WaterColor),
+    })
+end
+function ToxLighting.SetWater(enabled)
+    LightingSettings.LightingWater = enabled == true
+    if LightingSettings.LightingWater then
+        ToxLighting.RefreshWater()
+        return
+    end
+    local terrain = workspace:FindFirstChildOfClass("Terrain")
+    if terrain and ToxWaterState.Snapshot then
+        ToxPresetSet(terrain, ToxWaterState.Snapshot)
+    end
+    ToxWaterState.Snapshot = nil
+end
+local ToxFloorState = {
+    Parts = setmetatable({}, { __mode = "k" }),
+    Connection = nil,
+}
+local function ToxIsFloorPart(object)
+    if not object:IsA("BasePart") or not object.Anchored or object.Transparency >= 0.9 then
+        return false
+    end
+    if object:IsA("Terrain") or string.sub(object.Name, 1, 3) == "Tox" then
+        return false
+    end
+    if object.Material == Enum.Material.Water or object.Material == Enum.Material.Glass then
+        return false
+    end
+    local size = object.Size
+    if math.min(size.X, size.Z) < 6 or size.Y > math.min(size.X, size.Z) * 0.5 then
+        return false
+    end
+    if math.abs(object.CFrame.UpVector.Y) < 0.9 then
+        return false
+    end
+    local model = object:FindFirstAncestorOfClass("Model")
+    if model and model:FindFirstChildOfClass("Humanoid") then
+        return false
+    end
+    return true
+end
+local ToxFloorShiny = {
+    [Enum.Material.SmoothPlastic] = 1.25, [Enum.Material.Plastic] = 1.1, [Enum.Material.Marble] = 1.25,
+    [Enum.Material.Metal] = 1.2, [Enum.Material.DiamondPlate] = 1.1, [Enum.Material.Foil] = 1.25,
+    [Enum.Material.Ice] = 1.25, [Enum.Material.Granite] = 1, [Enum.Material.Slate] = 0.9,
+    [Enum.Material.Concrete] = 0.8, [Enum.Material.Pebble] = 0.7, [Enum.Material.Cobblestone] = 0.7,
+    [Enum.Material.Wood] = 0.75, [Enum.Material.WoodPlanks] = 0.75, [Enum.Material.Brick] = 0.6,
+    [Enum.Material.Grass] = 0.35, [Enum.Material.Sand] = 0.35, [Enum.Material.Fabric] = 0.35,
+    [Enum.Material.Snow] = 0.5, [Enum.Material.Ground] = 0.35, [Enum.Material.LeafyGrass] = 0.35,
+}
+local function ToxFloorAmount()
+    return math.clamp(tonumber(LightingSettings.LightingFloorReflectAmount) or 35, 0, 100) / 100
+end
+local function ToxFloorTarget(object, original, amount)
+    local factor = ToxFloorShiny[object.Material] or 0.9
+    return math.max(original, math.clamp(amount * factor, 0, 0.6))
+end
+local function ToxApplyFloor(object)
+    if not ToxIsFloorPart(object) then
+        return
+    end
+    if ToxFloorState.Parts[object] == nil then
+        ToxFloorState.Parts[object] = object.Reflectance
+    end
+    pcall(function()
+        object.Reflectance = ToxFloorTarget(object, ToxFloorState.Parts[object], ToxFloorAmount())
+    end)
+end
+function ToxLighting.SetFloorReflections(enabled)
+    LightingSettings.LightingFloorReflect = enabled == true
+    if LightingSettings.LightingFloorReflect then
+        if not ToxFloorState.Connection then
+            for _, object in ipairs(workspace:GetDescendants()) do
+                ToxApplyFloor(object)
+            end
+            ToxFloorState.Connection = workspace.DescendantAdded:Connect(function(object)
+                if object:IsA("BasePart") then
+                    task.defer(ToxApplyFloor, object)
+                end
+            end)
+        else
+            ToxLighting.RefreshFloorReflections()
+        end
+        return
+    end
+    if ToxFloorState.Connection then
+        pcall(function()
+            ToxFloorState.Connection:Disconnect()
+        end)
+        ToxFloorState.Connection = nil
+    end
+    for object, original in pairs(ToxFloorState.Parts) do
+        if object and object.Parent then
+            pcall(function()
+                object.Reflectance = original
+            end)
+        end
+        ToxFloorState.Parts[object] = nil
+    end
+end
+function ToxLighting.RefreshFloorReflections()
+    if not LightingSettings.LightingFloorReflect then
+        return
+    end
+    local amount = ToxFloorAmount()
+    for object, original in pairs(ToxFloorState.Parts) do
+        if object and object.Parent then
+            pcall(function()
+                object.Reflectance = ToxFloorTarget(object, original, amount)
+            end)
+        end
+    end
 end
 local ToxLightingPresets = {
     Dawn = {
@@ -1554,466 +1954,137 @@ local ToxLightingPresets = {
     },
 }
 local ToxPresetOrder = { "Off", "Dawn", "Morning", "Midday", "Sunset", "Evening", "Night", "Overcast" }
-local ToxPresetClasses = { "Sky", "Atmosphere", "BloomEffect", "ColorCorrectionEffect", "SunRaysEffect", "DepthOfFieldEffect" }
-local ToxPresetFade = TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-local ToxPresetStart = {
-    Atmosphere = { Density = 0, Offset = 0, Glare = 0, Haze = 0 },
-    BloomEffect = { Intensity = 0, Size = 0 },
-    ColorCorrectionEffect = { Brightness = 0, Contrast = 0, Saturation = 0, TintColor = RGB(255, 255, 255) },
-    SunRaysEffect = { Intensity = 0 },
-    DepthOfFieldEffect = { FarIntensity = 0, NearIntensity = 0 },
-}
-local ToxPresetState = {
-    Active = nil,
-    Lighting = nil,
-    Water = nil,
-    Wind = nil,
-    Clouds = nil,
-    CloudsCreated = false,
-    Detached = {},
-    Created = {},
-    Connections = {},
-    Tweens = {},
-    Applying = false,
-}
-local function ToxPresetSet(object, props)
-    for property, value in pairs(props) do
-        pcall(function()
-            object[property] = value
-        end)
+local function ToxPresetToSettings(preset)
+    local L = preset.Lighting
+    local values = {
+        LightingClockTime = L.ClockTime,
+        LightingBrightness = L.Brightness,
+        LightingExposure = L.ExposureCompensation,
+        LightingLatitude = L.GeographicLatitude,
+        LightingShadowSoftness = L.ShadowSoftness,
+        LightingDiffuseScale = L.EnvironmentDiffuseScale,
+        LightingSpecularScale = L.EnvironmentSpecularScale,
+        LightingGlobalShadows = L.GlobalShadows,
+        LightingTechnology = "Future",
+        LightingAmbientColorName = "Custom",
+        LightingAmbientColor = L.Ambient,
+        LightingOutdoorAmbientColorName = "Custom",
+        LightingOutdoorAmbientColor = L.OutdoorAmbient,
+        LightingSunColorName = "Custom",
+        LightingSunColor = L.ColorShift_Top,
+        LightingFogStart = 0,
+        LightingFogEnd = 100000,
+        LightingSkyStyle = preset.Sky.Faces or "Stars",
+        LightingSunSize = preset.Sky.SunAngularSize or 11,
+        LightingMoonSize = preset.Sky.MoonAngularSize or 11,
+        LightingStarCount = preset.Sky.StarCount or 3000,
+        LightingAtmosphereDensity = preset.Atmosphere.Density,
+        LightingAtmosphereOffset = preset.Atmosphere.Offset,
+        LightingAtmosphereHaze = preset.Atmosphere.Haze,
+        LightingAtmosphereGlare = preset.Atmosphere.Glare,
+        LightingAtmosphereColorName = "Custom",
+        LightingAtmosphereColor = preset.Atmosphere.Color,
+        LightingAtmosphereDecayName = "Custom",
+        LightingAtmosphereDecay = preset.Atmosphere.Decay,
+        LightingCloudCover = preset.Clouds.Cover,
+        LightingCloudDensity = preset.Clouds.Density,
+        LightingCloudColorName = "Custom",
+        LightingCloudColor = preset.Clouds.Color,
+        LightingCloudWind = math.floor((preset.Wind or Vector3.new(6, 0, 0)).X + 0.5),
+        LightingBloomIntensity = preset.Bloom.Intensity,
+        LightingBloomSize = preset.Bloom.Size,
+        LightingBloomThreshold = preset.Bloom.Threshold,
+        LightingColorBrightness = preset.ColorCorrection.Brightness,
+        LightingColorContrast = preset.ColorCorrection.Contrast,
+        LightingColorSaturation = preset.ColorCorrection.Saturation,
+        LightingColorTintName = "Custom",
+        LightingColorTint = preset.ColorCorrection.TintColor,
+        LightingDOFFar = preset.DepthOfField.FarIntensity,
+        LightingDOFFocus = preset.DepthOfField.FocusDistance,
+        LightingDOFRadius = preset.DepthOfField.InFocusRadius,
+        LightingDOFNear = preset.DepthOfField.NearIntensity,
+        LightingWaterColorName = "Custom",
+        LightingWaterColor = preset.Water.WaterColor,
+        LightingFloorReflectAmount = math.floor((preset.Reflect or 0.25) * 100 + 0.5),
+    }
+    if preset.SunRays then
+        values.LightingSunRaysIntensity = preset.SunRays.Intensity
+        values.LightingSunRaysSpread = preset.SunRays.Spread
+    end
+    for key, value in pairs(values) do
+        LightingSettings[key] = value
     end
 end
-local function ToxPresetTween(object, props, instant)
-    if instant then
-        ToxPresetSet(object, props)
+local function ToxSyncToggles(keys)
+    if type(env.SyncToggleVisuals) ~= "function" then
         return
     end
-    local tweenable, rest = {}, {}
-    for property, value in pairs(props) do
-        local kind = typeof(value)
-        if kind == "number" or kind == "Color3" or kind == "Vector3" then
-            tweenable[property] = value
-        else
-            rest[property] = value
-        end
+    for key, value in pairs(keys) do
+        pcall(env.SyncToggleVisuals, key, value)
     end
-    ToxPresetSet(object, rest)
-    local ok, tween = pcall(function()
-        return TweenService:Create(object, ToxPresetFade, tweenable)
-    end)
-    if ok and tween then
-        table.insert(ToxPresetState.Tweens, tween)
-        tween:Play()
-    else
-        ToxPresetSet(object, tweenable)
-    end
-end
-local function ToxPresetStopTweens()
-    for _, tween in ipairs(ToxPresetState.Tweens) do
-        pcall(function()
-            tween:Cancel()
-        end)
-    end
-    table.clear(ToxPresetState.Tweens)
-end
-local function ToxPresetIsOwn(object)
-    for _, created in ipairs(ToxPresetState.Created) do
-        if created == object then
-            return true
-        end
-    end
-    return false
-end
-local function ToxPresetDetach(object)
-    if ToxPresetIsOwn(object) or ToxPresetState.Detached[object] ~= nil then
-        return
-    end
-    for _, className in ipairs(ToxPresetClasses) do
-        if object:IsA(className) then
-            ToxPresetState.Detached[object] = object.Parent
-            pcall(function()
-                object.Parent = nil
-            end)
-            return
-        end
-    end
-end
-local function ToxPresetDisconnect()
-    for _, connection in ipairs(ToxPresetState.Connections) do
-        pcall(function()
-            connection:Disconnect()
-        end)
-    end
-    table.clear(ToxPresetState.Connections)
-end
-local function ToxPresetRestore()
-    ToxPresetDisconnect()
-    ToxPresetStopTweens()
-    for _, object in ipairs(ToxPresetState.Created) do
-        pcall(function()
-            object:Destroy()
-        end)
-    end
-    table.clear(ToxPresetState.Created)
-    ToxRestoreDetached(ToxPresetState.Detached)
-    if ToxPresetState.Lighting then
-        for property, value in pairs(ToxPresetState.Lighting) do
-            if property == "Technology" then
-                ToxSetTechnology(value)
-            else
-                pcall(function()
-                    LightingService[property] = value
-                end)
-            end
-        end
-        ToxPresetState.Lighting = nil
-    end
-    local terrain = workspace:FindFirstChildOfClass("Terrain")
-    if terrain and ToxPresetState.Water then
-        ToxPresetSet(terrain, ToxPresetState.Water)
-    end
-    ToxPresetState.Water = nil
-    if ToxPresetState.Clouds and ToxPresetState.Clouds.Instance and not ToxPresetState.CloudsCreated then
-        ToxPresetSet(ToxPresetState.Clouds.Instance, ToxPresetState.Clouds.Snapshot)
-    end
-    ToxPresetState.Clouds = nil
-    ToxPresetState.CloudsCreated = false
-    if ToxPresetState.Wind then
-        pcall(function()
-            workspace.GlobalWind = ToxPresetState.Wind
-        end)
-        ToxPresetState.Wind = nil
-    end
-    ToxPresetState.Active = nil
-    if type(ToxLighting.SetFloorOverride) == "function" then
-        ToxLighting.SetFloorOverride(nil)
-    end
-end
-local function ToxPresetClearForSwitch()
-    ToxPresetDisconnect()
-    ToxPresetStopTweens()
-    for _, object in ipairs(ToxPresetState.Created) do
-        pcall(function()
-            object:Destroy()
-        end)
-    end
-    table.clear(ToxPresetState.Created)
-    if ToxPresetState.CloudsCreated then
-        ToxPresetState.Clouds = nil
-        ToxPresetState.CloudsCreated = false
-    end
-    ToxPresetState.Active = nil
-end
-local function ToxPresetCreate(className, name, props, instant)
-    local object = Instance.new(className)
-    object.Name = name
-    local start = ToxPresetStart[className]
-    if start and not instant then
-        ToxPresetSet(object, props)
-        ToxPresetSet(object, start)
-    else
-        ToxPresetSet(object, props)
-    end
-    table.insert(ToxPresetState.Created, object)
-    object.Parent = LightingService
-    if start and not instant then
-        ToxPresetTween(object, props)
-    end
-    return object
-end
-local function ToxPresetApplyLighting(preset, instant)
-    ToxPresetState.Applying = true
-    ToxPresetTween(LightingService, preset.Lighting, instant)
-    ToxSetTechnology("Future")
-    task.delay(instant and 0 or ToxPresetFade.Time + 0.05, function()
-        ToxPresetState.Applying = false
-    end)
-end
-local function ToxPresetApplyClouds(preset, terrain, instant)
-    if not terrain or not preset.Clouds then
-        return
-    end
-    local existing = ToxPresetState.Clouds
-    if existing and existing.Instance and existing.Instance.Parent and not ToxPresetState.CloudsCreated then
-        ToxPresetTween(existing.Instance, preset.Clouds, instant)
-        return
-    end
-    local clouds = terrain:FindFirstChildOfClass("Clouds")
-    if clouds then
-        local snapshot = {}
-        for property in pairs(preset.Clouds) do
-            pcall(function()
-                snapshot[property] = clouds[property]
-            end)
-        end
-        pcall(function()
-            snapshot.Enabled = clouds.Enabled
-        end)
-        ToxPresetState.Clouds = { Instance = clouds, Snapshot = snapshot }
-        ToxPresetState.CloudsCreated = false
-        pcall(function()
-            clouds.Enabled = true
-        end)
-    else
-        local ok, created = pcall(function()
-            local object = Instance.new("Clouds")
-            object.Name = "ToxPresetClouds"
-            object.Cover = 0
-            object.Parent = terrain
-            return object
-        end)
-        if not ok or not created then
-            return
-        end
-        clouds = created
-        table.insert(ToxPresetState.Created, clouds)
-        ToxPresetState.Clouds = { Instance = clouds, Snapshot = {} }
-        ToxPresetState.CloudsCreated = true
-    end
-    ToxPresetTween(clouds, preset.Clouds, instant)
 end
 function ToxLighting.GetPresetNames()
     return ToxPresetOrder
 end
 function ToxLighting.GetPreset()
-    return ToxPresetState.Active or "Off"
+    return tostring(LightingSettings.LightingPreset or "Off")
 end
-function ToxLighting.ApplyPreset(name, instant)
+function ToxLighting.ApplyPreset(name)
     name = tostring(name or "Off")
     local preset = ToxLightingPresets[name]
-    local switching = ToxPresetState.Active ~= nil and preset ~= nil
-    if switching then
-        ToxPresetClearForSwitch()
-    elseif ToxPresetState.Active then
-        ToxPresetRestore()
-    end
     LightingSettings.LightingPreset = preset and name or "Off"
     if not preset then
-        return
-    end
-    if LightingSettings.AdjustLighting then
         ToxLighting.SetAdjust(false)
-        if type(env.SyncToggleVisuals) == "function" then
-            pcall(env.SyncToggleVisuals, "AdjustLighting", false)
+        for _, key in ipairs({ "SunRays", "Bloom", "ColorCorrection", "DepthOfField", "Atmosphere" }) do
+            ToxLighting.SetEffect(key, false)
         end
-    end
-    if LightingSettings.Fullbright then
-        LightingSettings.Fullbright = false
-        if type(env.UpdateFullbright) == "function" then
-            pcall(env.UpdateFullbright)
-        end
-        if type(env.SyncToggleVisuals) == "function" then
-            pcall(env.SyncToggleVisuals, "Fullbright", false)
-        end
-    end
-    local snapshot = ToxPresetState.Lighting or {}
-    for property in pairs(preset.Lighting) do
-        if snapshot[property] == nil then
-            pcall(function()
-                snapshot[property] = LightingService[property]
-            end)
-        end
-    end
-    if snapshot.Technology == nil then
-        pcall(function()
-            snapshot.Technology = LightingService.Technology
-        end)
-    end
-    ToxPresetState.Lighting = snapshot
-    for _, object in ipairs(LightingService:GetChildren()) do
-        ToxPresetDetach(object)
-    end
-    local terrain = workspace:FindFirstChildOfClass("Terrain")
-    if terrain and preset.Water then
-        local water = ToxPresetState.Water or {}
-        for property in pairs(preset.Water) do
-            if water[property] == nil then
-                pcall(function()
-                    water[property] = terrain[property]
-                end)
-            end
-        end
-        ToxPresetState.Water = water
-        ToxPresetTween(terrain, preset.Water, instant)
-    end
-    ToxPresetApplyClouds(preset, terrain, instant)
-    if preset.Wind then
-        pcall(function()
-            if ToxPresetState.Wind == nil then
-                ToxPresetState.Wind = workspace.GlobalWind
-            end
-            workspace.GlobalWind = preset.Wind
-        end)
-    end
-    local skyProps = { CelestialBodiesShown = true, StarCount = preset.Sky.StarCount or 3000 }
-    if preset.Sky.SunAngularSize then skyProps.SunAngularSize = preset.Sky.SunAngularSize end
-    if preset.Sky.MoonAngularSize then skyProps.MoonAngularSize = preset.Sky.MoonAngularSize end
-    local faces = preset.Sky.Faces and ToxPresetSkies[preset.Sky.Faces]
-    if faces then
-        skyProps.SkyboxBk = faces.Bk
-        skyProps.SkyboxDn = faces.Dn
-        skyProps.SkyboxFt = faces.Ft
-        skyProps.SkyboxLf = faces.Lf
-        skyProps.SkyboxRt = faces.Rt
-        skyProps.SkyboxUp = faces.Up
-    end
-    ToxPresetCreate("Sky", "ToxPresetSky", skyProps, true)
-    ToxPresetCreate("Atmosphere", "ToxPresetAtmosphere", preset.Atmosphere, instant)
-    ToxPresetCreate("BloomEffect", "ToxPresetBloom", preset.Bloom, instant)
-    ToxPresetCreate("ColorCorrectionEffect", "ToxPresetColor", preset.ColorCorrection, instant)
-    if preset.SunRays then
-        ToxPresetCreate("SunRaysEffect", "ToxPresetSunRays", preset.SunRays, instant)
-    end
-    if preset.DepthOfField then
-        ToxPresetCreate("DepthOfFieldEffect", "ToxPresetDepth", preset.DepthOfField, instant)
-    end
-    ToxPresetApplyLighting(preset, instant)
-    ToxPresetState.Active = name
-    if type(ToxLighting.SetFloorOverride) == "function" then
-        ToxLighting.SetFloorOverride(preset.Reflect)
-    end
-    table.insert(ToxPresetState.Connections, LightingService.ChildAdded:Connect(function(object)
-        task.defer(function()
-            if ToxPresetState.Active then
-                ToxPresetDetach(object)
-            end
-        end)
-    end))
-    local pending = false
-    table.insert(ToxPresetState.Connections, LightingService.Changed:Connect(function(property)
-        if ToxPresetState.Applying or pending or not ToxPresetState.Active then
-            return
-        end
-        if preset.Lighting[property] == nil then
-            return
-        end
-        pending = true
-        task.delay(0.1, function()
-            pending = false
-            if ToxPresetState.Active == name and not ToxPresetState.Applying then
-                ToxPresetApplyLighting(preset, true)
-            end
-        end)
-    end))
-end
-local ToxFloorState = {
-    Parts = setmetatable({}, { __mode = "k" }),
-    Override = nil,
-    Connection = nil,
-}
-local function ToxIsFloorPart(object)
-    if not object:IsA("BasePart") or not object.Anchored or object.Transparency >= 0.9 then
-        return false
-    end
-    if object:IsA("Terrain") or string.sub(object.Name, 1, 3) == "Tox" then
-        return false
-    end
-    if object.Material == Enum.Material.Water or object.Material == Enum.Material.Glass then
-        return false
-    end
-    local size = object.Size
-    if math.min(size.X, size.Z) < 6 or size.Y > math.min(size.X, size.Z) * 0.5 then
-        return false
-    end
-    local up = object.CFrame.UpVector
-    if math.abs(up.Y) < 0.9 then
-        return false
-    end
-    local model = object:FindFirstAncestorOfClass("Model")
-    if model and model:FindFirstChildOfClass("Humanoid") then
-        return false
-    end
-    return true
-end
-local ToxFloorShiny = {
-    [Enum.Material.SmoothPlastic] = 1.25, [Enum.Material.Plastic] = 1.1, [Enum.Material.Marble] = 1.25,
-    [Enum.Material.Metal] = 1.2, [Enum.Material.DiamondPlate] = 1.1, [Enum.Material.Foil] = 1.25,
-    [Enum.Material.Ice] = 1.25, [Enum.Material.Granite] = 1, [Enum.Material.Slate] = 0.9,
-    [Enum.Material.Concrete] = 0.8, [Enum.Material.Pebble] = 0.7, [Enum.Material.Cobblestone] = 0.7,
-    [Enum.Material.Wood] = 0.75, [Enum.Material.WoodPlanks] = 0.75, [Enum.Material.Brick] = 0.6,
-    [Enum.Material.Grass] = 0.35, [Enum.Material.Sand] = 0.35, [Enum.Material.Fabric] = 0.35,
-    [Enum.Material.Snow] = 0.5, [Enum.Material.Ground] = 0.35, [Enum.Material.LeafyGrass] = 0.35,
-}
-local function ToxFloorTarget(object, original, amount)
-    local factor = ToxFloorShiny[object.Material] or 0.9
-    return math.max(original, math.clamp(amount * factor, 0, 0.6))
-end
-local function ToxFloorAmount()
-    local amount = 0
-    if LightingSettings.LightingFloorReflect then
-        amount = math.clamp(tonumber(LightingSettings.LightingFloorReflectAmount) or 35, 0, 100) / 100
-    end
-    if ToxFloorState.Override then
-        amount = math.max(amount, ToxFloorState.Override)
-    end
-    return amount
-end
-local function ToxFloorActive()
-    return LightingSettings.LightingFloorReflect == true or ToxFloorState.Override ~= nil
-end
-local function ToxApplyFloor(object)
-    if not ToxIsFloorPart(object) then
+        ToxLighting.SetSky(false)
+        ToxLighting.SetClouds(false)
+        ToxLighting.SetWater(false)
+        ToxLighting.SetFloorReflections(false)
+        ToxSyncToggles({
+            AdjustLighting = false, LightingSunRays = false, LightingBloom = false,
+            LightingColorCorrection = false, LightingDepthOfField = false, LightingAtmosphere = false,
+            LightingSky = false, LightingClouds = false, LightingWater = false, LightingFloorReflect = false,
+        })
         return
     end
-    if ToxFloorState.Parts[object] == nil then
-        ToxFloorState.Parts[object] = object.Reflectance
+    ToxLighting.SetRemoveAtmosphere(false)
+    ToxLighting.SetRemoveSkyboxes(false)
+    ToxLighting.SetRemoveGrading(false)
+    ToxLighting.SetFixShadows(false)
+    if not LightingSettings.AdjustLighting then
+        ToxLighting.SetAdjust(true)
     end
-    pcall(function()
-        object.Reflectance = ToxFloorTarget(object, ToxFloorState.Parts[object], ToxFloorAmount())
-    end)
-end
-local function ToxFloorSync()
-    if ToxFloorActive() then
-        if not ToxFloorState.Connection then
-            for _, object in ipairs(workspace:GetDescendants()) do
-                ToxApplyFloor(object)
-            end
-            ToxFloorState.Connection = workspace.DescendantAdded:Connect(function(object)
-                if object:IsA("BasePart") then
-                    task.defer(ToxApplyFloor, object)
-                end
-            end)
-        else
-            local amount = ToxFloorAmount()
-            for object, original in pairs(ToxFloorState.Parts) do
-                if object and object.Parent then
-                    pcall(function()
-                        object.Reflectance = ToxFloorTarget(object, original, amount)
-                    end)
-                end
-            end
-        end
-        return
-    end
-    if ToxFloorState.Connection then
-        pcall(function()
-            ToxFloorState.Connection:Disconnect()
-        end)
-        ToxFloorState.Connection = nil
-    end
-    for object, original in pairs(ToxFloorState.Parts) do
-        if object and object.Parent then
-            pcall(function()
-                object.Reflectance = original
-            end)
-        end
-        ToxFloorState.Parts[object] = nil
-    end
-end
-function ToxLighting.SetFloorReflections(enabled)
-    LightingSettings.LightingFloorReflect = enabled == true
-    ToxFloorSync()
-end
-function ToxLighting.SetFloorOverride(amount)
-    ToxFloorState.Override = tonumber(amount)
-    ToxFloorSync()
-end
-function ToxLighting.RefreshFloorReflections()
-    ToxFloorSync()
+    ToxPresetToSettings(preset)
+    ToxLighting.RefreshMain()
+    ToxLighting.SetEffect("Bloom", true)
+    ToxLighting.SetEffect("ColorCorrection", true)
+    ToxLighting.SetEffect("SunRays", preset.SunRays ~= nil)
+    ToxLighting.SetEffect("DepthOfField", true)
+    ToxLighting.SetEffect("Atmosphere", true)
+    ToxLighting.SetSky(true)
+    ToxLighting.RefreshSky()
+    ToxLighting.SetClouds(true)
+    ToxLighting.SetWater(true)
+    ToxLighting.SetFloorReflections(true)
+    ToxLighting.RefreshFloorReflections()
+    ToxSyncToggles({
+        AdjustLighting = true, LightingBloom = true, LightingColorCorrection = true,
+        LightingSunRays = preset.SunRays ~= nil, LightingDepthOfField = true, LightingAtmosphere = true,
+        LightingSky = true, LightingClouds = true, LightingWater = true, LightingFloorReflect = true,
+        LightingFixShadows = false, LightingRemoveAtmosphere = false, LightingRemoveSkyboxes = false,
+        LightingRemoveGrading = false, LightingGlobalShadows = LightingSettings.LightingGlobalShadows == true,
+    })
 end
 function ToxLighting.Reset(syncVisuals)
-    ToxLighting.ApplyPreset("Off")
     ToxLighting.SetFloorReflections(false)
+    ToxLighting.SetSky(false)
+    ToxLighting.SetClouds(false)
+    ToxLighting.SetWater(false)
+    ToxLighting.SetEffect("DepthOfField", false)
+    ToxLighting.SetEffect("Atmosphere", false)
+    LightingSettings.LightingPreset = "Off"
     ToxLighting.SetFixShadows(false)
     ToxLighting.SetAdjust(false)
     ToxLighting.SetEffect("SunRays", false)
@@ -2052,6 +2123,11 @@ function ToxLighting.Reset(syncVisuals)
             "LightingRemoveGrading",
             "LightingGlobalShadows",
             "LightingFloorReflect",
+            "LightingSky",
+            "LightingClouds",
+            "LightingWater",
+            "LightingDepthOfField",
+            "LightingAtmosphere",
             "Fullbright"
         }) do
             pcall(env.SyncToggleVisuals, key, false)
@@ -2060,6 +2136,7 @@ function ToxLighting.Reset(syncVisuals)
 end
 ToxLightingState.ChildConnection = LightingService.ChildAdded:Connect(function(object)
     task.defer(function()
+        ToxLighting.HandleNewSky(object)
         if LightingSettings.LightingRemoveAtmosphere and object:IsA("Atmosphere") then
             if ToxLightingState.RemovedAtmosphere[object] == nil then
                 ToxLightingState.RemovedAtmosphere[object] = LightingService
