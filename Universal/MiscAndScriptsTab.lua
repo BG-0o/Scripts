@@ -288,7 +288,6 @@ Settings.MagnetShape = Settings.MagnetShape or "Orbit"
 Settings.MagnetAttackStyle = Settings.MagnetAttackStyle or "Swarm"
 Settings.PartMagnetRange = math.clamp(tonumber(Settings.PartMagnetRange) or 80, 5, 500)
 Settings.MagnetRadius = math.clamp(tonumber(Settings.MagnetRadius) or 10, 2, 100)
--- Spin 0-100 (velocidade real = Spin / 5). Migra o valor antigo MagnetSpeed (0-20).
 if tonumber(Settings.MagnetSpin) == nil then
     Settings.MagnetSpin = (tonumber(Settings.MagnetSpeed) or 3) * 5
 end
@@ -325,7 +324,6 @@ do
         return V3(cos(theta) * r, y, sin(theta) * r)
     end
 
-    -- Formas: (i, n, t, centro, cframe orientado, tamanho, velocidade) -> posicao
     local SHAPE_ORDER = {
         "Orbit", "Ring", "Rings", "Wave",
         "Spiral", "Halo", "Tornado", "Blades",
@@ -397,7 +395,6 @@ do
         local row = floor((i - 1) / cols)
         return LocalPos(cf, (col - (cols - 1) / 2) * 3, -3.6, (row - (cols - 1) / 2) * 3)
     end
-    -- Disco com 3 bracos em espiral
     SHAPES.Galaxy = function(i, n, t, c, cf, R, S)
         local arm = (i - 1) % 3
         local j = floor((i - 1) / 3)
@@ -405,19 +402,16 @@ do
         local a = arm * TAU / 3 + f * 2.5 + t * S * 0.3
         return c + V3(cos(a) * f * R, 0.5, sin(a) * f * R)
     end
-    -- Flor de 5 petalas (rosa polar)
     SHAPES.Flower = function(i, n, t, c, cf, R, S)
         local th = math.pi * (i - 1) / n + t * S * 0.2
         local r = R * cos(5 * th)
         return c + V3(cos(th) * r, 1, sin(th) * r)
     end
-    -- Oito deitado na sua frente/volta
     SHAPES.Infinity = function(i, n, t, c, cf, R, S)
         local s = TAU * (i - 1) / n + t * S * 0.4
         local d = 1 + sin(s) ^ 2
         return LocalPos(cf, R * cos(s) / d, 1, R * sin(s) * cos(s) / d)
     end
-    -- Rosquinha girando
     SHAPES.Torus = function(i, n, t, c, cf, R, S)
         local major = R * 0.75
         local minor = max(R * 0.25, 1.5)
@@ -426,14 +420,12 @@ do
         local w = major + minor * cos(v)
         return c + V3(cos(u) * w, minor * sin(v) + 1, sin(u) * w)
     end
-    -- Coroa com pontas em zigue-zague
     SHAPES.Crown = function(i, n, t, c, cf, R, S)
         local a = TAU * (i - 1) / n + t * S * 0.4
         local tri = math.abs(((a * 8 / TAU) % 2) - 1)
         local rr = R * 0.6
         return c + V3(cos(a) * rr, 3 + tri * R * 0.4, sin(a) * rr)
     end
-    -- 4 colunas girando em volta
     SHAPES.Pillars = function(i, n, t, c, cf, R, S)
         local p = (i - 1) % 4
         local j = floor((i - 1) / 4)
@@ -441,7 +433,6 @@ do
         local a = p * TAU / 4 + t * S * 0.3
         return c + V3(cos(a) * R, -2 + j / m * R * 1.5, sin(a) * R)
     end
-    -- Cometa: uma cabeca orbitando com rastro atras
     SHAPES.Comet = function(i, n, t, c, cf, R, S)
         local f = (i - 1) / max(n - 1, 1)
         local a = t * S * 0.6 - f * 2.2
@@ -449,12 +440,10 @@ do
         local rr = R + spread
         return c + V3(cos(a) * rr, 1 + sin(a * 2) * R * 0.2 + spread * 0.5, sin(a) * rr)
     end
-    -- Esfera que enche e esvazia
     SHAPES.Pulse = function(i, n, t, c, cf, R, S)
         local radius = R * (0.55 + 0.35 * sin(t * S * 0.8))
         return c + V3(0, 2, 0) + SphereDir(i, n, t * S * 0.2) * radius
     end
-    -- Piramide (arestas) girando
     local PYR = {
         { V3(-1, 0, -1), V3(1, 0, -1) }, { V3(1, 0, -1), V3(1, 0, 1) },
         { V3(1, 0, 1), V3(-1, 0, 1) }, { V3(-1, 0, 1), V3(-1, 0, -1) },
@@ -468,7 +457,6 @@ do
         local local3 = V3(p.X * R * 0.7, p.Y * R * 1.2 - 2, p.Z * R * 0.7)
         return c + CFrame.Angles(0, t * S * 0.3, 0):VectorToWorldSpace(local3)
     end
-    -- Cubo (arestas) girando em dois eixos
     local CUBE = {}
     for _, a in ipairs({ -1, 1 }) do
         for _, b in ipairs({ -1, 1 }) do
@@ -484,7 +472,6 @@ do
         local rot = CFrame.Angles(0, t * S * 0.3, 0) * CFrame.Angles(t * S * 0.15, 0, 0)
         return c + V3(0, R * 0.6 + 1, 0) + rot:VectorToWorldSpace(p)
     end
-    -- Chuva caindo em volta
     SHAPES.Rain = function(i, n, t, c, cf, R, S)
         local ph = ((i * 0.618034) % 1 + t * S * 0.06) % 1
         local a = i * GOLD
@@ -492,7 +479,6 @@ do
         return c + V3(cos(a) * rr, R * 1.2 * (1 - ph) - 2, sin(a) * rr)
     end
 
-    -- Jeitos de ficar no alvo: (i, n, t, centro do alvo, cframe, distancia, velocidade, tamanho)
     local ATTACK_ORDER = { "Swarm", "Cage", "Ring", "Head", "Feet", "Ram", "Tornado", "Inside", "Shape" }
     local ATTACK = {}
 
@@ -639,7 +625,6 @@ do
         return nil
     end
 
-    -- Ponto do modo Mouse: so muda quando voce clica / segura (mouse ou toque)
     local MousePoint = nil
     local holdKind = nil
     local holdTouch = nil
@@ -729,7 +714,6 @@ do
         local D = math.clamp(tonumber(Settings.MagnetAttackDistance) or 3, 0, 100)
         local t = os.clock()
 
-        -- Decide centro + funcao de posicao
         local center = root.Position + V3(0, H, 0)
         local cf = FlatCFrame(center, root.CFrame.LookVector)
         local shapeFn = SHAPES[shapeName]
@@ -746,7 +730,6 @@ do
                 attackFn = ATTACK[Settings.MagnetAttackStyle] or ATTACK.Swarm
                 status = "Attack • " .. target.DisplayName .. " • " .. tostring(Settings.MagnetAttackStyle)
             else
-                -- Sem alvo (saiu / morreu / nick vazio): volta pra forma que voce estava usando
                 status = "Attack • no target → " .. shapeName
             end
         elseif mode == "Mouse" then
@@ -1030,7 +1013,6 @@ do
         b.MouseButton1Click:Connect(function()
             if name == "Mouse" or name == "Attack" then
                 if Settings.MagnetMode == name then
-                    -- clicar de novo volta pra forma que voce estava usando
                     Settings.MagnetMode = Settings.MagnetShape
                 else
                     Settings.MagnetMode = name
@@ -1099,6 +1081,7 @@ do
     end
     body.CanvasSize = UDim2.new(0, 0, 0, y + 6)
 
+    if env.MakeResizable then pcall(env.MakeResizable, gui, "ToxMagnet", Vector2.new(260, 220), Vector2.new(900, 1400)) end
     MagnetGui = gui
     env.ToxMagnetGui = gui
     env.ToxSetPartMagnet = function(v)
@@ -1757,6 +1740,7 @@ do
         end
     end)
 
+    if env.MakeResizable then pcall(env.MakeResizable, gui, "AvatarItems", Vector2.new(300, 240), Vector2.new(1000, 1400)) end
     AvatarItemsGui = gui
     env.ToxAvatarItemsGui = gui
     env.ToxAvatarItemsLoad = AvatarItemsLoad

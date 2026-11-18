@@ -1257,6 +1257,9 @@ function ToxLighting.SetAdjust(enabled)
             pcall(env.SyncToggleVisuals, "Fullbright", false)
         end
     end
+    if enabled and type(ToxLighting.GetPreset) == "function" and ToxLighting.GetPreset() ~= "Off" then
+        ToxLighting.ApplyPreset("Off")
+    end
     local keepFixShadows = LightingSettings.LightingFixShadows == true
     LightingSettings.AdjustLighting = enabled
     if enabled then
@@ -1392,7 +1395,295 @@ function ToxLighting.SetRemoveGrading(enabled)
         ToxRestoreGrading()
     end
 end
+local ToxPresetSkies = {
+    Morning = {
+        Bk = "rbxassetid://7879352266", Dn = "rbxassetid://7879347786", Ft = "rbxassetid://7879358161",
+        Lf = "rbxassetid://7879393853", Rt = "rbxassetid://7879350066", Up = "rbxassetid://7879345023",
+    },
+    Midday = {
+        Bk = "rbxassetid://11832250366", Dn = "rbxassetid://11832250656", Ft = "rbxassetid://11832250915",
+        Lf = "rbxassetid://11832250090", Rt = "rbxassetid://11832249798", Up = "rbxassetid://11832257515",
+    },
+    Sunset = {
+        Bk = "rbxassetid://225469345", Dn = "rbxassetid://225469349", Ft = "rbxassetid://225469359",
+        Lf = "rbxassetid://225469364", Rt = "rbxassetid://225469372", Up = "rbxassetid://225469380",
+    },
+    Evening = {
+        Bk = "rbxassetid://271042516", Dn = "rbxassetid://271077243", Ft = "rbxassetid://271042556",
+        Lf = "rbxassetid://271042310", Rt = "rbxassetid://271042467", Up = "rbxassetid://271077958",
+    },
+}
+local ToxLightingPresets = {
+    Morning = {
+        Lighting = {
+            ClockTime = 7.2, GeographicLatitude = 41, Brightness = 2.6, ExposureCompensation = 0.1,
+            Ambient = Color3.fromRGB(62, 56, 60), OutdoorAmbient = Color3.fromRGB(140, 128, 122),
+            ColorShift_Top = Color3.fromRGB(255, 214, 170), ColorShift_Bottom = Color3.fromRGB(120, 100, 90),
+            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.25, GlobalShadows = true,
+        },
+        Sky = { Faces = "Morning", StarCount = 0, SunAngularSize = 14 },
+        Atmosphere = { Density = 0.32, Offset = 0.25, Color = Color3.fromRGB(205, 176, 148), Decay = Color3.fromRGB(106, 112, 125), Glare = 0.4, Haze = 1.6 },
+        Bloom = { Intensity = 0.6, Size = 28, Threshold = 1.2 },
+        ColorCorrection = { Brightness = 0.02, Contrast = 0.12, Saturation = 0.12, TintColor = Color3.fromRGB(255, 242, 228) },
+        SunRays = { Intensity = 0.1, Spread = 0.8 },
+        DepthOfField = { FarIntensity = 0.08, FocusDistance = 60, InFocusRadius = 60, NearIntensity = 0 },
+        Water = { WaterColor = Color3.fromRGB(42, 92, 110), WaterReflectance = 1, WaterTransparency = 0.85, WaterWaveSize = 0.15, WaterWaveSpeed = 10 },
+    },
+    Midday = {
+        Lighting = {
+            ClockTime = 13.8, GeographicLatitude = 30, Brightness = 3, ExposureCompensation = 0,
+            Ambient = Color3.fromRGB(70, 72, 82), OutdoorAmbient = Color3.fromRGB(150, 150, 160),
+            ColorShift_Top = Color3.fromRGB(255, 248, 235), ColorShift_Bottom = Color3.fromRGB(110, 115, 125),
+            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.15, GlobalShadows = true,
+        },
+        Sky = { Faces = "Midday", StarCount = 0, SunAngularSize = 11 },
+        Atmosphere = { Density = 0.27, Offset = 0.2, Color = Color3.fromRGB(199, 205, 216), Decay = Color3.fromRGB(92, 110, 140), Glare = 0, Haze = 1 },
+        Bloom = { Intensity = 0.45, Size = 24, Threshold = 1.4 },
+        ColorCorrection = { Brightness = 0, Contrast = 0.1, Saturation = 0.15, TintColor = Color3.fromRGB(255, 255, 255) },
+        SunRays = { Intensity = 0.06, Spread = 0.5 },
+        DepthOfField = { FarIntensity = 0.06, FocusDistance = 80, InFocusRadius = 80, NearIntensity = 0 },
+        Water = { WaterColor = Color3.fromRGB(30, 110, 140), WaterReflectance = 1, WaterTransparency = 0.9, WaterWaveSize = 0.12, WaterWaveSpeed = 12 },
+    },
+    Sunset = {
+        Lighting = {
+            ClockTime = 17.4, GeographicLatitude = 41, Brightness = 2.4, ExposureCompensation = 0.15,
+            Ambient = Color3.fromRGB(70, 52, 52), OutdoorAmbient = Color3.fromRGB(150, 118, 108),
+            ColorShift_Top = Color3.fromRGB(255, 165, 105), ColorShift_Bottom = Color3.fromRGB(120, 80, 90),
+            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.3, GlobalShadows = true,
+        },
+        Sky = { Faces = "Sunset", StarCount = 0, SunAngularSize = 18 },
+        Atmosphere = { Density = 0.36, Offset = 0.3, Color = Color3.fromRGB(255, 186, 140), Decay = Color3.fromRGB(120, 88, 110), Glare = 0.6, Haze = 2 },
+        Bloom = { Intensity = 0.8, Size = 32, Threshold = 1.1 },
+        ColorCorrection = { Brightness = 0.01, Contrast = 0.15, Saturation = 0.2, TintColor = Color3.fromRGB(255, 228, 205) },
+        SunRays = { Intensity = 0.15, Spread = 1 },
+        DepthOfField = { FarIntensity = 0.1, FocusDistance = 55, InFocusRadius = 55, NearIntensity = 0 },
+        Water = { WaterColor = Color3.fromRGB(70, 70, 95), WaterReflectance = 1, WaterTransparency = 0.8, WaterWaveSize = 0.15, WaterWaveSpeed = 9 },
+    },
+    Evening = {
+        Lighting = {
+            ClockTime = 18.5, GeographicLatitude = 41, Brightness = 1.6, ExposureCompensation = 0.2,
+            Ambient = Color3.fromRGB(52, 46, 62), OutdoorAmbient = Color3.fromRGB(105, 92, 120),
+            ColorShift_Top = Color3.fromRGB(255, 140, 120), ColorShift_Bottom = Color3.fromRGB(80, 70, 110),
+            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.35, GlobalShadows = true,
+        },
+        Sky = { Faces = "Evening", StarCount = 1500, SunAngularSize = 20 },
+        Atmosphere = { Density = 0.38, Offset = 0.25, Color = Color3.fromRGB(190, 140, 160), Decay = Color3.fromRGB(70, 60, 100), Glare = 0.5, Haze = 1.8 },
+        Bloom = { Intensity = 0.9, Size = 34, Threshold = 1 },
+        ColorCorrection = { Brightness = 0, Contrast = 0.16, Saturation = 0.1, TintColor = Color3.fromRGB(245, 225, 240) },
+        SunRays = { Intensity = 0.12, Spread = 0.9 },
+        DepthOfField = { FarIntensity = 0.1, FocusDistance = 50, InFocusRadius = 50, NearIntensity = 0 },
+        Water = { WaterColor = Color3.fromRGB(50, 50, 80), WaterReflectance = 1, WaterTransparency = 0.8, WaterWaveSize = 0.15, WaterWaveSpeed = 8 },
+    },
+    Night = {
+        Lighting = {
+            ClockTime = 0.2, GeographicLatitude = 41, Brightness = 1.2, ExposureCompensation = 0.25,
+            Ambient = Color3.fromRGB(30, 33, 50), OutdoorAmbient = Color3.fromRGB(58, 64, 96),
+            ColorShift_Top = Color3.fromRGB(150, 170, 255), ColorShift_Bottom = Color3.fromRGB(40, 45, 80),
+            EnvironmentDiffuseScale = 1, EnvironmentSpecularScale = 1, ShadowSoftness = 0.4, GlobalShadows = true,
+        },
+        Sky = { Faces = nil, StarCount = 5000, MoonAngularSize = 14 },
+        Atmosphere = { Density = 0.36, Offset = 0.1, Color = Color3.fromRGB(62, 72, 112), Decay = Color3.fromRGB(20, 25, 46), Glare = 0, Haze = 0.6 },
+        Bloom = { Intensity = 1, Size = 40, Threshold = 0.9 },
+        ColorCorrection = { Brightness = -0.02, Contrast = 0.18, Saturation = -0.05, TintColor = Color3.fromRGB(205, 215, 255) },
+        DepthOfField = { FarIntensity = 0.12, FocusDistance = 45, InFocusRadius = 45, NearIntensity = 0 },
+        Water = { WaterColor = Color3.fromRGB(20, 30, 60), WaterReflectance = 1, WaterTransparency = 0.75, WaterWaveSize = 0.12, WaterWaveSpeed = 6 },
+    },
+}
+local ToxPresetOrder = { "Off", "Morning", "Midday", "Sunset", "Evening", "Night" }
+local ToxPresetClasses = { "Sky", "Atmosphere", "BloomEffect", "ColorCorrectionEffect", "SunRaysEffect", "DepthOfFieldEffect" }
+local ToxPresetState = {
+    Active = nil,
+    Lighting = nil,
+    Water = nil,
+    Detached = {},
+    Created = {},
+    Connections = {},
+    Applying = false,
+}
+local function ToxPresetSet(object, props)
+    for property, value in pairs(props) do
+        pcall(function()
+            object[property] = value
+        end)
+    end
+end
+local function ToxPresetIsOwn(object)
+    for _, created in ipairs(ToxPresetState.Created) do
+        if created == object then
+            return true
+        end
+    end
+    return false
+end
+local function ToxPresetDetach(object)
+    if ToxPresetIsOwn(object) or ToxPresetState.Detached[object] ~= nil then
+        return
+    end
+    for _, className in ipairs(ToxPresetClasses) do
+        if object:IsA(className) then
+            ToxPresetState.Detached[object] = object.Parent
+            pcall(function()
+                object.Parent = nil
+            end)
+            return
+        end
+    end
+end
+local function ToxPresetDisconnect()
+    for _, connection in ipairs(ToxPresetState.Connections) do
+        pcall(function()
+            connection:Disconnect()
+        end)
+    end
+    table.clear(ToxPresetState.Connections)
+end
+local function ToxPresetRestore()
+    ToxPresetDisconnect()
+    for _, object in ipairs(ToxPresetState.Created) do
+        pcall(function()
+            object:Destroy()
+        end)
+    end
+    table.clear(ToxPresetState.Created)
+    ToxRestoreDetached(ToxPresetState.Detached)
+    if ToxPresetState.Lighting then
+        for property, value in pairs(ToxPresetState.Lighting) do
+            if property == "Technology" then
+                ToxSetTechnology(value)
+            else
+                pcall(function()
+                    LightingService[property] = value
+                end)
+            end
+        end
+        ToxPresetState.Lighting = nil
+    end
+    local terrain = workspace:FindFirstChildOfClass("Terrain")
+    if terrain and ToxPresetState.Water then
+        ToxPresetSet(terrain, ToxPresetState.Water)
+    end
+    ToxPresetState.Water = nil
+    ToxPresetState.Active = nil
+end
+local function ToxPresetCreate(className, name, props)
+    local object = Instance.new(className)
+    object.Name = name
+    ToxPresetSet(object, props)
+    table.insert(ToxPresetState.Created, object)
+    object.Parent = LightingService
+    return object
+end
+local function ToxPresetApplyLighting(preset)
+    ToxPresetState.Applying = true
+    ToxPresetSet(LightingService, preset.Lighting)
+    ToxSetTechnology("Future")
+    ToxPresetState.Applying = false
+end
+function ToxLighting.GetPresetNames()
+    return ToxPresetOrder
+end
+function ToxLighting.GetPreset()
+    return ToxPresetState.Active or "Off"
+end
+function ToxLighting.ApplyPreset(name)
+    name = tostring(name or "Off")
+    local preset = ToxLightingPresets[name]
+    if ToxPresetState.Active then
+        ToxPresetRestore()
+    end
+    LightingSettings.LightingPreset = preset and name or "Off"
+    if not preset then
+        return
+    end
+    if LightingSettings.AdjustLighting then
+        ToxLighting.SetAdjust(false)
+        if type(env.SyncToggleVisuals) == "function" then
+            pcall(env.SyncToggleVisuals, "AdjustLighting", false)
+        end
+    end
+    if LightingSettings.Fullbright then
+        LightingSettings.Fullbright = false
+        if type(env.UpdateFullbright) == "function" then
+            pcall(env.UpdateFullbright)
+        end
+        if type(env.SyncToggleVisuals) == "function" then
+            pcall(env.SyncToggleVisuals, "Fullbright", false)
+        end
+    end
+    local snapshot = {}
+    for property in pairs(preset.Lighting) do
+        pcall(function()
+            snapshot[property] = LightingService[property]
+        end)
+    end
+    pcall(function()
+        snapshot.Technology = LightingService.Technology
+    end)
+    ToxPresetState.Lighting = snapshot
+    for _, object in ipairs(LightingService:GetChildren()) do
+        ToxPresetDetach(object)
+    end
+    local terrain = workspace:FindFirstChildOfClass("Terrain")
+    if terrain and preset.Water then
+        local water = {}
+        for property in pairs(preset.Water) do
+            pcall(function()
+                water[property] = terrain[property]
+            end)
+        end
+        ToxPresetState.Water = water
+        ToxPresetSet(terrain, preset.Water)
+    end
+    local skyProps = { CelestialBodiesShown = true, StarCount = preset.Sky.StarCount or 3000 }
+    if preset.Sky.SunAngularSize then skyProps.SunAngularSize = preset.Sky.SunAngularSize end
+    if preset.Sky.MoonAngularSize then skyProps.MoonAngularSize = preset.Sky.MoonAngularSize end
+    local faces = preset.Sky.Faces and ToxPresetSkies[preset.Sky.Faces]
+    if faces then
+        skyProps.SkyboxBk = faces.Bk
+        skyProps.SkyboxDn = faces.Dn
+        skyProps.SkyboxFt = faces.Ft
+        skyProps.SkyboxLf = faces.Lf
+        skyProps.SkyboxRt = faces.Rt
+        skyProps.SkyboxUp = faces.Up
+    end
+    ToxPresetCreate("Sky", "ToxPresetSky", skyProps)
+    ToxPresetCreate("Atmosphere", "ToxPresetAtmosphere", preset.Atmosphere)
+    ToxPresetCreate("BloomEffect", "ToxPresetBloom", preset.Bloom)
+    ToxPresetCreate("ColorCorrectionEffect", "ToxPresetColor", preset.ColorCorrection)
+    if preset.SunRays then
+        ToxPresetCreate("SunRaysEffect", "ToxPresetSunRays", preset.SunRays)
+    end
+    if preset.DepthOfField then
+        ToxPresetCreate("DepthOfFieldEffect", "ToxPresetDepth", preset.DepthOfField)
+    end
+    ToxPresetApplyLighting(preset)
+    ToxPresetState.Active = name
+    table.insert(ToxPresetState.Connections, LightingService.ChildAdded:Connect(function(object)
+        task.defer(function()
+            if ToxPresetState.Active then
+                ToxPresetDetach(object)
+            end
+        end)
+    end))
+    local pending = false
+    table.insert(ToxPresetState.Connections, LightingService.Changed:Connect(function(property)
+        if ToxPresetState.Applying or pending or not ToxPresetState.Active then
+            return
+        end
+        if preset.Lighting[property] == nil then
+            return
+        end
+        pending = true
+        task.delay(0.1, function()
+            pending = false
+            if ToxPresetState.Active == name then
+                ToxPresetApplyLighting(preset)
+            end
+        end)
+    end))
+end
 function ToxLighting.Reset(syncVisuals)
+    ToxLighting.ApplyPreset("Off")
     ToxLighting.SetFixShadows(false)
     ToxLighting.SetAdjust(false)
     ToxLighting.SetEffect("SunRays", false)

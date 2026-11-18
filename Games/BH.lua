@@ -540,7 +540,7 @@ local function RebuildPlaceDropdown()
     if typeof(PlaceDropdown) == "Instance" then
         for _, d in ipairs(PlaceDropdown:GetDescendants()) do
             if d:IsA("TextButton") then
-                d.Text = tostring(SelectedPlace) .. "  v"
+                d.Text = tostring(SelectedPlace)
             end
         end
     end

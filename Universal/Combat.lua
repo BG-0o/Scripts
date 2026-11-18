@@ -56,9 +56,6 @@ Settings.AimWallCheck = Settings.AimWallCheck == true
 Settings.ShowFOV = Settings.ShowFOV == true
 Settings.FOVRadius = tonumber(Settings.FOVRadius) or 120
 Settings.SilentAim = Settings.SilentAim == true
-Settings.MagicBullet = Settings.MagicBullet == true
-Settings.MagicBulletFOV = tonumber(Settings.MagicBulletFOV) or 120
-Settings.MagicBulletFOVEnabled = Settings.MagicBulletFOVEnabled == true
 Settings.Triggerbot = Settings.Triggerbot == true
 Settings.TriggerbotDelay = tonumber(Settings.TriggerbotDelay) or 0.12
 Settings.Spinbot = Settings.Spinbot == true
@@ -334,9 +331,9 @@ end
 getgenv().GetClosestCombatTarget = GetClosestTarget
 
 local hookInstalled = false
-local currentMagicTarget = nil
+local currentAimTarget = nil
 
-local function InstallMagicBulletHook()
+local function InstallSilentAimHook()
     if hookInstalled then return end
     hookInstalled = true
 
@@ -355,8 +352,8 @@ local function InstallMagicBulletHook()
                 return oldNamecall(self, ...)
             end
 
-            if (Settings.MagicBullet or Settings.SilentAim) and not env.Destroyed and currentMagicTarget and currentMagicTarget.Parent then
-                local target = currentMagicTarget
+            if Settings.SilentAim and not env.Destroyed and currentAimTarget and currentAimTarget.Parent then
+                local target = currentAimTarget
                 local targetChar = target.Parent
                 local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
 
@@ -424,8 +421,8 @@ local function InstallMagicBulletHook()
     end)
 end
 
-if Settings.MagicBullet or Settings.SilentAim then
-    InstallMagicBulletHook()
+if Settings.SilentAim then
+    InstallSilentAimHook()
 end
 
 local lastUltraInstinctTime = 0
@@ -821,13 +818,10 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
     if not Camera then Camera = Workspace.CurrentCamera end
     if not Camera then return end
 
-    if Settings.MagicBullet or Settings.SilentAim then
-        local mbFov = (Settings.MagicBullet and Settings.MagicBulletFOVEnabled and Settings.MagicBulletFOV)
-            or (Settings.SilentAim and Settings.SilentAimFOVEnabled and Settings.SilentAimFOV)
-            or 300
-        currentMagicTarget = GetClosestTarget(mbFov)
+    if Settings.SilentAim then
+        currentAimTarget = GetClosestTarget(300)
     else
-        currentMagicTarget = nil
+        currentAimTarget = nil
     end
 
     local mousePos = GetMousePos()
@@ -893,7 +887,7 @@ local combatConnection = RunService.RenderStepped:Connect(function(dt)
         lockedTarget = nil
     end
 
-    local activeTargetPart = currentCombatTargetPart or currentMagicTarget
+    local activeTargetPart = currentCombatTargetPart or currentAimTarget
     if not activeTargetPart and Settings.TargetESP then
         activeTargetPart = GetClosestTarget(Settings.FOVRadius or 120)
     end
@@ -1224,24 +1218,11 @@ local function BuildCombatUI()
 
     CreateToggle("Silent Aim", CombatPage, Settings.SilentAim, function(v)
         Settings.SilentAim = v == true
-        AutoSaveConfiguration()
-    end, "SilentAim")
-
-    CreateToggle("Magic Bullet", CombatPage, Settings.MagicBullet, function(v)
-        Settings.MagicBullet = v == true
-        if v then
-            InstallMagicBulletHook()
+        if Settings.SilentAim then
+            InstallSilentAimHook()
         end
         AutoSaveConfiguration()
-    end, "MagicBullet")
-
-    CreateToggleWithValue("Magic Bullet FOV", CombatPage, Settings.MagicBulletFOVEnabled, Settings.MagicBulletFOV, function(v)
-        Settings.MagicBulletFOVEnabled = v == true
-        AutoSaveConfiguration()
-    end, function(val)
-        Settings.MagicBulletFOV = tonumber(val) or 120
-        AutoSaveConfiguration()
-    end, "MagicBulletFOV")
+    end, "SilentAim")
 
     CreateToggle("Triggerbot", CombatPage, Settings.Triggerbot, function(v)
         Settings.Triggerbot = v == true

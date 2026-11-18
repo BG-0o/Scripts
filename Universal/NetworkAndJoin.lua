@@ -988,7 +988,7 @@ local function RefreshQuickJoinGames()
         idLabel.Size = UDim2.new(1, -95, 0, 16)
         idLabel.Position = UDim2.new(0, 10, 0, 26)
         idLabel.BackgroundTransparency = 1
-        idLabel.Text = "ID: " .. tostring(gInfo.PlaceId) .. "  •  Módulo: " .. tostring(gInfo.Code)
+        idLabel.Text = "ID: " .. tostring(gInfo.PlaceId) .. "  •  Module: " .. tostring(gInfo.Code)
         idLabel.TextColor3 = Color3.fromRGB(150, 150, 175)
         idLabel.Font = Enum.Font.Gotham
         idLabel.TextSize = 10

@@ -1307,9 +1307,6 @@ getgenv().SetNDSNoTPAnchor = function(
         return false
     end
 
-    -- Com o No TP ligado, so aceita nova ancora vinda de um TP do proprio hub
-    -- (AllowToxTeleport / fling). Qualquer outra chamada durante um TP
-    -- forcado do jogo era o que fazia o No TP "aceitar" o puxao.
     if Settings.NDSNoTP then
         local ownTeleport =
             (getgenv().ToxIsToxTeleportAllowed
@@ -1547,7 +1544,6 @@ end
 
 local function NDSIsIslandRock(object)
     if not object:IsA("BasePart") or not object.Anchored then
-        -- pedras que caem (meteoro etc.) nao sao anchored: ignora
         return false
     end
     if object.Name == "ToxNDSRockCollider" or object.Name == "ToxNDSSupport" then
@@ -1576,9 +1572,6 @@ local function NDSIsIslandRock(object)
     return true
 end
 
--- Pra cada pedra cria uma copia invisivel, anchored e com colisao, so no seu
--- cliente. Assim colide por cima E pelos lados, mesmo que a pedra original
--- esteja sem colisao ou num collision group que nao bate no player.
 local NDSRockSet = setmetatable({}, { __mode = "k" })
 local NDSRockFolder = nil
 local NDSRockCount = 0
@@ -1722,8 +1715,6 @@ local function NDSRefreshWaterParts()
     return list
 end
 
--- Agua feita de Part (oceano, flash flood subindo...): topo da part que esta
--- embaixo/em volta dos seus pes.
 local function NDSWaterTopAt(position, feetY)
     local best, bestName = nil, nil
     for _, part in ipairs(NDSRefreshWaterParts()) do
@@ -1745,8 +1736,6 @@ local function NDSWaterTopAt(position, feetY)
     return best, bestName
 end
 
--- Agua de Terrain: raio de cima pra baixo so no Terrain, pegando a primeira
--- superficie de agua.
 local NDSTerrainParams = RaycastParams.new()
 NDSTerrainParams.FilterType = Enum.RaycastFilterType.Include
 NDSTerrainParams.IgnoreWater = false
@@ -2241,8 +2230,6 @@ local function NDSResetDisasterState()
     NDSClearDisasterPin()
 end
 
--- Status "intermission/loading" com a sua SurvivalTag ainda ativa = rodada
--- ainda rolando; nao derruba a previsao fixa (evita piscar).
 local function NDSResetDisasterStateFromStatus()
     local char = Player.Character
     local tag = char and char:FindFirstChild("SurvivalTag")
@@ -2252,8 +2239,6 @@ local function NDSResetDisasterStateFromStatus()
     NDSResetDisasterState()
 end
 
--- announced = true quando veio do texto do proprio jogo (desastre comecou).
--- Previsao (SurvivalTag) fica FIXA na tela ate o desastre aparecer de verdade.
 local function NDSNotifyDisaster(disaster, mapName, announced)
     if not disaster then
         return
@@ -2320,7 +2305,6 @@ local function NDSScanDisasters()
                 if not NDSPinnedDisaster then
                     return
                 end
-                -- previsao fixa: continua olhando a GUI do jogo pra saber quando o desastre comecou
             end
         end
     end
@@ -2926,7 +2910,7 @@ NDSCreateButton("Quick Rejoin (Instant Reset)", GamePage, function()
     local ts = game:GetService("TeleportService")
     if ts and game.PlaceId then
         if CustomNotify then
-            CustomNotify("Reconectando ao servidor...", Color3.fromRGB(0, 168, 255), 3)
+            CustomNotify("Reconnecting to server...", Color3.fromRGB(0, 168, 255), 3)
         end
         if game.JobId and game.JobId ~= "" then
             pcall(function()

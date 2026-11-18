@@ -67,9 +67,6 @@ getgenv().Settings = {
     ShowFOV = false,
     FOVRadius = 120,
     SilentAim = false,
-    MagicBullet = false,
-    MagicBulletFOV = 120,
-    MagicBulletFOVEnabled = false,
     Triggerbot = false,
     TriggerbotDelay = 0.12,
     Spinbot = false,
@@ -111,7 +108,6 @@ getgenv().Settings = {
     ESPDistance = false,
     ESPTracers = false,
     ESPBox = false,
-    ESPHeadDot = false,
     ESPSkeleton = false,
     TargetESP = false,
     TargetESPColor = Color3.fromRGB(255, 30, 30),
@@ -124,6 +120,7 @@ getgenv().Settings = {
     MouseIconSize = 150,
     Fullbright = false,
     AdjustLighting = false,
+    LightingPreset = "Off",
     LightingTechnology = "ShadowMap",
     LightingAmbientColorName = "White",
     LightingOutdoorAmbientColorName = "White",
@@ -319,6 +316,7 @@ getgenv().ToxStartupBooleanState = {}
 getgenv().ToxStartupToggleCallbacks = {}
 getgenv().ToxStartupOptionsApplied = false
 getgenv().ToxHubActive = true
+getgenv().ToxHubVersion = "v2.0"
 getgenv().ToxHubGame = game
 getgenv().ToxModule1SplitVersion = "2026-10-19-kick-autoreexec-persist-v12"
 getgenv().ToxUniversalLoaded = nil
@@ -1696,7 +1694,6 @@ if not game:IsLoaded() then
     game.Loaded:Wait()
 end
 local env = getgenv()
--- O payload atual ja foi consumido; libera o Auto Execute para armar a proxima rodada.
 env.ToxAutoExecuteQueued = false
 env.ToxAutoExecuteQueuedGame = nil
 task.wait(0.55)
@@ -1759,7 +1756,6 @@ if not shouldExecute then
 end
 local guardNow = tick()
 local previousGuardAt = tonumber(env.__ToxQueuedDestinationAt) or 0
--- Bloqueia apenas payloads duplicados quase simultaneos, nao futuros kicks.
 if env.__ToxQueuedDestinationGame == game
 and guardNow - previousGuardAt < 2 then
     return

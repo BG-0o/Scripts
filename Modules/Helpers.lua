@@ -60,8 +60,6 @@ NotifLayout.Padding = UDim.new(0, 0)
 NotifLayout.Parent = NotifContainer
 getgenv().ToxLastNotificationText = getgenv().ToxLastNotificationText or nil
 getgenv().ToxLastNotificationTime = getgenv().ToxLastNotificationTime or 0
--- Notificacoes: card com barra colorida, entra deslizando da direita,
--- barra de tempo embaixo, clique pra fechar, e notificacoes fixas (pin).
 local TextService = game:GetService("TextService")
 local NOTIF_WIDTH = 270
 local NOTIF_MAX_STACK = 6
@@ -117,7 +115,6 @@ local function CreateNotif(text, color, pinned)
     stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     stroke.Parent = card
 
-    -- brilho suave da cor da notificacao vindo da esquerda
     local glow = Instance.new("Frame")
     glow.Name = "Glow"
     glow.Size = UDim2.new(1, 0, 1, 0)
@@ -183,7 +180,6 @@ local function CreateNotif(text, color, pinned)
     TweenService:Create(progress, inInfo, { BackgroundTransparency = 0.35 }):Play()
 
     if pinned then
-        -- barra "respirando" enquanto esta fixa
         handle.PulseTween = TweenService:Create(bar, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { BackgroundTransparency = 0.6 })
         task.delay(0.45, function()
             if not handle.Dismissed and handle.PulseTween then handle.PulseTween:Play() end
@@ -259,8 +255,6 @@ getgenv().CustomNotify = function(text, color, customTime)
     return handle
 end
 
--- Notificacao fixa: fica na tela ate ToxUnpinNotify(id). Chamar de novo com o
--- mesmo id so atualiza o texto.
 getgenv().ToxPinNotify = function(id, text, color)
     id = tostring(id or "default")
     local message = tostring(text or "")
@@ -981,9 +975,6 @@ getgenv().ApplySavedGuiPosition = function(key, gui)
     end
     return saved or gui.Position
 end
--- Lembra quais janelas (Waypoints, Music, Magnet, etc.) ficaram abertas e
--- reabre elas na proxima execucao. Fica salvo junto com as posicoes,
--- em UIPositions.__Open, entao nao precisa mexer no formato do config.
 local OPEN_STATE_KEY = "__Open"
 local OpenStateIgnored = {
     Main = true, MobileToggle = true, Watermark = true, Keybinds = true,
@@ -1017,7 +1008,6 @@ local function RecordOpenState(key, gui)
     or getgenv().Destroyed
     or not gui.Parent
     or not IsMainShown() then
-        -- Esconder tudo pela tecla da GUI / fechar o hub nao conta como "fechei a janela"
         return
     end
     local open = GetOpenStateTable()
@@ -1048,11 +1038,9 @@ task.spawn(function()
     repeat
         task.wait(0.2)
     until getgenv().ScriptLoaded or env.Destroyed or getgenv().Destroyed
-    -- da tempo dos modulos terminarem de montar as janelas (todas nascem fechadas)
     task.wait(0.8)
     local waited = 0
     while not IsMainShown() and not env.Destroyed and not getgenv().Destroyed do
-        -- Start Hidden: so reabre quando o hub for aberto
         task.wait(0.2)
         waited += 0.2
         if waited > 600 then break end
@@ -1073,7 +1061,6 @@ getgenv().TrackGuiPosition = function(key, gui)
             RecordOpenState(key, gui)
         end))
         if OpenStateRestored and IsMainShown() and GetOpenStateTable()[key] == true then
-            -- janela criada depois do load (ex: modulo do jogo)
             task.defer(function()
                 if gui.Parent then gui.Visible = true end
             end)

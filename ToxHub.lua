@@ -68,7 +68,7 @@ local function ToxLoadError(msg)
     warn(msg)
     pcall(function()
         game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "ToxHub - erro ao carregar",
+            Title = "ToxHub - load error",
             Text = string.sub(tostring(msg), 1, 180),
             Duration = 20,
         })
@@ -83,7 +83,7 @@ end
 
 local function RunFetchedSource(relPath, success, content)
     if not success or type(content) ~= "string" or content == "" or content == "404: Not Found" or content:sub(1, 15):find("404") then
-        ToxLoadError("[ToxHub Error]: Nao foi possivel carregar " .. tostring(relPath))
+        ToxLoadError("[ToxHub Error]: Could not load " .. tostring(relPath))
         return false
     end
 

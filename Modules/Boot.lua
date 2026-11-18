@@ -300,7 +300,6 @@ Destroyed = false
 getgenv().__ToxHubReexecCancelled = nil
 
 local VALID_KEY = "BetaUsers"
--- Key antiga: quem ja tinha salvo continua entrando (e e migrado pra nova)
 local LEGACY_VALID_KEY = "Tox-BetaUsers"
 local KEY_FILENAME = "ToxHub_Key.txt"
 local DISCORD_URL = "https://discord.com/invite/A7tZ9VbVvM"

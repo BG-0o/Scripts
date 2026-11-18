@@ -1193,47 +1193,50 @@ local function UpdateHealthESP()
                     billboard.Name = "ToxESPHealth"
                     billboard.Adornee = head or root
                     billboard.AlwaysOnTop = true
-                    billboard.Size = UDim2.fromOffset(180, 22)
-                    billboard.StudsOffset = Vector3.new(0, 2.55, 0)
+                    billboard.Size = UDim2.fromOffset(320, 60)
+                    billboard.StudsOffset = Vector3.new(0, 3.2, 0)
                     billboard.MaxDistance = maxDistance > 0 and maxDistance or 100000
                     billboard.Parent = character
 
-                    local label = Instance.new("TextLabel")
-                    label.Name = "HealthLabel"
-                    label.Size = UDim2.fromScale(1, 1)
-                    label.BackgroundTransparency = 1
-                    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-                    label.TextStrokeTransparency = 0
-                    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    label.TextSize = 12
-                    label.Font = Enum.Font.Gotham
-                    label.TextXAlignment = Enum.TextXAlignment.Center
-                    label.Parent = billboard
+                    local back = Instance.new("Frame")
+                    back.Name = "HealthBack"
+                    back.AnchorPoint = Vector2.new(0.5, 1)
+                    back.Position = UDim2.new(0.5, 0, 1, -1)
+                    back.Size = UDim2.fromOffset(72, 6)
+                    back.BackgroundColor3 = Color3.fromRGB(10, 10, 14)
+                    back.BackgroundTransparency = 0.25
+                    back.BorderSizePixel = 0
+                    back.Parent = billboard
+                    local backCorner = Instance.new("UICorner")
+                    backCorner.CornerRadius = UDim.new(1, 0)
+                    backCorner.Parent = back
+                    local backStroke = Instance.new("UIStroke")
+                    backStroke.Color = Color3.fromRGB(0, 0, 0)
+                    backStroke.Thickness = 1
+                    backStroke.Transparency = 0.2
+                    backStroke.Parent = back
+
+                    local fill = Instance.new("Frame")
+                    fill.Name = "HealthFill"
+                    fill.Size = UDim2.fromScale(1, 1)
+                    fill.BackgroundColor3 = Color3.fromRGB(80, 255, 120)
+                    fill.BorderSizePixel = 0
+                    fill.Parent = back
+                    local fillCorner = Instance.new("UICorner")
+                    fillCorner.CornerRadius = UDim.new(1, 0)
+                    fillCorner.Parent = fill
 
                     healthBillboards[target] = billboard
                 end
 
                 billboard.MaxDistance = maxDistance > 0 and maxDistance or 100000
-                local label = billboard:FindFirstChild("HealthLabel")
-                if label then
-                    label.Text = "HP: "
-                        .. tostring(math.floor(humanoid.Health + 0.5))
-                        .. "/"
-                        .. tostring(math.floor(humanoid.MaxHealth + 0.5))
-
-                    if Settings.VisualRainbow and lastRainbowColor then
-                        label.TextColor3 = lastRainbowColor
-                    elseif typeof(Settings.EspColor) == "Color3" then
-                        label.TextColor3 = Settings.EspColor
-                    else
-                        local colors = env.ColorMap
-                        local color = typeof(colors) == "table"
-                            and colors[Settings.EspColorName]
-                            or nil
-                        label.TextColor3 = typeof(color) == "Color3"
-                            and color
-                            or Color3.fromRGB(255, 255, 255)
-                    end
+                local back = billboard:FindFirstChild("HealthBack")
+                local fill = back and back:FindFirstChild("HealthFill")
+                if fill then
+                    local maxHealth = math.max(humanoid.MaxHealth, 1)
+                    local ratio = math.clamp(humanoid.Health / maxHealth, 0, 1)
+                    fill.Size = UDim2.fromScale(ratio, 1)
+                    fill.BackgroundColor3 = Color3.fromHSV(0.33 * ratio, 0.8, 1)
                 end
             else
                 local billboard = healthBillboards[target]
@@ -1419,7 +1422,7 @@ local function InstallVisualUI(page)
     visualUIInstalled = true
 
     Toggle(
-        "Show Health",
+        "Health Bar",
         page,
         Settings.ESPShowHealth,
         function(value)
@@ -2604,6 +2607,24 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             technologies = {"ShadowMap"}
         end
 
+        if type(controller.ApplyPreset) == "function" then
+            CreateDropdown(
+                "Shader Preset",
+                controller.GetPresetNames(),
+                page,
+                Settings.LightingPreset or "Off",
+                function(value)
+                    controller.ApplyPreset(value)
+                    if type(env.AutoSaveConfiguration) == "function" then
+                        env.AutoSaveConfiguration()
+                    end
+                end
+            )
+            if Settings.LightingPreset and Settings.LightingPreset ~= "Off" then
+                task.defer(controller.ApplyPreset, Settings.LightingPreset)
+            end
+        end
+
         CreateToggle(
             "Adjust Lighting",
             page,
@@ -3385,12 +3406,13 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         MoveAfter(playerSection, "Max Zoom", "Noclip Camera")
         MoveAfter(playerSection, "Return By Death", "Max Zoom")
 
-        MoveAfter(visualSection, "Show Health", "Names")
+        MoveAfter(visualSection, "Health Bar", "Names")
         MoveBefore(visualSection, "Rainbow", "ESP Color")
 
         if lightingSection then
             MoveControlToSection("Fullbright", "LIGHTING")
             MoveBefore(lightingSection, "Adjust Lighting", "Fullbright")
+            MoveBefore(lightingSection, "Shader Preset", "Adjust Lighting")
             MoveAfter(lightingSection, "Get Technology", "Fullbright")
             MoveAfter(lightingSection, "Technology", "Get Technology")
             MoveAfter(lightingSection, "Ambient", "Technology")
@@ -3452,8 +3474,8 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
         })
         SetOrder(visualSection, {
             "ESP", "Team Colors", "ESP Max Dist",
-            "Charms", "2D Box ESP", "Skeleton ESP", "Head Dot ESP", "Tracers",
-            "Names", "Show Health", "Distance", "Target ESP",
+            "Charms", "2D Box ESP", "Skeleton ESP", "Tracers",
+            "Names", "Health Bar", "Distance", "Target ESP",
             "Rainbow", "ESP Color", "🎨 Pick Custom ESP Color (HSV)",
         })
         if miscSection and type(miscSection.Controls) == "table" then

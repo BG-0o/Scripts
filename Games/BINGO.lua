@@ -1166,7 +1166,7 @@ do
         return bought
     end
 
-    MakeSection("Auto Bingo & Marcacao", "🎱")
+    MakeSection("Auto Bingo & Marking", "🎱")
     CreateToggle("Auto Farm (BINGO)", GamePage, Settings.BINGOAutoFarm, function(v)
         local state = v == true
         Settings.BINGOAutoFarm = state
@@ -1184,12 +1184,12 @@ do
         SyncBingoAttributes()
     end, "BINGOAutoClaim")
 
-    CreateButton("Sincronizar Atributos BINGO", GamePage, function()
+    CreateButton("Sync BINGO Attributes", GamePage, function()
         SyncBingoAttributes()
-        CustomNotify("Atributos aplicados (Cash: " .. tostring(GetPlayerCash()) .. ")", Color3.fromRGB(90, 235, 130), 2)
+        CustomNotify("Attributes applied (Cash: " .. tostring(GetPlayerCash()) .. ")", Color3.fromRGB(90, 235, 130), 2)
     end)
 
-    MakeSection("Loja & Cosmeticos", "🛍")
+    MakeSection("Shop & Cosmetics", "🛍")
     CreateToggle("Auto Buy Card Skins", GamePage, Settings.BINGOBuyCards, function(v)
         Settings.BINGOBuyCards = v == true
     end, "BINGOBuyCards")
@@ -1206,11 +1206,11 @@ do
         Settings.BINGOBuyStamps = v == true
     end, "BINGOBuyStamps")
 
-    CreateButton("Comprar Itens Acessiveis Agora", GamePage, function()
+    CreateButton("Buy Affordable Items Now", GamePage, function()
         task.spawn(function()
             local cfg = GetBingoShopDeps()
             if not cfg then
-                CustomNotify("Config de BINGO nao encontrada!", Color3.fromRGB(255, 160, 70), 3)
+                CustomNotify("BINGO config not found!", Color3.fromRGB(255, 160, 70), 3)
                 return
             end
             local total = 0
@@ -1218,7 +1218,7 @@ do
             total = total + BuyCategory("chair", "OwnedChairSkins", cfg.CHAIR_SKINS)
             total = total + BuyCategory("dance", "OwnedDances", cfg.DANCES)
             total = total + BuyCategory("stamp", "OwnedStamps", cfg.STAMPS)
-            CustomNotify("Compras concluidas (" .. tostring(total) .. " itens)", Color3.fromRGB(90, 235, 130), 3)
+            CustomNotify("Purchases done (" .. tostring(total) .. " items)", Color3.fromRGB(90, 235, 130), 3)
         end)
     end)
 
@@ -1253,25 +1253,25 @@ do
 
     local communityExecuted = false
     MakeSection("Community Hub & Extras", "🧰")
-    CreateButton("Executar Community Hub (BINGO)", GamePage, function()
+    CreateButton("Run Community Hub (BINGO)", GamePage, function()
         if communityExecuted then
-            CustomNotify("Community Hub (BINGO) ja esta ativo nesta sessao.", Color3.fromRGB(255, 200, 80), 3)
+            CustomNotify("Community Hub (BINGO) is already active in this session.", Color3.fromRGB(255, 200, 80), 3)
             return
         end
         communityExecuted = true
-        CustomNotify("Iniciando Community Hub (BINGO)...", Color3.fromRGB(110, 185, 255), 3)
+        CustomNotify("Starting Community Hub (BINGO)...", Color3.fromRGB(110, 185, 255), 3)
         task.spawn(function()
             local ok, err = pcall(RunBINGOCommunityScript)
             if not ok then
                 communityExecuted = false
-                CustomNotify("Erro Community Hub (BINGO): " .. tostring(err), Color3.fromRGB(255, 95, 95), 5)
+                CustomNotify("Community Hub error (BINGO): " .. tostring(err), Color3.fromRGB(255, 95, 95), 5)
                 warn("[ToxHub BINGO Community Error]: " .. tostring(err))
             end
         end)
     end)
 
-    CreateButton("Recarregar Modulo (BINGO)", GamePage, function()
-        CustomNotify("Recarregando 50 Player BINGO! (BINGO)...", Color3.fromRGB(90, 175, 255), 2)
+    CreateButton("Reload Module (BINGO)", GamePage, function()
+        CustomNotify("Reloading 50 Player BINGO! (BINGO)...", Color3.fromRGB(90, 175, 255), 2)
         task.spawn(function()
             if type(env.ToxBINGOCleanup) == "function" then
                 pcall(env.ToxBINGOCleanup)
@@ -1286,7 +1286,7 @@ do
                 chunk()
             end)
             if not ok then
-                CustomNotify("Falha ao recarregar (BINGO): " .. tostring(err), Color3.fromRGB(255, 95, 95), 4)
+                CustomNotify("Failed to reload (BINGO): " .. tostring(err), Color3.fromRGB(255, 95, 95), 4)
             end
         end)
     end)

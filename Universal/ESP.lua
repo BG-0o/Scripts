@@ -132,13 +132,6 @@ local function HidePlayerDrawings(p)
             grp.Box.Position = Vector2.new(-10000, -10000)
         end)
     end
-    if grp.HeadDot then
-        pcall(function()
-            grp.HeadDot.Visible = false
-            grp.HeadDot.Transparency = 0
-            grp.HeadDot.Position = Vector2.new(-10000, -10000)
-        end)
-    end
     if grp.Skeleton and typeof(grp.Skeleton) == "table" then
         for _, line in pairs(grp.Skeleton) do
             pcall(function()
@@ -978,7 +971,6 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
         or Settings.ESPDistance
         or Settings.ESPTracers
         or Settings.ESPBox
-        or Settings.ESPHeadDot
         or Settings.ESPSkeleton
         or effectiveChams
     )
@@ -1107,7 +1099,7 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
                         end
 
                         if Settings.ESPDistance then
-                            table.insert(lines, "Dist: " .. math.floor(distFromMe) .. "m")
+                            table.insert(lines, math.floor(distFromMe) .. "m")
                         end
 
                         if label then
@@ -1120,21 +1112,19 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
                         ESPLabels[p] = nil
                     end
 
-                    local hasDrawingESP = Drawing and (Settings.ESPTracers or Settings.ESPBox or Settings.ESPHeadDot or Settings.ESPSkeleton)
+                    local hasDrawingESP = Drawing and (Settings.ESPTracers or Settings.ESPBox or Settings.ESPSkeleton)
                     if hasDrawingESP then
                         local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
 
                         if not ESPDrawings[p] then
                             ESPDrawings[p] = {
                                 Line = CreateTrackedDrawing("Line"),
-                                Box = CreateTrackedDrawing("Square"),
-                                HeadDot = CreateTrackedDrawing("Circle")
+                                Box = CreateTrackedDrawing("Square")
                             }
                         end
 
                         local lineDraw = ESPDrawings[p].Line
                         local boxDraw = ESPDrawings[p].Box
-                        local headDraw = ESPDrawings[p].HeadDot
 
                         if onScreen and pos.Z > 1 then
                             if Settings.ESPTracers and lineDraw then
@@ -1170,30 +1160,6 @@ espConnection = RunService.RenderStepped:Connect(function(delta)
                             elseif boxDraw then
                                 boxDraw.Visible = false
                                 boxDraw.Position = Vector2.new(-10000, -10000)
-                            end
-
-                            if Settings.ESPHeadDot and headDraw then
-                                local head = char:FindFirstChild("Head")
-                                if head then
-                                    local hp, hon = Camera:WorldToViewportPoint(head.Position)
-                                    if hon and hp.Z > 1 then
-                                        headDraw.Position = Vector2.new(hp.X, hp.Y)
-                                        headDraw.Radius = isCurrentTarget and 6 or 4
-                                        headDraw.Filled = true
-                                        headDraw.Color = espColor
-                                        headDraw.Transparency = 1
-                                        headDraw.Visible = true
-                                    else
-                                        headDraw.Visible = false
-                                        headDraw.Position = Vector2.new(-10000, -10000)
-                                    end
-                                else
-                                    headDraw.Visible = false
-                                    headDraw.Position = Vector2.new(-10000, -10000)
-                                end
-                            elseif headDraw then
-                                headDraw.Visible = false
-                                headDraw.Position = Vector2.new(-10000, -10000)
                             end
 
                             if Settings.ESPSkeleton then

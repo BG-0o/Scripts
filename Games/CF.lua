@@ -556,7 +556,7 @@ do
         end)
     end
 
-    MakeSection("Farming & Ovos", "🐔")
+    MakeSection("Farming & Eggs", "🐔")
     CreateToggle("Auto Farm (CF)", GamePage, Settings.CFAutoFarm, function(v)
         local state = v == true
         Settings.CFAutoFarm = state
@@ -583,28 +583,28 @@ do
         Settings.CFAutoCash = v == true
     end, "CFAutoCash")
 
-    CreateButton("Depositar Ovos Agora", GamePage, function()
+    CreateButton("Deposit Eggs Now", GamePage, function()
         DepositEggs(false)
-        CustomNotify("Ovos depositados!", Color3.fromRGB(90, 235, 130), 2)
+        CustomNotify("Eggs deposited!", Color3.fromRGB(90, 235, 130), 2)
     end)
 
-    CreateButton("Coletar Cash Agora", GamePage, function()
+    CreateButton("Collect Cash Now", GamePage, function()
         local net = GetCFNetwork()
         if net then
             pcall(function()
                 net.InvokeServer("Collect Cash")
             end)
-            CustomNotify("Cash coletado!", Color3.fromRGB(90, 235, 130), 2)
+            CustomNotify("Cash collected!", Color3.fromRGB(90, 235, 130), 2)
         end
     end)
 
-    MakeSection("Galinhas & Upgrades", "🛒")
+    MakeSection("Chickens & Upgrades", "🛒")
     CreateToggle("Auto Merge Chickens", GamePage, Settings.CFAutoMerge, function(v)
         Settings.CFAutoMerge = v == true
     end, "CFAutoMerge")
 
     if type(CreateDropdown) == "function" then
-        CreateDropdown("Quantidade de Galinhas", {"1", "5", "25", "100"}, GamePage, Settings.CFBuyAmount, function(opt)
+        CreateDropdown("Chicken Amount", {"1", "5", "25", "100"}, GamePage, Settings.CFBuyAmount, function(opt)
             Settings.CFBuyAmount = tostring(opt)
         end)
     end
@@ -613,14 +613,14 @@ do
         Settings.CFAutoBuyChickens = v == true
     end, "CFAutoBuyChickens")
 
-    CreateButton("Comprar Galinhas Agora", GamePage, function()
+    CreateButton("Buy Chickens Now", GamePage, function()
         local net = GetCFNetwork()
         if net then
             local amt = tonumber(Settings.CFBuyAmount) or 1
             pcall(function()
                 net.InvokeServer("Buy Chickens", amt)
             end)
-            CustomNotify("Compra enviada (" .. tostring(amt) .. "x)", Color3.fromRGB(90, 235, 130), 2)
+            CustomNotify("Purchase sent (" .. tostring(amt) .. "x)", Color3.fromRGB(90, 235, 130), 2)
         end
     end)
 
@@ -632,13 +632,13 @@ do
         Settings.CFAutoUpgradeTier = v == true
     end, "CFAutoUpgradeTier")
 
-    CreateButton("Resgatar Group Reward", GamePage, function()
+    CreateButton("Claim Group Reward", GamePage, function()
         local net = GetCFNetwork()
         if net then
             pcall(function()
                 net.InvokeServer("Claim Group Reward")
             end)
-            CustomNotify("Tentativa de Group Reward enviada!", Color3.fromRGB(90, 235, 130), 2)
+            CustomNotify("Group Reward attempt sent!", Color3.fromRGB(90, 235, 130), 2)
         end
     end)
 
@@ -699,25 +699,25 @@ do
 
     local communityExecuted = false
     MakeSection("Community Hub & Extras", "🧰")
-    CreateButton("Executar Community Hub (CF)", GamePage, function()
+    CreateButton("Run Community Hub (CF)", GamePage, function()
         if communityExecuted then
-            CustomNotify("Community Hub (CF) ja esta ativo nesta sessao.", Color3.fromRGB(255, 200, 80), 3)
+            CustomNotify("Community Hub (CF) is already active in this session.", Color3.fromRGB(255, 200, 80), 3)
             return
         end
         communityExecuted = true
-        CustomNotify("Iniciando Community Hub (CF)...", Color3.fromRGB(110, 185, 255), 3)
+        CustomNotify("Starting Community Hub (CF)...", Color3.fromRGB(110, 185, 255), 3)
         task.spawn(function()
             local ok, err = pcall(RunCFCommunityScript)
             if not ok then
                 communityExecuted = false
-                CustomNotify("Erro Community Hub (CF): " .. tostring(err), Color3.fromRGB(255, 95, 95), 5)
+                CustomNotify("Community Hub error (CF): " .. tostring(err), Color3.fromRGB(255, 95, 95), 5)
                 warn("[ToxHub CF Community Error]: " .. tostring(err))
             end
         end)
     end)
 
-    CreateButton("Recarregar Modulo (CF)", GamePage, function()
-        CustomNotify("Recarregando Chicken Farm (CF)...", Color3.fromRGB(90, 175, 255), 2)
+    CreateButton("Reload Module (CF)", GamePage, function()
+        CustomNotify("Reloading Chicken Farm (CF)...", Color3.fromRGB(90, 175, 255), 2)
         task.spawn(function()
             if type(env.ToxCFCleanup) == "function" then
                 pcall(env.ToxCFCleanup)
@@ -732,7 +732,7 @@ do
                 chunk()
             end)
             if not ok then
-                CustomNotify("Falha ao recarregar (CF): " .. tostring(err), Color3.fromRGB(255, 95, 95), 4)
+                CustomNotify("Failed to reload (CF): " .. tostring(err), Color3.fromRGB(255, 95, 95), 4)
             end
         end)
     end)

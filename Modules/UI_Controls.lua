@@ -5,6 +5,31 @@ env.ToxUI = UI
 
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local function AttachChoiceArrow(button)
+    local padding = Instance.new("UIPadding")
+    padding.PaddingLeft = UDim.new(0, 6)
+    padding.PaddingRight = UDim.new(0, 14)
+    padding.Parent = button
+    local arrow = Instance.new("TextLabel")
+    arrow.Name = "ChoiceArrow"
+    arrow.AnchorPoint = Vector2.new(1, 0.5)
+    arrow.Position = UDim2.new(1, 11, 0.5, 0)
+    arrow.Size = UDim2.fromOffset(8, 8)
+    arrow.BackgroundTransparency = 1
+    arrow.Text = "▼"
+    arrow.TextSize = 7
+    arrow.Font = Enum.Font.GothamBold
+    arrow.TextColor3 = button.TextColor3
+    arrow.TextTransparency = 0.25
+    arrow.Parent = button
+    button:GetPropertyChangedSignal("TextColor3"):Connect(function()
+        arrow.TextColor3 = button.TextColor3
+    end)
+    return function(open)
+        TweenService:Create(arrow, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = open and 180 or 0 }):Play()
+    end
+end
+getgenv().ToxAttachChoiceArrow = AttachChoiceArrow
 local Settings = env.Settings or {}
 local Theme = env.Theme or UI.Theme or {}
 local RegisteredToggles = env.RegisteredToggles or UI.RegisteredToggles or {}
@@ -1261,25 +1286,28 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
     ChoiceBtn.Position = UDim2.new(1, -154, 0.5, -11)
     ChoiceBtn.BackgroundColor3 = Color3.fromRGB(12, 17, 26)
     ChoiceBtn.BorderSizePixel = 0
-    ChoiceBtn.Text = tostring(initialChoice) .. " v"
+    ChoiceBtn.Text = tostring(initialChoice)
     ChoiceBtn.TextColor3 = Enabled and Theme.Accent or Theme.Text
     ChoiceBtn.Font = Enum.Font.GothamBold
     ChoiceBtn.TextSize = 11
     ChoiceBtn.TextTruncate = Enum.TextTruncate.AtEnd
     ChoiceBtn.Parent = Container
+    local SetChoiceArrow = AttachChoiceArrow(ChoiceBtn)
     local cbCorner = Instance.new("UICorner") cbCorner.CornerRadius = UDim.new(0, 6) cbCorner.Parent = ChoiceBtn
     local cbStroke = Instance.new("UIStroke") cbStroke.Color = Enabled and Theme.Accent or Theme.Outline cbStroke.Thickness = 1 cbStroke.Transparency = 0.5 cbStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border cbStroke.Parent = ChoiceBtn
     ChoiceBtn.MouseButton1Click:Connect(function()
         if getgenv().Destroyed then return end
         if getgenv().ShowToxDropdownOverlay then
-            ChoiceBtn.Text = tostring(initialChoice) .. " ^"
+            SetChoiceArrow(true)
             getgenv().ShowToxDropdownOverlay(ChoiceBtn, Options, initialChoice, function(opt)
                 initialChoice = opt
-                ChoiceBtn.Text = tostring(opt) .. " v"
+                ChoiceBtn.Text = tostring(opt)
+                SetChoiceArrow(false)
                 if CallbackChoice then CallbackChoice(opt) end
                 AutoSaveConfiguration()
             end, function()
-                ChoiceBtn.Text = tostring(initialChoice) .. " v"
+                ChoiceBtn.Text = tostring(initialChoice)
+                SetChoiceArrow(false)
             end)
         end
     end)
@@ -1339,7 +1367,7 @@ getgenv().CreateToggleWithChoice = function(Name, Page, Options, DefaultToggle, 
         end,
         SetValue = function(Value)
             initialChoice = Value
-            ChoiceBtn.Text = tostring(Value) .. " v"
+            ChoiceBtn.Text = tostring(Value)
         end
     }
     RegisterSharedToggle(SyncKey, Controller)
@@ -1610,12 +1638,13 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback
     Button.Position = UDim2.new(1, -134, 0.5, -12)
     Button.BackgroundColor3 = Color3.fromRGB(12, 17, 26)
     Button.BorderSizePixel = 0
-    Button.Text = tostring(DefaultOption) .. "  v"
+    Button.Text = tostring(DefaultOption)
     Button.TextColor3 = Theme.Accent
     Button.TextSize = 11
     Button.Font = Enum.Font.GothamBold
     Button.TextTruncate = Enum.TextTruncate.AtEnd
     Button.Parent = TopRow
+    local SetDropdownArrow = AttachChoiceArrow(Button)
     local btnCorner = Instance.new("UICorner") btnCorner.CornerRadius = UDim.new(0, 6) btnCorner.Parent = Button
     local btnStroke = Instance.new("UIStroke") btnStroke.Color = Theme.Outline btnStroke.Thickness = 1 btnStroke.Transparency = 0.5 btnStroke.Parent = Button
     RegisterThemedObject(Button, "TextColor3", "Accent")
@@ -1623,14 +1652,16 @@ getgenv().CreateDropdown = function(Name, Options, Page, DefaultOption, Callback
     Button.MouseButton1Click:Connect(function()
         if getgenv().Destroyed then return end
         if getgenv().ShowToxDropdownOverlay then
-            Button.Text = tostring(SelectedOption) .. "  ^"
+            SetDropdownArrow(true)
             getgenv().ShowToxDropdownOverlay(Button, Options, SelectedOption, function(opt)
                 SelectedOption = opt
-                Button.Text = tostring(opt) .. "  v"
+                Button.Text = tostring(opt)
+                SetDropdownArrow(false)
                 if Callback then Callback(opt) end
                 AutoSaveConfiguration()
             end, function()
-                Button.Text = tostring(SelectedOption) .. "  v"
+                Button.Text = tostring(SelectedOption)
+                SetDropdownArrow(false)
             end)
         end
     end)

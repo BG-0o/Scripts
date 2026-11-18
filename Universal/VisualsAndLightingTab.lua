@@ -186,9 +186,6 @@ end)
 CreateToggle("2D Box ESP", VisualsPage, Settings.ESPBox, function(v)
     Settings.ESPBox = v
 end)
-CreateToggle("Head Dot ESP", VisualsPage, Settings.ESPHeadDot, function(v)
-    Settings.ESPHeadDot = v
-end)
 CreateToggle("Skeleton ESP", VisualsPage, Settings.ESPSkeleton, function(v)
     Settings.ESPSkeleton = v == true
     if not v then

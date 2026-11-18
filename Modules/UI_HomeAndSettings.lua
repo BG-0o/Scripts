@@ -30,7 +30,7 @@ local function InitializeHomePage()
     local targetPage = (getgenv and getgenv().HomePage) or HomePage
     if not targetPage then return end
     local plr = (Players and Players.LocalPlayer) or Player or (game:GetService("Players").LocalPlayer)
-    local profileCard = CreateCard(targetPage, "Perfil do Usuário", "👤", 0, "Home_Profile")
+    local profileCard = CreateCard(targetPage, "User Profile", "👤", 0, "Home_Profile")
     local bannerFrame = Instance.new("Frame")
     bannerFrame.Size = UDim2.new(1, -4, 0, 72)
     bannerFrame.BackgroundColor3 = Theme.Element
@@ -54,7 +54,7 @@ local function InitializeHomePage()
     welcomeLbl.Size = UDim2.new(1, -78, 0, 20)
     welcomeLbl.Position = UDim2.new(0, 72, 0, 12)
     welcomeLbl.BackgroundTransparency = 1
-    welcomeLbl.Text = "Bem-vindo, " .. tostring(plr and (plr.DisplayName or plr.Name) or "Player") .. " (@" .. tostring(plr and plr.Name or "Player") .. ")"
+    welcomeLbl.Text = "Welcome, " .. tostring(plr and (plr.DisplayName or plr.Name) or "Player") .. " (@" .. tostring(plr and plr.Name or "Player") .. ")"
     welcomeLbl.TextColor3 = Theme.Text
     welcomeLbl.TextSize = 13
     welcomeLbl.Font = Enum.Font.GothamBold
@@ -66,7 +66,7 @@ local function InitializeHomePage()
     subLbl.Size = UDim2.new(1, -78, 0, 18)
     subLbl.Position = UDim2.new(0, 72, 0, 36)
     subLbl.BackgroundTransparency = 1
-    subLbl.Text = "ToxHub 1.0.0 • Lifetime"
+    subLbl.Text = "ToxHub " .. (getgenv().ToxHubVersion or "v2.0") .. " • Lifetime"
     subLbl.TextColor3 = Theme.Accent
     subLbl.TextSize = 11
     subLbl.Font = Enum.Font.GothamMedium
@@ -76,17 +76,17 @@ local function InitializeHomePage()
     RegisterThemedObject(subLbl, "TextColor3", "Accent")
     local supportCard = CreateCard(targetPage, "Loja & Loader", "🛒", 7, "Home_Support")
     ActivePageCards[targetPage] = supportCard
-    CreateButton("Comprar Robux com R$ (BRL)", targetPage, function()
+    CreateButton("Buy Robux with R$ (BRL)", targetPage, function()
         if setclipboard then
             setclipboard("https://discord.gg/A7tZ9VbVvM")
         end
-        CustomNotify("Link copiado! Acesse o Discord no canal #robux para comprar via PIX/BRL.", Color3.fromRGB(0, 230, 120), 6)
+        CustomNotify("Link copied! Open the #robux channel on Discord to buy with PIX/BRL.", Color3.fromRGB(0, 230, 120), 6)
     end)
-    CreateButton("Copiar Loader Oficial (ToxHub)", targetPage, function()
+    CreateButton("Copy Official Loader (ToxHub)", targetPage, function()
         if setclipboard then
             setclipboard('loadstring(game:HttpGet("https://raw.githubusercontent.com/BG-0o/Scripts/refs/heads/main/ToxHub.lua"))()')
         end
-        CustomNotify("Loader do ToxHub copiado para a área de transferência!", Color3.fromRGB(0, 168, 255), 5)
+        CustomNotify("ToxHub loader copied to clipboard!", Color3.fromRGB(0, 168, 255), 5)
     end)
     ActivePageCards[targetPage] = nil
 end
@@ -704,12 +704,13 @@ local function AddSettingsDropdown(parent, name, options, defaultOption, callbac
     btn.Position = UDim2.new(1, -118, 0.5, -12)
     btn.BackgroundColor3 = Theme.Panel
     btn.BorderSizePixel = 0
-    btn.Text = tostring(defaultOption) .. "  v"
+    btn.Text = tostring(defaultOption)
     btn.TextColor3 = Theme.Accent
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 11
     btn.TextTruncate = Enum.TextTruncate.AtEnd
     btn.Parent = row
+    local setArrow = getgenv().ToxAttachChoiceArrow and getgenv().ToxAttachChoiceArrow(btn) or function() end
     local bc = Instance.new("UICorner") bc.CornerRadius = UDim.new(0, 4) bc.Parent = btn
     local bs = Instance.new("UIStroke") bs.Color = Theme.Outline bs.Thickness = 1 bs.Parent = btn
     RegisterThemedObject(btn, "BackgroundColor3", "Panel")
@@ -718,14 +719,16 @@ local function AddSettingsDropdown(parent, name, options, defaultOption, callbac
     local currentOpt = defaultOption
     btn.MouseButton1Click:Connect(function()
         if getgenv().ShowToxDropdownOverlay then
-            btn.Text = tostring(currentOpt) .. "  ^"
+            setArrow(true)
             getgenv().ShowToxDropdownOverlay(btn, options, currentOpt, function(opt)
                 currentOpt = opt
-                btn.Text = tostring(opt) .. "  v"
+                btn.Text = tostring(opt)
+                setArrow(false)
                 if callback then callback(opt) end
                 if getgenv().AutoSaveConfiguration then getgenv().AutoSaveConfiguration() end
             end, function()
-                btn.Text = tostring(currentOpt) .. "  v"
+                btn.Text = tostring(currentOpt)
+                setArrow(false)
             end)
         end
     end)
@@ -1149,7 +1152,7 @@ task.spawn(function()
         local maxP = Players.MaxPlayers
         UpdatePlayersPill(tostring(pCount) .. " / " .. tostring(maxP))
         if WatermarkFrame and WatermarkFrame.Visible and WatermarkLabel then
-            WatermarkLabel.Text = "<b>ToxHub</b> v2.0  |  FPS: " .. tostring(currentFps) .. "  |  Ping: " .. tostring(pingVal) .. "ms"
+            WatermarkLabel.Text = "<b>ToxHub</b> " .. (getgenv().ToxHubVersion or "v2.0") .. "  |  FPS: " .. tostring(currentFps) .. "  |  Ping: " .. tostring(pingVal) .. "ms"
         end
         pcall(function()
             if UpdatePlayersStat then
