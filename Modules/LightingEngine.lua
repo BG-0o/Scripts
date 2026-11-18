@@ -935,6 +935,17 @@ if type(env.ToxLightingCleanup) == "function" then
     pcall(env.ToxLightingCleanup)
 end
 local LightingService = game:GetService("Lighting")
+for _, container in ipairs({ workspace.CurrentCamera, workspace }) do
+    if container then
+        for _, child in ipairs(container:GetChildren()) do
+            if child.Name == "ToxMirrorReflections" then
+                pcall(function()
+                    child:Destroy()
+                end)
+            end
+        end
+    end
+end
 local LightingSettings = env.Settings or {}
 local ToxLighting = {}
 local ToxLightingState = {
