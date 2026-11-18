@@ -1191,17 +1191,17 @@ local function UpdateHealthESP()
 
                     billboard = Instance.new("BillboardGui")
                     billboard.Name = "ToxESPHealth"
-                    billboard.Adornee = head or root
+                    billboard.Adornee = root
                     billboard.AlwaysOnTop = true
-                    billboard.Size = UDim2.fromOffset(320, 60)
-                    billboard.StudsOffset = Vector3.new(0, 3.2, 0)
+                    billboard.Size = UDim2.fromOffset(80, 10)
+                    billboard.StudsOffset = Vector3.new(0, -3.6, 0)
                     billboard.MaxDistance = maxDistance > 0 and maxDistance or 100000
                     billboard.Parent = character
 
                     local back = Instance.new("Frame")
                     back.Name = "HealthBack"
-                    back.AnchorPoint = Vector2.new(0.5, 1)
-                    back.Position = UDim2.new(0.5, 0, 1, -1)
+                    back.AnchorPoint = Vector2.new(0.5, 0.5)
+                    back.Position = UDim2.fromScale(0.5, 0.5)
                     back.Size = UDim2.fromOffset(72, 6)
                     back.BackgroundColor3 = Color3.fromRGB(10, 10, 14)
                     back.BackgroundTransparency = 0.25
@@ -2651,6 +2651,32 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             end
         end
 
+        if type(controller.SetMirrorReflections) == "function" then
+            CreateToggle(
+                "Mirror Reflections",
+                page,
+                Settings.LightingMirror == true,
+                function(value)
+                    controller.SetMirrorReflections(value)
+                end,
+                "LightingMirror"
+            )
+            CreateVisualNumberOption(
+                "Mirror Strength",
+                page,
+                Settings.LightingMirrorStrength or 45,
+                0,
+                100,
+                function(value)
+                    Settings.LightingMirrorStrength = value
+                    controller.RefreshMirrorReflections()
+                end
+            )
+            if Settings.LightingMirror then
+                task.defer(controller.SetMirrorReflections, true)
+            end
+        end
+
         CreateToggle(
             "Adjust Lighting",
             page,
@@ -3441,6 +3467,8 @@ local mergedFeaturesOk, mergedFeaturesError = pcall(function()
             MoveBefore(lightingSection, "Shader Preset", "Adjust Lighting")
             MoveAfter(lightingSection, "Floor Reflections", "Shader Preset")
             MoveAfter(lightingSection, "Floor Reflection Amount", "Floor Reflections")
+            MoveAfter(lightingSection, "Mirror Reflections", "Floor Reflection Amount")
+            MoveAfter(lightingSection, "Mirror Strength", "Mirror Reflections")
             MoveAfter(lightingSection, "Get Technology", "Fullbright")
             MoveAfter(lightingSection, "Technology", "Get Technology")
             MoveAfter(lightingSection, "Ambient", "Technology")

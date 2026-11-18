@@ -1677,6 +1677,9 @@ local function ToxPresetRestore()
     if type(ToxLighting.SetFloorOverride) == "function" then
         ToxLighting.SetFloorOverride(nil)
     end
+    if type(ToxLighting.SetMirrorOverride) == "function" then
+        ToxLighting.SetMirrorOverride(nil)
+    end
 end
 local function ToxPresetClearForSwitch()
     ToxPresetDisconnect()
@@ -1861,6 +1864,9 @@ function ToxLighting.ApplyPreset(name, instant)
     if type(ToxLighting.SetFloorOverride) == "function" then
         ToxLighting.SetFloorOverride(preset.Reflect)
     end
+    if type(ToxLighting.SetMirrorOverride) == "function" then
+        ToxLighting.SetMirrorOverride(preset.Reflect and (0.2 + preset.Reflect) or nil)
+    end
     table.insert(ToxPresetState.Connections, LightingService.ChildAdded:Connect(function(object)
         task.defer(function()
             if ToxPresetState.Active then
@@ -1987,8 +1993,241 @@ end
 function ToxLighting.RefreshFloorReflections()
     ToxFloorSync()
 end
+local RunService = game:GetService("RunService")
+local ToxMirrorState = {
+    Folder = nil,
+    Rigs = {},
+    Floors = setmetatable({}, { __mode = "k" }),
+    Connection = nil,
+    Override = nil,
+    RayClock = 0,
+}
+local ToxMirrorFlip = CFrame.Angles(0, 0, math.pi)
+local ToxMirrorKeep = { SpecialMesh = true, Decal = true, Texture = true, SurfaceAppearance = true, BlockMesh = true, CylinderMesh = true }
+local function ToxMirrorStrength()
+    local amount = 0
+    if LightingSettings.LightingMirror then
+        amount = math.clamp(tonumber(LightingSettings.LightingMirrorStrength) or 45, 0, 100) / 100
+    end
+    if ToxMirrorState.Override then
+        amount = math.max(amount, ToxMirrorState.Override)
+    end
+    return amount
+end
+local function ToxMirrorActive()
+    return LightingSettings.LightingMirror == true or ToxMirrorState.Override ~= nil
+end
+local function ToxMirrorFolder()
+    local camera = workspace.CurrentCamera
+    if not ToxMirrorState.Folder or not ToxMirrorState.Folder.Parent then
+        local folder = Instance.new("Folder")
+        folder.Name = "ToxMirrorReflections"
+        folder.Parent = camera
+        ToxMirrorState.Folder = folder
+    elseif ToxMirrorState.Folder.Parent ~= camera and camera then
+        ToxMirrorState.Folder.Parent = camera
+    end
+    return ToxMirrorState.Folder
+end
+local function ToxMirrorDropRig(character)
+    local rig = ToxMirrorState.Rigs[character]
+    ToxMirrorState.Rigs[character] = nil
+    if rig then
+        if rig.Watch then
+            pcall(function()
+                rig.Watch:Disconnect()
+            end)
+        end
+        for _, clone in pairs(rig.Parts) do
+            pcall(function()
+                clone:Destroy()
+            end)
+        end
+    end
+end
+local function ToxMirrorClonePart(source)
+    local ok, clone = pcall(function()
+        local archivable = source.Archivable
+        source.Archivable = true
+        local copy = source:Clone()
+        source.Archivable = archivable
+        return copy
+    end)
+    if not ok or not clone then
+        return nil
+    end
+    for _, child in ipairs(clone:GetChildren()) do
+        if not ToxMirrorKeep[child.ClassName] then
+            child:Destroy()
+        end
+    end
+    clone.Name = "ToxMirrorPart"
+    clone.Anchored = true
+    clone.CanCollide = false
+    clone.CanQuery = false
+    clone.CanTouch = false
+    clone.CastShadow = false
+    clone.Parent = ToxMirrorFolder()
+    return clone
+end
+local function ToxMirrorBuildRig(character)
+    local rig = { Parts = {}, FloorY = nil, FloorPart = nil }
+    for _, object in ipairs(character:GetDescendants()) do
+        if object:IsA("BasePart") and object.Name ~= "HumanoidRootPart" and object.Transparency < 1 then
+            local clone = ToxMirrorClonePart(object)
+            if clone then
+                rig.Parts[object] = clone
+            end
+        end
+    end
+    rig.Watch = character.DescendantAdded:Connect(function(object)
+        if object:IsA("BasePart") then
+            rig.Dirty = true
+        end
+    end)
+    ToxMirrorState.Rigs[character] = rig
+    return rig
+end
+local ToxMirrorRayParams = RaycastParams.new()
+ToxMirrorRayParams.FilterType = Enum.RaycastFilterType.Exclude
+local function ToxMirrorFindFloor(root, exclude)
+    ToxMirrorRayParams.FilterDescendantsInstances = exclude
+    local hit = workspace:Raycast(root.Position, Vector3.new(0, -14, 0), ToxMirrorRayParams)
+    if not hit or not hit.Instance or hit.Instance:IsA("Terrain") then
+        return nil, nil
+    end
+    if hit.Normal.Y < 0.9 then
+        return nil, nil
+    end
+    return hit.Position.Y, hit.Instance
+end
+local function ToxMirrorSetFloor(part, strength)
+    if not part or not part:IsA("BasePart") then
+        return
+    end
+    if ToxMirrorState.Floors[part] == nil then
+        ToxMirrorState.Floors[part] = part.Transparency
+    end
+    local original = ToxMirrorState.Floors[part]
+    pcall(function()
+        part.Transparency = math.max(original, strength)
+    end)
+end
+local function ToxMirrorRestoreFloors()
+    for part, original in pairs(ToxMirrorState.Floors) do
+        if part and part.Parent then
+            pcall(function()
+                part.Transparency = original
+            end)
+        end
+        ToxMirrorState.Floors[part] = nil
+    end
+end
+local function ToxMirrorStep(delta)
+    local strength = ToxMirrorStrength()
+    local camera = workspace.CurrentCamera
+    if strength <= 0 or not camera then
+        return
+    end
+    local players = game:GetService("Players")
+    local alive = {}
+    local exclude = { ToxMirrorFolder() }
+    for _, player in ipairs(players:GetPlayers()) do
+        if player.Character then
+            table.insert(exclude, player.Character)
+        end
+    end
+    ToxMirrorState.RayClock += delta
+    local refreshFloors = ToxMirrorState.RayClock >= 0.15
+    if refreshFloors then
+        ToxMirrorState.RayClock = 0
+    end
+    local cameraPos = camera.CFrame.Position
+    for _, player in ipairs(players:GetPlayers()) do
+        local character = player.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        if root and humanoid and humanoid.Health > 0 and (root.Position - cameraPos).Magnitude < 220 then
+            alive[character] = true
+            local rig = ToxMirrorState.Rigs[character]
+            if rig and rig.Dirty then
+                ToxMirrorDropRig(character)
+                rig = nil
+            end
+            rig = rig or ToxMirrorBuildRig(character)
+            if refreshFloors or not rig.FloorY then
+                local floorY, floorPart = ToxMirrorFindFloor(root, exclude)
+                rig.FloorY, rig.FloorPart = floorY, floorPart
+                if floorPart then
+                    ToxMirrorSetFloor(floorPart, strength)
+                end
+            end
+            local floorY = rig.FloorY
+            local height = floorY and (root.Position.Y - floorY) or math.huge
+            local fade = math.clamp((height - 3) / 9, 0, 1)
+            for source, clone in pairs(rig.Parts) do
+                if source.Parent and floorY and fade < 1 then
+                    local cf = source.CFrame
+                    local p = cf.Position
+                    clone.CFrame = CFrame.new(p.X, 2 * floorY - p.Y, p.Z) * ToxMirrorFlip * cf.Rotation
+                    local base = math.max(source.Transparency, source.LocalTransparencyModifier)
+                    clone.Transparency = math.max(base, 0.15 + fade * 0.85)
+                else
+                    clone.Transparency = 1
+                end
+            end
+        end
+    end
+    for character in pairs(ToxMirrorState.Rigs) do
+        if not alive[character] then
+            ToxMirrorDropRig(character)
+        end
+    end
+end
+local function ToxMirrorSync()
+    if ToxMirrorActive() then
+        if not ToxMirrorState.Connection then
+            ToxMirrorState.Connection = RunService.RenderStepped:Connect(function(delta)
+                pcall(ToxMirrorStep, delta)
+            end)
+        end
+        local strength = ToxMirrorStrength()
+        for part in pairs(ToxMirrorState.Floors) do
+            ToxMirrorSetFloor(part, strength)
+        end
+        return
+    end
+    if ToxMirrorState.Connection then
+        pcall(function()
+            ToxMirrorState.Connection:Disconnect()
+        end)
+        ToxMirrorState.Connection = nil
+    end
+    for character in pairs(ToxMirrorState.Rigs) do
+        ToxMirrorDropRig(character)
+    end
+    if ToxMirrorState.Folder then
+        pcall(function()
+            ToxMirrorState.Folder:Destroy()
+        end)
+        ToxMirrorState.Folder = nil
+    end
+    ToxMirrorRestoreFloors()
+end
+function ToxLighting.SetMirrorReflections(enabled)
+    LightingSettings.LightingMirror = enabled == true
+    ToxMirrorSync()
+end
+function ToxLighting.SetMirrorOverride(amount)
+    ToxMirrorState.Override = tonumber(amount)
+    ToxMirrorSync()
+end
+function ToxLighting.RefreshMirrorReflections()
+    ToxMirrorSync()
+end
 function ToxLighting.Reset(syncVisuals)
     ToxLighting.ApplyPreset("Off")
+    ToxLighting.SetMirrorReflections(false)
     ToxLighting.SetFloorReflections(false)
     ToxLighting.SetFixShadows(false)
     ToxLighting.SetAdjust(false)
@@ -2028,6 +2267,7 @@ function ToxLighting.Reset(syncVisuals)
             "LightingRemoveGrading",
             "LightingGlobalShadows",
             "LightingFloorReflect",
+            "LightingMirror",
             "Fullbright"
         }) do
             pcall(env.SyncToggleVisuals, key, false)
