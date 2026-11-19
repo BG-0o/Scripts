@@ -35,42 +35,36 @@ local Seasons = {
     Halloween = {
         Kind = "emoji", Pile = false, Direction = 1,
         Emojis = { "🍂", "🍂", "🍁", "🦇", "👻" },
-        Bulbs = { rgb(249, 115, 22), rgb(168, 85, 247), rgb(132, 204, 22) },
         Corner = "🎃",
         Extra = "Spider",
     },
     Easter = {
         Kind = "emoji", Pile = false, Direction = 1,
         Emojis = { "🌸", "🌸", "🌼", "🥚" },
-        Bulbs = { rgb(249, 168, 212), rgb(196, 181, 253), rgb(253, 230, 138), rgb(167, 243, 208) },
         Corner = "🥚",
         Extra = "Bunny",
     },
     ["New Year"] = {
         Kind = "confetti", Pile = true, Direction = 1,
         Colors = { rgb(250, 204, 21), rgb(229, 231, 235), rgb(253, 224, 71), rgb(245, 158, 11) },
-        Bulbs = { rgb(250, 204, 21), rgb(229, 231, 235) },
         Corner = "🎆",
         Extra = "Sparkles",
     },
     ["St. Patrick's"] = {
         Kind = "emoji", Pile = false, Direction = 1,
         Emojis = { "🍀", "🍀", "☘️", "💰" },
-        Bulbs = nil,
         Corner = "🍀",
         Extra = "Rainbow",
     },
     ["Valentine's"] = {
         Kind = "emoji", Pile = false, Direction = -1,
         Emojis = { "❤️", "💕", "💖", "💘" },
-        Bulbs = { rgb(244, 63, 94), rgb(249, 168, 212), rgb(255, 255, 255) },
         Corner = "💘",
         Extra = nil,
     },
     Carnaval = {
         Kind = "confetti", Pile = true, Direction = 1,
         Colors = { rgb(236, 72, 153), rgb(250, 204, 21), rgb(34, 197, 94), rgb(59, 130, 246), rgb(168, 85, 247) },
-        Bulbs = { rgb(236, 72, 153), rgb(250, 204, 21), rgb(34, 197, 94), rgb(59, 130, 246), rgb(168, 85, 247) },
         Corner = "🎭",
         Extra = nil,
     },
@@ -328,17 +322,17 @@ local function BuildDecor()
         local wire = Instance.new("Frame")
         wire.BorderSizePixel = 0
         wire.BackgroundColor3 = rgb(30, 30, 30)
-        wire.BackgroundTransparency = 0.2
+        wire.BackgroundTransparency = 0.6
         wire.Size = UDim2.new(1, -40, 0, 1)
         wire.Position = UDim2.new(0, 20, 0, -1)
         wire.ZIndex = 1001
         wire.Parent = DecorFolder
         Decor.Bulbs = {}
-        local count = 22
+        local count = 12
         for i = 1, count do
             local bulb = Instance.new("Frame")
             bulb.BorderSizePixel = 0
-            bulb.Size = UDim2.fromOffset(6, 8)
+            bulb.Size = UDim2.fromOffset(4, 6)
             bulb.AnchorPoint = Vector2.new(0.5, 0)
             bulb.Position = UDim2.new((i - 0.5) / count, 0, 0, (i % 2 == 0) and 2 or 0)
             bulb.BackgroundColor3 = season.Bulbs[(i - 1) % #season.Bulbs + 1]
@@ -348,7 +342,7 @@ local function BuildDecor()
             c.Parent = bulb
             local glow = Instance.new("UIStroke")
             glow.Color = bulb.BackgroundColor3
-            glow.Thickness = 2
+            glow.Thickness = 1
             glow.Transparency = 0.5
             glow.Parent = bulb
             bulb.Parent = wire
@@ -411,9 +405,9 @@ local function AnimateDecor(t)
     end
     if Decor.Bulbs then
         for _, b in ipairs(Decor.Bulbs) do
-            local on = math.sin(t * 3 + b.Offset * 1.7) > -0.2
-            b.Frame.BackgroundTransparency = on and 0 or 0.65
-            b.Glow.Transparency = on and 0.35 or 0.9
+            local on = math.sin(t * 1.2 + b.Offset * 1.7) > -0.2
+            b.Frame.BackgroundTransparency = on and 0.15 or 0.55
+            b.Glow.Transparency = on and 0.6 or 0.95
         end
     end
     if Decor.Corner then
