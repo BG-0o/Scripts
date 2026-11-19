@@ -71,6 +71,31 @@ local UIFlakes = {}
 local Stuck = {}
 local PileHeight = {}
 local LooseFlakes = {}
+local Surfaces = {}
+local SurfaceLastPos = {}
+local lastSurfaceScan = 0
+
+local function RefreshSurfaces(w, h)
+    local now = os.clock()
+    if now - lastSurfaceScan < 0.5 then
+        return
+    end
+    lastSurfaceScan = now
+    table.clear(Surfaces)
+    if Main.Visible then
+        table.insert(Surfaces, Main)
+    end
+    for _, child in ipairs(Gui:GetChildren()) do
+        if child ~= Main and child:IsA("Frame") and child.Visible then
+            local size = child.AbsoluteSize
+            if size.X >= 150 and size.Y >= 80
+            and size.X < w * 0.9 and size.Y < h * 0.9
+            and child.BackgroundTransparency < 0.99 then
+                table.insert(Surfaces, child)
+            end
+        end
+    end
+end
 
 for _ = 1, SCREEN_FLAKES do
     table.insert(ScreenFlakes, { Frame = NewFlakeFrame(Overlay) })
@@ -96,8 +121,11 @@ local function ResetAll()
     end
 end
 
-local function ReleaseStuck(pushX)
-    for _, s in ipairs(Stuck) do
+local function ReleaseStuck(pushX, surface)
+    for i = #Stuck, 1, -1 do
+        local s = Stuck[i]
+        if surface == nil or s.Surface == surface then
+        table.remove(Stuck, i)
         table.insert(LooseFlakes, {
             Frame = s.Frame,
             X = s.Frame.AbsolutePosition.X,
@@ -106,9 +134,13 @@ local function ReleaseStuck(pushX)
             VY = math.random() * 20,
             Size = s.Size,
         })
+        end
     end
-    table.clear(Stuck)
-    table.clear(PileHeight)
+    if surface == nil then
+        table.clear(PileHeight)
+    else
+        PileHeight[surface] = nil
+    end
 end
 
 local function ClearLoose()
@@ -118,25 +150,25 @@ local function ClearLoose()
     table.clear(LooseFlakes)
 end
 
-local function StickFlake(flake, relX)
+local function StickFlake(flake, relX, surface)
     if #Stuck >= MAX_STUCK then
         return false
     end
     local bucket = math.floor(relX / BUCKET)
-    local height = PileHeight[bucket] or 0
+    PileHeight[surface] = PileHeight[surface] or {}
+    local piles = PileHeight[surface]
+    local height = piles[bucket] or 0
     if height > 10 then
         return false
     end
     local frame = NewFlakeFrame(Overlay)
     frame.Size = UDim2.fromOffset(flake.Size, flake.Size)
     frame.BackgroundTransparency = flake.Frame.BackgroundTransparency
-    table.insert(Stuck, { Frame = frame, RelX = relX, Lift = height + flake.Size * 0.6, Size = flake.Size })
-    PileHeight[bucket] = height + flake.Size * 0.6
+    table.insert(Stuck, { Frame = frame, RelX = relX, Lift = height + flake.Size * 0.6, Size = flake.Size, Surface = surface })
+    piles[bucket] = height + flake.Size * 0.6
     return true
 end
 
-local lastMainPos = nil
-local lastMainTime = os.clock()
 local running = false
 local Connection = nil
 
@@ -156,36 +188,60 @@ local function Step(dt)
     UIClip.Visible = wantUI
     local t = os.clock()
 
-    local mainPos = Main.AbsolutePosition
-    local mainSize = Main.AbsoluteSize
-    local moved = Vector2.zero
-    if lastMainPos then
-        moved = mainPos - lastMainPos
+    local w, h = ScreenSize()
+    if wantScreen then
+        RefreshSurfaces(w, h)
+    else
+        table.clear(Surfaces)
     end
-    lastMainPos = mainPos
-    if (moved.Magnitude > 0.5 or not wantScreen) and #Stuck > 0 then
-        ReleaseStuck(moved.X / math.max(dt, 1 / 240))
+    local active = {}
+    for _, surface in ipairs(Surfaces) do
+        if surface.Parent and surface.Visible then
+            active[surface] = true
+        end
+    end
+    for surface, lastPos in pairs(SurfaceLastPos) do
+        if not active[surface] then
+            ReleaseStuck(0, surface)
+            SurfaceLastPos[surface] = nil
+        end
+    end
+    for surface in pairs(active) do
+        local pos = surface.AbsolutePosition
+        local last = SurfaceLastPos[surface]
+        if last and (pos - last).Magnitude > 0.5 then
+            ReleaseStuck((pos - last).X / math.max(dt, 1 / 240), surface)
+        end
+        SurfaceLastPos[surface] = pos
+    end
+    if not wantScreen and #Stuck > 0 then
+        ReleaseStuck(0)
     end
 
     if wantScreen then
-        local w, h = ScreenSize()
-        local top = mainPos.Y
-        local left, right = mainPos.X + 6, mainPos.X + mainSize.X - 6
         for _, f in ipairs(ScreenFlakes) do
             local prevY = f.Y
             f.Y += f.VY * dt
             local x = f.X + math.sin(t * 1.3 + f.Phase) * f.Sway
-            if prevY + f.Size <= top and f.Y + f.Size >= top and x >= left and x <= right then
-                StickFlake(f, x - mainPos.X)
-                Respawn(f, w, h, true)
-            elseif f.Y > h + 10 then
+            local landed = false
+            for surface in pairs(active) do
+                local pos, size = surface.AbsolutePosition, surface.AbsoluteSize
+                local top = pos.Y
+                if prevY + f.Size <= top and f.Y + f.Size >= top and x >= pos.X + 6 and x <= pos.X + size.X - 6 then
+                    StickFlake(f, x - pos.X, surface)
+                    landed = true
+                    break
+                end
+            end
+            if landed or f.Y > h + 10 then
                 Respawn(f, w, h, true)
             else
                 f.Frame.Position = UDim2.fromOffset(x, f.Y)
             end
         end
-        for _, s in ipairs(Stuck) do
-            s.Frame.Position = UDim2.fromOffset(mainPos.X + s.RelX - s.Size / 2, mainPos.Y - s.Lift - s.Size * 0.4)
+        for _, st in ipairs(Stuck) do
+            local pos = st.Surface.AbsolutePosition
+            st.Frame.Position = UDim2.fromOffset(pos.X + st.RelX - st.Size / 2, pos.Y - st.Lift - st.Size * 0.4)
         end
     else
         for _, f in ipairs(ScreenFlakes) do
@@ -227,7 +283,7 @@ local function SetRunning(on)
     if on and not running then
         running = true
         ResetAll()
-        lastMainPos = nil
+        table.clear(SurfaceLastPos)
         Connection = RunService.RenderStepped:Connect(Step)
     elseif not on and running then
         running = false
