@@ -188,19 +188,6 @@ getgenv().AllowToxTeleport = function(seconds, reason)
         untilTime
     )
     getgenv().ToxTeleportWhitelistReason = tostring(reason or "ToxHub")
-    if getgenv().ToxPauseWalkFling then
-        pcall(getgenv().ToxPauseWalkFling, math.max(1.2, tonumber(seconds) or 1))
-    end
-    if getgenv().ToxWalkFlingImpulseActive then
-        pcall(function()
-            local character = game:GetService("Players").LocalPlayer.Character
-            local root = character and character:FindFirstChild("HumanoidRootPart")
-            if root then
-                root.AssemblyLinearVelocity = Vector3.zero
-                root.AssemblyAngularVelocity = Vector3.zero
-            end
-        end)
-    end
 end
 getgenv().ToxIsToxTeleportAllowed = function()
     return tick() < math.max(

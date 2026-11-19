@@ -1194,16 +1194,6 @@ local function IsOwnTeleportActive()
     return false
 end
 
-local function IsOwnTeleportForFling()
-    if getgenv().ToxIsToxTeleportAllowed and getgenv().ToxIsToxTeleportAllowed() then
-        return true
-    end
-    if getgenv().ToxFlingBusy and tick() < (tonumber(getgenv().ToxFlingBusyUntil) or 0) then
-        return true
-    end
-    return false
-end
-
 local function CheckExternalTeleport(root)
     local pos = root.Position
     if GuardLastRoot ~= root or not GuardLastPos then
@@ -1236,7 +1226,14 @@ AddConnection(RunService.Heartbeat:Connect(function()
 
     local justTeleported = CheckExternalTeleport(root)
 
-    if justTeleported or IsExternalTeleportGuardActive() then
+    if justTeleported and Settings.WalkFling then
+        local ndsNoTPActive =
+            game.PlaceId == 189707
+            and Settings.NDSNoTP == true
+        if not ndsNoTPActive and getgenv().SetNDSNoTPAnchor then
+            pcall(getgenv().SetNDSNoTPAnchor, root.CFrame, true)
+        end
+    elseif (justTeleported or IsExternalTeleportGuardActive()) and not Settings.WalkFling then
         pcall(function()
             root.AssemblyLinearVelocity = GetSafeWalkVelocity(root, humanoid)
             root.AssemblyAngularVelocity = Vector3.zero
@@ -1261,11 +1258,6 @@ AddConnection(RunService.Heartbeat:Connect(function()
     end
 end))
 
-local WalkFlingLastPos = nil
-local WalkFlingPauseUntil = 0
-getgenv().ToxPauseWalkFling = function(seconds)
-    WalkFlingPauseUntil = math.max(WalkFlingPauseUntil, tick() + (tonumber(seconds) or 1))
-end
 
 local function StopWalkFling()
     WalkFlingGeneration = WalkFlingGeneration + 1
@@ -1326,35 +1318,7 @@ local function StartWalkFling()
 
                 local power = math.clamp(tonumber(Settings.WalkFlingPower) or 30, 1, 100)
 
-                if CheckExternalTeleport(root) or IsExternalTeleportGuardActive() then
-                    power = 0
-                    normalVel = Vector3.zero
-                end
-
-                local pos = root.Position
-                local flying = getgenv().ToxIsFlyBypassMoving and getgenv().ToxIsFlyBypassMoving()
-                local jumpLimit = 12 + (tonumber(humanoid.WalkSpeed) or 16) * 0.15
-                if not flying and WalkFlingLastPos and (pos - WalkFlingLastPos).Magnitude > jumpLimit then
-                    WalkFlingPauseUntil = tick() + 1.2
-                end
-                WalkFlingLastPos = pos
-                if IsOwnTeleportForFling() or (getgenv().ToxTeleportInProgress == true) then
-                    WalkFlingPauseUntil = math.max(WalkFlingPauseUntil, tick() + 0.6)
-                end
-                if tick() < WalkFlingPauseUntil then
-                    if power >= 1 then
-                        normalVel = Vector3.zero
-                    end
-                    power = 0
-                end
-
                 local isNDS = game.PlaceId == 189707
-                if isNDS and power >= 1 and not flying then
-                    local state = humanoid:GetState()
-                    if state == Enum.HumanoidStateType.Freefall and root.AssemblyLinearVelocity.Y < -30 then
-                        power = 0
-                    end
-                end
 
                 if power < 1 then
                     SetWalkFlingImpulse(false)
