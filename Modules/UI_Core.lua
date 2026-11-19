@@ -268,6 +268,66 @@ local UIThemePresets = {
         DimText = Color3.fromRGB(190, 210, 195),
         Risky = Color3.fromRGB(255, 90, 90)
     },
+    ["Halloween"] = {
+        Background = Color3.fromRGB(14, 10, 18),
+        Panel = Color3.fromRGB(20, 14, 26),
+        Element = Color3.fromRGB(30, 20, 38),
+        Hover = Color3.fromRGB(44, 28, 54),
+        Outline = Color3.fromRGB(70, 40, 20),
+        Text = Color3.fromRGB(255, 245, 235),
+        DimText = Color3.fromRGB(200, 175, 160),
+        Risky = Color3.fromRGB(132, 204, 22)
+    },
+    ["Easter"] = {
+        Background = Color3.fromRGB(24, 20, 34),
+        Panel = Color3.fromRGB(32, 26, 46),
+        Element = Color3.fromRGB(44, 36, 62),
+        Hover = Color3.fromRGB(58, 48, 82),
+        Outline = Color3.fromRGB(90, 70, 110),
+        Text = Color3.fromRGB(255, 250, 255),
+        DimText = Color3.fromRGB(215, 200, 230),
+        Risky = Color3.fromRGB(251, 113, 133)
+    },
+    ["New Year"] = {
+        Background = Color3.fromRGB(8, 8, 12),
+        Panel = Color3.fromRGB(14, 14, 20),
+        Element = Color3.fromRGB(22, 22, 30),
+        Hover = Color3.fromRGB(34, 32, 42),
+        Outline = Color3.fromRGB(80, 66, 24),
+        Text = Color3.fromRGB(255, 252, 240),
+        DimText = Color3.fromRGB(200, 190, 160),
+        Risky = Color3.fromRGB(244, 63, 94)
+    },
+    ["St. Patrick's"] = {
+        Background = Color3.fromRGB(8, 20, 12),
+        Panel = Color3.fromRGB(12, 28, 17),
+        Element = Color3.fromRGB(18, 40, 25),
+        Hover = Color3.fromRGB(26, 56, 35),
+        Outline = Color3.fromRGB(40, 90, 50),
+        Text = Color3.fromRGB(240, 255, 244),
+        DimText = Color3.fromRGB(170, 210, 180),
+        Risky = Color3.fromRGB(250, 204, 21)
+    },
+    ["Valentine's"] = {
+        Background = Color3.fromRGB(24, 10, 16),
+        Panel = Color3.fromRGB(34, 14, 22),
+        Element = Color3.fromRGB(48, 20, 32),
+        Hover = Color3.fromRGB(66, 28, 44),
+        Outline = Color3.fromRGB(110, 40, 64),
+        Text = Color3.fromRGB(255, 240, 245),
+        DimText = Color3.fromRGB(230, 180, 195),
+        Risky = Color3.fromRGB(255, 255, 255)
+    },
+    ["Carnaval"] = {
+        Background = Color3.fromRGB(18, 10, 28),
+        Panel = Color3.fromRGB(26, 14, 40),
+        Element = Color3.fromRGB(38, 20, 56),
+        Hover = Color3.fromRGB(54, 28, 78),
+        Outline = Color3.fromRGB(90, 40, 110),
+        Text = Color3.fromRGB(255, 250, 255),
+        DimText = Color3.fromRGB(220, 195, 235),
+        Risky = Color3.fromRGB(250, 204, 21)
+    },
     ["Cyberpunk Cyan"] = {
         Background = Color3.fromRGB(8, 15, 20),
         Panel = Color3.fromRGB(11, 21, 28),
@@ -280,6 +340,16 @@ local UIThemePresets = {
     }
 }
 
+local SeasonalAccents = {
+    ["Christmas"] = { Color3.fromRGB(220, 38, 50), Color3.fromRGB(34, 197, 94) },
+    ["Halloween"] = { Color3.fromRGB(249, 115, 22), Color3.fromRGB(168, 85, 247) },
+    ["Easter"] = { Color3.fromRGB(244, 143, 200), Color3.fromRGB(253, 224, 120) },
+    ["New Year"] = { Color3.fromRGB(234, 179, 8), Color3.fromRGB(229, 231, 235) },
+    ["St. Patrick's"] = { Color3.fromRGB(34, 197, 94), Color3.fromRGB(250, 204, 21) },
+    ["Valentine's"] = { Color3.fromRGB(244, 63, 94), Color3.fromRGB(249, 168, 212) },
+    ["Carnaval"] = { Color3.fromRGB(217, 70, 239), Color3.fromRGB(250, 204, 21) },
+}
+getgenv().ToxSeasonalAccents = SeasonalAccents
 getgenv().SetToxUITheme = function(themeName, skipSave)
     local preset = UIThemePresets[tostring(themeName)]
     if preset then
@@ -293,10 +363,10 @@ getgenv().SetToxUITheme = function(themeName, skipSave)
             end
         elseif tostring(themeName) == "Clean White" and Settings.CustomAccentActive ~= true then
             Theme.Accent = Color3.fromRGB(2, 132, 199)
-        elseif tostring(themeName) == "Christmas" then
+        elseif SeasonalAccents[tostring(themeName)] then
             if Settings.CustomAccentActive ~= true then
-                Theme.Accent = Color3.fromRGB(220, 38, 50)
-                Theme.Accent2 = Color3.fromRGB(34, 197, 94)
+                Theme.Accent = SeasonalAccents[tostring(themeName)][1]
+                Theme.Accent2 = SeasonalAccents[tostring(themeName)][2]
             end
             if not skipSave and (Settings.ToxSnowMode == nil or Settings.ToxSnowMode == "Off") then
                 Settings.ToxSnowMode = "Both"
@@ -309,6 +379,9 @@ getgenv().SetToxUITheme = function(themeName, skipSave)
             end
         end
         ApplyTheme()
+        if getgenv().ToxSeasonApply then
+            pcall(getgenv().ToxSeasonApply)
+        end
         if getgenv().SetToxUITransparency then
             getgenv().SetToxUITransparency(Settings.ToxUITransparency or 0, true)
         end

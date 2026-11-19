@@ -16,10 +16,71 @@ local VALID_MODES = { Off = true, Screen = true, UI = true, Both = true }
 if not VALID_MODES[tostring(Settings.ToxSnowMode)] then
     Settings.ToxSnowMode = "Off"
 end
+if Settings.ToxThemeDecor == nil then
+    Settings.ToxThemeDecor = true
+end
+
+local function rgb(r, g, b)
+    return Color3.fromRGB(r, g, b)
+end
+
+local Seasons = {
+    Christmas = {
+        Kind = "dot", Pile = true, Direction = 1,
+        Colors = { rgb(255, 255, 255) },
+        Bulbs = { rgb(239, 68, 68), rgb(34, 197, 94), rgb(250, 204, 21), rgb(59, 130, 246) },
+        Corner = "🎄",
+        Extra = "Santa",
+    },
+    Halloween = {
+        Kind = "emoji", Pile = false, Direction = 1,
+        Emojis = { "🍂", "🍂", "🍁", "🦇", "👻" },
+        Bulbs = { rgb(249, 115, 22), rgb(168, 85, 247), rgb(132, 204, 22) },
+        Corner = "🎃",
+        Extra = "Spider",
+    },
+    Easter = {
+        Kind = "emoji", Pile = false, Direction = 1,
+        Emojis = { "🌸", "🌸", "🌼", "🥚" },
+        Bulbs = { rgb(249, 168, 212), rgb(196, 181, 253), rgb(253, 230, 138), rgb(167, 243, 208) },
+        Corner = "🥚",
+        Extra = "Bunny",
+    },
+    ["New Year"] = {
+        Kind = "confetti", Pile = true, Direction = 1,
+        Colors = { rgb(250, 204, 21), rgb(229, 231, 235), rgb(253, 224, 71), rgb(245, 158, 11) },
+        Bulbs = { rgb(250, 204, 21), rgb(229, 231, 235) },
+        Corner = "🎆",
+        Extra = "Sparkles",
+    },
+    ["St. Patrick's"] = {
+        Kind = "emoji", Pile = false, Direction = 1,
+        Emojis = { "🍀", "🍀", "☘️", "💰" },
+        Bulbs = nil,
+        Corner = "🍀",
+        Extra = "Rainbow",
+    },
+    ["Valentine's"] = {
+        Kind = "emoji", Pile = false, Direction = -1,
+        Emojis = { "❤️", "💕", "💖", "💘" },
+        Bulbs = { rgb(244, 63, 94), rgb(249, 168, 212), rgb(255, 255, 255) },
+        Corner = "💘",
+        Extra = nil,
+    },
+    Carnaval = {
+        Kind = "confetti", Pile = true, Direction = 1,
+        Colors = { rgb(236, 72, 153), rgb(250, 204, 21), rgb(34, 197, 94), rgb(59, 130, 246), rgb(168, 85, 247) },
+        Bulbs = { rgb(236, 72, 153), rgb(250, 204, 21), rgb(34, 197, 94), rgb(59, 130, 246), rgb(168, 85, 247) },
+        Corner = "🎭",
+        Extra = nil,
+    },
+}
+local DefaultSeason = { Kind = "dot", Pile = true, Direction = 1, Colors = { rgb(255, 255, 255) } }
+env.ToxSeasonalThemes = Seasons
 
 local SCREEN_FLAKES = 70
 local UI_FLAKES = 35
-local MAX_STUCK = 140
+local MAX_STUCK = 160
 local BUCKET = 5
 
 local Overlay = Instance.new("ScreenGui")
@@ -41,29 +102,83 @@ UIClip.Active = false
 UIClip.Visible = false
 UIClip.Parent = Main
 
-local function NewFlakeFrame(parent)
-    local f = Instance.new("Frame")
-    f.BorderSizePixel = 0
-    f.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+local DecorFolder = Instance.new("Frame")
+DecorFolder.Name = "ToxThemeDecor"
+DecorFolder.BackgroundTransparency = 1
+DecorFolder.Size = UDim2.new(1, 0, 1, 0)
+DecorFolder.ZIndex = 1001
+DecorFolder.Active = false
+DecorFolder.Visible = false
+DecorFolder.Parent = Main
+
+local Season = DefaultSeason
+
+local function CurrentSeason()
+    return Seasons[tostring(Settings.ToxUITheme)]
+end
+
+local function NewParticleFrame(parent)
+    local kind = Season.Kind
+    local f
+    if kind == "emoji" then
+        f = Instance.new("TextLabel")
+        f.BackgroundTransparency = 1
+        f.Font = Enum.Font.GothamBold
+        f.TextScaled = true
+        f.Text = Season.Emojis[math.random(1, #Season.Emojis)]
+    else
+        f = Instance.new("Frame")
+        f.BorderSizePixel = 0
+        local colors = Season.Colors or DefaultSeason.Colors
+        f.BackgroundColor3 = colors[math.random(1, #colors)]
+        if kind == "dot" then
+            local c = Instance.new("UICorner")
+            c.CornerRadius = UDim.new(1, 0)
+            c.Parent = f
+        end
+    end
     f.Active = false
     f.ZIndex = 1000
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(1, 0)
-    c.Parent = f
     f.Parent = parent
     return f
 end
 
-local function Respawn(flake, width, height, fromTop)
-    flake.X = math.random() * width
-    flake.Y = fromTop and (-math.random() * 40) or (math.random() * height)
-    flake.Size = math.random(2, 5)
-    flake.VY = 25 + flake.Size * 12 + math.random() * 20
-    flake.VX = 0
-    flake.Phase = math.random() * math.pi * 2
-    flake.Sway = 8 + math.random() * 18
-    flake.Frame.Size = UDim2.fromOffset(flake.Size, flake.Size)
-    flake.Frame.BackgroundTransparency = 0.05 + (5 - flake.Size) * 0.12
+local function Respawn(p, width, height, fromEdge)
+    local kind = Season.Kind
+    local dir = Season.Direction or 1
+    p.X = math.random() * width
+    if fromEdge then
+        p.Y = dir > 0 and (-math.random() * 40) or (height + math.random() * 40)
+    else
+        p.Y = math.random() * height
+    end
+    if kind == "emoji" then
+        p.Size = math.random(14, 22)
+        p.VY = (30 + math.random() * 35) * dir
+        p.Frame.Text = Season.Emojis[math.random(1, #Season.Emojis)]
+        p.Frame.TextTransparency = 0.1 + math.random() * 0.25
+        p.Spin = (math.random() - 0.5) * 120
+    elseif kind == "confetti" then
+        p.Size = math.random(3, 6)
+        p.VY = (45 + math.random() * 45) * dir
+        local colors = Season.Colors
+        p.Frame.BackgroundColor3 = colors[math.random(1, #colors)]
+        p.Frame.BackgroundTransparency = 0.05
+        p.Spin = (math.random() - 0.5) * 540
+    else
+        p.Size = math.random(2, 5)
+        p.VY = (25 + p.Size * 12 + math.random() * 20) * dir
+        p.Frame.BackgroundTransparency = 0.05 + (5 - p.Size) * 0.12
+        p.Spin = 0
+    end
+    p.Rot = math.random() * 360
+    p.Phase = math.random() * math.pi * 2
+    p.Sway = 8 + math.random() * 18
+    if kind == "confetti" then
+        p.Frame.Size = UDim2.fromOffset(p.Size, p.Size * 1.8)
+    else
+        p.Frame.Size = UDim2.fromOffset(p.Size, p.Size)
+    end
 end
 
 local ScreenFlakes = {}
@@ -74,6 +189,12 @@ local LooseFlakes = {}
 local Surfaces = {}
 local SurfaceLastPos = {}
 local lastSurfaceScan = 0
+
+local function ScreenSize()
+    local cam = workspace.CurrentCamera
+    local v = cam and cam.ViewportSize or Vector2.new(1280, 720)
+    return v.X, v.Y
+end
 
 local function RefreshSurfaces(w, h)
     local now = os.clock()
@@ -97,27 +218,28 @@ local function RefreshSurfaces(w, h)
     end
 end
 
-for _ = 1, SCREEN_FLAKES do
-    table.insert(ScreenFlakes, { Frame = NewFlakeFrame(Overlay) })
-end
-for _ = 1, UI_FLAKES do
-    table.insert(UIFlakes, { Frame = NewFlakeFrame(UIClip) })
-end
-
-local function ScreenSize()
-    local cam = workspace.CurrentCamera
-    local v = cam and cam.ViewportSize or Vector2.new(1280, 720)
-    return v.X, v.Y
-end
-
-local function ResetAll()
-    local w, h = ScreenSize()
-    for _, f in ipairs(ScreenFlakes) do
-        Respawn(f, w, h, false)
+local function ClearParticles()
+    for _, list in ipairs({ ScreenFlakes, UIFlakes }) do
+        for _, p in ipairs(list) do
+            pcall(function() p.Frame:Destroy() end)
+        end
+        table.clear(list)
     end
-    local uw, uh = UIClip.AbsoluteSize.X, UIClip.AbsoluteSize.Y
-    for _, f in ipairs(UIFlakes) do
-        Respawn(f, math.max(uw, 1), math.max(uh, 1), false)
+end
+
+local function BuildParticles()
+    ClearParticles()
+    local w, h = ScreenSize()
+    for _ = 1, SCREEN_FLAKES do
+        local p = { Frame = NewParticleFrame(Overlay) }
+        Respawn(p, w, h, false)
+        table.insert(ScreenFlakes, p)
+    end
+    local uw, uh = math.max(UIClip.AbsoluteSize.X, 1), math.max(UIClip.AbsoluteSize.Y, 1)
+    for _ = 1, UI_FLAKES do
+        local p = { Frame = NewParticleFrame(UIClip) }
+        Respawn(p, uw, uh, false)
+        table.insert(UIFlakes, p)
     end
 end
 
@@ -125,15 +247,15 @@ local function ReleaseStuck(pushX, surface)
     for i = #Stuck, 1, -1 do
         local s = Stuck[i]
         if surface == nil or s.Surface == surface then
-        table.remove(Stuck, i)
-        table.insert(LooseFlakes, {
-            Frame = s.Frame,
-            X = s.Frame.AbsolutePosition.X,
-            Y = s.Frame.AbsolutePosition.Y,
-            VX = (pushX or 0) * (0.3 + math.random() * 0.4) + (math.random() - 0.5) * 30,
-            VY = math.random() * 20,
-            Size = s.Size,
-        })
+            table.remove(Stuck, i)
+            table.insert(LooseFlakes, {
+                Frame = s.Frame,
+                X = s.Frame.AbsolutePosition.X,
+                Y = s.Frame.AbsolutePosition.Y,
+                VX = (pushX or 0) * (0.3 + math.random() * 0.4) + (math.random() - 0.5) * 30,
+                VY = math.random() * 20,
+                Size = s.Size,
+            })
         end
     end
     if surface == nil then
@@ -150,7 +272,7 @@ local function ClearLoose()
     table.clear(LooseFlakes)
 end
 
-local function StickFlake(flake, relX, surface)
+local function StickFlake(p, relX, surface)
     if #Stuck >= MAX_STUCK then
         return false
     end
@@ -161,16 +283,168 @@ local function StickFlake(flake, relX, surface)
     if height > 10 then
         return false
     end
-    local frame = NewFlakeFrame(Overlay)
-    frame.Size = UDim2.fromOffset(flake.Size, flake.Size)
-    frame.BackgroundTransparency = flake.Frame.BackgroundTransparency
-    table.insert(Stuck, { Frame = frame, RelX = relX, Lift = height + flake.Size * 0.6, Size = flake.Size, Surface = surface })
-    piles[bucket] = height + flake.Size * 0.6
+    local frame = p.Frame:Clone()
+    frame.Rotation = Season.Kind == "confetti" and (math.random(0, 1) * 90) or 0
+    frame.Parent = Overlay
+    local lift = height + p.Size * 0.6
+    table.insert(Stuck, { Frame = frame, RelX = relX, Lift = lift, Size = p.Size, Surface = surface })
+    piles[bucket] = lift
     return true
+end
+
+local Decor = {}
+local function ClearDecor()
+    for _, child in ipairs(DecorFolder:GetChildren()) do
+        child:Destroy()
+    end
+    table.clear(Decor)
+end
+
+local function DecorLabel(text, size, position, rotation)
+    local l = Instance.new("TextLabel")
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.TextScaled = true
+    l.Font = Enum.Font.GothamBold
+    l.Size = UDim2.fromOffset(size, size)
+    l.Position = position
+    l.Rotation = rotation or 0
+    l.ZIndex = 1002
+    l.Active = false
+    l.Parent = DecorFolder
+    return l
+end
+
+local function BuildDecor()
+    ClearDecor()
+    local season = CurrentSeason()
+    if not season or Settings.ToxThemeDecor == false then
+        DecorFolder.Visible = false
+        return
+    end
+    DecorFolder.Visible = true
+
+    if season.Bulbs then
+        local wire = Instance.new("Frame")
+        wire.BorderSizePixel = 0
+        wire.BackgroundColor3 = rgb(30, 30, 30)
+        wire.BackgroundTransparency = 0.2
+        wire.Size = UDim2.new(1, -40, 0, 1)
+        wire.Position = UDim2.new(0, 20, 0, -1)
+        wire.ZIndex = 1001
+        wire.Parent = DecorFolder
+        Decor.Bulbs = {}
+        local count = 22
+        for i = 1, count do
+            local bulb = Instance.new("Frame")
+            bulb.BorderSizePixel = 0
+            bulb.Size = UDim2.fromOffset(6, 8)
+            bulb.AnchorPoint = Vector2.new(0.5, 0)
+            bulb.Position = UDim2.new((i - 0.5) / count, 0, 0, (i % 2 == 0) and 2 or 0)
+            bulb.BackgroundColor3 = season.Bulbs[(i - 1) % #season.Bulbs + 1]
+            bulb.ZIndex = 1002
+            local c = Instance.new("UICorner")
+            c.CornerRadius = UDim.new(1, 0)
+            c.Parent = bulb
+            local glow = Instance.new("UIStroke")
+            glow.Color = bulb.BackgroundColor3
+            glow.Thickness = 2
+            glow.Transparency = 0.5
+            glow.Parent = bulb
+            bulb.Parent = wire
+            table.insert(Decor.Bulbs, { Frame = bulb, Glow = glow, Offset = i })
+        end
+    end
+
+    if season.Corner then
+        Decor.Corner = DecorLabel(season.Corner, 30, UDim2.new(0, -14, 0, -20), -18)
+    end
+
+    if season.Extra == "Santa" then
+        Decor.Extra = DecorLabel("🎅", 30, UDim2.new(1, -18, 0, -22), 15)
+    elseif season.Extra == "Spider" then
+        local thread = Instance.new("Frame")
+        thread.BorderSizePixel = 0
+        thread.BackgroundColor3 = rgb(220, 220, 220)
+        thread.BackgroundTransparency = 0.3
+        thread.Size = UDim2.fromOffset(1, 40)
+        thread.Position = UDim2.new(1, -60, 0, 0)
+        thread.ZIndex = 1002
+        thread.Parent = DecorFolder
+        local spider = DecorLabel("🕷️", 22, UDim2.new(1, -71, 0, 36), 0)
+        DecorLabel("🕸️", 34, UDim2.new(1, -26, 0, -8), 0)
+        Decor.Thread = thread
+        Decor.Spider = spider
+    elseif season.Extra == "Bunny" then
+        Decor.Bunny = DecorLabel("🐰", 32, UDim2.new(1, -60, 0, -26), 0)
+    elseif season.Extra == "Sparkles" then
+        Decor.Sparkles = {
+            DecorLabel("✨", 20, UDim2.new(1, -30, 0, -16), 0),
+            DecorLabel("🥂", 24, UDim2.new(1, -60, 0, -20), 10),
+        }
+    elseif season.Extra == "Rainbow" then
+        local bar = Instance.new("Frame")
+        bar.BorderSizePixel = 0
+        bar.BackgroundColor3 = rgb(255, 255, 255)
+        bar.Size = UDim2.new(1, -24, 0, 3)
+        bar.Position = UDim2.new(0, 12, 0, 0)
+        bar.ZIndex = 1002
+        bar.Parent = DecorFolder
+        local g = Instance.new("UIGradient")
+        g.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, rgb(239, 68, 68)),
+            ColorSequenceKeypoint.new(0.2, rgb(249, 115, 22)),
+            ColorSequenceKeypoint.new(0.4, rgb(250, 204, 21)),
+            ColorSequenceKeypoint.new(0.6, rgb(34, 197, 94)),
+            ColorSequenceKeypoint.new(0.8, rgb(59, 130, 246)),
+            ColorSequenceKeypoint.new(1, rgb(168, 85, 247)),
+        })
+        g.Parent = bar
+        Decor.Rainbow = g
+        Decor.Pot = DecorLabel("💰", 24, UDim2.new(1, -30, 0, -18), 0)
+    end
+end
+
+local function AnimateDecor(t)
+    if not DecorFolder.Visible then
+        return
+    end
+    if Decor.Bulbs then
+        for _, b in ipairs(Decor.Bulbs) do
+            local on = math.sin(t * 3 + b.Offset * 1.7) > -0.2
+            b.Frame.BackgroundTransparency = on and 0 or 0.65
+            b.Glow.Transparency = on and 0.35 or 0.9
+        end
+    end
+    if Decor.Corner then
+        Decor.Corner.Rotation = -18 + math.sin(t * 1.5) * 6
+    end
+    if Decor.Spider and Decor.Thread then
+        local len = 34 + math.sin(t * 0.9) * 16
+        Decor.Thread.Size = UDim2.fromOffset(1, len)
+        Decor.Spider.Position = UDim2.new(1, -71, 0, len - 4)
+        Decor.Spider.Rotation = math.sin(t * 2) * 10
+    end
+    if Decor.Bunny then
+        local hop = math.max(0, math.sin(t * 2.2)) * 8
+        Decor.Bunny.Position = UDim2.new(1, -60, 0, -26 - hop)
+    end
+    if Decor.Sparkles then
+        for i, s in ipairs(Decor.Sparkles) do
+            s.TextTransparency = 0.5 + math.sin(t * 4 + i) * 0.5
+        end
+    end
+    if Decor.Rainbow then
+        Decor.Rainbow.Offset = Vector2.new(math.sin(t * 0.6) * 0.3, 0)
+    end
+    if Decor.Extra then
+        Decor.Extra.Rotation = 15 + math.sin(t * 1.2) * 5
+    end
 end
 
 local running = false
 local Connection = nil
+local DecorConnection = nil
 
 local function Step(dt)
     if env.Destroyed or not Main.Parent then
@@ -187,9 +461,10 @@ local function Step(dt)
     Overlay.Enabled = wantScreen or #LooseFlakes > 0
     UIClip.Visible = wantUI
     local t = os.clock()
-
     local w, h = ScreenSize()
-    if wantScreen then
+    local canPile = Season.Pile == true and (Season.Direction or 1) > 0
+
+    if wantScreen and canPile then
         RefreshSurfaces(w, h)
     else
         table.clear(Surfaces)
@@ -200,7 +475,7 @@ local function Step(dt)
             active[surface] = true
         end
     end
-    for surface, lastPos in pairs(SurfaceLastPos) do
+    for surface in pairs(SurfaceLastPos) do
         if not active[surface] then
             ReleaseStuck(0, surface)
             SurfaceLastPos[surface] = nil
@@ -219,24 +494,28 @@ local function Step(dt)
     end
 
     if wantScreen then
-        for _, f in ipairs(ScreenFlakes) do
-            local prevY = f.Y
-            f.Y += f.VY * dt
-            local x = f.X + math.sin(t * 1.3 + f.Phase) * f.Sway
+        for _, p in ipairs(ScreenFlakes) do
+            local prevY = p.Y
+            p.Y += p.VY * dt
+            p.Rot += p.Spin * dt
+            local x = p.X + math.sin(t * 1.3 + p.Phase) * p.Sway
             local landed = false
-            for surface in pairs(active) do
-                local pos, size = surface.AbsolutePosition, surface.AbsoluteSize
-                local top = pos.Y
-                if prevY + f.Size <= top and f.Y + f.Size >= top and x >= pos.X + 6 and x <= pos.X + size.X - 6 then
-                    StickFlake(f, x - pos.X, surface)
-                    landed = true
-                    break
+            if canPile then
+                for surface in pairs(active) do
+                    local pos, size = surface.AbsolutePosition, surface.AbsoluteSize
+                    local top = pos.Y
+                    if prevY + p.Size <= top and p.Y + p.Size >= top and x >= pos.X + 6 and x <= pos.X + size.X - 6 then
+                        StickFlake(p, x - pos.X, surface)
+                        landed = true
+                        break
+                    end
                 end
             end
-            if landed or f.Y > h + 10 then
-                Respawn(f, w, h, true)
+            if landed or p.Y > h + 30 or p.Y < -60 then
+                Respawn(p, w, h, true)
             else
-                f.Frame.Position = UDim2.fromOffset(x, f.Y)
+                p.Frame.Position = UDim2.fromOffset(x, p.Y)
+                p.Frame.Rotation = p.Rot
             end
         end
         for _, st in ipairs(Stuck) do
@@ -244,13 +523,12 @@ local function Step(dt)
             st.Frame.Position = UDim2.fromOffset(pos.X + st.RelX - st.Size / 2, pos.Y - st.Lift - st.Size * 0.4)
         end
     else
-        for _, f in ipairs(ScreenFlakes) do
-            f.Frame.Position = UDim2.fromOffset(-50, -50)
+        for _, p in ipairs(ScreenFlakes) do
+            p.Frame.Position = UDim2.fromOffset(-80, -80)
         end
     end
 
     if #LooseFlakes > 0 then
-        local _, h = ScreenSize()
         for i = #LooseFlakes, 1, -1 do
             local l = LooseFlakes[i]
             l.VY += 220 * dt
@@ -267,14 +545,16 @@ local function Step(dt)
     end
 
     if wantUI then
-        local uw, uh = UIClip.AbsoluteSize.X, UIClip.AbsoluteSize.Y
-        for _, f in ipairs(UIFlakes) do
-            f.Y += f.VY * 0.6 * dt
-            if f.Y > uh + 6 then
-                Respawn(f, math.max(uw, 1), math.max(uh, 1), true)
+        local uw, uh = math.max(UIClip.AbsoluteSize.X, 1), math.max(UIClip.AbsoluteSize.Y, 1)
+        for _, p in ipairs(UIFlakes) do
+            p.Y += p.VY * 0.6 * dt
+            p.Rot += p.Spin * dt
+            if p.Y > uh + 30 or p.Y < -40 then
+                Respawn(p, uw, uh, true)
             end
-            local x = f.X + math.sin(t * 1.1 + f.Phase) * f.Sway
-            f.Frame.Position = UDim2.fromOffset(x, f.Y)
+            local x = p.X + math.sin(t * 1.1 + p.Phase) * p.Sway
+            p.Frame.Position = UDim2.fromOffset(x, p.Y)
+            p.Frame.Rotation = p.Rot
         end
     end
 end
@@ -282,8 +562,8 @@ end
 local function SetRunning(on)
     if on and not running then
         running = true
-        ResetAll()
         table.clear(SurfaceLastPos)
+        BuildParticles()
         Connection = RunService.RenderStepped:Connect(Step)
     elseif not on and running then
         running = false
@@ -293,9 +573,36 @@ local function SetRunning(on)
         end
         ReleaseStuck(0)
         ClearLoose()
+        ClearParticles()
         Overlay.Enabled = false
         UIClip.Visible = false
     end
+end
+
+local function RefreshDecorLoop()
+    local needs = DecorFolder.Visible
+    if needs and not DecorConnection then
+        DecorConnection = RunService.RenderStepped:Connect(function()
+            if env.Destroyed or not Main.Parent then
+                return
+            end
+            AnimateDecor(os.clock())
+        end)
+    elseif not needs and DecorConnection then
+        DecorConnection:Disconnect()
+        DecorConnection = nil
+    end
+end
+
+env.ToxSeasonApply = function()
+    Season = CurrentSeason() or DefaultSeason
+    ReleaseStuck(0)
+    ClearLoose()
+    if running then
+        BuildParticles()
+    end
+    BuildDecor()
+    RefreshDecorLoop()
 end
 
 env.SetToxSnowMode = function(mode, skipSave)
@@ -310,10 +617,27 @@ env.SetToxSnowMode = function(mode, skipSave)
     end
 end
 
-env.ToxSnowCleanup = function()
-    SetRunning(false)
-    pcall(function() Overlay:Destroy() end)
-    pcall(function() UIClip:Destroy() end)
+env.SetToxThemeDecor = function(enabled, skipSave)
+    Settings.ToxThemeDecor = enabled == true
+    BuildDecor()
+    RefreshDecorLoop()
+    if not skipSave and env.AutoSaveConfiguration then
+        env.AutoSaveConfiguration()
+    end
 end
 
+env.ToxSnowCleanup = function()
+    SetRunning(false)
+    if DecorConnection then
+        DecorConnection:Disconnect()
+        DecorConnection = nil
+    end
+    pcall(function() Overlay:Destroy() end)
+    pcall(function() UIClip:Destroy() end)
+    pcall(function() DecorFolder:Destroy() end)
+end
+
+Season = CurrentSeason() or DefaultSeason
+BuildDecor()
+RefreshDecorLoop()
 env.SetToxSnowMode(Settings.ToxSnowMode, true)

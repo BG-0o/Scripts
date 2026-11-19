@@ -613,7 +613,13 @@ CreateDropdown(
         "Translucent Glass",
         "Midnight Purple",
         "Cyberpunk Cyan",
-        "Christmas"
+        "Christmas",
+        "Halloween",
+        "Easter",
+        "New Year",
+        "St. Patrick's",
+        "Valentine's",
+        "Carnaval"
     },
     ConfigPage,
     tostring(Settings.ToxUITheme or "Dark Neon"),
@@ -628,7 +634,7 @@ CreateDropdown(
     end
 )
 local SnowDropdown = CreateDropdown(
-    "Snow Effect",
+    "Theme Effects",
     { "Off", "Screen", "UI", "Both" },
     ConfigPage,
     tostring(Settings.ToxSnowMode or "Off"),
@@ -649,6 +655,13 @@ getgenv().SyncToxSnowDropdown = function(value)
         end
     end
 end
+CreateToggle("Theme Decorations", ConfigPage, Settings.ToxThemeDecor ~= false, function(val)
+    if getgenv().SetToxThemeDecor then
+        getgenv().SetToxThemeDecor(val == true)
+    else
+        Settings.ToxThemeDecor = val == true
+    end
+end, "ToxThemeDecor")
 CreateButton("🎨 Custom Accent (Color Picker)", ConfigPage, function()
     local ui = getgenv().ToxUI
     local opener = (ui and ui.OpenColorPicker) or getgenv().OpenToxColorPicker
