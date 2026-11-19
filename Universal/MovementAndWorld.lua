@@ -1194,6 +1194,16 @@ local function IsOwnTeleportActive()
     return false
 end
 
+local function IsOwnTeleportForFling()
+    if getgenv().ToxIsToxTeleportAllowed and getgenv().ToxIsToxTeleportAllowed() then
+        return true
+    end
+    if getgenv().ToxFlingBusy and tick() < (tonumber(getgenv().ToxFlingBusyUntil) or 0) then
+        return true
+    end
+    return false
+end
+
 local function CheckExternalTeleport(root)
     local pos = root.Position
     if GuardLastRoot ~= root or not GuardLastPos then
@@ -1322,11 +1332,13 @@ local function StartWalkFling()
                 end
 
                 local pos = root.Position
-                if WalkFlingLastPos and (pos - WalkFlingLastPos).Magnitude > 12 then
+                local flying = getgenv().ToxIsFlyBypassMoving and getgenv().ToxIsFlyBypassMoving()
+                local jumpLimit = 12 + (tonumber(humanoid.WalkSpeed) or 16) * 0.15
+                if not flying and WalkFlingLastPos and (pos - WalkFlingLastPos).Magnitude > jumpLimit then
                     WalkFlingPauseUntil = tick() + 1.2
                 end
                 WalkFlingLastPos = pos
-                if IsOwnTeleportActive() or (getgenv().ToxTeleportInProgress == true) then
+                if IsOwnTeleportForFling() or (getgenv().ToxTeleportInProgress == true) then
                     WalkFlingPauseUntil = math.max(WalkFlingPauseUntil, tick() + 0.6)
                 end
                 if tick() < WalkFlingPauseUntil then
@@ -1337,12 +1349,9 @@ local function StartWalkFling()
                 end
 
                 local isNDS = game.PlaceId == 189707
-                if isNDS and power >= 1 then
+                if isNDS and power >= 1 and not flying then
                     local state = humanoid:GetState()
-                    local airborne = humanoid.FloorMaterial == Enum.Material.Air
-                        or state == Enum.HumanoidStateType.Freefall
-                        or state == Enum.HumanoidStateType.Jumping
-                    if airborne or root.AssemblyLinearVelocity.Y < -20 then
+                    if state == Enum.HumanoidStateType.Freefall and root.AssemblyLinearVelocity.Y < -30 then
                         power = 0
                     end
                 end
@@ -1359,7 +1368,7 @@ local function StartWalkFling()
                         moveDir = root.CFrame.LookVector
                     end
 
-                    local liftY = isNDS and 0 or mult * 0.75
+                    local liftY = isNDS and mult * 0.25 or mult * 0.75
                     root.AssemblyLinearVelocity = Vector3.new(moveDir.X * mult, liftY, moveDir.Z * mult)
 
                     RunService.RenderStepped:Wait()

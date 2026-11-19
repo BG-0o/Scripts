@@ -177,9 +177,6 @@ getgenv().AllowToxTeleport = function(seconds, reason)
     local untilTime = tick() + (tonumber(seconds) or 1)
     if reason == "Fly Bypass" then
         getgenv().ToxFlyBypassUntil = math.max(tonumber(getgenv().ToxFlyBypassUntil) or 0, untilTime)
-        if getgenv().ToxPauseWalkFling then
-            pcall(getgenv().ToxPauseWalkFling, 1.2)
-        end
         return
     end
     getgenv().ToxTeleportBypassUntil = math.max(
