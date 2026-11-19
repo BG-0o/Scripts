@@ -1429,6 +1429,7 @@ local FlyBG = nil
 local FlyBypassFloor = nil
 local FlyBypassY = nil
 local FlyBypassCharacter = nil
+local FlyBypassLastPos = nil
 local function DisableNormalFlyPhysics()
     local Hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
     if FlyBV then FlyBV:Destroy() FlyBV = nil end
@@ -1552,6 +1553,11 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
         if not FlyBypassY or FlyBypassCharacter ~= Root then
             FlyBypassY = Root.Position.Y
             FlyBypassCharacter = Root
+            FlyBypassLastPos = Root.Position
+        end
+        local expectedStep = actualFlySpeed * delta * 2 + 6
+        if FlyBypassLastPos and (Root.Position - FlyBypassLastPos).Magnitude > expectedStep then
+            FlyBypassY = Root.Position.Y
         end
 
         if getgenv().AllowToxTeleport then
@@ -1581,9 +1587,11 @@ AddConnection(RunService.RenderStepped:Connect(function(delta)
 
         FlyBypassFloor.CFrame = CFrame.new(Root.Position.X, Root.Position.Y - standOffset - 0.25 - 0.05, Root.Position.Z)
         Root.AssemblyAngularVelocity = Vector3.zero
+        FlyBypassLastPos = Root.Position
     else
         FlyBypassY = nil
         FlyBypassCharacter = nil
+        FlyBypassLastPos = nil
         if FlyBypassFloor then
             pcall(function() FlyBypassFloor:Destroy() end)
             FlyBypassFloor = nil

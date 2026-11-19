@@ -169,8 +169,19 @@ getgenv().CurrentGameModule = ResolveCurrentGameModule()
 getgenv().ToxTeleportBypassUntil = 0
 getgenv().ToxTeleportWhitelistUntil = 0
 getgenv().ToxTeleportWhitelistReason = nil
+getgenv().ToxFlyBypassUntil = 0
+getgenv().ToxIsFlyBypassMoving = function()
+    return tick() < (tonumber(getgenv().ToxFlyBypassUntil) or 0)
+end
 getgenv().AllowToxTeleport = function(seconds, reason)
     local untilTime = tick() + (tonumber(seconds) or 1)
+    if reason == "Fly Bypass" then
+        getgenv().ToxFlyBypassUntil = math.max(tonumber(getgenv().ToxFlyBypassUntil) or 0, untilTime)
+        if getgenv().ToxPauseWalkFling then
+            pcall(getgenv().ToxPauseWalkFling, 1.2)
+        end
+        return
+    end
     getgenv().ToxTeleportBypassUntil = math.max(
         tonumber(getgenv().ToxTeleportBypassUntil) or 0,
         untilTime

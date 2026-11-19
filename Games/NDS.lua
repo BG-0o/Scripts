@@ -1151,7 +1151,7 @@ local function StartNoTP()
             NoTPCorrectionCFrame
     end))
 
-    NoTPConnection = AddConnection(RunService.Heartbeat:Connect(function()
+    NoTPConnection = AddConnection(RunService.Heartbeat:Connect(function(deltaTime)
         if game.PlaceId ~= NDSPlaceId then
             Settings.NDSNoTP = false
             StopNoTP()
@@ -1261,7 +1261,17 @@ local function StartNoTP()
                 - NoTPAnchorCFrame.Position
             ).Magnitude
 
-        if frameDistance > 8
+        local allowedStep = 8
+        if Settings.FlyBypass
+        and getgenv().ToxIsFlyBypassMoving
+        and getgenv().ToxIsFlyBypassMoving() then
+            allowedStep = 8 + (tonumber(Settings.FlySpeed) or 10) * 10 * math.max(tonumber(deltaTime) or 0.016, 0.016) * 2
+            if frameDistance <= allowedStep and not IsNDSVoidPosition(currentRoot.Position) then
+                NoTPAnchorCFrame = currentRoot.CFrame
+            end
+        end
+
+        if frameDistance > allowedStep
         and protectedDistance > 8 then
             if getgenv().ToxIsToxTeleportAllowed and getgenv().ToxIsToxTeleportAllowed() then
                 NoTPAnchorCFrame = currentRoot.CFrame

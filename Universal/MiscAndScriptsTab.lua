@@ -641,8 +641,10 @@ do
                 part.AssemblyLinearVelocity = Vector3.zero
                 part.AssemblyAngularVelocity = Vector3.zero
             end)
-            if data.CanCollide ~= nil then
-                pcall(function() part.CanCollide = data.CanCollide end)
+            for other, canCollide in pairs(data.Collisions or {}) do
+                if other.Parent then
+                    pcall(function() other.CanCollide = canCollide end)
+                end
             end
         end
         if cooldown and cooldown > 0 then
@@ -680,6 +682,17 @@ do
         if math.max(size.X, size.Y, size.Z) > 80 then return false end
         if IsCharacterPart(part) then return false end
         if part:FindFirstAncestorOfClass("Tool") then return false end
+        if part.AssemblyRootPart and part.AssemblyRootPart ~= part then return false end
+        local okConnected, connected = pcall(function() return part:GetConnectedParts(true) end)
+        if not okConnected or #connected > 25 then return false end
+        for _, other in ipairs(connected) do
+            if other ~= part then
+                if other.Anchored or IsCharacterPart(other) or other:FindFirstAncestorOfClass("Tool") then
+                    return false
+                end
+                if Controlled[other] then return false end
+            end
+        end
         return true
     end
 
@@ -706,9 +719,16 @@ do
         align.Responsiveness = pull
         align.Parent = part
         nextIndex += 1
-        Controlled[part] = { Att = att, Align = align, Index = nextIndex, CanCollide = part.CanCollide, Pull = pull, GrabbedAt = os.clock() }
-        controlledCount += 1
+        local collisions = {}
+        local okConnected, connected = pcall(function() return part:GetConnectedParts(true) end)
+        for _, other in ipairs(okConnected and connected or { part }) do
+            collisions[other] = other.CanCollide
+            pcall(function() other.CanCollide = false end)
+        end
+        collisions[part] = collisions[part] == nil and part.CanCollide or collisions[part]
         pcall(function() part.CanCollide = false end)
+        Controlled[part] = { Att = att, Align = align, Index = nextIndex, Collisions = collisions, Pull = pull, GrabbedAt = os.clock() }
+        controlledCount += 1
     end
 
     local function TryRaiseSimulationRadius()
@@ -865,7 +885,9 @@ do
             local stuckLimit = 20 + R * 0.5
             for part, data in pairs(Controlled) do
                 if not part.Parent or part.Anchored
-                or not data.Align.Parent or data.Att.Parent ~= part then
+                or not data.Align.Parent or data.Att.Parent ~= part
+                or (part.AssemblyRootPart and part.AssemblyRootPart ~= part)
+                or IsCharacterPart(part) then
                     Release(part)
                 elseif data.Target and now - data.GrabbedAt > 1.5 then
                     checked += 1

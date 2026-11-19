@@ -1185,6 +1185,9 @@ local function IsOwnTeleportActive()
     if tick() < (tonumber(getgenv().ToxFlingBypassUntil) or 0) then
         return true
     end
+    if getgenv().ToxIsFlyBypassMoving and getgenv().ToxIsFlyBypassMoving() then
+        return true
+    end
     if getgenv().ToxFlingBusy and tick() < (tonumber(getgenv().ToxFlingBusyUntil) or 0) then
         return true
     end
