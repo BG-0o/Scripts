@@ -39,6 +39,7 @@ local CORE_MODULES = {
     { Path = "Modules/UI_HomeAndSettings.lua", Required = true },
     { Path = "Modules/UI_QuickPages.lua",      Required = true },
     { Path = "Modules/LightingEngine.lua",     Required = false },
+    { Path = "Modules/SnowEffect.lua",         Required = false },
     { Path = "Modules/ModuleLoader.lua",       Required = true },
 }
 

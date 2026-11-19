@@ -258,6 +258,16 @@ local UIThemePresets = {
         DimText = Color3.fromRGB(175, 160, 205),
         Risky = Color3.fromRGB(244, 63, 94)
     },
+    ["Christmas"] = {
+        Background = Color3.fromRGB(14, 22, 18),
+        Panel = Color3.fromRGB(18, 30, 24),
+        Element = Color3.fromRGB(26, 42, 33),
+        Hover = Color3.fromRGB(36, 58, 45),
+        Outline = Color3.fromRGB(60, 40, 40),
+        Text = Color3.fromRGB(255, 255, 255),
+        DimText = Color3.fromRGB(190, 210, 195),
+        Risky = Color3.fromRGB(255, 90, 90)
+    },
     ["Cyberpunk Cyan"] = {
         Background = Color3.fromRGB(8, 15, 20),
         Panel = Color3.fromRGB(11, 21, 28),
@@ -283,6 +293,20 @@ getgenv().SetToxUITheme = function(themeName, skipSave)
             end
         elseif tostring(themeName) == "Clean White" and Settings.CustomAccentActive ~= true then
             Theme.Accent = Color3.fromRGB(2, 132, 199)
+        elseif tostring(themeName) == "Christmas" then
+            if Settings.CustomAccentActive ~= true then
+                Theme.Accent = Color3.fromRGB(220, 38, 50)
+                Theme.Accent2 = Color3.fromRGB(34, 197, 94)
+            end
+            if not skipSave and (Settings.ToxSnowMode == nil or Settings.ToxSnowMode == "Off") then
+                Settings.ToxSnowMode = "Both"
+                if getgenv().SetToxSnowMode then
+                    getgenv().SetToxSnowMode("Both", true)
+                end
+                if getgenv().SyncToxSnowDropdown then
+                    pcall(getgenv().SyncToxSnowDropdown, "Both")
+                end
+            end
         end
         ApplyTheme()
         if getgenv().SetToxUITransparency then
