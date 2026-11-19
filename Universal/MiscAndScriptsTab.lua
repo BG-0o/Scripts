@@ -326,17 +326,70 @@ do
     end
 
     local SHAPE_ORDER = {
-        "Orbit", "Ring", "Rings", "Wave",
-        "Spiral", "Halo", "Tornado", "Blades",
-        "Fountain", "Floor", "Galaxy", "Flower",
-        "Infinity", "Torus", "Crown", "Pillars",
-        "Comet", "Pulse", "Pyramid", "Cube",
-        "Rain", "Spikes", "Saturn", "Hourglass",
-        "Wheel", "Wave Grid", "Arrow", "Spring",
+        "Orbit", "Ball", "Ring", "Rings",
+        "Wave", "Spiral", "Halo", "Tornado",
+        "Blades", "Fountain", "Galaxy", "Black Hole",
+        "Flower", "Heart", "Infinity", "Torus",
+        "Crown", "Wings", "Dragon", "Dome",
+        "Gyro", "Pulse", "Pyramid", "Cube",
+        "Rain", "Spikes", "Saturn", "Wheel",
         "Orbitals",
     }
     local SHAPES = {}
 
+    SHAPES.Ball = function(i, n, t, c, cf, R, S)
+        local rot = CFrame.Angles(t * S * 0.3, t * S * 0.4, 0)
+        return c + V3(0, R * 0.6 + 4, 0) + rot:VectorToWorldSpace(SphereDir(i, n, 0)) * (R * 0.6)
+    end
+    SHAPES.Infinity = function(i, n, t, c, cf, R, S)
+        local s = TAU * (i - 1) / n + t * S * 0.4
+        local d = 1 + sin(s) ^ 2
+        return LocalPos(cf, R * cos(s) / d, R * 0.5 + 3 + R * sin(s) * cos(s) / d, -(R * 0.3 + 4))
+    end
+    SHAPES.Heart = function(i, n, t, c, cf, R, S)
+        local s = TAU * (i - 1) / n + t * S * 0.2
+        local x = 16 * sin(s) ^ 3
+        local y = 13 * cos(s) - 5 * cos(2 * s) - 2 * cos(3 * s) - cos(4 * s)
+        local k = R / 16 * (1 + 0.08 * sin(t * S * 2))
+        return LocalPos(cf, x * k, y * k + R * 0.5 + 3, -(R * 0.3 + 4))
+    end
+    SHAPES["Black Hole"] = function(i, n, t, c, cf, R, S)
+        local center = c + V3(0, R * 0.6 + 4, 0)
+        local ph = ((i * 0.618034) % 1 + t * S * 0.06) % 1
+        local rr = R * (1 - ph) + 0.6
+        local a = i * GOLD + t * S * 3 / (rr + 1) + ph * 6
+        local tilt = CFrame.Angles(math.rad(15), 0, 0)
+        return center + tilt:VectorToWorldSpace(V3(cos(a) * rr, -ph * ph * R * 0.3, sin(a) * rr))
+    end
+    SHAPES.Wings = function(i, n, t, c, cf, R, S)
+        local side = (i % 2 == 0) and 1 or -1
+        local j = floor((i - 1) / 2)
+        local f = j / max(ceil(n / 2) - 1, 1)
+        local flap = sin(t * S * 0.8) * 0.6
+        local x = side * (2 + f * R)
+        local y = 2 + sin(f * math.pi) * R * 0.4 + flap * f * R * 0.5
+        return LocalPos(cf, x, y, 2 + f * R * 0.3)
+    end
+    SHAPES.Dragon = function(i, n, t, c, cf, R, S)
+        local f = (i - 1) / max(n - 1, 1)
+        local a = t * S * 0.5 - f * 2.5
+        local rr = R * (1 + 0.15 * sin(a * 3))
+        local y = 3 + sin(a * 2 + t * S * 0.7) * R * 0.35
+        return c + V3(cos(a) * rr, y, sin(a) * rr)
+    end
+    SHAPES.Dome = function(i, n, t, c, cf, R, S)
+        local dir = SphereDir(i, n, t * S * 0.2)
+        return c + V3(0, -2, 0) + V3(dir.X, math.abs(dir.Y), dir.Z) * R
+    end
+    SHAPES.Gyro = function(i, n, t, c, cf, R, S)
+        local k = (i - 1) % 3
+        local j = floor((i - 1) / 3)
+        local m = max(ceil(n / 3), 1)
+        local a = TAU * j / m + t * S * 0.8
+        local rr = R * (0.6 + 0.15 * k)
+        local rot = CFrame.Angles(t * S * 0.3 * (k + 1), t * S * 0.2 * (k + 1), k)
+        return c + V3(0, 3, 0) + rot:VectorToWorldSpace(V3(cos(a) * rr, 0, sin(a) * rr))
+    end
     SHAPES.Orbit = function(i, n, t, c, cf, R, S)
         local ring = i % 4
         local rr = R * 0.7 + ring * (R * 0.3)
@@ -392,12 +445,6 @@ do
         local rr = ph * R
         return c + V3(cos(a) * rr, ph * (1 - ph) * 4 * R * 0.9, sin(a) * rr)
     end
-    SHAPES.Floor = function(i, n, t, c, cf, R, S)
-        local cols = max(ceil(sqrt(n)), 1)
-        local col = (i - 1) % cols
-        local row = floor((i - 1) / cols)
-        return LocalPos(cf, (col - (cols - 1) / 2) * 3, -3.6, (row - (cols - 1) / 2) * 3)
-    end
     SHAPES.Galaxy = function(i, n, t, c, cf, R, S)
         local arm = (i - 1) % 3
         local j = floor((i - 1) / 3)
@@ -409,11 +456,6 @@ do
         local th = math.pi * (i - 1) / n + t * S * 0.2
         local r = R * cos(5 * th)
         return c + V3(cos(th) * r, 1, sin(th) * r)
-    end
-    SHAPES.Infinity = function(i, n, t, c, cf, R, S)
-        local s = TAU * (i - 1) / n + t * S * 0.4
-        local d = 1 + sin(s) ^ 2
-        return LocalPos(cf, R * cos(s) / d, 1, R * sin(s) * cos(s) / d)
     end
     SHAPES.Torus = function(i, n, t, c, cf, R, S)
         local major = R * 0.75
@@ -428,20 +470,6 @@ do
         local tri = math.abs(((a * 8 / TAU) % 2) - 1)
         local rr = R * 0.6
         return c + V3(cos(a) * rr, 3 + tri * R * 0.4, sin(a) * rr)
-    end
-    SHAPES.Pillars = function(i, n, t, c, cf, R, S)
-        local p = (i - 1) % 4
-        local j = floor((i - 1) / 4)
-        local m = max(ceil(n / 4) - 1, 1)
-        local a = p * TAU / 4 + t * S * 0.3
-        return c + V3(cos(a) * R, -2 + j / m * R * 1.5, sin(a) * R)
-    end
-    SHAPES.Comet = function(i, n, t, c, cf, R, S)
-        local f = (i - 1) / max(n - 1, 1)
-        local a = t * S * 0.6 - f * 2.2
-        local spread = f * 1.5 * sin(i * 7)
-        local rr = R + spread
-        return c + V3(cos(a) * rr, 1 + sin(a * 2) * R * 0.2 + spread * 0.5, sin(a) * rr)
     end
     SHAPES.Pulse = function(i, n, t, c, cf, R, S)
         local radius = R * (0.55 + 0.35 * sin(t * S * 0.8))
@@ -499,41 +527,10 @@ do
         end
         return center + SphereDir(i - ringCount, max(n - ringCount, 1), t * S * 0.3) * (R * 0.4)
     end
-    SHAPES.Hourglass = function(i, n, t, c, cf, R, S)
-        local f = (i - 1) / max(n - 1, 1)
-        local y = (f - 0.5) * 2
-        local rr = R * 0.15 + math.abs(y) * R * 0.7
-        local a = i * GOLD + t * S * 0.4
-        return c + V3(cos(a) * rr, y * R * 0.9 + R * 0.9, sin(a) * rr)
-    end
     SHAPES.Wheel = function(i, n, t, c, cf, R, S)
         local a = TAU * (i - 1) / n + t * S * 0.6
         local rr = R * 0.7
         return LocalPos(cf, cos(a) * rr, sin(a) * rr + rr + 1, -(R * 0.5 + 4))
-    end
-    SHAPES["Wave Grid"] = function(i, n, t, c, cf, R, S)
-        local cols = max(ceil(sqrt(n)), 1)
-        local col = (i - 1) % cols
-        local row = floor((i - 1) / cols)
-        local spacing = max(R / cols * 2, 2.5)
-        local x = (col - (cols - 1) / 2) * spacing
-        local z = (row - (cols - 1) / 2) * spacing
-        local d = sqrt(x * x + z * z)
-        return c + V3(x, sin(d * 0.4 - t * S * 1.2) * 1.5 - 1, z)
-    end
-    SHAPES.Arrow = function(i, n, t, c, cf, R, S)
-        local side = (i % 2 == 0) and 1 or -1
-        local j = floor((i - 1) / 2)
-        local f = j / max(ceil(n / 2) - 1, 1)
-        local bob = sin(t * S * 0.8) * 0.6
-        return LocalPos(cf, side * f * R * 0.6, 2 + bob, -(R + 4) + f * R * 0.8)
-    end
-    SHAPES.Spring = function(i, n, t, c, cf, R, S)
-        local f = (i - 1) / max(n - 1, 1)
-        local a = f * TAU * 8 + t * S * 0.8
-        local rr = max(R * 0.3, 3)
-        local stretch = 0.75 + 0.25 * sin(t * S * 0.6)
-        return c + V3(cos(a) * rr, f * R * 1.5 * stretch - 3, sin(a) * rr)
     end
     SHAPES.Orbitals = function(i, n, t, c, cf, R, S)
         local k = (i - 1) % 4
